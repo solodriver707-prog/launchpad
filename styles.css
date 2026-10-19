@@ -911,3 +911,27 @@ body::before{opacity:.5}
 .pnlbar em.up{right:6px}.pnlbar em.down{left:6px}
 @media (max-width:700px){.tl{grid-template-columns:24px 1fr 1fr;}.tl .bs-bars,.tl.h span:nth-child(3){display:none}.tl>span:last-child{display:none}.tl.h span:last-child{display:none}}
 .pnlbar em{background:rgba(11,11,13,.85);padding:1px 6px;border-radius:5px;z-index:1}
+
+/* ===== trades table: full width, lighter, easier to read ===== */
+.trow{grid-template-columns:minmax(64px,.8fr) minmax(76px,.8fr) minmax(84px,1fr) minmax(76px,1fr) minmax(84px,1fr) minmax(104px,1.15fr) minmax(170px,1.7fr) 48px;gap:14px;padding:12px 14px;font-size:13.5px;min-width:820px;border-bottom:1px solid #1C1C21;font-weight:500}
+.trow.big{font-weight:500}
+.trow::before{top:auto;bottom:0;height:2px;opacity:.7;border-radius:0}
+.trow.b::before{background:linear-gradient(90deg,var(--up),transparent)}
+.trow.s::before{background:linear-gradient(90deg,var(--down),transparent)}
+.trow:not(.h):hover{background:#18181C}
+.trow.h{padding:10px 14px;font-size:12px;letter-spacing:.02em;text-transform:uppercase;color:var(--faint);font-weight:600}
+.trow.h .link{text-transform:uppercase;letter-spacing:.02em;font-weight:600;color:var(--faint)}
+.trow > span:first-child{color:var(--muted);font-family:'Manrope',sans-serif}
+.trow .ty{display:inline-flex;align-items:center;gap:6px;font-family:'Manrope',sans-serif}
+.trow.b .ty,.trow.s .ty{font-weight:700}
+.trow .ty::before{content:"";width:8px;height:8px;border-radius:99px;background:currentColor;flex:none}
+.trow .r{color:var(--text)}
+.trow > span:nth-child(3){font-weight:700}
+.trow.b > span:nth-child(3){color:var(--up)}.trow.s > span:nth-child(3){color:var(--down)}
+.trow > span:nth-child(5),.trow > span:nth-child(6){color:var(--soft)}
+.trow .maker{font-size:13px;color:var(--text);padding:3px 6px}
+.trow .maker .av{width:24px!important;height:24px!important}
+.trow .txb{width:32px;height:32px;margin-left:auto}
+.tbl{border:1px solid #1C1C21;border-radius:14px;max-height:640px}
+.trow.enter{--fl:rgba(255,255,255,.06)}
+.trow.b.enter{--fl:rgba(61,220,151,.14)}.trow.s.enter{--fl:rgba(242,112,138,.14)}
