@@ -115,7 +115,7 @@
       o += drawMouth(sp, mouthY, mouthW);
     }
     o += drawAcc(sp, top);
-    return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" aria-hidden="true"><defs><clipPath id="c"><circle cx="50" cy="50" r="50"/></clipPath></defs><g clip-path="url(#c)">' + o + '</g></svg>';
+    return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" aria-hidden="true"><g>' + o + '</g></svg>';
   }
 
   var cache = {};

@@ -403,13 +403,14 @@
       var t = Math.max(d.buy, d.sell);
       if (S.sort === 'graduated' && d.prog < 100) return false;
       if (S.sort === 'grad' && d.prog >= 100) return false;
-      if (t > S.maxTax) return false;
+      if (t < rv('tax')[0] || t > rv('tax')[1]) return false;
       if (S.zeroOnly && t !== 0) return false;
       if (S.gradOnly && d.prog < 100) return false;
       if (S.rewardsOnly && !d.rewards) return false;
       if (S.watchOnly && S.watch.indexOf(d.tick) === -1) return false;
       if (S.cleanOnly && riskMetrics(d).some(function (m) { return m.lv === 'r'; })) return false;
-      if (d.prog < S.minProg || d.mcN < S.minMc) return false;
+      var mcr = rv('mc'), pr = rv('prog'), ag = rv('age'), am = (Date.now() - d.born) / 60000;
+      if (d.prog < pr[0] || d.prog > pr[1] || d.mcN < mcr[0] || d.mcN > mcr[1] || am < ag[0] || am > ag[1]) return false;
       if (S.cat !== 'all' && pairInfo(d.pair).cat !== S.cat) return false;
       if (S.pair !== 'All' && d.pair !== S.pair) return false;
       return true;
@@ -484,27 +485,19 @@
   }
   // ================= RACE TO RAYDIUM (all coins climbing the hill) =================
   var RACE_OFF = {}, RPOS = {};
-  var LG0 = Math.log10(5e5), LG1 = Math.log10(1e8);
-  var MB = 95, MP = 47; // mountain base / peak (y %)
-  function mHalf(k) { return 47 * Math.pow(Math.max(0, 1 - k), 1.55); }
+  var LG0 = Math.log10(5e5), LG1 = Math.log10(1e8), SPLIT = 0.56;
   function gameF(t) { return Math.max(0, Math.min(1, (Math.log10(t.mcN * 1000) - LG0) / (LG1 - LG0))); }
-  function skyY(f) { return MP - 7 - f * (MP - 7 - 21); }
-  function mcSkyY(usd) { return skyY(Math.max(0, Math.min(1, (Math.log10(usd) - LG0) / (LG1 - LG0)))); }
-  function raceSize(t) { return t.prog >= 100 ? Math.max(30, Math.min(54, 26 + Math.sqrt(t.mcN) * 0.12)) : Math.max(26, Math.min(40, 24 + Math.sqrt(t.mcN) * 0.7)); }
-  function mountainPath() {
-    var L = [], R = [], i;
-    for (i = 0; i <= 40; i++) { var k = i / 40, y = MB - k * (MB - MP), h = mHalf(k); L.push((50 - h).toFixed(2) + ',' + y.toFixed(2)); R.unshift((50 + h).toFixed(2) + ',' + y.toFixed(2)); }
-    return 'M' + L.join(' L') + ' L' + R.join(' L');
-  }
-  function raceTarget(t) {
-    var h = hash(t.tick + 'm'), side = (h & 1) ? 1 : -1, fr = ((h >> 3) % 1000) / 1000;
-    if (t.prog >= 100) { var f = gameF(t); return { x: 50 + side * (6 + fr * 34), y: skyY(f), sky: true }; }
-    var k = Math.max(0, Math.min(1, t.prog / 100)), half = mHalf(k);
-    return { x: 50 + side * half * (0.18 + fr * 0.78), y: MB - k * (MB - MP) - 0.6, sky: false, half: half };
+  function trackPt(u) { return { x: 5 + u * 89, y: 84 - Math.pow(u, 1.3) * 62 }; }
+  function coinU(t) { return t.prog < 100 ? SPLIT * Math.max(0, Math.min(1, t.prog / 100)) : SPLIT + (1 - SPLIT) * gameF(t); }
+  function mcU(usd) { return SPLIT + (1 - SPLIT) * Math.max(0, Math.min(1, (Math.log10(usd) - LG0) / (LG1 - LG0))); }
+  function raceSize(t) { return t.prog >= 100 ? Math.max(32, Math.min(46, 28 + Math.sqrt(t.mcN) * 0.08)) : 32; }
+  function trackPath(close) {
+    var d = '', i; for (i = 0; i <= 80; i++) { var p = trackPt(i / 80); d += (i ? ' L' : 'M') + p.x.toFixed(2) + ',' + p.y.toFixed(2); }
+    return close ? d + ' L94,100 L5,100 Z' : d;
   }
   // ----- race zoom / pan -----
   var RZ = { z: 1, x: 0, y: 0, preset: 'all' };
-  var ZP = [['all', 'All', 0, 1, 0, 1], ['start', 'Base camp', .04, .96, .68, 1], ['p1', 'The climb', .1, .9, .45, 1], ['near', 'Near the summit', .3, .7, .38, .72], ['p2', 'The sky', .12, .88, 0, .5]];
+  var ZP = [['all', 'All', 0, 1, 0, 1], ['start', 'Fresh launches', 0, .22, .55, 1], ['p1', 'Bonding curve', 0, .6, .3, 1], ['near', 'Near graduation', .3, .62, .25, .85], ['p2', 'Open market', .5, 1, 0, .7]];
   function zoomStyle() { return 'transform:translate(' + RZ.x.toFixed(1) + 'px,' + RZ.y.toFixed(1) + 'px) scale(' + RZ.z.toFixed(3) + ');--z:' + RZ.z.toFixed(3); }
   function zoomBar() {
     return '<div class="zoombar"><button class="zb" data-act="rz" data-arg="out" aria-label="Zoom out">−</button><span class="zb-v mono" id="zb-v">' + Math.round(RZ.z * 100) + '%</span><button class="zb" data-act="rz" data-arg="in" aria-label="Zoom in">+</button>' +
@@ -524,6 +517,7 @@
     var v = document.getElementById('zb-v'); if (v) v.textContent = Math.round(RZ.z * 100) + '%';
     document.querySelectorAll('.zp').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-arg') === RZ.preset); });
     var st = document.getElementById('race-stage'); if (st) st.classList.toggle('zoomed', RZ.z > 1.01);
+    clearTimeout(zApply._t); zApply._t = setTimeout(raceLayout, 90);
   }
   function zoomAt(px, py, factor, anim) {
     var nz = Math.max(1, Math.min(8, RZ.z * factor));
@@ -574,59 +568,72 @@
   document.addEventListener('touchend', function () { pinch = null; });
   window.addEventListener('resize', function () { zApply(false); });
 
-  function relax(list) {
-    var W = 1300, H = 460;
-    for (var it = 0; it < 30; it++) {
-      for (var a = 0; a < list.length; a++) for (var b = a + 1; b < list.length; b++) {
-        var A2 = list[a], B2 = list[b]; if (A2.sky !== B2.sky) continue;
-        var dx = (B2.x - A2.x) * W / 100, dy = (B2.y - A2.y) * H / 100, d = Math.sqrt(dx * dx + dy * dy) || 0.01, min = (A2.r + B2.r) / 2 + 4;
-        if (d < min) { var push = (min - d) / 2 / W * 100, sx = dx >= 0 ? 1 : -1; A2.x -= sx * push; B2.x += sx * push; }
+  function raceLayout() {
+    var st = document.getElementById('race-stage'), box = document.getElementById('race-b'), cbox = document.getElementById('race-c'); if (!st || !box) return;
+    var W = st.clientWidth * RZ.z, H = st.clientHeight * RZ.z, list = all().map(function (t) { var u = coinU(t), p = trackPt(u); return { t: t, u: u, x: p.x, y: p.y, X: p.x * W / 100, sz: raceSize(t) }; }).sort(function (a, b) { return b.u - a.u; });
+    var rows = [[], [], []], over = [];
+    list.forEach(function (c) {
+      var placed = false;
+      for (var r = 0; r < 3 && !placed; r++) {
+        var ok = rows[r].every(function (o) { return Math.abs(o.X - c.X) >= (o.sz + c.sz) / 2 + 4; });
+        if (ok) { rows[r].push(c); c.row = r; placed = true; }
       }
-      list.forEach(function (p) { if (!p.sky) { var lo = 50 - p.half * 0.97, hi = 50 + p.half * 0.97; p.x = Math.max(lo, Math.min(hi, p.x)); } else p.x = Math.max(6, Math.min(94, p.x)); });
-    }
+      if (!placed) over.push(c);
+    });
+    list.forEach(function (c) {
+      var el = box.querySelector('.rb[data-race="' + c.t.tick + '"]'); if (!el) return;
+      if (c.row == null) { el.style.visibility = 'hidden'; return; }
+      el.style.visibility = '';
+      var dy = c.row * (c.sz + 18) / H * 100;
+      RPOS[c.t.tick] = { x: c.x, y: c.y - dy };
+      el.style.left = c.x.toFixed(2) + '%'; el.style.top = (c.y - dy - 1.2).toFixed(2) + '%';
+      el.classList.toggle('stacked', c.row > 0);
+    });
+    // overflow chips: group by proximity
+    var groups = [];
+    over.sort(function (a, b) { return a.X - b.X; }).forEach(function (c) { var g = groups[groups.length - 1]; if (g && c.X - g.x1 < 60) { g.items.push(c); g.x1 = c.X; } else groups.push({ items: [c], x0: c.X, x1: c.X }); });
+    if (cbox) cbox.innerHTML = groups.map(function (g) {
+      var u = g.items.reduce(function (s2, c) { return s2 + c.u; }, 0) / g.items.length, p = trackPt(u), dy = 3 * 50 / H * 100;
+      return '<button class="rchip" data-act="rzat" data-arg="' + p.x.toFixed(2) + '|' + p.y.toFixed(2) + '" style="left:' + p.x.toFixed(2) + '%;top:' + (p.y - dy - 1.2).toFixed(2) + '%" data-tip="' + esc(g.items.map(function (c) { return '$' + c.t.tick; }).join(', ')) + ' — click to zoom">' +
+        g.items.slice(0, 2).map(function (c) { return avatarHTML(c.t, 22); }).join('') + '<b>+' + g.items.length + ' more</b></button>';
+    }).join('');
   }
   function raceSection() {
     var a = all(), climbing = a.filter(function (t) { return t.prog < 100; }), grad = a.filter(function (t) { return t.prog >= 100; }).sort(function (x, y) { return x.mcN - y.mcN; });
-    var pts = a.map(function (t) { var g = raceTarget(t); g.t = t; g.r = raceSize(t); g.half = g.half || 0; return g; });
-    relax(pts); pts.forEach(function (p) { RPOS[p.t.tick] = { x: p.x, y: p.y }; });
     var leader = climbing.slice().sort(function (x, y) { return y.prog - x.prog; })[0], king = grad[grad.length - 1];
-    var contours = [.25, .5, .75].map(function (k) {
-      var y = MB - k * (MB - MP), h = mHalf(k);
-      return '<span class="contour" style="left:' + (50 - h) + '%;width:' + (2 * h) + '%;top:' + y + '%"></span><span class="clab" style="left:' + (50 - h - 1) + '%;top:' + y + '%">' + (k * 100) + '%</span>';
+    var ticks = [[0, 'START'], [.25 * SPLIT, '25%'], [.5 * SPLIT, '50%'], [.75 * SPLIT, '75%'], [mcU(1e6), '$1M'], [mcU(1e7), '$10M'], [mcU(5e7), '$50M']].map(function (k) {
+      var p = trackPt(k[0]); return '<span class="tk-mark" style="left:' + p.x + '%;top:' + p.y + '%"><i></i><b>' + k[1] + '</b></span>';
     }).join('');
-    var alts = [[1e6, '$1M'], [1e7, '$10M'], [5e7, '$50M']].map(function (m) { var y = mcSkyY(m[0]); return '<span class="alt" style="top:' + y + '%"></span><span class="alab" style="top:' + y + '%">' + m[1] + '</span>'; }).join('');
+    var rp = trackPt(SPLIT), mp = trackPt(1);
     function stat(lbl, t2, val) { return t2 ? '<button class="race-lead" data-act="open" data-arg="' + esc(t2.tick) + '">' + avatarHTML(t2, 26) + '<span><small>' + lbl + '</small><b>$' + esc(t2.tick) + ' · ' + val + '</b></span></button>' : ''; }
-    return '<section class="race card-s" id="race"><div class="m-head"><div><span class="kicker"><span class="livedot"></span>LIVE</span><h2 class="title-xl" style="font-size:30px;margin:8px 0 4px">The Mountain</h2>' +
-      '<p class="muted" style="margin:0;max-width:620px">Every coin climbs the bonding curve. Reach the summit and it graduates to Raydium — then the real game starts in the sky, all the way to the moon.</p></div>' +
-      '<div class="race-stats"><div><span class="muted">Climbing</span><b class="mono">' + climbing.length + '</b></div><div><span class="muted">In the sky</span><b class="mono">' + grad.length + '</b></div>' +
-      stat('CLOSEST TO SUMMIT', leader, leader ? leader.prog.toFixed(0) + '%' : '') + stat('HIGHEST IN THE SKY', king, king ? fmtK(king.mcN) : '') + '</div></div>' +
-      '<div class="race-tools">' + zoomBar() + '<span class="zoom-hint2">Ctrl + scroll to zoom · double-click · drag to move</span></div><div class="race-stage mtn" id="race-stage"><div class="race-zoom" id="race-zoom" style="' + zoomStyle() + '">' +
-        '<span class="stars"></span>' + alts +
-        '<span class="moonflag2" style="top:' + mcSkyY(1e8) + '%"><span class="moon"></span><b>MOON · $100M</b></span>' +
-        '<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="mtnF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3A3B41"/><stop offset=".45" stop-color="#1D1D21"/><stop offset="1" stop-color="#121214"/></linearGradient>' +
-          '<linearGradient id="mtnS" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".38" stop-color="#fff" stop-opacity=".06"/><stop offset=".62" stop-color="#000" stop-opacity=".14"/><stop offset="1" stop-color="#000" stop-opacity="0"/></linearGradient></defs>' +
-          '<path d="' + mountainPath() + ' Z" fill="url(#mtnF)"/><path d="' + mountainPath() + ' Z" fill="url(#mtnS)"/>' +
-          '<path d="' + mountainPath() + '" fill="none" stroke="#E8E8EA" stroke-width="2" vector-effect="non-scaling-stroke" class="hill-path"/></svg>' +
-        contours +
-        '<span class="rayflag" style="left:50%;top:' + MP + '%"><span class="flagpole"></span><span class="flagcloth">RAYDIUM</span></span>' +
-        '<span class="phase-l p1">PHASE 1 · THE CLIMB</span><span class="phase-l p2">PHASE 2 · THE SKY</span>' +
-        '<div id="race-b">' + pts.map(function (p) { return raceBubble(p.t); }).join('') + '</div></div></div></section>';
+    setTimeout(raceLayout, 0);
+    return '<section class="race card-s" id="race"><div class="m-head"><div><span class="kicker"><span class="livedot"></span>LIVE</span><h2 class="title-xl" style="font-size:30px;margin:8px 0 4px">Race to the moon</h2>' +
+      '<p class="muted" style="margin:0;max-width:640px">Every coin sits on the track at its real progress. Left half: bonding curve to graduation. Right half: market cap on the open market, up to $100M.</p></div>' +
+      '<div class="race-stats"><div><span class="muted">On the curve</span><b class="mono">' + climbing.length + '</b></div><div><span class="muted">Graduated</span><b class="mono">' + grad.length + '</b></div>' +
+      stat('CLOSEST TO RAYDIUM', leader, leader ? leader.prog.toFixed(0) + '%' : '') + stat('HIGHEST', king, king ? fmtK(king.mcN) : '') + '</div></div>' +
+      '<div class="race-tools">' + zoomBar() + '<span class="zoom-hint2">Ctrl + scroll to zoom · double-click · drag to move</span></div><div class="race-stage trk" id="race-stage"><div class="race-zoom" id="race-zoom" style="' + zoomStyle() + '">' +
+        '<span class="zone z1" style="left:5%;width:' + (rp.x - 5) + '%"><b>PHASE 1 · BONDING CURVE</b><small>0 → 100%</small></span><span class="zone z2" style="left:' + rp.x + '%;width:' + (94 - rp.x) + '%"><b>PHASE 2 · OPEN MARKET</b><small>$500K → $100M</small></span>' +
+        '<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="trkF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".07"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient></defs>' +
+          '<path d="' + trackPath(true) + '" fill="url(#trkF)"/><path d="' + trackPath(false) + '" fill="none" stroke="#E8E8EA" stroke-width="2.5" vector-effect="non-scaling-stroke" class="hill-path"/></svg>' +
+        ticks +
+        '<span class="rayflag" style="left:' + rp.x + '%;top:' + rp.y + '%"><span class="flagpole"></span><span class="flagcloth">RAYDIUM · GRADUATION</span></span>' +
+        '<span class="moonflag2" style="left:' + (mp.x - 4) + '%;top:' + (mp.y - 12) + '%"><span class="moon"></span><b>MOON · $100M</b></span>' +
+        '<div id="race-b">' + a.map(function (t) { return raceBubble(t); }).join('') + '</div><div id="race-c"></div></div></div></section>';
   }
   function raceBubble(t) {
-    var p = RPOS[t.tick] || raceTarget(t), sz = raceSize(t), done = t.prog >= 100, lab = done ? fmtK(t.mcN) : Math.min(100, t.prog).toFixed(0) + '%';
-    return '<button class="rb ' + (done ? 'done' : '') + '" data-race="' + esc(t.tick) + '" data-act="open" data-arg="' + esc(t.tick) + '" style="left:' + p.x.toFixed(2) + '%;top:' + p.y.toFixed(2) + '%;--sz:' + sz + 'px" data-tip="$' + esc(t.tick) + ' · ' + (done ? 'graduated · ' : Math.min(100, t.prog).toFixed(0) + '% up · ') + fmtK(t.mcN) + '">' +
+    var p = trackPt(coinU(t)), sz = raceSize(t), done = t.prog >= 100, lab = done ? fmtK(t.mcN) : Math.min(100, t.prog).toFixed(0) + '%';
+    return '<button class="rb ' + (done ? 'done' : '') + '" data-race="' + esc(t.tick) + '" data-act="open" data-arg="' + esc(t.tick) + '" style="left:' + p.x.toFixed(2) + '%;top:' + p.y.toFixed(2) + '%;--sz:' + sz + 'px" data-tip="$' + esc(t.tick) + ' · ' + (done ? 'graduated · ' : Math.min(100, t.prog).toFixed(0) + '% of curve · ') + fmtK(t.mcN) + '">' +
       avatarHTML(t, Math.round(sz)) + '<span class="rb-pct mono">' + lab + '</span></button>';
   }
+  var raceT = 0;
   function raceUpdate(t, side) {
-    var el = document.querySelector('.rb[data-race="' + t.tick + '"]'); if (!el) return;
-    var g = raceTarget(t), old = RPOS[t.tick];
-    if (old && !g.sky && old.y !== undefined) { var half = g.half * 0.97; g.x = Math.max(50 - half, Math.min(50 + half, old.x)); }
-    RPOS[t.tick] = { x: g.x, y: g.y };
-    el.style.left = g.x.toFixed(2) + '%'; el.style.top = g.y.toFixed(2) + '%';
+    var el = document.querySelector('.rb[data-race="' + t.tick + '"]');
+    if (!el) { if (document.getElementById('race-b')) { document.getElementById('race-b').insertAdjacentHTML('beforeend', raceBubble(t)); } return; }
     var done = t.prog >= 100; el.classList.toggle('done', done);
     var pc = el.querySelector('.rb-pct'); if (pc) pc.textContent = done ? fmtK(t.mcN) : Math.min(100, t.prog).toFixed(0) + '%';
-    el.setAttribute('data-tip', '$' + t.tick + ' · ' + (done ? 'graduated · ' : Math.min(100, t.prog).toFixed(0) + '% up · ') + fmtK(t.mcN));
+    el.setAttribute('data-tip', '$' + t.tick + ' · ' + (done ? 'graduated · ' : Math.min(100, t.prog).toFixed(0) + '% of curve · ') + fmtK(t.mcN));
     el.classList.remove('up-hit', 'down-hit'); void el.offsetWidth; el.classList.add(side === 'buy' ? 'up-hit' : 'down-hit');
+    if (Date.now() - raceT > 400) { raceT = Date.now(); raceLayout(); } else { clearTimeout(raceUpdate._t); raceUpdate._t = setTimeout(raceLayout, 420); }
   }
   function heroHTML() {
     var st = stats(), slides = HERO.map(function (tk, i) { return heroSlide(find(tk), i); }).join('');
@@ -783,21 +790,57 @@
   }
 
   S.fpop = null; S.cleanOnly = false;
-  var FOPT = {
-    tax: { lab: 'Tax', key: 'maxTax', def: 10, opts: [[10, 'Any'], [0, '0%'], [3, '≤ 3%'], [6, '≤ 6%']] },
-    prog: { lab: 'Curve', key: 'minProg', def: 0, opts: [[0, 'Any'], [25, '≥ 25%'], [50, '≥ 50%'], [75, '≥ 75%'], [90, '≥ 90%']] },
-    mc: { lab: 'MCap', key: 'minMc', def: 0, opts: [[0, 'Any'], [10, '≥ $10K'], [50, '≥ $50K'], [100, '≥ $100K'], [500, '≥ $500K'], [1000, '≥ $1M']] }
+  var RDEF = { mc: [0, 100], prog: [0, 100], tax: [0, 10], age: [0, 100] };
+  S.r = JSON.parse(JSON.stringify(RDEF));
+  var AGEL = Math.log10(43200);
+  function mcK(s0) { return Math.pow(10, s0 / 20); }            // slider 0..100 -> $1K..$100M (in K)
+  function ageM(s0) { return Math.pow(10, s0 / 100 * AGEL); }   // slider 0..100 -> 1 min..30 d
+  function ageS(m) { return Math.log10(m) / AGEL * 100; }
+  function rv(k) { var r = S.r[k];
+    if (k === 'mc') return [r[0] <= 0 ? 0 : mcK(r[0]), r[1] >= 100 ? Infinity : mcK(r[1])];
+    if (k === 'age') return [r[0] <= 0 ? 0 : ageM(r[0]), r[1] >= 100 ? Infinity : ageM(r[1])];
+    return [r[0], r[1]]; }
+  function ageTxt(m) { return m < 60 ? Math.round(m) + 'm' : m < 1440 ? (m / 60).toFixed(m < 600 ? 1 : 0).replace('.0', '') + 'h' : Math.round(m / 1440) + 'd'; }
+  function rLabel(k) {
+    var r = S.r[k], d = RDEF[k], v = rv(k);
+    if (r[0] === d[0] && r[1] === d[1]) return 'Any';
+    function one(x, isMax) {
+      if (k === 'mc') return x === Infinity ? '∞' : fmtK(x);
+      if (k === 'age') return x === Infinity ? '∞' : ageTxt(Math.max(1, x));
+      if (k === 'tax') return x + '%';
+      return Math.round(x) + '%';
+    }
+    if (r[0] === d[0]) return (k === 'age' ? '< ' : '≤ ') + one(v[1], true);
+    if (r[1] === d[1]) return (k === 'age' ? '> ' : '≥ ') + one(v[0]);
+    return one(v[0]) + ' – ' + one(v[1], true);
+  }
+  var RCFG = {
+    mc: { lab: 'MCap', title: 'Market cap', max: 100, step: 1, scale: ['$1K', '$10K', '$100K', '$1M', '$10M', '$100M+'],
+      pre: [['Any', 0, 100], ['< $10K', 0, 20], ['$10K–$100K', 20, 40], ['$100K–$1M', 40, 60], ['$1M+', 60, 100]] },
+    prog: { lab: 'Curve', title: 'Bonding curve', max: 100, step: 1, scale: ['0%', '25%', '50%', '75%', '100%'],
+      pre: [['Any', 0, 100], ['Early 0–25%', 0, 25], ['Mid 25–75%', 25, 75], ['Near grad 75–99%', 75, 99], ['Graduated', 100, 100]] },
+    tax: { lab: 'Tax', title: 'Max tax (buy or sell)', max: 10, step: 1, scale: ['0%', '2%', '4%', '6%', '8%', '10%'],
+      pre: [['Any', 0, 10], ['0%', 0, 0], ['≤ 3%', 0, 3], ['≤ 6%', 0, 6], ['High 6%+', 6, 10]] },
+    age: { lab: 'Age', title: 'Time since launch', max: 100, step: 1, scale: ['1m', '10m', '1h', '1d', '30d+'],
+      pre: [['Any', 0, 100], ['< 5 min', 0, Math.round(ageS(5))], ['< 1 hour', 0, Math.round(ageS(60))], ['< 24 hours', 0, Math.round(ageS(1440))], ['Older 1d+', Math.round(ageS(1440)), 100]] }
   };
+  function rFill(k) { var c = RCFG[k], r = S.r[k]; return 'left:' + (r[0] / c.max * 100) + '%;right:' + (100 - r[1] / c.max * 100) + '%'; }
+  function rangePop(k) {
+    var c = RCFG[k], r = S.r[k];
+    return '<div class="fpop range"><div class="rp-h"><span>' + c.title + '</span><b class="mono" id="rpv-' + k + '">' + rLabel(k) + '</b></div>' +
+      '<div class="dual' + (k === 'tax' ? ' taxg' : '') + '"><div class="dual-track"><i id="rpf-' + k + '" style="' + rFill(k) + '"></i></div>' +
+        '<input type="range" min="0" max="' + c.max + '" step="' + c.step + '" value="' + r[0] + '" data-range="' + k + '|0" aria-label="' + c.title + ' minimum">' +
+        '<input type="range" min="0" max="' + c.max + '" step="' + c.step + '" value="' + r[1] + '" data-range="' + k + '|1" aria-label="' + c.title + ' maximum"></div>' +
+      '<div class="rp-scale mono">' + c.scale.map(function (x) { return '<span>' + x + '</span>'; }).join('') + '</div>' +
+      '<div class="rp-pre">' + c.pre.map(function (p) { var on = r[0] === p[1] && r[1] === p[2]; return '<button class="' + (on ? 'on' : '') + '" data-act="rpre" data-arg="' + k + '|' + p[1] + '|' + p[2] + '">' + p[0] + '</button>'; }).join('') + '</div>' +
+      '<div class="rp-foot"><span class="mono muted" id="rpc-' + k + '">' + filtered().length + ' coins match</span><button class="link" style="min-height:0;font-size:12.5px" data-act="rpre" data-arg="' + k + '|' + RDEF[k][0] + '|' + RDEF[k][1] + '">Clear</button></div></div>';
+  }
   function filterBar() {
     var active = 0;
-    var drops = Object.keys(FOPT).map(function (k) {
-      var f = FOPT[k], v = S[f.key], cur = f.opts.filter(function (o) { return o[0] === v; })[0], on = v !== f.def; if (on) active++;
-      var label = cur ? cur[1] : (k === 'tax' ? '≤ ' + v + '%' : k === 'prog' ? '≥ ' + v + '%' : '≥ ' + fmtK(v));
-      return '<div class="fdrop"><button class="fchip' + (on ? ' on' : '') + (S.fpop === k ? ' open' : '') + '" data-act="fpop" data-arg="' + k + '"><span class="fc-l">' + f.lab + '</span><b>' + label + '</b><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg></button>' +
-        (S.fpop === k ? '<div class="fpop">' + f.opts.map(function (o) {
-          var sw = k === 'tax' && o[0] !== 10 ? '<i style="background:' + taxBg(o[0]) + '"></i>' : '';
-          return '<button class="fopt' + (o[0] === v ? ' on' : '') + '" data-act="fset" data-arg="' + k + '|' + o[0] + '">' + sw + o[1] + '</button>';
-        }).join('') + '</div>' : '') + '</div>';
+    var drops = ['mc', 'age', 'prog', 'tax'].map(function (k) {
+      var c = RCFG[k], lbl = rLabel(k), on = lbl !== 'Any'; if (on) active++;
+      return '<div class="fdrop"><button class="fchip' + (on ? ' on' : '') + (S.fpop === k ? ' open' : '') + '" data-act="fpop" data-arg="' + k + '"><span class="fc-l">' + c.lab + '</span><b id="fcl-' + k + '">' + lbl + '</b><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg></button>' +
+        (S.fpop === k ? rangePop(k) : '') + '</div>';
     }).join('');
     var tg = [['zeroOnly', '0% tax', ''], ['gradOnly', 'Graduated', ''], ['rewardsOnly', 'Rewards', I.gift], ['watchOnly', 'Watchlist', I.star(false)], ['cleanOnly', 'No warnings', '<span class="fdot"></span>']].map(function (t) {
       var on = !!S[t[0]]; if (on) active++;
@@ -805,6 +848,17 @@
     }).join('');
     return '<div class="fbar"><span class="fb-ic" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 6h16M7 12h10M10 18h4"/></svg></span>' + drops + '<span class="fb-sep"></span>' + tg +
       (active ? '<button class="freset" data-act="reset">Reset · ' + active + '</button>' : '') + '</div>';
+  }
+  function refreshGrid() {
+    var list = filtered(), g = document.getElementById('grid'), cnt = document.getElementById('count');
+    if (cnt) cnt.textContent = list.length + ' of ' + all().length + ' tokens';
+    ['mc', 'age', 'prog', 'tax'].forEach(function (k) {
+      var l = rLabel(k), e = document.getElementById('fcl-' + k); if (e) { e.textContent = l; e.parentNode.classList.toggle('on', l !== 'Any'); }
+      var v = document.getElementById('rpv-' + k); if (v) v.textContent = l;
+      var f = document.getElementById('rpf-' + k); if (f) f.setAttribute('style', rFill(k));
+      var c = document.getElementById('rpc-' + k); if (c) c.textContent = list.length + ' coins match';
+    });
+    if (g && S.view !== 'bubbles') g.innerHTML = list.length ? list.map(function (t) { return card(t); }).join('') : '<div class="empty"><b style="font-size:19px">No coins in this range</b><span class="muted">Widen a slider or hit Reset.</span><button class="btn pri" data-act="reset">Reset filters</button></div>';
   }
   function home() {
     var hero = heroHTML();
@@ -1349,6 +1403,7 @@
     S.launched.unshift(t); if (S.launched.length > 20) S.launched.pop();
     toast('New launch: ' + name + ' $' + tick, t);
     machineLaunch(t);
+    var rbx = document.getElementById('race-b'); if (rbx) { rbx.insertAdjacentHTML('beforeend', raceBubble(t)); raceLayout(); }
     if (S.screen === 'home' && S.sort === 'newest') {
       S.newTick = tick;
       var grid = document.getElementById('grid'), ok = filtered().indexOf(t) !== -1;
@@ -1392,7 +1447,7 @@
       case 'sort': set({ sort: arg }); break;
       case 'pair': set({ pair: arg }); break;
       case 'toggle': var o = {}; o[arg] = !S[arg]; set(o); break;
-      case 'reset': set({ fpop: null, cleanOnly: false, maxTax: 10, minProg: 0, minMc: 0, pair: 'All', cat: 'all', zeroOnly: false, gradOnly: false, rewardsOnly: false, watchOnly: false }); break;
+      case 'reset': S.r = JSON.parse(JSON.stringify(RDEF)); set({ fpop: null, cleanOnly: false, maxTax: 10, minProg: 0, minMc: 0, pair: 'All', cat: 'all', zeroOnly: false, gradOnly: false, rewardsOnly: false, watchOnly: false }); break;
       case 'tf': set({ tf: arg }); break;
       case 'tpTab': set({ tpTab: arg }); break;
       case 'side': set({ side: arg }); break;
@@ -1410,9 +1465,10 @@
       case 'cpair': setC({ pair: arg }); break;
       case 'cat': set({ cat: arg, pair: 'All' }); break;
       case 'fpop': set({ fpop: S.fpop === arg ? null : arg }); break;
-      case 'fset': var fs = arg.split('|'), fo = {}; fo[FOPT[fs[0]].key] = +fs[1]; fo.fpop = null; set(fo); break;
+      case 'rpre': var rq = arg.split('|'); S.r[rq[0]] = [+rq[1], +rq[2]]; render(); break;
       case 'rz': var dd = stageWH(); if (dd) zoomAt(dd.w / 2, dd.h / 2, arg === 'in' ? 1.6 : 1 / 1.6, true); break;
       case 'rzp': zoomPreset(arg); break;
+      case 'rzat': var za = arg.split('|'), dz = stageWH(); if (dz) { var px0 = +za[0] / 100 * dz.w * RZ.z + RZ.x, py0 = +za[1] / 100 * dz.h * RZ.z + RZ.y; zoomAt(px0, py0, 2.6, true); } break;
       case 'soc': var sp0 = arg.split('|'), st0 = find(sp0[0]), so0 = st0 && socialsOf(st0), u0 = so0 && so0[sp0[1]];
         if (so0 && !so0.demo && u0) window.open(u0, '_blank', 'noopener'); else toast('Demo coin — its ' + ({ web: 'website', x: 'X account', tg: 'Telegram' })[sp0[1]] + ' opens here once real coins go live', st0); break;
       case 'quick': var qq0 = QUICK.filter(function (x) { return x[0] === arg; })[0]; if (qq0 && qq0[2]) set({ cat: pairInfo(qq0[2]).cat, pair: qq0[2], view: 'grid' }); else set({ cat: arg, pair: 'All', view: 'grid' }); setTimeout(function () { var bd = document.getElementById('board'); if (bd) bd.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 30); break;
@@ -1477,6 +1533,13 @@
   });
 
   document.addEventListener('input', function (e) {
+    var rg = e.target.getAttribute && e.target.getAttribute('data-range');
+    if (rg) {
+      var pk = rg.split('|'), k = pk[0], idx = +pk[1], val = +e.target.value, r = S.r[k];
+      if (idx === 0) r[0] = Math.min(val, r[1]); else r[1] = Math.max(val, r[0]);
+      if (+e.target.value !== r[idx]) e.target.value = r[idx];
+      refreshGrid(); return;
+    }
     var el = e.target, key = el.getAttribute && el.getAttribute('data-bind');
     if (!key) return;
     var v = el.value;
