@@ -1250,3 +1250,43 @@ header{background:rgba(9,9,10,.78);border-bottom-color:#1C1C20}
 .race-zoom .hill-path{stroke-width:calc(2.5px / var(--z,1))}
 .zoom-hint{top:auto;bottom:10px;right:14px}
 .phase2bg{border-left-width:calc(1px / var(--z,1))}
+/* ===== clean rug bin ===== */
+.mlab{width:150px}
+.rugbin{position:absolute;top:262px;width:78px;height:66px;transform:translateX(-50%);z-index:5;animation:none}
+.rugbin .bin-lid,.rugbin .bin-body{display:none}
+.bin-shadow{position:absolute;left:-6px;right:-6px;bottom:-6px;height:12px;border-radius:50%;background:radial-gradient(closest-side,rgba(0,0,0,.7),transparent)}
+.bin-back{position:absolute;left:3px;right:3px;top:6px;height:14px;border-radius:50%;background:radial-gradient(ellipse at 50% 70%,#050506,#141416);border:1px solid #3A3B41}
+.bin-slot{position:absolute;left:50%;top:13px;width:0;height:0;z-index:2}
+.bin-front{position:absolute;left:0;right:0;top:13px;bottom:0;z-index:3;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;clip-path:polygon(0 0,100% 0,92% 100%,8% 100%);
+  background:linear-gradient(90deg,#1B1B1F,#2A2B30 30%,#202024 70%,#151518);border-top:2px solid #55575E;border-radius:0 0 10px 10px}
+.bin-front::before{content:"";position:absolute;inset:6px 10px;background:repeating-linear-gradient(90deg,transparent 0 9px,rgba(255,255,255,.04) 9px 11px);pointer-events:none}
+.bin-front b{position:relative;font-family:var(--disp);font-stretch:125%;font-size:19px;color:#F2708A;line-height:1}
+.bin-front small{position:relative;font-family:var(--mono);font-size:7.5px;letter-spacing:.14em;color:var(--muted)}
+.bin-lid{display:block!important;position:absolute;left:-4px;right:-4px;top:2px;height:9px;z-index:4;border-radius:5px 5px 2px 2px;background:linear-gradient(180deg,#5A5C63,#34353B);box-shadow:0 2px 0 #1A1A1D;transform-origin:4px 100%;transition:transform .32s cubic-bezier(.3,1.6,.5,1)}
+.bin-lid i{position:absolute;left:50%;top:-5px;width:16px;height:5px;margin-left:-8px;border-radius:3px 3px 0 0;background:#6E7077}
+.rugbin.open .bin-lid{transform:rotate(-118deg);transition:transform .35s cubic-bezier(.2,.8,.2,1)}
+.rugbin.thud{animation:thud .45s cubic-bezier(.3,1.6,.5,1)}
+@keyframes thud{30%{transform:translateX(-50%) scale(1.06,.92)}60%{transform:translateX(-50%) scale(.98,1.03)}}
+.bin-plus{position:absolute;left:50%;top:-6px;z-index:6;transform:translateX(-50%);font-family:var(--disp);font-stretch:125%;font-weight:900;font-size:15px;color:#F2708A;opacity:0;pointer-events:none}
+.bin-plus.go{animation:plus1 .9s ease-out}
+@keyframes plus1{0%{opacity:0;translate:0 0}20%{opacity:1}100%{opacity:0;translate:0 -34px}}
+.lcoin.inbin{position:absolute;transform:translateX(-50%);animation:fallIn .46s cubic-bezier(.55,0,.9,.5) forwards;rotate:0deg}
+@keyframes fallIn{0%{translate:0 0;rotate:0deg}100%{translate:0 64px;rotate:-25deg;scale:.85}}
+.lcoin.inbin .lc-tax,.lcoin.inbin .lc-rug,.lcoin.inbin .lc-mc{opacity:0!important}
+.lcoin.grabbed{animation:swing 1.2s ease-in-out infinite alternate}
+@keyframes swing{from{rotate:-5deg}to{rotate:5deg}}
+/* bin mounted above the belt */
+.rugbin{top:104px;height:50px;width:72px;z-index:5}
+.bin-shadow{display:none}
+.bin-pole{position:absolute;right:-9px;top:-96px;width:5px;height:122px;border-radius:3px;background:linear-gradient(90deg,#3A3B41,#55575E,#3A3B41)}
+.bin-pole::after{content:"";position:absolute;right:0;top:104px;width:12px;height:5px;border-radius:3px;background:#55575E}
+.bin-back{top:5px;height:13px}
+.bin-slot{top:12px}
+.bin-front{top:12px;border-radius:0 0 9px 9px}
+.bin-lid{top:1px;transform-origin:calc(100% - 4px) 100%}
+.rugbin.open .bin-lid{transform:rotate(-100deg)}
+.bin-plus{top:-24px}
+@keyframes fallIn{0%{translate:0 0;rotate:0deg}100%{translate:0 58px;rotate:-20deg;scale:.8}}
+.lcoin.inbin{clip-path:inset(0 -20px -20px -20px)}
+.rugbin.open .bin-lid{transform:rotate(100deg)}
+.rugbin{width:76px}

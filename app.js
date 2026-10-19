@@ -1505,7 +1505,7 @@
   function hillPos(p) { var k = p / 100; return { x: 8 + k * 78, y: 12 + Math.pow(k, 1.6) * 62 }; }
   function jarH(v) { return Math.min(92, 8 + Math.sqrt(v) * 38); }
   var RUGS = 0, CLEAN = 0;
-  var POS = { press: 18, tax: 34, scan: 48, pick: 56, bin: 64, pump: 76, launch: 91 };
+  var POS = { press: 18, tax: 34, scan: 46, pick: 55, bin: 64, pump: 78, launch: 92 };
   function machineSection() {
     var mach = [
       ['press', POS.press, 'MASCOT PRESS', '#A3B1C2', '1', 'Give it a face', 'Name, ticker &amp; mascot'],
@@ -1525,7 +1525,8 @@
       '<div class="trolley" id="trolley" style="left:' + POS.pick + '%"><span class="tr-body"></span><span class="cable" id="cable"></span>' +
       '<span class="claw" id="claw"><span class="claw-hub"></span><span class="finger l"></span><span class="finger r"></span><span class="claw-hold" id="claw-hold"></span></span></div>' +
       '<span class="crane-tag" style="left:' + ((POS.pick + POS.bin) / 2) + '%">RUG CATCHER</span></div>';
-    var bin = '<div class="rugbin" id="rugbin" style="left:' + POS.bin + '%"><span class="bin-lid"></span><span class="bin-body"><b id="rug-n">' + RUGS + '</b><small>RUGS</small></span></div>';
+    var bin = '<div class="rugbin" id="rugbin" style="left:' + POS.bin + '%"><span class="bin-pole"></span><span class="bin-back"></span><span class="bin-slot" id="bin-slot"></span>' +
+      '<span class="bin-front"><b id="rug-n">' + RUGS + '</b><small>RUGS</small></span><span class="bin-lid"><i></i></span><span class="bin-plus" id="bin-plus">+1</span></div>';
     var split = '<div class="split"><div class="split-h"><b>Where does the tax go?</b><span class="muted">Every trade pays the tax shown on the coin. It gets shared like this:</span><span class="mono split-tot" id="fs-jar">' + M.tax.toFixed(2) + ' SOL shared so far</span></div>' +
       '<div class="split-bar"><span class="sp c" style="flex:50"><b>50%</b> Creator</span><span class="sp h" style="flex:30"><b>30%</b> Holders</span><span class="sp v" style="flex:20"><b>20%</b> Burn</span></div></div>';
     return '<section class="factory card-s" id="machine">' +
@@ -1553,37 +1554,41 @@
   function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
   function catchRug(c) {
     ARM.busy = true;
-    var tro = document.getElementById('trolley'), cab = document.getElementById('cable'), claw = document.getElementById('claw'), hold = document.getElementById('claw-hold'), bin = document.getElementById('rugbin');
-    if (!tro || !cab || !claw || !hold) { ARM.busy = false; c.el.remove(); c.gone = true; return; }
+    var tro = document.getElementById('trolley'), cab = document.getElementById('cable'), claw = document.getElementById('claw'), hold = document.getElementById('claw-hold'), bin = document.getElementById('rugbin'), slot = document.getElementById('bin-slot');
+    if (!tro || !cab || !claw || !hold || !bin || !slot) { ARM.busy = false; c.el.remove(); c.gone = true; return; }
     claw.classList.add('open');
     cab.style.height = '118px';
     wait(620).then(function () {
       claw.classList.remove('open'); claw.classList.add('grip');
-      return wait(260);
+      return wait(240);
     }).then(function () {
       c.el.classList.add('grabbed'); c.el.style.left = ''; hold.appendChild(c.el);
       cab.style.height = '26px';
       return wait(560);
     }).then(function () {
       tro.style.left = POS.bin + '%';
-      return wait(760);
+      setTimeout(function () { bin.classList.add('open'); }, 380);
+      return wait(780);
     }).then(function () {
-      cab.style.height = '96px';
-      if (bin) bin.classList.add('open');
-      return wait(560);
-    }).then(function () {
-      claw.classList.remove('grip'); claw.classList.add('open');
-      c.el.classList.add('drop');
+      cab.style.height = '36px';
       return wait(420);
     }).then(function () {
-      c.el.remove(); c.gone = true; RUGS++;
-      setCount('rug-n', RUGS); setCount('ls-rug', RUGS);
-      if (bin) { bin.classList.remove('open', 'shake'); void bin.offsetWidth; bin.classList.add('shake'); }
-      cab.style.height = '26px'; claw.classList.remove('open');
-      return wait(380);
+      claw.classList.remove('grip'); claw.classList.add('open');
+      c.el.classList.remove('grabbed'); c.el.classList.add('inbin');
+      c.el.style.left = '0'; c.el.style.top = '-54px';
+      slot.appendChild(c.el);
+      return wait(460);
     }).then(function () {
+      c.el.remove(); c.gone = true; RUGS++;
+      bin.classList.remove('open', 'thud'); void bin.offsetWidth; bin.classList.add('thud');
+      setCount('rug-n', RUGS); setCount('ls-rug', RUGS);
+      var pl = document.getElementById('bin-plus'); if (pl) { pl.classList.remove('go'); void pl.offsetWidth; pl.classList.add('go'); }
+      cab.style.height = '26px';
+      return wait(420);
+    }).then(function () {
+      claw.classList.remove('open');
       tro.style.left = POS.pick + '%';
-      return wait(700);
+      return wait(760);
     }).then(function () { ARM.busy = false; });
   }
   (function lineLoop(now) {
