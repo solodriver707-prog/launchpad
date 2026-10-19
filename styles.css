@@ -1290,3 +1290,28 @@ header{background:rgba(9,9,10,.78);border-bottom-color:#1C1C20}
 .lcoin.inbin{clip-path:inset(0 -20px -20px -20px)}
 .rugbin.open .bin-lid{transform:rotate(100deg)}
 .rugbin{width:76px}
+/* ===================== THE MOUNTAIN ===================== */
+.race-stage.mtn{height:520px;background:radial-gradient(ellipse at 50% 0%,rgba(255,255,255,.05),transparent 55%),linear-gradient(180deg,#0A0A0C,#101013 60%,#0C0C0E);border-color:#1F1F23}
+.mtn .stars{position:absolute;left:0;right:0;top:0;height:48%;background-image:radial-gradient(1px 1px at 12% 22%,rgba(255,255,255,.7),transparent),radial-gradient(1px 1px at 28% 8%,rgba(255,255,255,.5),transparent),radial-gradient(1.5px 1.5px at 41% 30%,rgba(255,255,255,.6),transparent),radial-gradient(1px 1px at 63% 14%,rgba(255,255,255,.6),transparent),radial-gradient(1px 1px at 77% 34%,rgba(255,255,255,.4),transparent),radial-gradient(1.5px 1.5px at 88% 10%,rgba(255,255,255,.6),transparent),radial-gradient(1px 1px at 6% 40%,rgba(255,255,255,.4),transparent),radial-gradient(1px 1px at 94% 42%,rgba(255,255,255,.4),transparent);animation:twinkleBg 4s ease-in-out infinite alternate;pointer-events:none}
+@keyframes twinkleBg{to{opacity:.55}}
+.mtn .alt{position:absolute;left:5%;right:5%;border-top:1px dashed rgba(255,255,255,.08)}
+.mtn .alab{position:absolute;right:5.5%;transform:translateY(-120%) scale(calc(1 / var(--z,1)));transform-origin:100% 100%;font-family:var(--mono);font-size:10.5px;color:var(--muted)}
+.mtn .contour{position:absolute;border-top:1px dashed rgba(255,255,255,.1);pointer-events:none}
+.mtn .clab{position:absolute;transform:translate(-100%,-50%) scale(calc(1 / var(--z,1)));transform-origin:100% 50%;font-family:var(--mono);font-size:10px;color:var(--faint)}
+.moonflag2{position:absolute;left:50%;transform:translate(-50%,-50%) scale(calc(1 / var(--z,1)));display:flex;flex-direction:column;align-items:center;gap:6px;pointer-events:none}
+.moonflag2 .moon{width:40px;height:40px;border-radius:99px;background:radial-gradient(circle at 35% 35%,#FFFFFF,#D9DADE 55%,#8E9198);box-shadow:0 0 40px rgba(255,255,255,.25)}
+.moonflag2 b{font-family:var(--mono);font-size:10px;letter-spacing:.14em;color:var(--soft)}
+.mtn .rayflag{transform:translate(-2px,-100%) scale(calc(1 / var(--z,1)));transform-origin:0 100%}
+.mtn .flagcloth{background:#ECECEE}
+.mtn .phase-l{bottom:12px}
+.mtn .phase-l.p1{left:3%}.mtn .phase-l.p2{left:3%;bottom:auto;top:14%;color:var(--muted)}
+.mtn .hill-path{filter:drop-shadow(0 0 10px rgba(255,255,255,.12))}
+.mtn .rb .av{box-shadow:0 0 0 2px #151518,0 0 0 3px #45464D}
+.mtn .rb.done .av{box-shadow:0 0 0 2px #0C0C0E,0 0 0 3.5px #ECECEE,0 0 18px rgba(255,255,255,.2)}
+.mtn .rb-pct{background:rgba(10,10,12,.8)}
+@media (max-width:720px){.race-stage.mtn{height:440px}}
+.race-tools{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:14px}
+.race-tools .zoombar{position:static;max-width:100%}
+.zoom-hint2{margin-left:auto;font-size:11.5px;color:var(--faint)}
+.race-tools + .race-stage{margin-top:10px}
+@media (max-width:900px){.zoom-hint2{display:none}}

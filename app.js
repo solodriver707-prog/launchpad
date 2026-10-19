@@ -482,24 +482,28 @@
     '</div>';
   }
   // ================= RACE TO RAYDIUM (all coins climbing the hill) =================
-  var RACE_OFF = {};
+  var RACE_OFF = {}, RPOS = {};
   var LG0 = Math.log10(5e5), LG1 = Math.log10(1e8);
-  function hillXY(p) { var k = Math.max(0, Math.min(1, p / 100)); return { x: 4 + k * 42, y: 88 - Math.pow(k, 1.4) * 34 }; }
+  var MB = 95, MP = 47; // mountain base / peak (y %)
+  function mHalf(k) { return 47 * Math.pow(Math.max(0, 1 - k), 1.55); }
   function gameF(t) { return Math.max(0, Math.min(1, (Math.log10(t.mcN * 1000) - LG0) / (LG1 - LG0))); }
-  function gameXY(f) { return { x: 50 + f * 42, y: 54 - Math.pow(f, 0.85) * 30 }; }
-  function mcXY(usd) { return gameXY(Math.max(0, Math.min(1, (Math.log10(usd) - LG0) / (LG1 - LG0)))); }
-  function raceSize(t) { return Math.max(28, Math.min(60, 22 + Math.sqrt(t.mcN) * (t.prog >= 100 ? 0.16 : 1.1))); }
-  function racePath(close) {
-    var d = close ? 'M0,100 L0,88' : 'M0,88', i;
-    for (i = 0; i <= 40; i++) { var h = hillXY(i * 2.5); d += ' L' + h.x.toFixed(2) + ',' + h.y.toFixed(2); }
-    d += ' L50,54';
-    for (i = 1; i <= 40; i++) { var g = gameXY(i / 40); d += ' L' + g.x.toFixed(2) + ',' + g.y.toFixed(2); }
-    d += ' L100,24';
-    return close ? d + ' L100,100 Z' : d;
+  function skyY(f) { return MP - 7 - f * (MP - 7 - 21); }
+  function mcSkyY(usd) { return skyY(Math.max(0, Math.min(1, (Math.log10(usd) - LG0) / (LG1 - LG0)))); }
+  function raceSize(t) { return t.prog >= 100 ? Math.max(30, Math.min(54, 26 + Math.sqrt(t.mcN) * 0.12)) : Math.max(26, Math.min(40, 24 + Math.sqrt(t.mcN) * 0.7)); }
+  function mountainPath() {
+    var L = [], R = [], i;
+    for (i = 0; i <= 40; i++) { var k = i / 40, y = MB - k * (MB - MP), h = mHalf(k); L.push((50 - h).toFixed(2) + ',' + y.toFixed(2)); R.unshift((50 + h).toFixed(2) + ',' + y.toFixed(2)); }
+    return 'M' + L.join(' L') + ' L' + R.join(' L');
+  }
+  function raceTarget(t) {
+    var h = hash(t.tick + 'm'), side = (h & 1) ? 1 : -1, fr = ((h >> 3) % 1000) / 1000;
+    if (t.prog >= 100) { var f = gameF(t); return { x: 50 + side * (6 + fr * 34), y: skyY(f), sky: true }; }
+    var k = Math.max(0, Math.min(1, t.prog / 100)), half = mHalf(k);
+    return { x: 50 + side * half * (0.18 + fr * 0.78), y: MB - k * (MB - MP) - 0.6, sky: false, half: half };
   }
   // ----- race zoom / pan -----
   var RZ = { z: 1, x: 0, y: 0, preset: 'all' };
-  var ZP = [['all', 'All', 0, 1, 0, 1], ['start', 'Start', 0, .22, .62, .98], ['p1', 'Phase 1', 0, .5, .4, .98], ['near', 'Near graduation', .3, .52, .4, .8], ['p2', 'Phase 2', .48, 1, .1, .62]];
+  var ZP = [['all', 'All', 0, 1, 0, 1], ['start', 'Base camp', .04, .96, .68, 1], ['p1', 'The climb', .1, .9, .45, 1], ['near', 'Near the summit', .3, .7, .38, .72], ['p2', 'The sky', .12, .88, 0, .5]];
   function zoomStyle() { return 'transform:translate(' + RZ.x.toFixed(1) + 'px,' + RZ.y.toFixed(1) + 'px) scale(' + RZ.z.toFixed(3) + ');--z:' + RZ.z.toFixed(3); }
   function zoomBar() {
     return '<div class="zoombar"><button class="zb" data-act="rz" data-arg="out" aria-label="Zoom out">−</button><span class="zb-v mono" id="zb-v">' + Math.round(RZ.z * 100) + '%</span><button class="zb" data-act="rz" data-arg="in" aria-label="Zoom in">+</button>' +
@@ -569,48 +573,60 @@
   document.addEventListener('touchend', function () { pinch = null; });
   window.addEventListener('resize', function () { zApply(false); });
 
-  function raceSection() {
-    var a = all(), climbing = a.filter(function (t) { return t.prog < 100; }).sort(function (x, y) { return x.prog - y.prog; }), grad = a.filter(function (t) { return t.prog >= 100; }).sort(function (x, y) { return x.mcN - y.mcN; });
-    var bubbles = '', prevs = [], prevg = [];
-    climbing.forEach(function (t) { RACE_OFF[t.tick] = prevs.filter(function (pp) { return Math.abs(pp - t.prog) < 4.5; }).length; prevs.push(t.prog); bubbles += raceBubble(t); });
-    grad.forEach(function (t) { var f = gameF(t); RACE_OFF[t.tick] = prevg.filter(function (pp) { return Math.abs(pp - f) < 0.07; }).length; prevg.push(f); bubbles += raceBubble(t); });
-    var leader = climbing[climbing.length - 1], king = grad[grad.length - 1];
-    var marks = [25, 50, 75].map(function (m) { var h = hillXY(m); return '<span class="rmark" style="left:' + h.x + '%;top:' + h.y + '%"><i></i><b>' + m + '%</b></span>'; }).join('');
-    var miles = [[1e6, '$1M'], [1e7, '$10M'], [5e7, '$50M']].map(function (m) { var g = mcXY(m[0]); return '<span class="rmile" style="left:' + g.x + '%;top:' + g.y + '%"><i></i><b>' + m[1] + '</b></span>'; }).join('');
-    function stat(lbl, t2, val) { return t2 ? '<button class="race-lead" data-act="open" data-arg="' + esc(t2.tick) + '">' + avatarHTML(t2, 26) + '<span><small>' + lbl + '</small><b>$' + esc(t2.tick) + ' · ' + val + '</b></span></button>' : ''; }
-    return '<section class="race card-s" id="race"><div class="m-head"><div><span class="kicker"><span class="livedot"></span>LIVE</span><h2 class="title-xl" style="font-size:30px;margin:8px 0 4px">Race to the moon</h2>' +
-      '<p class="muted" style="margin:0;max-width:640px">Phase 1: climb the bonding curve to graduate. Phase 2: after Raydium the real game starts — coins climb by market cap all the way to $100M.</p></div>' +
-      '<div class="race-stats"><div><span class="muted">Climbing</span><b class="mono">' + climbing.length + '</b></div><div><span class="muted">Graduated</span><b class="mono" style="color:var(--ice)">' + grad.length + '</b></div>' +
-      stat('CLOSEST TO GRADUATING', leader, leader ? leader.prog.toFixed(0) + '%' : '') + stat('HIGHEST ON THE MOUNTAIN', king, king ? fmtK(king.mcN) : '') + '</div></div>' +
-      '<div class="race-stage" id="race-stage">' + zoomBar() + '<div class="race-zoom" id="race-zoom" style="' + zoomStyle() + '"><div class="phase2bg"></div><svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="hillg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#E8E8EA" stop-opacity=".16"/><stop offset="1" stop-color="#E8E8EA" stop-opacity="0"/></linearGradient></defs>' +
-        '<path d="' + racePath(true) + '" fill="url(#hillg)"/><path d="' + racePath(false) + '" fill="none" stroke="#E8E8EA" stroke-width="2.5" vector-effect="non-scaling-stroke" class="hill-path"/></svg>' +
-        marks + miles +
-        '<span class="rayflag" style="left:48%;top:54%"><span class="flagpole"></span><span class="flagcloth">RAYDIUM</span></span>' +
-        '<span class="moonflag"><span class="moon"></span><b>MOON · $100M</b></span>' +
-        '<span class="startline">START</span><span class="phase-l p1">PHASE 1 · BONDING CURVE</span><span class="phase-l p2">PHASE 2 · THE REAL GAME</span>' +
-        '<div id="race-b">' + bubbles + '</div></div><span class="zoom-hint">Ctrl + scroll to zoom · double-click to zoom in · drag to move</span></div></section>';
+  function relax(list) {
+    var W = 1300, H = 460;
+    for (var it = 0; it < 30; it++) {
+      for (var a = 0; a < list.length; a++) for (var b = a + 1; b < list.length; b++) {
+        var A2 = list[a], B2 = list[b]; if (A2.sky !== B2.sky) continue;
+        var dx = (B2.x - A2.x) * W / 100, dy = (B2.y - A2.y) * H / 100, d = Math.sqrt(dx * dx + dy * dy) || 0.01, min = (A2.r + B2.r) / 2 + 4;
+        if (d < min) { var push = (min - d) / 2 / W * 100, sx = dx >= 0 ? 1 : -1; A2.x -= sx * push; B2.x += sx * push; }
+      }
+      list.forEach(function (p) { if (!p.sky) { var lo = 50 - p.half * 0.97, hi = 50 + p.half * 0.97; p.x = Math.max(lo, Math.min(hi, p.x)); } else p.x = Math.max(6, Math.min(94, p.x)); });
+    }
   }
-  function racePos(t) {
-    var sz = raceSize(t), off = RACE_OFF[t.tick] || 0;
-    if (t.prog >= 100) { var g = gameXY(gameF(t)); return { l: g.x, t: g.y - 3 - off * 10, sz: sz }; }
-    var h = hillXY(t.prog); return { l: h.x, t: h.y - 3 - off * 9, sz: sz };
+  function raceSection() {
+    var a = all(), climbing = a.filter(function (t) { return t.prog < 100; }), grad = a.filter(function (t) { return t.prog >= 100; }).sort(function (x, y) { return x.mcN - y.mcN; });
+    var pts = a.map(function (t) { var g = raceTarget(t); g.t = t; g.r = raceSize(t); g.half = g.half || 0; return g; });
+    relax(pts); pts.forEach(function (p) { RPOS[p.t.tick] = { x: p.x, y: p.y }; });
+    var leader = climbing.slice().sort(function (x, y) { return y.prog - x.prog; })[0], king = grad[grad.length - 1];
+    var contours = [.25, .5, .75].map(function (k) {
+      var y = MB - k * (MB - MP), h = mHalf(k);
+      return '<span class="contour" style="left:' + (50 - h) + '%;width:' + (2 * h) + '%;top:' + y + '%"></span><span class="clab" style="left:' + (50 - h - 1) + '%;top:' + y + '%">' + (k * 100) + '%</span>';
+    }).join('');
+    var alts = [[1e6, '$1M'], [1e7, '$10M'], [5e7, '$50M']].map(function (m) { var y = mcSkyY(m[0]); return '<span class="alt" style="top:' + y + '%"></span><span class="alab" style="top:' + y + '%">' + m[1] + '</span>'; }).join('');
+    function stat(lbl, t2, val) { return t2 ? '<button class="race-lead" data-act="open" data-arg="' + esc(t2.tick) + '">' + avatarHTML(t2, 26) + '<span><small>' + lbl + '</small><b>$' + esc(t2.tick) + ' · ' + val + '</b></span></button>' : ''; }
+    return '<section class="race card-s" id="race"><div class="m-head"><div><span class="kicker"><span class="livedot"></span>LIVE</span><h2 class="title-xl" style="font-size:30px;margin:8px 0 4px">The Mountain</h2>' +
+      '<p class="muted" style="margin:0;max-width:620px">Every coin climbs the bonding curve. Reach the summit and it graduates to Raydium — then the real game starts in the sky, all the way to the moon.</p></div>' +
+      '<div class="race-stats"><div><span class="muted">Climbing</span><b class="mono">' + climbing.length + '</b></div><div><span class="muted">In the sky</span><b class="mono">' + grad.length + '</b></div>' +
+      stat('CLOSEST TO SUMMIT', leader, leader ? leader.prog.toFixed(0) + '%' : '') + stat('HIGHEST IN THE SKY', king, king ? fmtK(king.mcN) : '') + '</div></div>' +
+      '<div class="race-tools">' + zoomBar() + '<span class="zoom-hint2">Ctrl + scroll to zoom · double-click · drag to move</span></div><div class="race-stage mtn" id="race-stage"><div class="race-zoom" id="race-zoom" style="' + zoomStyle() + '">' +
+        '<span class="stars"></span>' + alts +
+        '<span class="moonflag2" style="top:' + mcSkyY(1e8) + '%"><span class="moon"></span><b>MOON · $100M</b></span>' +
+        '<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="mtnF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3A3B41"/><stop offset=".45" stop-color="#1D1D21"/><stop offset="1" stop-color="#121214"/></linearGradient>' +
+          '<linearGradient id="mtnS" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".38" stop-color="#fff" stop-opacity=".06"/><stop offset=".62" stop-color="#000" stop-opacity=".14"/><stop offset="1" stop-color="#000" stop-opacity="0"/></linearGradient></defs>' +
+          '<path d="' + mountainPath() + ' Z" fill="url(#mtnF)"/><path d="' + mountainPath() + ' Z" fill="url(#mtnS)"/>' +
+          '<path d="' + mountainPath() + '" fill="none" stroke="#E8E8EA" stroke-width="2" vector-effect="non-scaling-stroke" class="hill-path"/></svg>' +
+        contours +
+        '<span class="rayflag" style="left:50%;top:' + MP + '%"><span class="flagpole"></span><span class="flagcloth">RAYDIUM</span></span>' +
+        '<span class="phase-l p1">PHASE 1 · THE CLIMB</span><span class="phase-l p2">PHASE 2 · THE SKY</span>' +
+        '<div id="race-b">' + pts.map(function (p) { return raceBubble(p.t); }).join('') + '</div></div></div></section>';
   }
   function raceBubble(t) {
-    var p = racePos(t), done = t.prog >= 100, lab = done ? fmtK(t.mcN) : Math.min(100, t.prog).toFixed(0) + '%';
-    return '<button class="rb ' + (done ? 'done' : '') + '" data-race="' + esc(t.tick) + '" data-act="open" data-arg="' + esc(t.tick) + '" style="left:' + p.l + '%;top:' + p.t + '%;--sz:' + p.sz + 'px" data-tip="$' + esc(t.tick) + ' · ' + (done ? 'graduated · ' : Math.min(100, t.prog).toFixed(0) + '% up · ') + fmtK(t.mcN) + '">' +
-      avatarHTML(t, Math.round(p.sz)) + '<span class="rb-pct mono">' + lab + '</span></button>';
+    var p = RPOS[t.tick] || raceTarget(t), sz = raceSize(t), done = t.prog >= 100, lab = done ? fmtK(t.mcN) : Math.min(100, t.prog).toFixed(0) + '%';
+    return '<button class="rb ' + (done ? 'done' : '') + '" data-race="' + esc(t.tick) + '" data-act="open" data-arg="' + esc(t.tick) + '" style="left:' + p.x.toFixed(2) + '%;top:' + p.y.toFixed(2) + '%;--sz:' + sz + 'px" data-tip="$' + esc(t.tick) + ' · ' + (done ? 'graduated · ' : Math.min(100, t.prog).toFixed(0) + '% up · ') + fmtK(t.mcN) + '">' +
+      avatarHTML(t, Math.round(sz)) + '<span class="rb-pct mono">' + lab + '</span></button>';
   }
   function raceUpdate(t, side) {
     var el = document.querySelector('.rb[data-race="' + t.tick + '"]'); if (!el) return;
-    if (t.prog >= 100 && !el.classList.contains('done')) { el.classList.add('done'); RACE_OFF[t.tick] = 0; }
-    var p = racePos(t); el.style.left = p.l + '%'; el.style.top = p.t + '%';
-    var done = t.prog >= 100, pc = el.querySelector('.rb-pct'); if (pc) pc.textContent = done ? fmtK(t.mcN) : Math.min(100, t.prog).toFixed(0) + '%';
+    var g = raceTarget(t), old = RPOS[t.tick];
+    if (old && !g.sky && old.y !== undefined) { var half = g.half * 0.97; g.x = Math.max(50 - half, Math.min(50 + half, old.x)); }
+    RPOS[t.tick] = { x: g.x, y: g.y };
+    el.style.left = g.x.toFixed(2) + '%'; el.style.top = g.y.toFixed(2) + '%';
+    var done = t.prog >= 100; el.classList.toggle('done', done);
+    var pc = el.querySelector('.rb-pct'); if (pc) pc.textContent = done ? fmtK(t.mcN) : Math.min(100, t.prog).toFixed(0) + '%';
     el.setAttribute('data-tip', '$' + t.tick + ' · ' + (done ? 'graduated · ' : Math.min(100, t.prog).toFixed(0) + '% up · ') + fmtK(t.mcN));
     el.classList.remove('up-hit', 'down-hit'); void el.offsetWidth; el.classList.add(side === 'buy' ? 'up-hit' : 'down-hit');
   }
-
-
-
   function heroHTML() {
     var st = stats(), slides = HERO.map(function (tk, i) { return heroSlide(find(tk), i); }).join('');
     var avs = all().slice(0, 7).map(function (t, i) { return '<span style="--i:' + i + '">' + avatarHTML(t, 30) + '</span>'; }).join('');
