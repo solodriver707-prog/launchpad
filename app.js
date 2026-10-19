@@ -303,7 +303,7 @@
       right = '<button class="btn sec" data-act="openWallet">Connect wallet</button>';
     }
     return '<header><div class="wrap hdr">' +
-      '<button class="brand" data-act="home" aria-label="treid home">' + LOGO + '<span class="brand-name">treid</span></button><span class="hlive"><span class="livedot"></span><b class="mono" id="hlive-n">' + all().length + '</b> live</span>' +
+      '<button class="brand" data-act="home" aria-label="treid home"><span class="brand-name">treid</span></button><span class="hlive"><span class="livedot"></span><b class="mono" id="hlive-n">' + all().length + '</b> live</span>' +
       '<nav class="navlinks"><span class="nav-ind" id="nav-ind"></span><button class="' + (S.screen === 'home' ? 'on' : '') + '" data-act="home">Board</button><button class="' + (S.screen === 'create' ? 'on' : '') + '" data-act="create">Create</button><button class="' + (S.screen === 'leaders' ? 'on' : '') + '" data-act="leaders">Leaderboard</button><button data-act="how">How it works</button></nav>' +
       '<button class="searchbtn" data-act="palette">' + I.search + '<span>Search tokens or paste CA</span><span class="kbd">Ctrl K</span></button>' +
       '<div class="hdr-right"><button class="wl-btn' + (S.screen === 'watch' ? ' on' : '') + '" data-act="watchPage" aria-label="Watchlist" data-tip="Your watchlist">' + I.star(S.watch.length > 0) + (S.watch.length ? '<b class="mono" id="wl-n">' + S.watch.length + '</b>' : '') + '</button><button class="btn pri" data-act="create">+ Launch token</button>' + right + '</div>' +
@@ -379,11 +379,12 @@
     var flags = fl.length ? '<div class="tc-flags bad" data-tip="' + esc(fl.join(' · ')) + '"><span class="fl-ic">!</span><span>' + esc(fl.slice(0, 2).join(' · ')) + (fl.length > 2 ? ' +' + (fl.length - 2) : '') + '</span></div>' :
       '<div class="tc-flags ok"><span class="fl-ic">✓</span><span>No red flags</span></div>';
     return '<article class="tcard' + (S.newTick === t.tick ? ' is-new' : '') + ' ' + fr.cls + '" data-card="' + esc(t.tick) + '" data-act="open" data-arg="' + esc(t.tick) + '">' +
-      '<div class="tc-age ' + fr.cls + '"><span class="ag-dot"></span><span class="ag-lab">' + fr.lab + '</span><b class="mono" data-t="' + t.born + '">' + ago(t.born) + '</b>' + (done ? '<span class="ag-grad">GRADUATED</span>' : '') + '</div>' +
-      '<div class="tc-top"><button class="tc-id" data-act="open" data-arg="' + esc(t.tick) + '">' + avatarHTML(t, 52) +
-        '<span class="tc-name"><b>' + esc(t.name) + '</b><span>$' + esc(t.tick) + '</span></span></button>' +
-        '<div class="pairmini" data-tip="Paired with ' + esc(pairInfo(t.pair).name) + '">' + coinHTML(t.pair, 26) + '<small>PAIR</small><b>' + esc(pairLabel(t.pair)) + '</b></div>' +
-        '<div class="tax" style="background:' + taxBg(tmax) + '" data-tip="Buy ' + t.buy + '% · Sell ' + t.sell + '%"><small>TAX</small><b>' + tmax + '%</b></div></div>' +
+      '<div class="tc-hero"><div class="tch-bg" aria-hidden="true">' + avatarHTML(t, 240) + '</div>' +
+        '<div class="tc-age tch-age ' + fr.cls + '"><span class="ag-dot"></span><span class="ag-lab">' + fr.lab + '</span><b class="mono" data-t="' + t.born + '">' + ago(t.born) + '</b>' + (done ? '<span class="ag-grad">GRADUATED</span>' : '') + '</div>' +
+        '<div class="tch-av">' + avatarHTML(t, 124) + '</div>' +
+        '<div class="tch-side"><div class="tax" style="background:' + taxBg(tmax) + '" data-tip="Buy ' + t.buy + '% · Sell ' + t.sell + '%"><small>TAX</small><b>' + tmax + '%</b></div>' +
+        '<div class="pairmini" data-tip="Paired with ' + esc(pairInfo(t.pair).name) + '">' + coinHTML(t.pair, 28) + '<small>PAIR</small><b>' + esc(pairLabel(t.pair)) + '</b></div></div></div>' +
+      '<div class="tc-name2"><b>' + esc(t.name) + '</b><span class="mono">$' + esc(t.tick) + '</span></div>' +
       riskTiles(t) + socialsHTML(t) +
       '<div class="tc-mid"><div class="tc-mc"><div class="v"><span data-mc="' + esc(t.tick) + '" data-v="' + fmtK(t.mcN) + '">' + fmtK(t.mcN) + '</span>' +
         '<span class="chgpill ' + (c >= 0 ? 'up' : 'down') + '" data-chg="' + esc(t.tick) + '">' + chgTxt(c) + '</span></div><div class="l">market cap · ' + fmtNum(t.holders) + ' holders · vol ' + fmtK(t.vol) + '</div></div></div>' +
@@ -1173,6 +1174,13 @@
     if (g && S.view !== 'bubbles') g.innerHTML = list.length ? list.map(function (t) { return card(t); }).join('') : '<div class="empty"><b style="font-size:19px">No coins in this range</b><span class="muted">Widen a slider or hit Reset.</span><button class="btn pri" data-act="reset">Reset filters</button></div>';
   }
   var SLOGANS = ['The market', 'is yours.'];
+  var KIN = [['GOLD', 'gold'], ['$NFROG', 'frogs'], ['TSLAx', 'tesla'], ['SOL', 'solana'], ['$CHAD', 'chads'], ['EUR', 'euros'], ['BTC', 'bitcoin'], ['', 'anything.']];
+  var kinI = 0;
+  setInterval(function () {
+    var r = document.getElementById('kin-roll'); if (!r || document.hidden) return;
+    kinI++; r.style.transition = 'transform .7s cubic-bezier(.7,-0.3,.25,1.3)'; r.style.transform = 'translateY(' + (-kinI * 100 / (KIN.length + 1)) + '%)';
+    if (kinI === KIN.length) setTimeout(function () { r.style.transition = 'none'; kinI = 0; r.style.transform = 'translateY(0)'; }, 760);
+  }, 2000);
   function tcHTML(t, k) {
     var c = chg(t), tm = Math.max(t.buy, t.sell), id = esc(t.tick);
     return '<div class="tc-in" role="button" tabindex="0" data-act="open" data-arg="' + id + '">' +
@@ -1194,8 +1202,8 @@
     var t0 = find(HERO[tcI]) || all()[0];
     return '<section class="intro3" id="intro"><div class="aurora"><span class="a1"></span><span class="a2"></span><span class="a3"></span></div>' +
       '<div class="i3-l"><div class="i3-kick"><span class="livedot"></span><b data-count="' + st.tokens + '">' + st.tokens + '</b> coins live <i>·</i> <b data-count="' + Math.round(st.vol) + '" data-fmt="k">' + fmtK(st.vol) + '</b> volume <i>·</i> <b id="i2-tr">' + fmtNum(st.trades) + '</b> trades</div>' +
-        '<h1 class="i3-h">' + SLOGANS.map(function (w, k) { return '<span style="--k:' + k + '">' + w + '</span>'; }).join(' ') + '</h1>' +
-        '<p class="i3-p"><b>Trade anything. Meme everything.</b> Anything can be a market — pair any coin with SOL, gold, stocks or another meme.</p>' +
+        '<h1 class="kin"><span class="kin-a">trade</span> <span class="kin-slot"><span class="kin-roll" id="kin-roll">' + KIN.concat([KIN[0]]).map(function (x) { return '<span class="kin-w">' + (x[0] ? (x[0].charAt(0) === '$' ? avatarHTML(find(x[0].slice(1)) || BASE[0], 64) : coinHTML(x[0], 64)) : '') + '<b>' + x[1] + '</b></span>'; }).join('') + '</span></span></h1>' +
+        '<p class="i3-p">Launch a coin. Pair it with anything. Tax is always on the label.</p>' +
         '<div class="i3-cta"><button class="btn pri" data-act="create">Launch a coin <span aria-hidden="true">→</span></button><button class="btn sec" data-act="board">Trade anything ↓</button></div></div>' +
       '<div class="tc" id="tc">' + tcHTML(t0, tcI) + '<span class="tc-timer"></span></div>' +
       '<div class="i2-live"><div class="i2-lh"><span class="livedot"></span>JUST LAUNCHED<span class="muted mono" id="i2-cnt">' + st.tokens + ' live</span></div><div id="i2-fresh">' + fresh.map(i2Row).join('') + '</div></div>' +

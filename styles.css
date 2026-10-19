@@ -2363,3 +2363,38 @@ header::before{background:linear-gradient(90deg,transparent,rgba(216,195,160,.6)
 .brand-name{font-family:Manrope,sans-serif;font-stretch:100%;font-weight:800;font-size:22px;letter-spacing:-.035em;-webkit-text-fill-color:var(--ivory);color:var(--ivory);background:none;transform:none}
 .foot .logo,footer .logo{--ls:22px}
 .tcard,.wl-row{cursor:pointer}.tcard:hover{border-color:#34343A}
+/* wordmark only */
+.brand-name{font-family:Manrope,sans-serif;font-weight:800;font-size:24px;letter-spacing:-.05em;color:var(--ivory);-webkit-text-fill-color:var(--ivory)}
+/* kinetic headline: "trade [rolling asset]" */
+.i3-h{display:none}
+.kin{margin:2px 0 4px;display:flex;align-items:center;gap:.26em;font-family:Manrope,sans-serif;font-weight:800;font-size:clamp(40px,4.4vw,64px);line-height:1;letter-spacing:-.055em;color:var(--ivory)}
+.kin-a{color:rgba(237,233,225,.38)}
+.kin-slot{position:relative;display:inline-block;height:1.12em;overflow:hidden;vertical-align:middle;-webkit-mask-image:linear-gradient(180deg,transparent,#000 22%,#000 78%,transparent);mask-image:linear-gradient(180deg,transparent,#000 22%,#000 78%,transparent)}
+.kin-roll{display:flex;flex-direction:column}
+.kin-w{height:1.12em;display:flex;align-items:center;gap:.18em;white-space:nowrap}
+.kin-w .coin,.kin-w .av,.kin-w img,.kin-w>svg,.kin-w>span:first-child{width:.78em!important;height:.78em!important;flex:none;border-radius:50%}
+.kin-w .coin{font-size:.32em}
+.kin-w b{font-weight:800}
+.kin-w:last-child b,.kin-w:nth-last-child(2) b{background:linear-gradient(90deg,#EDE9E1,#D8C3A0);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.i3-p{font-size:15px;color:var(--muted);margin-top:2px}
+.kin-w>:first-child:not(b){width:.8em!important;height:.8em!important;min-width:.8em;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;overflow:hidden}.kin-w>:first-child:not(b) img,.kin-w>:first-child:not(b) svg{width:100%!important;height:100%!important}
+.kin-w .coin.img{padding:0!important;background:none!important;box-shadow:none!important}.kin-w .coin.img img{transform:none!important;max-width:none!important}
+.kin-w>:first-child:not(b){width:calc(clamp(40px,4.4vw,64px)*.78)!important;height:calc(clamp(40px,4.4vw,64px)*.78)!important;min-width:0}
+/* ===== image-first coin card ===== */
+.tc-hero{position:relative;height:168px;margin:-4px -4px 2px;border-radius:14px;overflow:hidden;display:flex;align-items:center;justify-content:center;background:#111113;box-shadow:inset 0 0 0 1px rgba(255,255,255,.05)}
+.tch-bg{position:absolute;inset:-30%;display:flex;align-items:center;justify-content:center;filter:blur(28px) saturate(1.4);opacity:.55;transform:scale(1.2);pointer-events:none}
+.tch-bg .av{width:100%!important;height:100%!important;border-radius:0!important}
+.tc-hero::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(8,8,10,.1),rgba(8,8,10,.55));pointer-events:none}
+.tch-av{position:relative;z-index:2;border-radius:50%;box-shadow:0 0 0 3px rgba(255,255,255,.14),0 18px 40px -12px rgba(0,0,0,.9);transition:transform .35s cubic-bezier(.2,1.5,.4,1)}
+.tch-av .av{display:block}
+.tcard:hover .tch-av{transform:scale(1.06) rotate(-3deg)}
+.tch-age{position:absolute!important;left:10px;top:10px;z-index:3;margin:0!important;padding:4px 9px!important;min-height:0!important;width:auto!important;border-radius:99px!important;background:rgba(8,8,10,.6)!important;backdrop-filter:blur(8px);font-size:10.5px!important;gap:6px!important}
+.tch-age b{margin-left:4px}
+.tch-side{position:absolute;right:10px;top:10px;bottom:10px;z-index:3;display:flex;flex-direction:column;justify-content:space-between;align-items:flex-end}
+.tch-side .tax{min-width:58px;padding:7px 10px;border-radius:12px;box-shadow:0 8px 20px -8px rgba(0,0,0,.8)}
+.tch-side .tax b{font-size:22px}
+.tch-side .pairmini{background:rgba(8,8,10,.62);backdrop-filter:blur(8px);border-color:rgba(255,255,255,.1);padding:6px 8px;min-width:58px}
+.tc-name2{display:flex;align-items:baseline;justify-content:space-between;gap:10px;padding:2px 2px 0}
+.tc-name2 b{font-size:18px;font-weight:800;letter-spacing:-.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tc-name2 span{font-size:12px;color:var(--muted)}
+.tcard>.tc-age,.tcard>.tc-top{display:none}
