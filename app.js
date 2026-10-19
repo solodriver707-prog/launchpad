@@ -100,6 +100,11 @@
     mk('Banana Ape', 'NANA', 'monkey', 8, 2, 'normal', 'tongue', 'party', 2, 4, 'MANGO', 77, 66.7, 24, 30, 260, true, 0, 0),
     mk('Sir Hoots', 'SIR', 'owl', 6, 5, 'normal', 'smile', 'crown', 0, 1, 'AAPLx', 405, 8.8, 72, 1300, 1540, true, 1, 0),
     mk('Disco Cat', 'DISCO', 'cat', 4, 1, 'wink', 'grin', 'halo', 1, 3, 'GIGA', 19, 210.4, 6, 6, 64, false, 0, 0),
+    mk('Chad Pug', 'CHAD', 'pug', 6, 6, 'shades', 'grin', 'crown', 0, 0, 'SOL', 91400, 18.2, 100, 30240, 48200, true, 1, 1),
+    mk('Moon Ape', 'MAPE', 'monkey', 4, 0, 'shades', 'grin', 'chain', 1, 1, 'BTC', 38200, 9.4, 100, 20160, 26100, true, 1, 1),
+    mk('Golden Goat', 'GOAT', 'goat', 8, 6, 'normal', 'smile', 'crown', 0, 1, 'GOLD', 12600, -4.1, 100, 14400, 15300, true, 1, 0),
+    mk('Turbo Shark', 'TSHK', 'shark', 5, 5, 'laser', 'grin', 'chain', 1, 2, 'ETH', 4300, 27.5, 100, 8640, 7900, true, 0, 1),
+    mk('Sir Quack', 'SIRQ', 'duck', 8, 4, 'normal', 'smile', 'halo', 0, 0, 'USDC', 2100, 6.6, 100, 5760, 5100, true, 1, 0),
     mk('Laser Frog', 'ZAP', 'frog', 9, 0, 'laser', 'grin', 'none', 3, 6, 'SILVER', 156, -18.5, 44, 260, 590, false, 0, 1)
   ];
   var PAIR_INFO = {
@@ -424,47 +429,60 @@
   }
   // ================= RACE TO RAYDIUM (all coins climbing the hill) =================
   var RACE_OFF = {};
-  function hillXY(p) { var k = Math.max(0, Math.min(1, p / 100)); return { x: 5 + k * 82, y: 88 - Math.pow(k, 1.55) * 70 }; }
-  function raceSize(t) { return Math.max(30, Math.min(58, 24 + Math.sqrt(t.mcN) * 1.1)); }
+  var LG0 = Math.log10(5e5), LG1 = Math.log10(1e8);
+  function hillXY(p) { var k = Math.max(0, Math.min(1, p / 100)); return { x: 4 + k * 42, y: 88 - Math.pow(k, 1.4) * 34 }; }
+  function gameF(t) { return Math.max(0, Math.min(1, (Math.log10(t.mcN * 1000) - LG0) / (LG1 - LG0))); }
+  function gameXY(f) { return { x: 50 + f * 42, y: 54 - Math.pow(f, 0.85) * 30 }; }
+  function mcXY(usd) { return gameXY(Math.max(0, Math.min(1, (Math.log10(usd) - LG0) / (LG1 - LG0)))); }
+  function raceSize(t) { return Math.max(28, Math.min(60, 22 + Math.sqrt(t.mcN) * (t.prog >= 100 ? 0.16 : 1.1))); }
+  function racePath(close) {
+    var d = close ? 'M0,100 L0,88' : 'M0,88', i;
+    for (i = 0; i <= 40; i++) { var h = hillXY(i * 2.5); d += ' L' + h.x.toFixed(2) + ',' + h.y.toFixed(2); }
+    d += ' L50,54';
+    for (i = 1; i <= 40; i++) { var g = gameXY(i / 40); d += ' L' + g.x.toFixed(2) + ',' + g.y.toFixed(2); }
+    d += ' L100,24';
+    return close ? d + ' L100,100 Z' : d;
+  }
   function raceSection() {
-    var a = all(), climbing = a.filter(function (t) { return t.prog < 100; }).sort(function (x, y) { return x.prog - y.prog; }), grad = a.filter(function (t) { return t.prog >= 100; });
-    var bubbles = '', prevs = [];
-    climbing.forEach(function (t) {
-      var near = prevs.filter(function (pp) { return Math.abs(pp - t.prog) < 4.5; }).length; prevs.push(t.prog);
-      RACE_OFF[t.tick] = near;
-      bubbles += raceBubble(t);
-    });
-    grad.forEach(function (t, i) { RACE_OFF[t.tick] = i; bubbles += raceBubble(t); });
-    var leader = climbing[climbing.length - 1];
+    var a = all(), climbing = a.filter(function (t) { return t.prog < 100; }).sort(function (x, y) { return x.prog - y.prog; }), grad = a.filter(function (t) { return t.prog >= 100; }).sort(function (x, y) { return x.mcN - y.mcN; });
+    var bubbles = '', prevs = [], prevg = [];
+    climbing.forEach(function (t) { RACE_OFF[t.tick] = prevs.filter(function (pp) { return Math.abs(pp - t.prog) < 4.5; }).length; prevs.push(t.prog); bubbles += raceBubble(t); });
+    grad.forEach(function (t) { var f = gameF(t); RACE_OFF[t.tick] = prevg.filter(function (pp) { return Math.abs(pp - f) < 0.07; }).length; prevg.push(f); bubbles += raceBubble(t); });
+    var leader = climbing[climbing.length - 1], king = grad[grad.length - 1];
     var marks = [25, 50, 75].map(function (m) { var h = hillXY(m); return '<span class="rmark" style="left:' + h.x + '%;top:' + h.y + '%"><i></i><b>' + m + '%</b></span>'; }).join('');
-    return '<section class="race card-s" id="race"><div class="m-head"><div><span class="kicker"><span class="livedot"></span>LIVE</span><h2 class="title-xl" style="font-size:30px;margin:8px 0 4px">Race to Raydium</h2>' +
-      '<p class="muted" style="margin:0">Every coin is climbing the bonding curve. Buys push it up the hill, sells slide it down. Reach the top and it graduates.</p></div>' +
+    var miles = [[1e6, '$1M'], [1e7, '$10M'], [5e7, '$50M']].map(function (m) { var g = mcXY(m[0]); return '<span class="rmile" style="left:' + g.x + '%;top:' + g.y + '%"><i></i><b>' + m[1] + '</b></span>'; }).join('');
+    function stat(lbl, t2, val) { return t2 ? '<button class="race-lead" data-act="open" data-arg="' + esc(t2.tick) + '">' + avatarHTML(t2, 26) + '<span><small>' + lbl + '</small><b>$' + esc(t2.tick) + ' · ' + val + '</b></span></button>' : ''; }
+    return '<section class="race card-s" id="race"><div class="m-head"><div><span class="kicker"><span class="livedot"></span>LIVE</span><h2 class="title-xl" style="font-size:30px;margin:8px 0 4px">Race to the moon</h2>' +
+      '<p class="muted" style="margin:0;max-width:640px">Phase 1: climb the bonding curve to graduate. Phase 2: after Raydium the real game starts — coins climb by market cap all the way to $100M.</p></div>' +
       '<div class="race-stats"><div><span class="muted">Climbing</span><b class="mono">' + climbing.length + '</b></div><div><span class="muted">Graduated</span><b class="mono" style="color:var(--ice)">' + grad.length + '</b></div>' +
-      (leader ? '<button class="race-lead" data-act="open" data-arg="' + esc(leader.tick) + '">' + avatarHTML(leader, 26) + '<span><small>CLOSEST TO THE TOP</small><b>$' + esc(leader.tick) + ' · <span data-rlead>' + leader.prog.toFixed(0) + '%</span></b></span></button>' : '') + '</div></div>' +
-      '<div class="race-stage" id="race-stage"><svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="hillg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#BEF264" stop-opacity=".18"/><stop offset="1" stop-color="#BEF264" stop-opacity="0"/></linearGradient></defs>' +
-        '<path d="' + (function () { var d = 'M0,100 L0,88 L5,88'; for (var i = 0; i <= 50; i++) { var h = hillXY(i * 2); d += ' L' + h.x.toFixed(2) + ',' + h.y.toFixed(2); } return d + ' L100,18 L100,100 Z'; })() + '" fill="url(#hillg)"/>' +
-        '<path d="' + (function () { var d = 'M0,88 L5,88'; for (var i = 0; i <= 50; i++) { var h = hillXY(i * 2); d += ' L' + h.x.toFixed(2) + ',' + h.y.toFixed(2); } return d + ' L100,18'; })() + '" fill="none" stroke="#BEF264" stroke-width="2.5" vector-effect="non-scaling-stroke" class="hill-path"/></svg>' +
-        marks + '<span class="summit"><span class="flagpole"></span><span class="flagcloth">RAYDIUM</span></span><span class="startline">START</span>' +
+      stat('CLOSEST TO GRADUATING', leader, leader ? leader.prog.toFixed(0) + '%' : '') + stat('HIGHEST ON THE MOUNTAIN', king, king ? fmtK(king.mcN) : '') + '</div></div>' +
+      '<div class="race-stage" id="race-stage"><div class="phase2bg"></div><svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="hillg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#BEF264" stop-opacity=".16"/><stop offset="1" stop-color="#BEF264" stop-opacity="0"/></linearGradient></defs>' +
+        '<path d="' + racePath(true) + '" fill="url(#hillg)"/><path d="' + racePath(false) + '" fill="none" stroke="#BEF264" stroke-width="2.5" vector-effect="non-scaling-stroke" class="hill-path"/></svg>' +
+        marks + miles +
+        '<span class="rayflag" style="left:48%;top:54%"><span class="flagpole"></span><span class="flagcloth">RAYDIUM</span></span>' +
+        '<span class="moonflag"><span class="moon"></span><b>MOON · $100M</b></span>' +
+        '<span class="startline">START</span><span class="phase-l p1">PHASE 1 · BONDING CURVE</span><span class="phase-l p2">PHASE 2 · THE REAL GAME</span>' +
         '<div id="race-b">' + bubbles + '</div></div></section>';
   }
   function racePos(t) {
     var sz = raceSize(t), off = RACE_OFF[t.tick] || 0;
-    if (t.prog >= 100) { var col = off % 4, row = Math.floor(off / 4); return { l: 91 + col * 2.4, t: 18 - row * 11, sz: sz * 0.72 }; }
-    var h = hillXY(t.prog); return { l: h.x, t: h.y - 4 - off * 9, sz: sz };
+    if (t.prog >= 100) { var g = gameXY(gameF(t)); return { l: g.x, t: g.y - 3 - off * 10, sz: sz }; }
+    var h = hillXY(t.prog); return { l: h.x, t: h.y - 3 - off * 9, sz: sz };
   }
   function raceBubble(t) {
-    var p = racePos(t), c = chg(t);
-    return '<button class="rb ' + (t.prog >= 100 ? 'done' : '') + '" data-race="' + esc(t.tick) + '" data-act="open" data-arg="' + esc(t.tick) + '" style="left:' + p.l + '%;top:' + p.t + '%;--sz:' + p.sz + 'px" data-tip="$' + esc(t.tick) + ' · ' + Math.min(100, t.prog).toFixed(0) + '% up · ' + fmtK(t.mcN) + '">' +
-      avatarHTML(t, Math.round(p.sz)) + '<span class="rb-pct mono">' + Math.min(100, t.prog).toFixed(0) + '%</span></button>';
+    var p = racePos(t), done = t.prog >= 100, lab = done ? fmtK(t.mcN) : Math.min(100, t.prog).toFixed(0) + '%';
+    return '<button class="rb ' + (done ? 'done' : '') + '" data-race="' + esc(t.tick) + '" data-act="open" data-arg="' + esc(t.tick) + '" style="left:' + p.l + '%;top:' + p.t + '%;--sz:' + p.sz + 'px" data-tip="$' + esc(t.tick) + ' · ' + (done ? 'graduated · ' : Math.min(100, t.prog).toFixed(0) + '% up · ') + fmtK(t.mcN) + '">' +
+      avatarHTML(t, Math.round(p.sz)) + '<span class="rb-pct mono">' + lab + '</span></button>';
   }
   function raceUpdate(t, side) {
     var el = document.querySelector('.rb[data-race="' + t.tick + '"]'); if (!el) return;
+    if (t.prog >= 100 && !el.classList.contains('done')) { el.classList.add('done'); RACE_OFF[t.tick] = 0; }
     var p = racePos(t); el.style.left = p.l + '%'; el.style.top = p.t + '%';
-    var pc = el.querySelector('.rb-pct'); if (pc) pc.textContent = Math.min(100, t.prog).toFixed(0) + '%';
-    el.setAttribute('data-tip', '$' + t.tick + ' · ' + Math.min(100, t.prog).toFixed(0) + '% up · ' + fmtK(t.mcN));
+    var done = t.prog >= 100, pc = el.querySelector('.rb-pct'); if (pc) pc.textContent = done ? fmtK(t.mcN) : Math.min(100, t.prog).toFixed(0) + '%';
+    el.setAttribute('data-tip', '$' + t.tick + ' · ' + (done ? 'graduated · ' : Math.min(100, t.prog).toFixed(0) + '% up · ') + fmtK(t.mcN));
     el.classList.remove('up-hit', 'down-hit'); void el.offsetWidth; el.classList.add(side === 'buy' ? 'up-hit' : 'down-hit');
-    if (t.prog >= 100 && !el.classList.contains('done')) { el.classList.add('done'); RACE_OFF[t.tick] = document.querySelectorAll('.rb.done').length - 1; var p2 = racePos(t); el.style.left = p2.l + '%'; el.style.top = p2.t + '%'; }
   }
+
 
 
   function heroHTML() {
@@ -655,13 +673,14 @@
   function yLabel(v) { return S.chartMode === 'price' ? fmtPrice(v * 1000 / 1e9) : fmtK(v); }
   function chartSVG(t) {
     var cs = candles(t), W = 1000, H = 380, top = 16, vh = 70, ph = H - vh - top - 10;
-    var mx = Math.max.apply(null, cs.map(function (c) { return c.h; })), mn = Math.min.apply(null, cs.map(function (c) { return c.l; })), sp = (mx - mn) || 1;
+    var mx = Math.max.apply(null, cs.map(function (c) { return c.h; })), mn = Math.min.apply(null, cs.map(function (c) { return c.l; }));
+    var minSp = mx * 0.08; if (mx - mn < minSp) { var mid = (mx + mn) / 2; mx = mid + minSp / 2; mn = mid - minSp / 2; } var sp = mx - mn;
     var vmx = Math.max.apply(null, cs.map(function (c) { return c.v; }));
-    var Y = function (v) { return top + (mx - v) / sp * ph; }, cw = W / cs.length, bw = Math.max(3, cw * 0.62);
+    var slots = Math.max(cs.length, 44), off0 = (slots - cs.length) * (W / slots), Y = function (v) { return top + (mx - v) / sp * ph; }, cw = W / slots, bw = Math.max(3, cw * 0.62);
     var g = '', pts = [];
     for (var k = 1; k < 5; k++) g += '<line x1="0" x2="' + W + '" y1="' + (top + k * ph / 5) + '" y2="' + (top + k * ph / 5) + '" stroke="#18181B" vector-effect="non-scaling-stroke"/>';
     var bars = cs.map(function (c, i) {
-      var x = i * cw + cw / 2, up = c.c >= c.o, col = up ? '#3DDC97' : '#F2708A', y1 = Y(Math.max(c.o, c.c)), y2 = Y(Math.min(c.o, c.c));
+      var x = off0 + i * cw + cw / 2, up = c.c >= c.o, col = up ? '#3DDC97' : '#F2708A', y1 = Y(Math.max(c.o, c.c)), y2 = Y(Math.min(c.o, c.c));
       pts.push({ x: x, y: Y(c.c), v: c.c, o: c.o, h: c.h, l: c.l });
       return '<line x1="' + x.toFixed(1) + '" x2="' + x.toFixed(1) + '" y1="' + Y(c.h).toFixed(1) + '" y2="' + Y(c.l).toFixed(1) + '" stroke="' + col + '" stroke-width="1.4" vector-effect="non-scaling-stroke"/>' +
         '<rect x="' + (x - bw / 2).toFixed(1) + '" y="' + y1.toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + Math.max(1.5, y2 - y1).toFixed(1) + '" rx="1" fill="' + col + '"' + (i === cs.length - 1 ? ' class="lastc"' : '') + '/>' +
@@ -688,7 +707,7 @@
   function makerHTML(addr, t) {
     var w = WMAP[addr], me = S.account && addr === S.account, dev = addr === devOf(t);
     var av = '<span class="av" style="width:20px;height:20px">' + A.svg(walletSpec(addr)) + '</span>';
-    return '<button class="maker" data-act="maker" data-arg="' + esc(addr) + '" title="Show only this wallet">' + av + '<span>' + (me ? 'You' : w && w.n ? '@' + w.n : short(addr)) + '</span>' +
+    return '<button class="maker" data-act="wallet" data-arg="' + esc(addr) + '" title="Open wallet">' + av + '<span>' + (me ? 'You' : w && w.n ? '@' + w.n : short(addr)) + '</span>' +
       (dev ? '<span class="bdg dev">DEV</span>' : '') + (me ? '<span class="bdg you">YOU</span>' : '') + '</button>';
   }
   S.pos = {}; S.tpFilter = 'all'; S.tpMaker = null; S.minSol = ''; S.absTime = false; S.chartMode = 'mc'; S.slip = 5; S.slipOpen = false; S.tpQueue = 0; S.comments = {};
@@ -704,13 +723,13 @@
   function timeTxt(ts) { if (!S.absTime) return ago(ts); var d = new Date(ts); return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2) + ':' + ('0' + d.getSeconds()).slice(-2); }
   function tradeRow(tr, t, enter) {
     var buy = tr.side === 'buy', usd = tr.sol * SOL_USD, w = Math.min(100, tr.sol / 5 * 100), px = tr.price || price(t), tok = tr.tokens || usd / px;
-    return '<div class="trow ' + (buy ? 'b' : 's') + (enter ? ' enter' : '') + (tr.sol >= 2 ? ' big' : '') + '" style="--w:' + w.toFixed(0) + '%">' +
+    return '<div class="trow ' + (buy ? 'b' : 's') + (enter ? ' enter' : '') + (tr.sol >= 2 ? ' big' : '') + '" style="--w:' + w.toFixed(0) + '%" data-act="wallet" data-arg="' + esc(tr.wallet) + '" title="Open wallet">' +
       '<span class="muted" data-t="' + tr.t + '">' + timeTxt(tr.t) + '</span>' +
       '<span class="ty">' + (buy ? 'Buy' : 'Sell') + (tr.sol >= 2 ? ' <span class="bdg whale2" title="Whale">' + I.gem + '</span>' : '') + '</span>' +
       '<span class="r">$' + (usd >= 1000 ? (usd / 1000).toFixed(2) + 'K' : usd.toFixed(2)) + '</span>' +
       '<span class="r">' + tr.sol.toFixed(3) + '</span><span class="r">' + fmtNum(tok) + '</span><span class="r">' + fmtPrice(px) + '</span>' +
       '<span>' + makerHTML(tr.wallet, t) + '</span>' +
-      '<span class="r"><button class="txb" data-act="tx" data-arg="' + esc(tr.sig || '') + '" aria-label="Copy transaction id">' + I.copy + '</button></span></div>';
+      '<span class="r"><button class="txb" data-act="wallet" data-arg="' + esc(tr.wallet) + '" aria-label="Open wallet details"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></button></span></div>';
   }
   function holdersOf(t) {
     var m = {}, tot = 1e9, px = price(t);
@@ -750,6 +769,66 @@
     var impact = Math.min(25, net * 3 / Math.sqrt(Math.max(t.mcN, 4)));
     var outTok = isBuy ? net * SOL_USD / (px * (1 + impact / 200)) : 0, outSol = isBuy ? 0 : net * (1 - impact / 200);
     return { isBuy: isBuy, amt: amt, sol: sol, pct: pct, tax: tax, impact: impact, out: isBuy ? outTok : outSol, min: (isBuy ? outTok : outSol) * (1 - S.slip / 100) };
+  }
+
+  // ================= WALLET PANEL (GMGN / Axiom style) =================
+  S.walletView = null; S.trackWallets = [];
+  try { S.trackWallets = JSON.parse(localStorage.getItem('gp.track') || '[]'); } catch (e) {}
+  function walletStats(addr, t) {
+    var px = price(t), tr = S.trades.filter(function (x) { return x.wallet === addr && x.tick === t.tick; }).sort(function (a, b) { return a.t - b.t; });
+    var st = { trades: tr, nb: 0, ns: 0, b: 0, s: 0, tb: 0, ts: 0, first: tr.length ? tr[0].t : null, last: tr.length ? tr[tr.length - 1].t : null };
+    tr.forEach(function (x) { var tok = x.tokens || x.sol * SOL_USD / (x.price || px); if (x.side === 'buy') { st.nb++; st.b += x.sol; st.tb += tok; } else { st.ns++; st.s += x.sol; st.ts += tok; } });
+    if (st.tb === 0 && st.ts > 0) {
+      st.tb = st.ts; st.b = st.s * (0.55 + (hash(addr) % 70) / 100); st.nb = 1;
+      var fb = { side: 'buy', sol: st.b, price: st.b * SOL_USD / st.tb, t: (st.first || Date.now()) - (8 + hash(addr) % 30) * 60000, sig: b58(64), tokens: st.tb };
+      st.trades = [fb].concat(st.trades); st.first = fb.t;
+    }
+    st.hold = Math.max(0, st.tb - st.ts); st.holdPct = st.hold / 1e9 * 100; st.val = st.hold * px / SOL_USD;
+    st.avg = st.tb ? st.b * SOL_USD / st.tb : 0; st.avgMc = st.avg * 1e9 / 1000;
+    st.realized = st.s - (st.tb ? st.b * (st.ts / st.tb) : 0); st.unreal = st.val - (st.tb ? st.b * (st.hold / st.tb) : 0); st.pnl = st.realized + st.unreal;
+    st.roi = st.b ? st.pnl / st.b * 100 : 0;
+    return st;
+  }
+  function walletOther(addr) {
+    var m = {};
+    S.trades.forEach(function (x) { if (x.wallet !== addr || x.tick === S.tick) return; var e = m[x.tick] = m[x.tick] || { tick: x.tick, b: 0, s: 0, n: 0 }; e.n++; if (x.side === 'buy') e.b += x.sol; else e.s += x.sol; });
+    return Object.keys(m).map(function (k) { return m[k]; }).sort(function (a, b) { return (b.b + b.s) - (a.b + a.s); }).slice(0, 8);
+  }
+  function walletChart(addr, t, st) {
+    var h = t.hist.slice(-120), W = 400, H = 130, mx = Math.max.apply(null, h), mn = Math.min.apply(null, h), sp = (mx - mn) || 1;
+    var line = 'M' + h.map(function (v, i) { return (i * W / (h.length - 1)).toFixed(1) + ' ' + (8 + (1 - (v - mn) / sp) * (H - 16)).toFixed(1); }).join(' L');
+    var t0 = Date.now() - 3600 * 1000, marks = st.trades.map(function (x) {
+      var fx = Math.max(0.02, Math.min(0.98, (x.t - t0) / (3600 * 1000))), mcv = (x.price || price(t)) * 1e9 / 1000, fy = Math.max(0.06, Math.min(0.94, 1 - (mcv - mn) / sp));
+      var buy = x.side === 'buy';
+      return '<span class="wmk ' + (buy ? 'b' : 's') + '" style="left:' + (fx * 100).toFixed(1) + '%;top:' + (fy * 100).toFixed(1) + '%" title="' + (buy ? 'Bought ' : 'Sold ') + x.sol.toFixed(3) + ' SOL at ' + fmtK(mcv) + ' MC">' + (buy ? 'B' : 'S') + '</span>';
+    }).join('');
+    var avgLine = st.avgMc ? '<span class="wavg" style="top:' + (Math.max(0.04, Math.min(0.96, 1 - (st.avgMc - mn) / sp)) * 100).toFixed(1) + '%"><em>avg entry ' + fmtK(st.avgMc) + '</em></span>' : '';
+    return '<div class="wchart"><svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none"><path d="' + line + ' L' + W + ' ' + H + ' L0 ' + H + ' Z" fill="url(#ccUp)" opacity=".7"/><path d="' + line + '" fill="none" stroke="#9696A0" stroke-width="1.8" vector-effect="non-scaling-stroke"/></svg>' + avgLine + marks + '</div>';
+  }
+  function walletDrawer() {
+    if (!S.walletView) return '';
+    var addr = S.walletView, t = find(S.tick) || featured(), st = walletStats(addr, t), other = walletOther(addr), dev = addr === devOf(t), tracked = S.trackWallets.indexOf(addr) !== -1;
+    var pnlCls = st.pnl >= 0 ? 'up' : 'down', sign = function (v) { return (v >= 0 ? '+' : '') + v.toFixed(3); };
+    return '<div class="overlay drawer-ov" data-act="bg"><aside class="drawer" role="dialog" aria-modal="true" aria-label="Wallet details">' +
+      '<div class="dw-head"><span class="av" style="width:56px;height:56px">' + A.svg(walletSpec(addr)) + '</span><div style="flex:1;min-width:0"><b style="font-size:18px">' + esc(walletName(addr)) + '</b>' + (dev ? ' <span class="bdg dev">DEV</span>' : '') +
+        '<button class="copy" style="display:flex;margin-top:4px" data-act="copyW" data-arg="' + esc(addr) + '">' + esc(addr.slice(0, 6) + '…' + addr.slice(-6)) + ' ' + I.copy + '</button></div><button class="iconbtn" data-act="closeW" aria-label="Close">✕</button></div>' +
+      '<div class="dw-actions"><button class="btn ' + (tracked ? 'sec' : 'pri') + '" data-act="trackW" data-arg="' + esc(addr) + '">' + (tracked ? 'Tracking ✓' : 'Track wallet') + '</button><button class="btn sec" data-act="maker" data-arg="' + esc(addr) + '">Show its trades</button></div>' +
+      '<div class="dw-sec"><div class="dw-title">' + avatarHTML(t, 22) + 'on $' + esc(t.tick) + '</div>' +
+        '<div class="dw-pnl"><span class="muted">Total PnL</span><b class="mono ' + pnlCls + '">' + sign(st.pnl) + ' SOL</b><span class="chgpill ' + pnlCls + '">' + (st.roi >= 0 ? '+' : '') + st.roi.toFixed(1) + '%</span></div>' +
+        '<div class="dw-grid">' +
+          [['Bought', '<span class="up">' + st.b.toFixed(3) + ' SOL</span>', st.nb + ' buys'], ['Sold', '<span class="down">' + st.s.toFixed(3) + ' SOL</span>', st.ns + ' sells'],
+           ['Holding', fmtNum(st.hold) + ' $' + esc(t.tick), st.holdPct.toFixed(3) + '% of supply'], ['Value now', st.val.toFixed(3) + ' SOL', '$' + (st.val * SOL_USD).toFixed(2)],
+           ['Avg entry', st.avgMc ? fmtK(st.avgMc) + ' MC' : '—', st.avg ? fmtPrice(st.avg) : ''], ['Realized / unreal.', '<span class="' + (st.realized >= 0 ? 'up' : 'down') + '">' + sign(st.realized) + '</span> / <span class="' + (st.unreal >= 0 ? 'up' : 'down') + '">' + sign(st.unreal) + '</span>', 'SOL'],
+           ['First trade', st.first ? ago(st.first) + ' ago' : '—', ''], ['Last trade', st.last ? ago(st.last) + ' ago' : '—', '']].map(function (r) { return '<div><span class="muted">' + r[0] + '</span><b class="mono">' + r[1] + '</b>' + (r[2] ? '<small class="muted mono">' + r[2] + '</small>' : '') + '</div>'; }).join('') + '</div>' +
+        '<div class="dw-sub">Where it bought &amp; sold</div>' + walletChart(addr, t, st) +
+        '<div class="dw-sub">Its trades on $' + esc(t.tick) + '</div><div class="dw-trades">' + (st.trades.length ? st.trades.slice().reverse().map(function (x) {
+          return '<div class="dwt ' + (x.side === 'buy' ? 'b' : 's') + '"><span class="ty">' + (x.side === 'buy' ? 'Buy' : 'Sell') + '</span><span class="mono">' + x.sol.toFixed(3) + ' SOL</span><span class="mono muted">@ ' + fmtK((x.price || price(t)) * 1e9 / 1000) + '</span><span class="mono muted">' + ago(x.t) + '</span><button class="txb" data-act="tx" data-arg="' + esc(x.sig || '') + '" aria-label="Copy transaction">' + I.copy + '</button></div>';
+        }).join('') : '<div class="muted" style="padding:10px 0">No trades on this coin yet.</div>') + '</div></div>' +
+      '<div class="dw-sec"><div class="dw-title">Other coins it trades</div>' + (other.length ? other.map(function (o) {
+          var tk = find(o.tick); if (!tk) return ''; var net = o.s - o.b;
+          return '<button class="dwo" data-act="open" data-arg="' + esc(o.tick) + '">' + avatarHTML(tk, 28) + '<span style="flex:1;text-align:left"><b>$' + esc(o.tick) + '</b><small class="muted mono" style="display:block">' + o.n + ' trades · ' + (o.b + o.s).toFixed(2) + ' SOL volume</small></span><span class="mono ' + (net >= 0 ? 'up' : 'down') + '">' + (net >= 0 ? '+' : '') + net.toFixed(2) + '</span></button>';
+        }).join('') : '<div class="muted">Nothing else yet.</div>') + '</div>' +
+      '<span class="note">Simulated wallet data in this beta.</span></aside></div>';
   }
 
   function tokenPage() {
@@ -802,7 +881,7 @@
       var medal = ['#FFD15C', '#D7DEEA', '#E0A36B'], order = [1, 0, 2];
       var podium = '<div class="podium">' + order.filter(function (k) { return tl[k]; }).map(function (k) {
         var e = tl[k];
-        return '<button class="pod p' + (k + 1) + '" data-act="maker" data-arg="' + esc(e.a) + '" style="--md:' + medal[k] + '"><span class="pod-av"><span class="av" style="width:' + (k ? 56 : 72) + 'px;height:' + (k ? 56 : 72) + 'px">' + A.svg(walletSpec(e.a)) + '</span><span class="medal">' + (k + 1) + '</span></span>' +
+        return '<button class="pod p' + (k + 1) + '" data-act="wallet" data-arg="' + esc(e.a) + '" style="--md:' + medal[k] + '"><span class="pod-av"><span class="av" style="width:' + (k ? 56 : 72) + 'px;height:' + (k ? 56 : 72) + 'px">' + A.svg(walletSpec(e.a)) + '</span><span class="medal">' + (k + 1) + '</span></span>' +
           '<b class="pod-name">' + esc(walletName(e.a)) + '</b><span class="pod-pnl mono ' + (e.pnl >= 0 ? 'up' : 'down') + '">' + (e.pnl >= 0 ? '+' : '') + e.pnl.toFixed(2) + ' SOL</span>' +
           '<span class="pod-sub mono">' + e.n + ' trades · ' + (e.val > 0.001 ? 'still holding' : 'exited') + '</span><span class="pod-base">' + (k + 1) + '</span></button>';
       }).join('') + '</div>';
@@ -937,7 +1016,7 @@
     var ae = document.activeElement, fid = ae && ae.id, ss = null, se = null;
     try { if (fid && ae.selectionStart != null) { ss = ae.selectionStart; se = ae.selectionEnd; } } catch (e) {}
     var body = S.screen === 'token' ? tokenPage() : S.screen === 'create' ? createPage() : home();
-    document.getElementById('app').innerHTML = '<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="ccUp" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3DDC97" stop-opacity=".28"/><stop offset="1" stop-color="#3DDC97" stop-opacity="0"/></linearGradient><linearGradient id="ccDn" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F2708A" stop-opacity=".26"/><stop offset="1" stop-color="#F2708A" stop-opacity="0"/></linearGradient></defs></svg>' + tape() + header() + body + footer() + walletModal() + palette();
+    document.getElementById('app').innerHTML = '<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="ccUp" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3DDC97" stop-opacity=".28"/><stop offset="1" stop-color="#3DDC97" stop-opacity="0"/></linearGradient><linearGradient id="ccDn" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F2708A" stop-opacity=".26"/><stop offset="1" stop-color="#F2708A" stop-opacity="0"/></linearGradient></defs></svg>' + tape() + header() + body + footer() + walletModal() + palette() + walletDrawer();
     if (fid) { var el = document.getElementById(fid); if (el) { el.focus({ preventScroll: true }); try { if (ss != null) el.setSelectionRange(ss, se); } catch (e) {} } }
     if (S.palOpen && !fid) { var p = document.getElementById('pal'); if (p) p.focus(); }
     if (S.screen === 'home' && !S.loading && firstCount) { firstCount = false; countUp(); }
@@ -1064,7 +1143,7 @@
   setInterval(function () { q('[data-t]').forEach(function (el) { el.textContent = ago(+el.getAttribute('data-t')); }); }, 5000);
 
   // ================= EVENTS =================
-  function openToken(tick) { set({ screen: 'token', tick: tick, side: 'buy', amount: '', tf: '1H', tpTab: 'trades', palOpen: false, walletMenu: false }); window.scrollTo(0, 0); }
+  function openToken(tick) { set({ walletView: null, screen: 'token', tick: tick, side: 'buy', amount: '', tf: '1H', tpTab: 'trades', palOpen: false, walletMenu: false }); window.scrollTo(0, 0); }
 
   document.addEventListener('click', function (e) {
     var el = e.target.closest('[data-act]');
@@ -1073,7 +1152,7 @@
     var act = el.getAttribute('data-act'), arg = el.getAttribute('data-arg');
     if (el.tagName === 'A' && act !== 'how') e.preventDefault();
     switch (act) {
-      case 'bg': if (e.target === el) set({ walletOpen: false, palOpen: false }); break;
+      case 'bg': if (e.target === el) set({ walletOpen: false, palOpen: false, walletView: null }); break;
       case 'home': set({ screen: 'home', palOpen: false }); window.scrollTo(0, 0); break;
       case 'create': set({ screen: 'create', palOpen: false }); window.scrollTo(0, 0); break;
       case 'how':
@@ -1110,8 +1189,12 @@
       case 'clearImg': setC({ img: null }); break;
       case 'cpair': setC({ pair: arg }); break;
       case 'cat': set({ cat: arg, pair: 'All' }); break;
+      case 'wallet': set({ walletView: arg }); break;
+      case 'closeW': set({ walletView: null }); break;
+      case 'copyW': copy(arg, 'Wallet address copied'); break;
+      case 'trackW': var ti = S.trackWallets.indexOf(arg); if (ti === -1) S.trackWallets.push(arg); else S.trackWallets.splice(ti, 1); try { localStorage.setItem('gp.track', JSON.stringify(S.trackWallets)); } catch (er) {} render(); toast(ti === -1 ? 'Tracking ' + walletName(arg) : 'Stopped tracking'); break;
       case 'tpf': set({ tpFilter: arg, tpQueue: 0 }); break;
-      case 'maker': set({ tpMaker: arg || null, tpTab: 'trades', tpQueue: 0 }); break;
+      case 'maker': set({ tpMaker: arg || null, tpTab: 'trades', tpQueue: 0, walletView: null }); break;
       case 'abs': set({ absTime: !S.absTime }); break;
       case 'resume': set({ tpQueue: 0 }); break;
       case 'tx': copy(arg, 'Transaction id copied (simulated)'); break;
@@ -1184,7 +1267,7 @@
 
   document.addEventListener('keydown', function (e) {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); set({ palOpen: !S.palOpen, palQ: '', palIdx: 0 }); return; }
-    if (e.key === 'Escape') { if (S.palOpen || S.walletOpen || S.walletMenu) set({ palOpen: false, walletOpen: false, walletMenu: false }); return; }
+    if (e.key === 'Escape') { if (S.palOpen || S.walletOpen || S.walletMenu || S.walletView) set({ palOpen: false, walletOpen: false, walletMenu: false, walletView: null }); return; }
     if (S.palOpen) {
       var res = palResults();
       if (e.key === 'ArrowDown') { e.preventDefault(); set({ palIdx: Math.min(res.length - 1, S.palIdx + 1) }); }
