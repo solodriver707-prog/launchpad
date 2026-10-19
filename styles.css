@@ -1397,3 +1397,25 @@ header{background:rgba(9,9,10,.78);border-bottom-color:#1C1C20}
 
 .trk .moonflag2{margin-top:-6px;flex-direction:row;gap:8px}
 .trk .moonflag2 .moon{width:30px;height:30px}
+/* pair picker */
+.pairchip .coin,.pairchip .av{width:20px!important;height:20px!important}
+.fpop.pairpop{width:min(560px,calc(100vw - 32px));padding:12px;gap:10px;max-height:min(560px,70vh)}
+.pp-search{display:flex;align-items:center;gap:8px;padding:0 12px;border-radius:10px;background:#0E0E10;border:1px solid #2A2A30;color:var(--muted)}
+.pp-search input{flex:1;min-height:40px;background:none;border:0;outline:none;color:var(--text);font-size:14px}
+.pp-tabs{display:flex;gap:4px;flex-wrap:wrap}
+.pp-tabs button{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:0 11px;border-radius:99px;border:1px solid #2A2A30;background:#141416;color:var(--soft);font-size:12.5px;font-weight:700}
+.pp-tabs button span{font-family:var(--mono);font-size:10.5px;color:var(--faint)}
+.pp-tabs button.on{background:#ECECEE;border-color:#ECECEE;color:#0A0A0B}.pp-tabs button.on span{color:#55575E}
+.pp-all{align-self:flex-start;background:none;border:0;color:var(--soft);font-size:12.5px;font-weight:700;padding:2px 0}
+.pp-all:hover{color:var(--text)}
+.pp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px;overflow-y:auto;padding-right:2px}
+.pp-item{display:flex;align-items:center;gap:9px;padding:8px;border-radius:11px;border:1px solid #232328;background:#121214;color:var(--text);text-align:left;transition:all .12s}
+.pp-item:hover{border-color:#4A4B52;background:#18181B;transform:translateY(-1px)}
+.pp-item.on{background:#ECECEE;border-color:#ECECEE;color:#0A0A0B}
+.pp-item.on small{color:#55575E}
+.pp-item.empty{opacity:.45}
+.pp-n{display:flex;flex-direction:column;min-width:0;flex:1}
+.pp-n b{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pp-n small{font-size:11px;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pp-c{font-size:11px;padding:2px 7px;border-radius:99px;background:#1F1F23;color:var(--soft)}
+.pp-item.on .pp-c{background:rgba(0,0,0,.1);color:#0A0A0B}

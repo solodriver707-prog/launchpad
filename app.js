@@ -92,19 +92,19 @@
     mk('Pixel Owl', 'HOOT', 'owl', 2, 7, 'normal', 'o', 'none', 0, 1, 'ETH', 58, 121.5, 18, 12, 150, false, 0, 0),
     mk('Tide Shark', 'FINS', 'shark', 5, 0, 'normal', 'grin', 'chain', 1, 2, 'EUR', 174, 9.7, 42, 300, 640, true, 1, 1),
     mk('Mango Monkey', 'MANGO', 'monkey', 1, 6, 'wink', 'grin', 'crown', 0, 0, 'OIL', 880, 22.0, 96, 2160, 3400, true, 1, 1),
-    mk('Static Owl', 'STATIC', 'owl', 7, 1, 'laser', 'o', 'none', 4, 8, 'GBP', 41, -31.2, 9, 25, 90, false, 0, 0),
+    mk('Static Owl', 'STATIC', 'owl', 7, 1, 'laser', 'o', 'none', 4, 8, 'ONDO', 41, -31.2, 9, 25, 90, false, 0, 0),
     mk('Diamond Paws', 'PAWS', 'cat', 5, 7, 'normal', 'tongue', 'chain', 2, 2, 'NFROG', 520, 17.4, 81, 720, 2010, true, 1, 1),
     mk('Turbo Pug', 'TURBO', 'pug', 8, 3, 'shades', 'grin', 'cap', 0, 0, 'BTC', 260, 6.1, 57, 360, 1020, true, 1, 0),
     mk('Gigabear', 'GIGA', 'bear', 9, 4, 'shades', 'smile', 'chain', 1, 1, 'SOL', 1020, 45.3, 100, 2880, 3810, true, 1, 1),
-    mk('Frost Shark', 'FROST', 'shark', 5, 7, 'shades', 'grin', 'none', 0, 2, 'JPY', 133, -3.2, 38, 95, 520, false, 0, 0),
+    mk('Frost Shark', 'FROST', 'shark', 5, 7, 'shades', 'grin', 'none', 0, 2, 'ONDO', 133, -3.2, 38, 95, 520, false, 0, 0),
     mk('Banana Ape', 'NANA', 'monkey', 8, 2, 'normal', 'tongue', 'party', 2, 4, 'MANGO', 77, 66.7, 24, 30, 260, true, 0, 0),
     mk('Sir Hoots', 'SIR', 'owl', 6, 5, 'normal', 'smile', 'crown', 0, 1, 'AAPLx', 405, 8.8, 72, 1300, 1540, true, 1, 0),
     mk('Disco Cat', 'DISCO', 'cat', 4, 1, 'wink', 'grin', 'halo', 1, 3, 'GIGA', 19, 210.4, 6, 6, 64, false, 0, 0),
     mk('Chad Pug', 'CHAD', 'pug', 6, 6, 'shades', 'grin', 'crown', 0, 0, 'SOL', 91400, 18.2, 100, 30240, 48200, true, 1, 1),
     mk('Moon Ape', 'MAPE', 'monkey', 4, 0, 'shades', 'grin', 'chain', 1, 1, 'BTC', 38200, 9.4, 100, 20160, 26100, true, 1, 1),
     mk('Golden Goat', 'GOAT', 'goat', 8, 6, 'normal', 'smile', 'crown', 0, 1, 'GOLD', 12600, -4.1, 100, 14400, 15300, true, 1, 0),
-    mk('Turbo Shark', 'TSHK', 'shark', 5, 5, 'laser', 'grin', 'chain', 1, 2, 'ETH', 4300, 27.5, 100, 8640, 7900, true, 0, 1),
-    mk('Sir Quack', 'SIRQ', 'duck', 8, 4, 'normal', 'smile', 'halo', 0, 0, 'USDC', 2100, 6.6, 100, 5760, 5100, true, 1, 0),
+    mk('Turbo Shark', 'TSHK', 'shark', 5, 5, 'laser', 'grin', 'chain', 1, 2, 'LINK', 4300, 27.5, 100, 8640, 7900, true, 0, 1),
+    mk('Sir Quack', 'SIRQ', 'duck', 8, 4, 'normal', 'smile', 'halo', 0, 0, 'DOGE', 2100, 6.6, 100, 5760, 5100, true, 1, 0),
     mk('Laser Frog', 'ZAP', 'frog', 9, 0, 'laser', 'grin', 'none', 3, 6, 'SILVER', 156, -18.5, 44, 260, 590, false, 0, 1)
   ];
   var PAIR_INFO = {
@@ -120,6 +120,8 @@
     ['crypto', 'Crypto', 'SOL · USDC · BTC · ETH', '#A3B1C2'], ['stocks', 'Stocks', 'Tokenized equities', '#3DDC97'],
     ['commod', 'Commodities', 'Gold · silver · oil', '#FFD15C'], ['fx', 'Currencies', 'EUR · JPY · GBP', '#7DB8FF']
   ];
+  [['USDT', 'Tether', 'usdt'], ['BNB', 'BNB', 'bnb'], ['XRP', 'XRP', 'xrp'], ['DOGE', 'Dogecoin', 'doge'], ['LINK', 'Chainlink', 'link'], ['AVAX', 'Avalanche', 'avax'], ['AAVE', 'Aave', 'aave'], ['RAY', 'Raydium', 'ray']].forEach(function (x) { PAIR_INFO[x[0]] = { img: 'icons/' + x[2] + '.svg', name: x[1], cat: 'crypto', g: x[0][0], c: '#888' }; });
+  PAIR_INFO.ONDO = { name: 'Ondo', cat: 'crypto', g: 'ON', c: '#C9D5FF' };
   var PAIRS = Object.keys(PAIR_INFO);
   function pairInfo(id) { if (PAIR_INFO[id]) return PAIR_INFO[id]; var t = find(id); return { name: t ? t.name : id, cat: 'memes', g: '', c: '#FF6B8B', meme: t }; }
   function pairLabel(id) { return PAIR_INFO[id] ? id : '$' + id; }
@@ -835,6 +837,29 @@
       '<div class="rp-pre">' + c.pre.map(function (p) { var on = r[0] === p[1] && r[1] === p[2]; return '<button class="' + (on ? 'on' : '') + '" data-act="rpre" data-arg="' + k + '|' + p[1] + '|' + p[2] + '">' + p[0] + '</button>'; }).join('') + '</div>' +
       '<div class="rp-foot"><span class="mono muted" id="rpc-' + k + '">' + filtered().length + ' coins match</span><button class="link" style="min-height:0;font-size:12.5px" data-act="rpre" data-arg="' + k + '|' + RDEF[k][0] + '|' + RDEF[k][1] + '">Clear</button></div></div>';
   }
+  S.pairQ = ''; S.pairTab = 'all';
+  function pairCounts() { var m = {}; all().forEach(function (t) { m[t.pair] = (m[t.pair] || 0) + 1; }); return m; }
+  function pairPop() {
+    var cnt = pairCounts(), q = S.pairQ.trim().toLowerCase();
+    var ids = Object.keys(PAIR_INFO).concat(BASE.filter(function (t) { return cnt[t.tick]; }).map(function (t) { return t.tick; }));
+    var memes = BASE.slice().sort(function (a, b) { return b.mcN - a.mcN; }).slice(0, 8).map(function (t) { return t.tick; });
+    memes.forEach(function (m) { if (ids.indexOf(m) === -1) ids.push(m); });
+    var list = ids.filter(function (id) {
+      var pi = pairInfo(id);
+      if (S.pairTab !== 'all' && pi.cat !== S.pairTab) return false;
+      if (q && id.toLowerCase().indexOf(q) === -1 && pi.name.toLowerCase().indexOf(q) === -1) return false;
+      return true;
+    }).sort(function (a, b) { return (cnt[b] || 0) - (cnt[a] || 0); });
+    var tabs = [['all', 'All']].concat(CATS.slice(1).map(function (c) { return [c[0], c[1]]; }));
+    return '<div class="fpop pairpop"><div class="pp-search">' + I.search + '<input id="pairq" data-bind="pairQ" value="' + esc(S.pairQ) + '" placeholder="Search Gold, ONDO, SOL, $PAWS…" autocomplete="off"></div>' +
+      '<div class="pp-tabs">' + tabs.map(function (t) { var n = t[0] === 'all' ? all().length : all().filter(function (x) { return pairInfo(x.pair).cat === t[0]; }).length; return '<button class="' + (S.pairTab === t[0] ? 'on' : '') + '" data-act="ptab" data-arg="' + t[0] + '">' + t[1] + '<span>' + n + '</span></button>'; }).join('') + '</div>' +
+      (S.pairTab !== 'all' ? '<button class="pp-all" data-act="pcat" data-arg="' + S.pairTab + '">Show all ' + tabs.filter(function (t) { return t[0] === S.pairTab; })[0][1].toLowerCase() + ' pairs →</button>' : '') +
+      '<div class="pp-grid">' + (list.length ? list.map(function (id) {
+        var n = cnt[id] || 0, on = S.pair === id;
+        return '<button class="pp-item' + (on ? ' on' : '') + (n ? '' : ' empty') + '" data-act="ppick" data-arg="' + esc(id) + '">' + coinHTML(id, 30) + '<span class="pp-n"><b>' + esc(pairLabel(id)) + '</b><small>' + esc(pairInfo(id).name) + '</small></span><span class="pp-c mono">' + n + '</span></button>';
+      }).join('') : '<div class="muted" style="padding:14px">No pair found</div>') + '</div>' +
+      '<div class="rp-foot"><span class="mono muted">' + filtered().length + ' coins match</span><button class="link" style="min-height:0;font-size:12.5px" data-act="pclear">Clear</button></div></div>';
+  }
   function filterBar() {
     var active = 0;
     var drops = ['mc', 'age', 'prog', 'tax'].map(function (k) {
@@ -846,6 +871,10 @@
       var on = !!S[t[0]]; if (on) active++;
       return '<button class="ftog' + (on ? ' on' : '') + '" data-act="toggle" data-arg="' + t[0] + '" aria-pressed="' + on + '">' + t[2] + t[1] + '</button>';
     }).join('');
+    var pairOn = S.pair !== 'All' || S.cat !== 'all'; if (pairOn) active++;
+    var pl = S.pair !== 'All' ? coinHTML(S.pair, 20) + '<b>' + esc(pairLabel(S.pair)) + '</b>' : S.cat !== 'all' ? '<b>' + CATS.filter(function (c) { return c[0] === S.cat; })[0][1] + '</b>' : '<b>Any</b>';
+    var pairChip = '<div class="fdrop"><button class="fchip pairchip' + (pairOn ? ' on' : '') + (S.fpop === 'pair' ? ' open' : '') + '" data-act="fpop" data-arg="pair"><span class="fc-l">Paired with</span>' + pl + '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg></button>' + (S.fpop === 'pair' ? pairPop() : '') + '</div>';
+    drops = pairChip + drops;
     return '<div class="fbar"><span class="fb-ic" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 6h16M7 12h10M10 18h4"/></svg></span>' + drops + '<span class="fb-sep"></span>' + tg +
       (active ? '<button class="freset" data-act="reset">Reset · ' + active + '</button>' : '') + '</div>';
   }
@@ -867,7 +896,7 @@
     var toolbar = '<div class="toolbar"><h2 class="h2">Tokens</h2><span class="demo" data-tip="Market data is simulated until on-chain launch goes live. Wallet + SOL balance are real (devnet).">DEMO DATA</span><div class="seg">' + SORTS.map(function (s) {
       return '<button class="' + (S.sort === s[0] ? 'on' : '') + '" aria-pressed="' + (S.sort === s[0]) + '" data-act="sort" data-arg="' + s[0] + '">' + s[1] + '</button>';
     }).join('') + '</div><div class="seg" role="group" aria-label="View"><button class="' + (S.view === 'grid' ? 'on' : '') + '" data-act="view" data-arg="grid">Grid</button><button class="' + (S.view === 'bubbles' ? 'on' : '') + '" data-act="view" data-arg="bubbles">Bubbles</button></div><span class="mono muted" style="margin-left:auto;font-size:12.5px" id="count">' + list.length + ' of ' + all().length + ' tokens</span></div>' +
-      (S.cat !== 'all' ? subPairs() : '');
+      '';
 
     var filters = filterBar();
 
@@ -1447,7 +1476,7 @@
       case 'sort': set({ sort: arg }); break;
       case 'pair': set({ pair: arg }); break;
       case 'toggle': var o = {}; o[arg] = !S[arg]; set(o); break;
-      case 'reset': S.r = JSON.parse(JSON.stringify(RDEF)); set({ fpop: null, cleanOnly: false, maxTax: 10, minProg: 0, minMc: 0, pair: 'All', cat: 'all', zeroOnly: false, gradOnly: false, rewardsOnly: false, watchOnly: false }); break;
+      case 'reset': S.r = JSON.parse(JSON.stringify(RDEF)); S.pairQ = ''; S.pairTab = 'all'; set({ fpop: null, cleanOnly: false, maxTax: 10, minProg: 0, minMc: 0, pair: 'All', cat: 'all', zeroOnly: false, gradOnly: false, rewardsOnly: false, watchOnly: false }); break;
       case 'tf': set({ tf: arg }); break;
       case 'tpTab': set({ tpTab: arg }); break;
       case 'side': set({ side: arg }); break;
@@ -1465,6 +1494,10 @@
       case 'cpair': setC({ pair: arg }); break;
       case 'cat': set({ cat: arg, pair: 'All' }); break;
       case 'fpop': set({ fpop: S.fpop === arg ? null : arg }); break;
+      case 'ptab': S.pairTab = arg; render(); break;
+      case 'ppick': set({ pair: S.pair === arg ? 'All' : arg, cat: S.pair === arg ? 'all' : pairInfo(arg).cat, fpop: null }); break;
+      case 'pcat': set({ cat: arg, pair: 'All', fpop: null }); break;
+      case 'pclear': set({ cat: 'all', pair: 'All', fpop: null, pairTab: 'all', pairQ: '' }); break;
       case 'rpre': var rq = arg.split('|'); S.r[rq[0]] = [+rq[1], +rq[2]]; render(); break;
       case 'rz': var dd = stageWH(); if (dd) zoomAt(dd.w / 2, dd.h / 2, arg === 'in' ? 1.6 : 1 / 1.6, true); break;
       case 'rzp': zoomPreset(arg); break;
