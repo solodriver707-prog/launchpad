@@ -64,7 +64,7 @@
     dice: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8.5" cy="8.5" r="1.3" fill="currentColor"/><circle cx="15.5" cy="15.5" r="1.3" fill="currentColor"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/></svg>',
     up: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></svg>'
   };
-  var LOGO = '<span class="logo" aria-hidden="true"><svg viewBox="0 0 64 64"><path d="M27 11 V41 Q27 52 38 52 H46" fill="none" stroke="#0A0A0A" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/><path class="tr-line" d="M12 33 L21 28 L29 32 L46 19" fill="none" stroke="#0A0A0A" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" pathLength="100"/><circle class="tr-dot" cx="47" cy="18.5" r="4.6" fill="#fff"/></svg></span>';
+  var LOGO = '<span class="logo" aria-hidden="true"><svg viewBox="0 0 40 40"><defs><linearGradient id="trG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FBF3E2"/><stop offset=".55" stop-color="#D8C3A0"/><stop offset="1" stop-color="#A88D5F"/></linearGradient></defs><polygon class="tr-bar" points="5,13 34,4.5 34,13.5 5,22" fill="url(#trG)" stroke="url(#trG)" stroke-width="3" stroke-linejoin="round"/><polygon class="tr-stem" points="14.5,24.5 24,21.7 24,36 14.5,36" fill="#EDE9E1" stroke="#EDE9E1" stroke-width="3" stroke-linejoin="round"/></svg></span>';
 
   // ================= DATA =================
   function mk(name, tick, kind, skinI, bgI, eyes, mouth, acc, buy, sell, pair, mcN, c24, prog, ageM, holders, soc, rewards, burn) {
@@ -303,7 +303,7 @@
       right = '<button class="btn sec" data-act="openWallet">Connect wallet</button>';
     }
     return '<header><div class="wrap hdr">' +
-      '<button class="brand" data-act="home" aria-label="treid home">' + LOGO + '<span class="brand-name">tre<span>i</span>d</span></button><span class="hlive"><span class="livedot"></span><b class="mono" id="hlive-n">' + all().length + '</b> live</span>' +
+      '<button class="brand" data-act="home" aria-label="treid home">' + LOGO + '<span class="brand-name">treid</span></button><span class="hlive"><span class="livedot"></span><b class="mono" id="hlive-n">' + all().length + '</b> live</span>' +
       '<nav class="navlinks"><span class="nav-ind" id="nav-ind"></span><button class="' + (S.screen === 'home' ? 'on' : '') + '" data-act="home">Board</button><button class="' + (S.screen === 'create' ? 'on' : '') + '" data-act="create">Create</button><button class="' + (S.screen === 'leaders' ? 'on' : '') + '" data-act="leaders">Leaderboard</button><button data-act="how">How it works</button></nav>' +
       '<button class="searchbtn" data-act="palette">' + I.search + '<span>Search tokens or paste CA</span><span class="kbd">Ctrl K</span></button>' +
       '<div class="hdr-right"><button class="wl-btn' + (S.screen === 'watch' ? ' on' : '') + '" data-act="watchPage" aria-label="Watchlist" data-tip="Your watchlist">' + I.star(S.watch.length > 0) + (S.watch.length ? '<b class="mono" id="wl-n">' + S.watch.length + '</b>' : '') + '</button><button class="btn pri" data-act="create">+ Launch token</button>' + right + '</div>' +
