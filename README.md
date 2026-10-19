@@ -1,4 +1,4 @@
-# UNDERDOG (beta)
+# GIGAPAD (beta)
 
 Every legend starts at zero. Launch tokens. Trade against anything.
 

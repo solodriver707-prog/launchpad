@@ -1,4 +1,4 @@
-/* UNDERDOG — no build step, no dependencies.
+/* GIGAPAD — no build step, no dependencies.
    Real: Solana wallet connection (Wallet Standard) + devnet SOL balance & airdrop.
    Simulated: tokens, prices, trades, launches (clearly marked as beta/simulated in the footer). */
 (function () {
@@ -64,7 +64,7 @@
     dice: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8.5" cy="8.5" r="1.3" fill="currentColor"/><circle cx="15.5" cy="15.5" r="1.3" fill="currentColor"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/></svg>',
     up: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></svg>'
   };
-  var LOGO = '<svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="16" fill="#C8FF3D"/><path d="M14 22 L20 9 L28 20 H36 L44 9 L50 22 V33 C50 44 42 53 32 53 C22 53 14 44 14 33 Z" fill="#0A0A0A"/><circle cx="25" cy="32" r="3.2" fill="#C8FF3D"/><circle cx="39" cy="32" r="3.2" fill="#C8FF3D"/><ellipse cx="32" cy="41" rx="4.2" ry="3" fill="#C8FF3D"/><path d="M27 46 q5 4 10 0" stroke="#C8FF3D" stroke-width="2" fill="none" stroke-linecap="round"/></svg>';
+  var LOGO = '<svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="16" fill="#BEF264"/><path d="M45 22 A15 15 0 1 0 47 37 H33" fill="none" stroke="#0B0B0D" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/><path d="M38 9 L53 9 L53 24 Z" fill="#0B0B0D"/></svg>';
 
   // ================= DATA =================
   function mk(name, tick, kind, skinI, bgI, eyes, mouth, acc, buy, sell, pair, mcN, c24, prog, ageM, holders, soc, rewards, burn) {
@@ -105,14 +105,14 @@
   var PAIR_INFO = {
     SOL: { img: 'icons/sol.svg', name: 'Solana', cat: 'crypto', g: '◎', c: '#9B8CFF' }, USDC: { img: 'icons/usdc.svg', name: 'USD Coin', cat: 'crypto', g: '$', c: '#5B9BFF' },
     ETH: { img: 'icons/eth.svg', name: 'Ether', cat: 'crypto', g: 'Ξ', c: '#A5B4FC' }, BTC: { img: 'icons/btc.svg', name: 'Bitcoin', cat: 'crypto', g: '₿', c: '#FFA94D' },
-    SPYx: { name: 'S&P 500', cat: 'stocks', g: 'S&P', c: '#34E39A' }, TSLAx: { name: 'Tesla', cat: 'stocks', g: 'T', c: '#FF7A93' },
+    SPYx: { name: 'S&P 500', cat: 'stocks', g: 'S&P', c: '#3DDC97' }, TSLAx: { name: 'Tesla', cat: 'stocks', g: 'T', c: '#FF7A93' },
     NVDAx: { name: 'Nvidia', cat: 'stocks', g: 'N', c: '#9BE15D' }, AAPLx: { name: 'Apple', cat: 'stocks', g: 'A', c: '#D7DEEA' },
     GOLD: { img: 'icons/gold.svg', name: 'Gold', cat: 'commod', g: 'Au', c: '#FFD15C' }, SILVER: { name: 'Silver', cat: 'commod', g: 'Ag', c: '#CBD5E1' }, OIL: { name: 'Crude oil', cat: 'commod', g: 'Oil', c: '#F59E6B' },
     EUR: { img: 'icons/eur.svg', name: 'Euro', cat: 'fx', g: '€', c: '#7DB8FF' }, JPY: { img: 'icons/jpy.svg', name: 'Yen', cat: 'fx', g: '¥', c: '#FF9AA8' }, GBP: { img: 'icons/gbp.svg', name: 'Pound', cat: 'fx', g: '£', c: '#C4B5FD' }
   };
   var CATS = [
-    ['all', 'Everything', 'Pair with anything', '#C8FF3D'], ['memes', 'Memes', 'Meme paired with meme', '#FF6B8B'],
-    ['crypto', 'Crypto', 'SOL · USDC · BTC · ETH', '#9B8CFF'], ['stocks', 'Stocks', 'Tokenized equities', '#34E39A'],
+    ['all', 'Everything', 'Pair with anything', '#BEF264'], ['memes', 'Memes', 'Meme paired with meme', '#FF6B8B'],
+    ['crypto', 'Crypto', 'SOL · USDC · BTC · ETH', '#9B8CFF'], ['stocks', 'Stocks', 'Tokenized equities', '#3DDC97'],
     ['commod', 'Commodities', 'Gold · silver · oil', '#FFD15C'], ['fx', 'Currencies', 'EUR · JPY · GBP', '#7DB8FF']
   ];
   var PAIRS = Object.keys(PAIR_INFO);
@@ -175,7 +175,7 @@
     setTimeout(function () { el.classList.add('out'); setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 320); }, 3400);
   }
   function confetti() {
-    var cols = ['#C8FF3D', '#9B8CFF', '#34E39A', '#FFD15C', '#FF6B8B'];
+    var cols = ['#BEF264', '#9B8CFF', '#3DDC97', '#FFD15C', '#FF6B8B'];
     var wrap = document.createElement('div');
     wrap.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:70;overflow:hidden';
     for (var i = 0; i < 70; i++) {
@@ -191,7 +191,7 @@
 
   function confettiSmall() {
     var b = document.querySelector('.big-btn'); if (!b) return; var r = b.getBoundingClientRect();
-    for (var i = 0; i < 18; i++) { var p = document.createElement('i'); p.style.cssText = 'position:fixed;z-index:70;pointer-events:none;width:7px;height:10px;border-radius:2px;left:' + (r.left + r.width / 2) + 'px;top:' + r.top + 'px;background:' + pick(['#C8FF3D', '#34E39A', '#FFD15C', '#fff']);
+    for (var i = 0; i < 18; i++) { var p = document.createElement('i'); p.style.cssText = 'position:fixed;z-index:70;pointer-events:none;width:7px;height:10px;border-radius:2px;left:' + (r.left + r.width / 2) + 'px;top:' + r.top + 'px;background:' + pick(['#BEF264', '#3DDC97', '#FFD15C', '#fff']);
       document.body.appendChild(p); p.animate([{ transform: 'translate(0,0) rotate(0)' }, { transform: 'translate(' + rnd(-160, 160) + 'px,' + rnd(-200, -60) + 'px) rotate(' + rnd(200, 700) + 'deg)', opacity: 0 }], { duration: rnd(700, 1100), easing: 'cubic-bezier(.2,.7,.3,1)', fill: 'forwards' }); (function (el) { setTimeout(function () { el.remove(); }, 1200); })(p); }
   }
   // ================= WALLET (Wallet Standard) =================
@@ -296,13 +296,22 @@
       right = '<button class="btn sec" data-act="openWallet">Connect wallet</button>';
     }
     return '<header><div class="wrap hdr">' +
-      '<button class="brand" data-act="home" aria-label="Underdog home">' + LOGO + '<span class="brand-name">UNDERDOG</span><span class="beta">BETA</span></button>' +
+      '<button class="brand" data-act="home" aria-label="GIGAPAD home">' + LOGO + '<span class="brand-name">GIGA<span>PAD</span></span><span class="beta">BETA</span></button>' +
       '<nav class="navlinks"><button class="' + (S.screen === 'home' ? 'on' : '') + '" data-act="home">Board</button><button class="' + (S.screen === 'create' ? 'on' : '') + '" data-act="create">Create</button><button data-act="how">How it works</button></nav>' +
       '<button class="searchbtn" data-act="palette">' + I.search + '<span>Search tokens or paste CA</span><span class="kbd">Ctrl K</span></button>' +
       '<div class="hdr-right"><button class="btn pri" data-act="create">+ Launch token</button>' + right + '</div>' +
       '</div></header>';
   }
 
+  function cardPts(t) {
+    var h = t.hist.slice(-48), mx = Math.max.apply(null, h), mn = Math.min.apply(null, h), sp = (mx - mn) || 1;
+    return h.map(function (v, i) { return [i * 300 / (h.length - 1), 6 + (1 - (v - mn) / sp) * 46]; });
+  }
+  function cardChart(t) {
+    var pts = cardPts(t), line = 'M' + pts.map(function (p) { return p[0].toFixed(1) + ' ' + p[1].toFixed(1); }).join(' L'), last = pts[pts.length - 1];
+    return '<svg viewBox="0 0 300 58" preserveAspectRatio="none" aria-hidden="true"><path class="cc-a" d="' + line + ' L300 58 L0 58 Z"/><path class="cc-l" d="' + line + '"/></svg>' +
+      '<span class="cc-dot" style="top:' + (last[1] / 58 * 100).toFixed(1) + '%"></span>';
+  }
   function spark(t) {
     var h = t.hist.slice(-36), mx = Math.max.apply(null, h), mn = Math.min.apply(null, h), sp = (mx - mn) || 1;
     return h.map(function (v, i) { return (i * 110 / (h.length - 1)).toFixed(1) + ',' + (36 - (v - mn) / sp * 32).toFixed(1); }).join(' ');
@@ -320,7 +329,8 @@
         '<div class="tax" style="background:' + taxBg(tmax) + '" data-tip="Buy ' + t.buy + '% · Sell ' + t.sell + '%"><small>TAX</small><b>' + tmax + '%</b></div></div>' +
       '<div class="tc-mid"><div class="tc-mc"><div class="l">Market cap</div><div class="v"><span data-mc="' + esc(t.tick) + '" data-v="' + fmtK(t.mcN) + '">' + fmtK(t.mcN) + '</span>' +
         '<span class="chgpill ' + (c >= 0 ? 'up' : 'down') + '" data-chg="' + esc(t.tick) + '">' + chgTxt(c) + '</span></div></div>' +
-        '<svg class="spark" viewBox="0 0 110 40" preserveAspectRatio="none" aria-hidden="true"><polyline data-spark="' + esc(t.tick) + '" points="' + spark(t) + '" fill="none" stroke="' + (c >= 0 ? '#34E39A' : '#FF5C7C') + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg></div>' +
+        '<div class="tc-vol"><span class="l">24h vol</span><b class="mono">' + fmtK(t.vol) + '</b></div></div>' +
+      '<div class="tc-chart ' + (c >= 0 ? 'up' : 'down') + '" data-cchart="' + esc(t.tick) + '">' + cardChart(t) + '</div>' +
       '<div class="tags"><span class="tag">Buy ' + t.buy + '%</span><span class="tag">Sell ' + t.sell + '%</span>' + badges + '</div>' +
       '<div class="prog"><div class="l"><span>' + (done ? 'Graduated to Raydium' : 'Bonding curve') + '</span><span class="mono" data-prog="' + esc(t.tick) + '">' + Math.min(100, t.prog).toFixed(0) + '%</span></div>' +
         '<div class="bar"><i class="' + (done ? 'done' : '') + '" data-bar="' + esc(t.tick) + '" style="width:' + Math.max(1, Math.min(100, t.prog)) + '%"></i></div></div>' +
@@ -387,11 +397,11 @@
   function heroSlide(t, rank) {
     var c = chg(t), tmax = Math.max(t.buy, t.sell), ch = heroChart(t, 1000, 220), pr = pressure(t.tick), id = esc(t.tick);
     return '<div class="hslide" data-hero="' + id + '">' +
-      '<svg class="feat-chart" viewBox="0 0 1000 220" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="hg' + id + '" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#C8FF3D" stop-opacity=".22"/><stop offset="1" stop-color="#C8FF3D" stop-opacity="0"/></linearGradient></defs>' +
-        '<path data-ha="' + id + '" d="' + ch.area + '" fill="url(#hg' + id + ')"/><path data-hl="' + id + '" d="' + ch.line + '" fill="none" stroke="#C8FF3D" stroke-opacity=".3" stroke-width="2" vector-effect="non-scaling-stroke"/>' +
-        '<path data-hl="' + id + '" class="flow" d="' + ch.line + '" fill="none" stroke="#C8FF3D" stroke-width="2.5" vector-effect="non-scaling-stroke"/></svg>' +
+      '<svg class="feat-chart" viewBox="0 0 1000 220" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="hg' + id + '" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#BEF264" stop-opacity=".22"/><stop offset="1" stop-color="#BEF264" stop-opacity="0"/></linearGradient></defs>' +
+        '<path data-ha="' + id + '" d="' + ch.area + '" fill="url(#hg' + id + ')"/><path data-hl="' + id + '" d="' + ch.line + '" fill="none" stroke="#BEF264" stroke-opacity=".3" stroke-width="2" vector-effect="non-scaling-stroke"/>' +
+        '<path data-hl="' + id + '" class="flow" d="' + ch.line + '" fill="none" stroke="#BEF264" stroke-width="2.5" vector-effect="non-scaling-stroke"/></svg>' +
       '<div class="hs-left">' +
-        '<span class="kicker"><span class="livedot"></span><span class="rank">#' + (rank + 1) + '</span> TOP DOG RIGHT NOW</span>' +
+        '<span class="kicker"><span class="livedot"></span><span class="rank">#' + (rank + 1) + '</span> GIGA OF THE HOUR</span>' +
         '<div class="title-xl hs-title">' + esc(t.name) + ' <span class="tk">$' + id + '</span></div>' +
         '<div class="hs-pills"><span class="pill" style="padding-left:11px">' + fmtNum(t.holders) + ' holders</span>' +
           '<button class="pill copy2" data-act="ca" data-arg="' + id + '">' + esc(short(t.ca)) + ' ' + I.copy + '</button>' + (t.rewards ? '<span class="pill i">' + I.gift + ' Rewards</span>' : '') + (t.burn ? '<span class="pill i">' + I.flame + ' Burn</span>' : '') + '</div>' +
@@ -431,9 +441,9 @@
       '<p class="muted" style="margin:0">Every coin is climbing the bonding curve. Buys push it up the hill, sells slide it down. Reach the top and it graduates.</p></div>' +
       '<div class="race-stats"><div><span class="muted">Climbing</span><b class="mono">' + climbing.length + '</b></div><div><span class="muted">Graduated</span><b class="mono" style="color:var(--ice)">' + grad.length + '</b></div>' +
       (leader ? '<button class="race-lead" data-act="open" data-arg="' + esc(leader.tick) + '">' + avatarHTML(leader, 26) + '<span><small>CLOSEST TO THE TOP</small><b>$' + esc(leader.tick) + ' · <span data-rlead>' + leader.prog.toFixed(0) + '%</span></b></span></button>' : '') + '</div></div>' +
-      '<div class="race-stage" id="race-stage"><svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="hillg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#C8FF3D" stop-opacity=".18"/><stop offset="1" stop-color="#C8FF3D" stop-opacity="0"/></linearGradient></defs>' +
+      '<div class="race-stage" id="race-stage"><svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="hillg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#BEF264" stop-opacity=".18"/><stop offset="1" stop-color="#BEF264" stop-opacity="0"/></linearGradient></defs>' +
         '<path d="' + (function () { var d = 'M0,100 L0,88 L5,88'; for (var i = 0; i <= 50; i++) { var h = hillXY(i * 2); d += ' L' + h.x.toFixed(2) + ',' + h.y.toFixed(2); } return d + ' L100,18 L100,100 Z'; })() + '" fill="url(#hillg)"/>' +
-        '<path d="' + (function () { var d = 'M0,88 L5,88'; for (var i = 0; i <= 50; i++) { var h = hillXY(i * 2); d += ' L' + h.x.toFixed(2) + ',' + h.y.toFixed(2); } return d + ' L100,18'; })() + '" fill="none" stroke="#C8FF3D" stroke-width="2.5" vector-effect="non-scaling-stroke" class="hill-path"/></svg>' +
+        '<path d="' + (function () { var d = 'M0,88 L5,88'; for (var i = 0; i <= 50; i++) { var h = hillXY(i * 2); d += ' L' + h.x.toFixed(2) + ',' + h.y.toFixed(2); } return d + ' L100,18'; })() + '" fill="none" stroke="#BEF264" stroke-width="2.5" vector-effect="non-scaling-stroke" class="hill-path"/></svg>' +
         marks + '<span class="summit"><span class="flagpole"></span><span class="flagcloth">RAYDIUM</span></span><span class="startline">START</span>' +
         '<div id="race-b">' + bubbles + '</div></div></section>';
   }
@@ -473,7 +483,7 @@
         '<div class="vtile"><div class="l">24h volume</div><div class="v" id="stat-vol">' + fmtK(st.vol) + '</div><div class="vbars" id="vbars">' + vbars() + '</div></div>' +
         '<div class="vtile"><div class="l"><span class="livedot"></span> Trades</div><div class="v" id="stat-trades">' + fmtNum(st.trades) + '</div><svg class="tline" viewBox="0 0 150 40" preserveAspectRatio="none" aria-hidden="true"><polyline id="tline" points="' + tline() + '" fill="none" stroke="#9B8CFF" stroke-width="2" stroke-linejoin="round"/></svg></div>' +
         '<div class="vtile ring-t"><div><div class="l">Graduated</div><div class="v" data-count="' + st.grad + '">' + st.grad + '</div><div class="muted" style="font-size:11.5px">to Raydium</div></div>' +
-          '<svg class="ring2" viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="26" fill="none" stroke="#1F1F23" stroke-width="7"/><circle cx="32" cy="32" r="26" fill="none" stroke="url(#rg)" stroke-width="7" stroke-linecap="round" stroke-dasharray="' + (C * gradPct / 100).toFixed(1) + ' ' + C.toFixed(1) + '" transform="rotate(-90 32 32)" class="ringarc"/><defs><linearGradient id="rg"><stop offset="0" stop-color="#C8FF3D"/><stop offset="1" stop-color="#9B8CFF"/></linearGradient></defs><g transform="translate(23 23) scale(.75)" fill="#C8FF3D"><path d="M6 3h12l4 6-10 12L2 9z"/></g></svg></div>' +
+          '<svg class="ring2" viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="26" fill="none" stroke="#1F1F23" stroke-width="7"/><circle cx="32" cy="32" r="26" fill="none" stroke="url(#rg)" stroke-width="7" stroke-linecap="round" stroke-dasharray="' + (C * gradPct / 100).toFixed(1) + ' ' + C.toFixed(1) + '" transform="rotate(-90 32 32)" class="ringarc"/><defs><linearGradient id="rg"><stop offset="0" stop-color="#BEF264"/><stop offset="1" stop-color="#9B8CFF"/></linearGradient></defs><g transform="translate(23 23) scale(.75)" fill="#BEF264"><path d="M6 3h12l4 6-10 12L2 9z"/></g></svg></div>' +
       '</div>' +
       '<div class="card-s feed"><div class="feed-h"><span class="livedot"></span>Live trades<span class="muted mono" style="margin-left:auto;font-size:11.5px;font-weight:500">simulated</span></div>' +
         '<div class="feed-list" id="feed">' + S.trades.slice(0, 6).map(function (t) { return feedRow(t); }).join('') + '</div></div></div>' +
@@ -555,7 +565,7 @@
           (id === 'All' ? 'All ' + CATS.filter(function (c) { return c[0] === S.cat; })[0][1].toLowerCase() : coinHTML(id, 22) + '<span>' + esc(pairLabel(id)) + '</span><span class="cnt">' + n + '</span>') + '</button>';
       }).join('') + '</div>';
     }
-    return '<div class="pair-head"><span class="kicker">PAIRED WITH</span><span class="muted" style="font-size:13px">Coins on Underdog trade against anything — drag to explore</span></div>' +
+    return '<div class="pair-head"><span class="kicker">PAIRED WITH</span><span class="muted" style="font-size:13px">Coins on GIGAPAD trade against anything — drag to explore</span></div>' +
       '<div class="cats drag-scroll">' + tiles + '</div>' + sub + '<div style="height:18px"></div>';
   }
 
@@ -568,7 +578,7 @@
       '<div class="sc-name">' + esc(t.name) + '</div><div class="mono muted" style="font-size:13px">$' + esc(t.tick) + ' · paired with ' + esc(pairLabel(t.pair)) + '</div>' +
       '<div class="sc-stats"><div><span class="muted">MC</span><b class="mono">' + fmtK(t.mcN) + '</b></div><div><span class="muted">24h</span><b class="mono ' + (c >= 0 ? 'up' : 'down') + '">' + chgTxt(c) + '</b></div>' +
       '<div class="tax" style="background:' + taxBg(tmax) + '"><small>TAX</small><b>' + tmax + '%</b></div></div>' +
-      '<svg class="sc-spark" viewBox="0 0 110 40" preserveAspectRatio="none" aria-hidden="true"><polyline points="' + spark(t) + '" fill="none" stroke="' + (c >= 0 ? '#34E39A' : '#FF5C7C') + '" stroke-width="2.2" stroke-linejoin="round"/></svg></div>';
+      '<svg class="sc-spark" viewBox="0 0 110 40" preserveAspectRatio="none" aria-hidden="true"><polyline points="' + spark(t) + '" fill="none" stroke="' + (c >= 0 ? '#3DDC97' : '#F2708A') + '" stroke-width="2.2" stroke-linejoin="round"/></svg></div>';
   }
   function deckHTML() {
     var l = deckList(), out = '';
@@ -619,7 +629,7 @@
     var grid = (!S.loading && S.view === 'bubbles') ? bubblesHTML(list) : '<section class="grid" id="grid">' + (S.loading ? [0, 1, 2, 3, 4, 5].map(skeletonCard).join('') : list.length ? list.map(function (t) { return card(t); }).join('') :
       '<div class="empty"><b style="font-size:19px">No tokens match these filters</b><span class="muted">Loosen the tax or market cap filters.</span><button class="btn pri" data-act="reset">Reset filters</button></div>') + '</section>';
 
-    var how = '<section id="how" style="margin-top:56px"><h2 class="h2" style="margin-bottom:16px">How Underdog works</h2><div class="row">' +
+    var how = '<section id="how" style="margin-top:56px"><h2 class="h2" style="margin-bottom:16px">How GIGAPAD works</h2><div class="row">' +
       [['01', 'Pick a name & logo', 'Use the built-in mascot builder or upload your own image. Takes under a minute.'],
        ['02', 'Set your buy & sell tax', 'From 0% to 10%. The tax is shown on every card in colour, so traders always know the cost.'],
        ['03', 'Launch on a bonding curve', 'Price rises as people buy. When the curve fills, liquidity graduates to Raydium automatically.']].map(function (s) {
@@ -651,20 +661,20 @@
     var g = '', pts = [];
     for (var k = 1; k < 5; k++) g += '<line x1="0" x2="' + W + '" y1="' + (top + k * ph / 5) + '" y2="' + (top + k * ph / 5) + '" stroke="#18181B" vector-effect="non-scaling-stroke"/>';
     var bars = cs.map(function (c, i) {
-      var x = i * cw + cw / 2, up = c.c >= c.o, col = up ? '#34E39A' : '#FF5C7C', y1 = Y(Math.max(c.o, c.c)), y2 = Y(Math.min(c.o, c.c));
+      var x = i * cw + cw / 2, up = c.c >= c.o, col = up ? '#3DDC97' : '#F2708A', y1 = Y(Math.max(c.o, c.c)), y2 = Y(Math.min(c.o, c.c));
       pts.push({ x: x, y: Y(c.c), v: c.c, o: c.o, h: c.h, l: c.l });
       return '<line x1="' + x.toFixed(1) + '" x2="' + x.toFixed(1) + '" y1="' + Y(c.h).toFixed(1) + '" y2="' + Y(c.l).toFixed(1) + '" stroke="' + col + '" stroke-width="1.4" vector-effect="non-scaling-stroke"/>' +
         '<rect x="' + (x - bw / 2).toFixed(1) + '" y="' + y1.toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + Math.max(1.5, y2 - y1).toFixed(1) + '" rx="1" fill="' + col + '"' + (i === cs.length - 1 ? ' class="lastc"' : '') + '/>' +
         '<rect x="' + (x - bw / 2).toFixed(1) + '" y="' + (H - c.v / vmx * vh).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + (c.v / vmx * vh).toFixed(1) + '" fill="' + col + '" opacity=".28"/>';
     }).join('');
     S.chartPts = pts; S.chartW = W; S.chartH = H;
-    var last = cs[cs.length - 1], ly = Y(last.c), lcol = last.c >= last.o ? '#34E39A' : '#FF5C7C';
+    var last = cs[cs.length - 1], ly = Y(last.c), lcol = last.c >= last.o ? '#3DDC97' : '#F2708A';
     var labels = ''; for (var j = 0; j <= 4; j++) { var v = mx - j * sp / 4; labels += '<span class="ylab" style="top:' + ((top + j * ph / 4) / H * 100).toFixed(2) + '%">' + yLabel(v) + '</span>'; }
     return '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" role="img" aria-label="Candlestick chart">' + g + bars +
       '<line x1="0" x2="' + W + '" y1="' + ly.toFixed(1) + '" y2="' + ly.toFixed(1) + '" stroke="' + lcol + '" stroke-opacity=".6" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"/></svg>' + labels +
       '<span class="lastlab" style="top:' + (ly / H * 100).toFixed(2) + '%;background:' + lcol + '">' + yLabel(last.c) + '</span>' +
       '<div class="xh" id="xh"></div><div class="xh-dot" id="xhd" style="background:#fff"></div><div class="xh-tip" id="xht"></div>' +
-      '<span class="wm">' + LOGO + 'underdog</span>';
+      '<span class="wm">' + LOGO + 'gigapad</span>';
   }
 
   // wallets pool so makers repeat (enables top traders / holders / maker filter)
@@ -673,9 +683,11 @@
   var WMAP = {}; WALLETS.forEach(function (w) { WMAP[w.a] = w; });
   function pickWallet() { return Math.random() < 0.88 ? WALLETS[Math.floor(Math.pow(Math.random(), 1.4) * WALLETS.length)].a : b58(44); }
   function devOf(t) { return t.creator || (t._dev = t._dev || WALLETS[hash(t.tick) % WALLETS.length].a); }
+  function walletSpec(addr) { var w = WMAP[addr]; if (w) return w.sp; var h = hash(addr || 'x'); return { kind: A.KINDS[h % A.KINDS.length], skin: A.SKINS[(h >> 3) % A.SKINS.length], bg: A.BGS[(h >> 6) % A.BGS.length], eyes: A.EYES[(h >> 9) % A.EYES.length], mouth: A.MOUTHS[(h >> 12) % A.MOUTHS.length], acc: A.ACCS[(h >> 15) % A.ACCS.length] }; }
+  function walletName(addr) { var w = WMAP[addr]; return S.account && addr === S.account ? 'You' : w && w.n ? '@' + w.n : short(addr); }
   function makerHTML(addr, t) {
     var w = WMAP[addr], me = S.account && addr === S.account, dev = addr === devOf(t);
-    var av = '<span class="av" style="width:20px;height:20px">' + (w ? A.svg(w.sp) : '') + '</span>';
+    var av = '<span class="av" style="width:20px;height:20px">' + A.svg(walletSpec(addr)) + '</span>';
     return '<button class="maker" data-act="maker" data-arg="' + esc(addr) + '" title="Show only this wallet">' + av + '<span>' + (me ? 'You' : w && w.n ? '@' + w.n : short(addr)) + '</span>' +
       (dev ? '<span class="bdg dev">DEV</span>' : '') + (me ? '<span class="bdg you">YOU</span>' : '') + '</button>';
   }
@@ -714,7 +726,7 @@
   function topTraders(t) {
     var m = {}, px = price(t);
     S.trades.forEach(function (tr) { if (tr.tick !== t.tick) return; var e = m[tr.wallet] = m[tr.wallet] || { a: tr.wallet, b: 0, s: 0, tok: 0, n: 0 }; var tok = tr.tokens || tr.sol * SOL_USD / px; e.n++; if (tr.side === 'buy') { e.b += tr.sol; e.tok += tok; } else { e.s += tr.sol; e.tok -= tok; } });
-    return Object.keys(m).map(function (k) { var e = m[k]; e.val = Math.max(0, e.tok) * px / SOL_USD; e.pnl = e.s + e.val - e.b; return e; }).sort(function (a, b) { return b.pnl - a.pnl; }).slice(0, 15);
+    return Object.keys(m).map(function (k) { var e = m[k]; if (e.b === 0 && e.s > 0) { e.b = e.s * (0.55 + (hash(e.a) % 70) / 100); e.n++; } e.val = Math.max(0, e.tok) * px / SOL_USD; e.pnl = e.s + e.val - e.b; return e; }).sort(function (a, b) { return b.pnl - a.pnl; }).slice(0, 15);
   }
   var CMT = ['LFG', 'tax is fair, aping in', 'chart looks clean ngl', 'who is still holding?', '0% buy tax is the way', 'this mascot is elite', 'graduation soon?', 'dev is active in tg', 'bought the dip', 'diamond hands only', 'see you at Raydium', 'buy pressure is insane right now', 'just found this, looks fun', 'held since 5k mc', 'sell tax keeps the paper hands away', 'the pair choice is genius', 'curve almost full', 'lowkey the best meme on here'];
   function seedComments(t) {
@@ -725,7 +737,7 @@
   }
   function commentHTML(c, t, enter) {
     var w = WMAP[c.w], me = S.account && c.w === S.account, dev = c.w === devOf(t);
-    return '<div class="cmt' + (enter ? ' enter' : '') + '"><span class="av" style="width:34px;height:34px">' + (w ? A.svg(w.sp) : t.img ? '<img src="' + esc(t.img) + '" alt="">' : A.svg(t.spec)) + '</span><div class="cmt-b">' +
+    return '<div class="cmt' + (enter ? ' enter' : '') + '"><span class="av" style="width:34px;height:34px">' + A.svg(walletSpec(c.w)) + '</span><div class="cmt-b">' +
       '<div class="cmt-h"><b>' + (me ? 'You' : w && w.n ? '@' + w.n : short(c.w)) + '</b>' + (dev ? '<span class="bdg dev">DEV</span>' : '') + '<span class="muted mono" data-t="' + c.t + '">' + ago(c.t) + '</span><span class="muted mono">#' + (1000 + c.id) + '</span></div>' +
       (c.reply != null ? '<div class="cmt-r">replying to #' + (1000 + c.reply) + '</div>' : '') +
       '<div class="cmt-t">' + esc(c.text) + '</div>' +
@@ -779,15 +791,29 @@
         '<span class="muted">Connect a wallet to join the thread.</span><button class="btn sec" data-act="openWallet">Connect wallet</button>') + '</div>' +
         '<div id="cmts">' + cm.slice().sort(function (a, b) { return b.t - a.t; }).map(function (x) { return commentHTML(x, t); }).join('') + '</div>';
     } else if (S.tpTab === 'holders') {
-      var hs = holdersOf(t), cols = ['#C8FF3D', '#9B8CFF', '#34E39A', '#FFD15C', '#FF9A4D', '#FF6B8B', '#5CE1E6', '#C4B5FD'];
+      var hs = holdersOf(t), cols = ['#BEF264', '#9B8CFF', '#3DDC97', '#FFD15C', '#FF9A4D', '#FF6B8B', '#5CE1E6', '#C4B5FD'];
       var top10 = 0; hs.slice(1, 11).forEach(function (h) { top10 += h.pct; });
       body = '<div class="hdist">' + hs.slice(0, 9).map(function (h, i) { return '<i style="flex:' + h.pct.toFixed(2) + ';background:' + (i ? cols[(i - 1) % cols.length] : '#3A3A42') + '" title="' + (h.label || short(h.a)) + ' ' + h.pct.toFixed(2) + '%"></i>'; }).join('') + '<i style="flex:12;background:#1F1F23"></i></div>' +
         '<div class="muted" style="font-size:12.5px;margin:6px 0 12px">Top 10 holders own <b style="color:' + (top10 > 40 ? 'var(--down)' : 'var(--up)') + '">' + top10.toFixed(1) + '%</b> · ' + fmtNum(t.holders) + ' holders</div>' +
         hs.map(function (h, i) { return '<div class="hrow"><span class="mono muted">' + (i + 1) + '</span>' + (h.label ? '<span class="maker"><span class="av" style="width:20px;height:20px;background:#3A3A42"></span><span>' + h.label + '</span><span class="bdg pool">' + (h.a === 'curve' ? 'CURVE' : 'POOL') + '</span></span>' : makerHTML(h.a, t)) +
           '<span class="hbar"><i style="width:' + Math.min(100, h.pct * 2).toFixed(1) + '%;background:' + (i ? cols[(i - 1) % cols.length] : '#3A3A42') + '"></i></span><span class="mono r">' + h.pct.toFixed(2) + '%</span></div>'; }).join('');
     } else {
-      body = '<div class="tbl"><div class="ttop h"><span>#</span><span>Trader</span><span class="r">Bought</span><span class="r">Sold</span><span class="r">Holding</span><span class="r">PnL</span><span class="r">Txns</span></div>' +
-        topTraders(t).map(function (e, i) { return '<div class="ttop"><span class="mono muted">' + (i + 1) + '</span><span>' + makerHTML(e.a, t) + '</span><span class="r mono">' + e.b.toFixed(2) + '</span><span class="r mono">' + e.s.toFixed(2) + '</span><span class="r mono">' + e.val.toFixed(2) + '</span><span class="r mono ' + (e.pnl >= 0 ? 'up' : 'down') + '"><b>' + (e.pnl >= 0 ? '+' : '') + e.pnl.toFixed(2) + ' SOL</b></span><span class="r mono muted">' + e.n + '</span></div>'; }).join('') + '</div>';
+      var tl = topTraders(t), maxAbs = Math.max.apply(null, tl.map(function (e) { return Math.abs(e.pnl); }).concat([0.01])), maxB = Math.max.apply(null, tl.map(function (e) { return Math.max(e.b, e.s); }).concat([0.01]));
+      var medal = ['#FFD15C', '#D7DEEA', '#E0A36B'], order = [1, 0, 2];
+      var podium = '<div class="podium">' + order.filter(function (k) { return tl[k]; }).map(function (k) {
+        var e = tl[k];
+        return '<button class="pod p' + (k + 1) + '" data-act="maker" data-arg="' + esc(e.a) + '" style="--md:' + medal[k] + '"><span class="pod-av"><span class="av" style="width:' + (k ? 56 : 72) + 'px;height:' + (k ? 56 : 72) + 'px">' + A.svg(walletSpec(e.a)) + '</span><span class="medal">' + (k + 1) + '</span></span>' +
+          '<b class="pod-name">' + esc(walletName(e.a)) + '</b><span class="pod-pnl mono ' + (e.pnl >= 0 ? 'up' : 'down') + '">' + (e.pnl >= 0 ? '+' : '') + e.pnl.toFixed(2) + ' SOL</span>' +
+          '<span class="pod-sub mono">' + e.n + ' trades · ' + (e.val > 0.001 ? 'still holding' : 'exited') + '</span><span class="pod-base">' + (k + 1) + '</span></button>';
+      }).join('') + '</div>';
+      body = podium + '<div class="tlist"><div class="tl h"><span>#</span><span>Trader</span><span>Bought / Sold</span><span>PnL</span><span class="r">Holding</span></div>' +
+        tl.map(function (e, i) {
+          var w = Math.abs(e.pnl) / maxAbs * 50;
+          return '<div class="tl"><span class="mono muted">' + (i + 1) + '</span><span>' + makerHTML(e.a, t) + '</span>' +
+            '<span class="bs-bars"><span class="bsb"><i class="b" style="width:' + (e.b / maxB * 100).toFixed(1) + '%"></i><em class="mono">' + e.b.toFixed(2) + '</em></span><span class="bsb"><i class="s" style="width:' + (e.s / maxB * 100).toFixed(1) + '%"></i><em class="mono">' + e.s.toFixed(2) + '</em></span></span>' +
+            '<span class="pnlbar"><span class="mid"></span><i class="' + (e.pnl >= 0 ? 'p' : 'n') + '" style="width:' + w.toFixed(1) + '%"></i><em class="mono ' + (e.pnl >= 0 ? 'up' : 'down') + '">' + (e.pnl >= 0 ? '+' : '') + e.pnl.toFixed(2) + '</em></span>' +
+            '<span class="r mono">' + (e.val > 0.001 ? e.val.toFixed(2) + ' SOL' : '<span class="muted">exited</span>') + '</span></div>';
+        }).join('') + '</div>';
     }
     var tabsHTML = '<section class="card-s panel"><div class="tabs">' + tabs.map(function (x) { return '<button class="' + (S.tpTab === x[0] ? 'on' : '') + '" data-act="tpTab" data-arg="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div>' + body + '</section>';
     // trade panel
@@ -841,7 +867,7 @@
       '<h1 class="title-xl" style="font-size:38px;margin:8px 0 22px">Launch a token</h1>' +
       '<div class="create-grid">' +
         '<section class="card-s panel" style="flex:999 1 520px;min-width:0;display:flex;flex-direction:column;gap:20px;padding:24px">' +
-          '<div class="row"><div class="field" style="flex:2 1 220px"><label for="c-name" style="font-weight:700">Name</label><input id="c-name" class="inp" maxlength="32" data-bind="c.name" value="' + esc(c.name) + '" placeholder="e.g. Underdog Pug"></div>' +
+          '<div class="row"><div class="field" style="flex:2 1 220px"><label for="c-name" style="font-weight:700">Name</label><input id="c-name" class="inp" maxlength="32" data-bind="c.name" value="' + esc(c.name) + '" placeholder="e.g. Giga Pug"></div>' +
             '<div class="field" style="flex:1 1 140px"><label for="c-tick" style="font-weight:700">Ticker</label><input id="c-tick" class="inp mono" data-bind="c.tick" value="' + esc(c.tick) + '" placeholder="DFROG"></div></div>' +
           '<div class="field"><label for="c-desc" style="font-weight:700">Description</label><textarea id="c-desc" class="inp" data-bind="c.desc" placeholder="What is this token about?">' + esc(c.desc) + '</textarea></div>' +
           '<div class="field"><div style="display:flex;justify-content:space-between;align-items:center"><b>Logo</b><button class="link" style="font-size:13.5px" data-act="randomLogo">' + I.dice + ' Randomise</button></div>' +
@@ -900,7 +926,7 @@
   }
 
   function footer() {
-    return '<footer><div class="wrap foot"><span style="display:flex;align-items:center;gap:8px"><span style="width:22px;height:22px;display:inline-block">' + LOGO + '</span><b style="color:var(--soft)">UNDERDOG</b></span>' +
+    return '<footer><div class="wrap foot"><span style="display:flex;align-items:center;gap:8px"><span style="width:22px;height:22px;display:inline-block">' + LOGO + '</span><b style="color:var(--soft)">GIGAPAD</b></span>' +
       '<span>Beta · market data on this page is simulated · wallet connects to Solana ' + CLUSTER + '</span>' +
       '<span style="margin-left:auto;display:flex;gap:16px"><a href="#machine" data-act="how">How it works</a><a href="#" data-act="social">X</a><a href="#" data-act="social">Telegram</a><a href="#" data-act="social">Terms</a></span></div></footer>';
   }
@@ -911,7 +937,7 @@
     var ae = document.activeElement, fid = ae && ae.id, ss = null, se = null;
     try { if (fid && ae.selectionStart != null) { ss = ae.selectionStart; se = ae.selectionEnd; } } catch (e) {}
     var body = S.screen === 'token' ? tokenPage() : S.screen === 'create' ? createPage() : home();
-    document.getElementById('app').innerHTML = tape() + header() + body + footer() + walletModal() + palette();
+    document.getElementById('app').innerHTML = '<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="ccUp" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3DDC97" stop-opacity=".28"/><stop offset="1" stop-color="#3DDC97" stop-opacity="0"/></linearGradient><linearGradient id="ccDn" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F2708A" stop-opacity=".26"/><stop offset="1" stop-color="#F2708A" stop-opacity="0"/></linearGradient></defs></svg>' + tape() + header() + body + footer() + walletModal() + palette();
     if (fid) { var el = document.getElementById(fid); if (el) { el.focus({ preventScroll: true }); try { if (ss != null) el.setSelectionRange(ss, se); } catch (e) {} } }
     if (S.palOpen && !fid) { var p = document.getElementById('pal'); if (p) p.focus(); }
     if (S.screen === 'home' && !S.loading && firstCount) { firstCount = false; countUp(); }
@@ -975,7 +1001,8 @@
     q(attr('data-chg2', t.tick)).forEach(function (el) { el.textContent = chgTxt(c); el.classList.remove('up', 'down'); el.classList.add(cls); });
     q(attr('data-chg3', t.tick)).forEach(function (el) { el.textContent = chgTxt(c); el.className = 'bc ' + cls; var b = el.parentNode; if (b) { b.classList.toggle('pos', c >= 0); b.classList.toggle('neg', c < 0); b.classList.remove('hit'); void b.offsetWidth; b.classList.add('hit'); } });
     q(attr('data-tape', t.tick)).forEach(function (el) { el.textContent = chgTxt(c); el.className = cls; });
-    q(attr('data-spark', t.tick)).forEach(function (el) { el.setAttribute('points', spark(t)); el.setAttribute('stroke', c >= 0 ? '#34E39A' : '#FF5C7C'); });
+    q(attr('data-spark', t.tick)).forEach(function (el) { el.setAttribute('points', spark(t)); el.setAttribute('stroke', c >= 0 ? '#3DDC97' : '#F2708A'); });
+    q(attr('data-cchart', t.tick)).forEach(function (el) { el.innerHTML = cardChart(t); el.classList.toggle('up', c >= 0); el.classList.toggle('down', c < 0); });
     q(attr('data-prog', t.tick)).forEach(function (el) { el.textContent = Math.min(100, t.prog).toFixed(0) + '%'; });
     q(attr('data-bar', t.tick)).forEach(function (el) { el.style.width = Math.max(1, Math.min(100, t.prog)) + '%'; if (t.prog >= 100) el.classList.add('done'); });
     var st = document.getElementById('stat-trades'); if (st) st.textContent = fmtNum(S.trades.length + S.tradeCount);
@@ -1131,7 +1158,7 @@
           soc: !!(c.x || c.tg || c.web), rewards: false, burn: false, ca: fakeCA(), vol: 0, hist: [5, 5], desc: c.desc.trim(), creator: S.account };
         S.created.unshift(nt); saveCreated();
         S.c = { name: '', tick: '', desc: '', x: '', tg: '', web: '', pair: 'SOL', buy: 0, sell: 0, img: null, spec: { kind: pick(A.KINDS), skin: pick(A.SKINS), bg: pick(A.BGS), eyes: 'normal', mouth: 'smile', acc: 'none' } };
-        openToken(nt.tick); confetti(); toast('$' + nt.tick + ' is live on Underdog', nt); break;
+        openToken(nt.tick); confetti(); toast('$' + nt.tick + ' is live on GIGAPAD', nt); break;
     }
   });
 
@@ -1201,8 +1228,8 @@
     var mach = [
       ['press', 22, 'MASCOT PRESS', '#B794FF', '1', 'Give it a face', 'Name, ticker &amp; mascot'],
       ['tax', 44, 'TAX STAMP', '#FFD15C', '2', 'Set the tax', '0–10%, shown to everyone'],
-      ['pump', 66, 'PUMP', '#22E58A', '3', 'Traders pump it', 'Every buy pushes the price up'],
-      ['launch', 88, 'LAUNCHER', '#C8FF3D', '4', 'Graduate', 'Hits 100% → Raydium']
+      ['pump', 66, 'PUMP', '#3DDC97', '3', 'Traders pump it', 'Every buy pushes the price up'],
+      ['launch', 88, 'LAUNCHER', '#BEF264', '4', 'Graduate', 'Hits 100% → Raydium']
     ];
     var html = mach.map(function (m) {
       return '<div class="mach m-' + m[0] + '" id="mach-' + m[0] + '" style="left:' + m[1] + '%;--mc:' + m[3] + '">' +
@@ -1215,7 +1242,7 @@
       '<div class="split-bar"><span class="sp c" style="flex:50"><b>50%</b> Creator</span><span class="sp h" style="flex:30"><b>30%</b> Holders</span><span class="sp v" style="flex:20"><b>20%</b> Burn</span></div></div>';
     return '<section class="factory card-s" id="machine">' +
       '<div class="m-head"><div><span class="kicker"><span class="livedot"></span>HOW IT WORKS</span><h2 class="title-xl" style="font-size:32px;margin:8px 0 4px">From raw coin to legend</h2>' +
-        '<p class="muted" style="margin:0">Every coin on Underdog rides the same line. Watch it get built.</p></div>' +
+        '<p class="muted" style="margin:0">Every coin on GIGAPAD rides the same line. Watch it get built.</p></div>' +
         '<button class="btn pri" data-act="mlaunch">Drop a coin in</button></div>' +
       '<div class="line-wrap drag-scroll"><div class="line" id="line">' +
         '<div class="hopper"><span>RAW<br>COINS</span></div>' + html +
