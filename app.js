@@ -64,7 +64,7 @@
     dice: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8.5" cy="8.5" r="1.3" fill="currentColor"/><circle cx="15.5" cy="15.5" r="1.3" fill="currentColor"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/></svg>',
     up: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></svg>'
   };
-  var LOGO = '<svg viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="lgS" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset=".5" stop-color="#D3D5DA"/><stop offset="1" stop-color="#9A9DA4"/></linearGradient></defs><rect x="2" y="2" width="60" height="60" rx="17" fill="url(#lgS)"/><path d="M46 21.5 A16 16 0 1 0 46 42.5" fill="none" stroke="#0A0A0B" stroke-width="9.5" stroke-linecap="round"/><path d="M40 13 L52 13 L52 25 Z" fill="#0A0A0B"/><circle cx="32" cy="32" r="3.6" fill="#0A0A0B"/></svg>';
+  var LOGO = '<svg viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="lgS" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset=".55" stop-color="#C9CBD1"/><stop offset="1" stop-color="#7E8188"/></linearGradient><linearGradient id="lgB" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1E1F24"/><stop offset="1" stop-color="#0A0A0C"/></linearGradient></defs><rect x="1.5" y="1.5" width="61" height="61" rx="16" fill="url(#lgB)" stroke="url(#lgS)" stroke-width="2"/><path d="M22 52 L22 44 L17 40 L20 36 L17 33 L21 29 L19 22 C20 13 28 9 36 10 C45 11 50 18 49 27 L47 33 L48 41 L43 48 L36 50 L33 56 Z" fill="url(#lgS)"/><path d="M30 25 L39 24" stroke="#0A0A0C" stroke-width="2.6" stroke-linecap="round"/><path d="M41 36 L46 35" stroke="#0A0A0C" stroke-width="2" stroke-linecap="round" opacity=".55"/><path d="M33 56 L36 50 L43 48" fill="none" stroke="#0A0A0C" stroke-width="1.4" opacity=".35"/></svg>';
 
   // ================= DATA =================
   function mk(name, tick, kind, skinI, bgI, eyes, mouth, acc, buy, sell, pair, mcN, c24, prog, ageM, holders, soc, rewards, burn) {
@@ -303,8 +303,8 @@
       right = '<button class="btn sec" data-act="openWallet">Connect wallet</button>';
     }
     return '<header><div class="wrap hdr">' +
-      '<button class="brand" data-act="home" aria-label="CHADPAD home">' + LOGO + '<span class="brand-name">CHAD<span>PAD</span></span><span class="beta">BETA</span></button>' +
-      '<nav class="navlinks"><button class="' + (S.screen === 'home' ? 'on' : '') + '" data-act="home">Board</button><button class="' + (S.screen === 'create' ? 'on' : '') + '" data-act="create">Create</button><button class="' + (S.screen === 'leaders' ? 'on' : '') + '" data-act="leaders">Leaderboard</button><button data-act="how">How it works</button></nav>' +
+      '<button class="brand" data-act="home" aria-label="CHADPAD home">' + LOGO + '<span class="brand-name">CHAD<span>PAD</span></span></button><span class="hlive"><span class="livedot"></span><b class="mono" id="hlive-n">' + all().length + '</b> live</span>' +
+      '<nav class="navlinks"><span class="nav-ind" id="nav-ind"></span><button class="' + (S.screen === 'home' ? 'on' : '') + '" data-act="home">Board</button><button class="' + (S.screen === 'create' ? 'on' : '') + '" data-act="create">Create</button><button class="' + (S.screen === 'leaders' ? 'on' : '') + '" data-act="leaders">Leaderboard</button><button data-act="how">How it works</button></nav>' +
       '<button class="searchbtn" data-act="palette">' + I.search + '<span>Search tokens or paste CA</span><span class="kbd">Ctrl K</span></button>' +
       '<div class="hdr-right"><button class="btn pri" data-act="create">+ Launch token</button>' + right + '</div>' +
       '</div></header>';
@@ -895,13 +895,89 @@
       }).join('') : '<div class="muted" style="padding:14px">No pair found</div>') + '</div>' +
       '<div class="rp-foot"><span class="mono muted">' + filtered().length + ' coins match</span><button class="link" style="min-height:0;font-size:12.5px" data-act="pclear">Clear</button></div></div>';
   }
+  function pairIds(tab, q) {
+    var cnt = pairCounts();
+    var ids = Object.keys(PAIR_INFO).concat(BASE.filter(function (t) { return cnt[t.tick]; }).map(function (t) { return t.tick; }));
+    BASE.slice().sort(function (a, b) { return b.mcN - a.mcN; }).slice(0, 8).forEach(function (t) { if (ids.indexOf(t.tick) === -1) ids.push(t.tick); });
+    q = (q || '').trim().toLowerCase().replace(/^\$/, '');
+    return ids.filter(function (id) { var pi = pairInfo(id);
+      if (tab !== 'all' && pi.cat !== tab) return false;
+      if (q && id.toLowerCase().indexOf(q) === -1 && pi.name.toLowerCase().indexOf(q) === -1) return false;
+      return true; }).sort(function (a, b) { return (cnt[b] || 0) - (cnt[a] || 0); });
+  }
+  // visible "Paired with" row: category segments + coin rail + search
+  function pairRow() {
+    var cnt = pairCounts(), a = all();
+    var cats = CATS.map(function (c) { var n = c[0] === 'all' ? a.length : a.filter(function (x) { return pairInfo(x.pair).cat === c[0]; }).length;
+      var on = S.cat === c[0];
+      return '<button class="prc' + (on ? ' on' : '') + '" style="--cc:' + c[3] + '" data-act="pcat" data-arg="' + c[0] + '"><span>' + (c[0] === 'all' ? 'All' : c[1]) + '</span><small>' + n + '</small></button>'; }).join('');
+    var rail = pairIds(S.cat, '').filter(function (id) { return cnt[id]; }).map(function (id) {
+      var on = S.pair === id;
+      return '<button class="prp' + (on ? ' on' : '') + '" data-act="ppick" data-arg="' + esc(id) + '" title="' + esc(pairInfo(id).name) + '">' + coinHTML(id, 22) + '<b>' + esc(pairLabel(id)) + '</b><small>' + cnt[id] + '</small></button>'; }).join('');
+    var q = S.pairQ.trim(), res = q ? pairIds('all', q).slice(0, 8) : [];
+    var drop = q ? '<div class="pr-drop">' + (res.length ? res.map(function (id) { var n = cnt[id] || 0;
+      return '<button class="pp-item' + (S.pair === id ? ' on' : '') + (n ? '' : ' empty') + '" data-act="ppick2" data-arg="' + esc(id) + '">' + coinHTML(id, 26) + '<span class="pp-n"><b>' + esc(pairLabel(id)) + '</b><small>' + esc(pairInfo(id).name) + ' · ' + (CATS.filter(function (c) { return c[0] === pairInfo(id).cat; })[0] || [0, ''])[1] + '</small></span><span class="pp-c mono">' + n + '</span></button>'; }).join('') : '<div class="muted" style="padding:12px 14px;font-size:13px">No pair called “' + esc(q) + '”</div>') + '</div>' : '';
+    var sel = S.pair !== 'All' ? '<button class="pr-sel" data-act="ppick" data-arg="' + esc(S.pair) + '">' + coinHTML(S.pair, 18) + '<b>' + esc(pairLabel(S.pair)) + '</b><span>×</span></button>' : '';
+    return '<div class="pairrow"><span class="pr-l">Paired<br>with</span><div class="pr-cats">' + cats + '</div>' +
+      '<div class="pr-rail drag-scroll">' + rail + '</div>' + sel +
+      '<div class="pr-search">' + I.search + '<input id="pairq" data-bind="pairQ" value="' + esc(S.pairQ) + '" placeholder="Find pair: Gold, ONDO, $PAWS…" autocomplete="off">' + drop + '</div></div>';
+  }
+  // ---- tape-measure range filters ----
+  var HB = 28;
+  function sPos(k, d) {
+    if (k === 'mc') return Math.max(0, Math.min(100, 20 * Math.log10(Math.max(1, d.mcN))));
+    if (k === 'age') return Math.max(0, Math.min(100, ageS(Math.max(1, (Date.now() - d.born) / 60000))));
+    if (k === 'tax') return Math.max(d.buy, d.sell);
+    return d.prog;
+  }
+  function rTicks(k) {
+    if (k === 'mc') return [[0, '1K'], [20, '10K'], [40, '100K'], [60, '1M'], [80, '10M'], [100, '100M']];
+    if (k === 'age') return [[0, '1m'], [ageS(10), '10m'], [ageS(60), '1h'], [ageS(1440), '1d'], [100, '30d']];
+    if (k === 'tax') return [[0, '0'], [2, '2'], [4, '4'], [6, '6'], [8, '8'], [10, '10%']];
+    return [[0, '0'], [25, '25'], [50, '50'], [75, '75'], [100, '100%']];
+  }
+  function endTxt(k, i) {
+    var v = rv(k)[i];
+    if (k === 'mc') return v === Infinity ? '∞' : v === 0 ? '$0' : fmtK(v);
+    if (k === 'age') return v === Infinity ? '∞' : v === 0 ? 'new' : ageTxt(Math.max(1, v));
+    return Math.round(v) + '%';
+  }
+  function histHTML(k) {
+    var c = RCFG[k], b = [], i, mx = 1, r = S.r[k];
+    for (i = 0; i < HB; i++) b.push(0);
+    all().forEach(function (d) { var x = Math.min(HB - 1, Math.floor(sPos(k, d) / c.max * HB)); b[x]++; });
+    b.forEach(function (n) { if (n > mx) mx = n; });
+    return b.map(function (n, j) { var mid = (j + .5) / HB * c.max, on = mid >= r[0] && mid <= r[1];
+      return '<i class="' + (on ? 'in' : '') + '" style="height:' + (n ? 18 + n / mx * 82 : 6) + '%;--d:' + (j * 18) + 'ms"></i>'; }).join('');
+  }
+  function irUpdate(k, idx) {
+    var c = RCFG[k], r = S.r[k], box = document.querySelector('.ir-' + k); if (!box) return;
+    var h = box.querySelectorAll('.ir-hist i');
+    for (var j = 0; j < h.length; j++) { var mid = (j + .5) / HB * c.max; h[j].classList.toggle('in', mid >= r[0] && mid <= r[1]); }
+    var lit = box.querySelector('.ir-rule.lit'); if (lit) lit.style.clipPath = 'inset(0 ' + (100 - r[1] / c.max * 100) + '% 0 ' + (r[0] / c.max * 100) + '%)';
+    var tl = box.querySelectorAll('.ir-rule.lit em');
+    rTicks(k).forEach(function (t, j) { var e = tl[j]; if (!e) return; var inr = t[0] >= r[0] && t[0] <= r[1]; e.classList.toggle('in', inr); });
+    if (idx != null) {
+      var f = box.querySelector('.ir-flag'), pos = r[idx] / c.max;
+      f.textContent = endTxt(k, idx); f.style.left = 'calc(' + (pos * 100) + '% + ' + (7 - pos * 14) + 'px)';
+      box.classList.add('drag'); clearTimeout(box._t); box._t = setTimeout(function () { box.classList.remove('drag'); }, 900);
+      // click when passing a major tick
+      var near = -1; rTicks(k).forEach(function (t, j) { if (Math.abs(t[0] - r[idx]) < c.max / 60) near = j; });
+      if (near > -1 && box._near !== near) { var e = tl[near]; if (e) { e.classList.remove('pop'); void e.offsetWidth; e.classList.add('pop'); } }
+      box._near = near;
+    }
+  }
   function inlineRange(k) {
     var c = RCFG[k], r = S.r[k], on = rLabel(k) !== 'Any';
     var ic = { mc: '$', age: '◷', prog: '▲', tax: '%' }[k];
-    return '<div class="irange ir-' + k + (on ? ' on' : '') + '"><div class="ir-h"><span><i>' + ic + '</i>' + c.lab + '</span><b id="fcl-' + k + '">' + rLabel(k) + '</b></div>' +
+    var tk = rTicks(k).map(function (t) { return '<em style="left:' + (t[0] / c.max * 100) + '%"><u>' + t[1] + '</u></em>'; }).join('');
+    var minor = k === 'tax' ? 10 : 20;
+    return '<div class="irange ir-' + k + (on ? ' on' : '') + '" style="--minor:' + (100 / minor) + '%"><div class="ir-h"><span><i>' + ic + '</i>' + c.lab + '</span><b id="fcl-' + k + '">' + rLabel(k) + '</b></div>' +
+      '<div class="ir-body"><div class="ir-hist">' + histHTML(k) + '</div>' +
       '<div class="dual sm' + (k === 'tax' ? ' taxg' : '') + '"><div class="dual-track"><i id="rpf-' + k + '" style="' + rFill(k) + '"></i></div>' +
       '<input type="range" min="0" max="' + c.max + '" step="' + c.step + '" value="' + r[0] + '" data-range="' + k + '|0" aria-label="' + c.title + ' minimum">' +
-      '<input type="range" min="0" max="' + c.max + '" step="' + c.step + '" value="' + r[1] + '" data-range="' + k + '|1" aria-label="' + c.title + ' maximum"></div>' +
+      '<input type="range" min="0" max="' + c.max + '" step="' + c.step + '" value="' + r[1] + '" data-range="' + k + '|1" aria-label="' + c.title + ' maximum"><span class="ir-flag"></span></div>' +
+      '<div class="ir-rules"><div class="ir-rule">' + tk + '</div><div class="ir-rule lit" style="clip-path:inset(0 ' + (100 - r[1] / c.max * 100) + '% 0 ' + (r[0] / c.max * 100) + '%)">' + tk + '</div></div></div>' +
 '</div>';
   }
   function filterBar() {
@@ -914,7 +990,7 @@
       var on = !!S[t[0]]; if (on) active++;
       return '<button class="ftog' + (on ? ' on' : '') + '" data-act="toggle" data-arg="' + t[0] + '" aria-pressed="' + on + '">' + t[2] + t[1] + '</button>';
     }).join('');
-    return '<div class="fbar2"><div class="fb2-row">' + pairChip + ['mc', 'age', 'prog', 'tax'].map(inlineRange).join('') + '</div>' +
+    return '<div class="fbar2">' + pairRow() + '<div class="fb2-row">' + ['mc', 'age', 'prog', 'tax'].map(inlineRange).join('') + '</div>' +
       '<div class="fb2-row sub">' + tg + '<span class="mono muted" style="margin-left:auto;font-size:12px" id="rpc-all">' + filtered().length + ' coins match</span>' + (active ? '<button class="freset" style="margin-left:10px" data-act="reset">Reset · ' + active + '</button>' : '') + '</div></div>';
   }
   function refreshGrid() {
@@ -1410,6 +1486,7 @@
     if (S.palOpen && !fid) { var p = document.getElementById('pal'); if (p) p.focus(); }
     if (S.screen === 'home' && !S.loading && firstCount) { firstCount = false; countUp(); }
     if (typeof reveal === 'function') reveal();
+    setTimeout(function () { navInd(); }, 0);
     mFit(); if (S.screen === 'home') mSetStep(M.step);
   }
   function countUp() {
@@ -1518,6 +1595,7 @@
       buy: Math.floor(rnd(0, 4)), sell: Math.floor(rnd(0, 6)), pair: Math.random() < 0.25 ? pick(BASE).tick : pick(PAIRS), mcN: mc, mc0: mc, prog: rnd(1, 4), born: Date.now(), holders: 1 + Math.floor(rnd(0, 6)),
       soc: false, rewards: Math.random() < 0.3, burn: false, ca: fakeCA(), vol: rnd(0.5, 2), hist: [mc * 0.98, mc] };
     S.launched.unshift(t); if (S.launched.length > 20) S.launched.pop();
+    var hl = document.getElementById('hlive-n'); if (hl) { hl.textContent = all().length; hl.classList.remove('tick'); void hl.offsetWidth; hl.classList.add('tick'); }
     toast('New launch: ' + name + ' $' + tick, t);
     machineLaunch(t);
     raceRefresh();
@@ -1586,6 +1664,7 @@
       case 'ptab': S.pairTab = arg; render(); break;
       case 'ppick': set({ pair: S.pair === arg ? 'All' : arg, cat: S.pair === arg ? 'all' : pairInfo(arg).cat, fpop: null }); break;
       case 'pcat': set({ cat: arg, pair: 'All', fpop: null }); break;
+      case 'ppick2': S.pairQ = ''; set({ pair: arg, cat: pairInfo(arg).cat, fpop: null }); break;
       case 'pclear': set({ cat: 'all', pair: 'All', fpop: null, pairTab: 'all', pairQ: '' }); break;
       case 'rpre': var rq = arg.split('|'); S.r[rq[0]] = [+rq[1], +rq[2]]; render(); break;
       case 'rz': var dd = stageWH(); if (dd) zoomAt(dd.w / 2, dd.h / 2, arg === 'in' ? 1.6 : 1 / 1.6, true); break;
@@ -1663,7 +1742,7 @@
       var pk = rg.split('|'), k = pk[0], idx = +pk[1], val = +e.target.value, r = S.r[k];
       if (idx === 0) r[0] = Math.min(val, r[1]); else r[1] = Math.max(val, r[0]);
       if (+e.target.value !== r[idx]) e.target.value = r[idx];
-      refreshGrid(); return;
+      refreshGrid(); irUpdate(k, idx); return;
     }
     var el = e.target, key = el.getAttribute && el.getAttribute('data-bind');
     if (!key) return;
@@ -1686,6 +1765,7 @@
 
   document.addEventListener('keydown', function (e) {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); set({ palOpen: !S.palOpen, palQ: '', palIdx: 0 }); return; }
+    if (e.target && e.target.id === 'pairq') { if (e.key === 'Enter') { var pr0 = pairIds('all', S.pairQ)[0]; if (pr0) { S.pairQ = ''; set({ pair: pr0, cat: pairInfo(pr0).cat }); } return; } if (e.key === 'Escape') { set({ pairQ: '' }); return; } }
     if (e.key === 'Escape') { if (S.palOpen || S.walletOpen || S.walletMenu || S.walletView) set({ palOpen: false, walletOpen: false, walletMenu: false, walletView: null }); return; }
     if (S.palOpen) {
       var res = palResults();
@@ -1695,6 +1775,10 @@
     }
   });
 
+  // header nav sliding indicator
+  function navInd(btn) { var ind = document.getElementById('nav-ind'), nav = ind && ind.parentNode; if (!ind) return; btn = btn || nav.querySelector('button.on'); if (!btn) { ind.style.opacity = 0; return; } var r = btn.getBoundingClientRect(), n = nav.getBoundingClientRect(); ind.style.opacity = 1; ind.style.width = r.width + 'px'; ind.style.transform = 'translateX(' + (r.left - n.left) + 'px)'; }
+  document.addEventListener('mouseover', function (e) { var b = e.target.closest && e.target.closest('.navlinks button'); if (b) navInd(b); else if (e.target.closest && !e.target.closest('.navlinks')) navInd(); });
+  window.addEventListener('resize', function () { navInd(); });
   // card spotlight follows the mouse
   document.addEventListener('mousemove', function (e) {
     var c = e.target.closest && e.target.closest('.tcard');
