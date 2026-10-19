@@ -660,20 +660,31 @@
       avatarHTML(t, r * 2) + '<span class="lb-tag"><b>$' + id + '</b><em class="mono">' + (cook ? Math.min(99, Math.floor(t.prog)) + '%' : fmtK(t.mcN)) + '</em></span>' +
       '<span class="lb-card"><b>' + esc(t.name) + '</b><span>' + coinHTML(t.pair, 14) + esc(pairLabel(t.pair)) + ' · tax ' + Math.max(t.buy, t.sell) + '%</span><span class="mono">' + fmtK(t.mcN) + ' <i class="' + (c >= 0 ? 'up' : 'down') + '">' + chgTxt(c) + '</i></span></span></button>';
   }
-  function raceSection() {
-    var a = all(), cook = a.filter(function (t) { return t.prog < 100; }), sent = a.filter(function (t) { return t.prog >= 100; });
+  try { S.viz = localStorage.getItem('dl.viz') || 'orbit'; } catch (e) { S.viz = 'orbit'; }
+  function ascentStage(a, cook, sent) {
     var alt = [['$1M', 1e6], ['$10M', 1e7], ['$50M', 5e7]].map(function (x) { return '<i data-f="' + ((mcU(x[1]) - SPLIT) / (1 - SPLIT)).toFixed(3) + '" data-z="s"><u>' + x[0] + '</u></i>'; }).join('') +
       [25, 50, 75].map(function (v) { return '<i data-f="' + (v / 100) + '" data-z="c"><u>' + v + '%</u></i>'; }).join('');
-    return '<section class="race card-s lab asc" id="race"><div class="lab-head"><div><h2 class="title-xl lab-title">The Ascent</h2>' +
-      '<p class="muted lab-sub">Buys lift a coin, sells sink it. Fill the bonding curve to break through the line — then it\'s a race to $100M.</p></div>' +
-      '<div class="asc-key"><span><i class="k-up"></i>buy</span><span><i class="k-dn"></i>sell</span><span><i class="k-sz"></i>size = market cap</span></div></div>' +
-      '<div class="lab-stage asc-stage" id="lab"><canvas class="asc-cv" id="asc-cv"></canvas>' +
+    return '<div class="lab-stage asc-stage" id="lab" data-mode="ascent"><canvas class="asc-cv" id="asc-cv"></canvas>' +
         '<div class="asc-zone z-sent"><span class="az-l">Sent <b class="mono" id="az-s">' + sent.length + '</b><small>graduated · market cap</small></span><span class="az-top mono">$100M</span></div>' +
         '<div class="asc-line"><span>graduation</span></div>' +
         '<div class="asc-zone z-cook"><span class="az-l">Cooking <b class="mono" id="az-c">' + cook.length + '</b><small>bonding curve</small></span></div>' +
         '<div class="asc-grid">' + alt + '</div>' +
-        '<div class="lab-nodes" id="lab-nodes">' + a.map(labBubble).join('') + '</div><div class="asc-fx" id="asc-fx"></div>' +
-      '</div></section>';
+        '<div class="lab-nodes" id="lab-nodes">' + a.map(labBubble).join('') + '</div><div class="asc-fx" id="asc-fx"></div></div>';
+  }
+  function orbitStage(a, cook, sent) {
+    return '<div class="lab-stage orb-stage" id="lab" data-mode="orbit"><canvas class="asc-cv" id="asc-cv"></canvas>' +
+      '<div class="orb-core" id="orb-core"><span class="oc-glow"></span><b>treid</b><small class="mono"><span id="az-c">' + cook.length + '</span> cooking · <span id="az-s">' + sent.length + '</span> sent</small></div>' +
+      '<div class="orb-labels" id="orb-labels"></div>' +
+      '<div class="lab-nodes" id="lab-nodes">' + a.map(labBubble).join('') + '</div><div class="asc-fx" id="asc-fx"></div>' +
+      '<div class="orb-hint mono">drag to spin · tap a coin to trade</div></div>';
+  }
+  function raceSection() {
+    var a = all(), cook = a.filter(function (t) { return t.prog < 100; }), sent = a.filter(function (t) { return t.prog >= 100; }), orb = S.viz === 'orbit';
+    return '<section class="race card-s lab asc' + (orb ? ' orbv' : '') + '" id="race"><div class="lab-head"><div><h2 class="title-xl lab-title">' + (orb ? 'The Orbit' : 'The Ascent') + '</h2>' +
+      '<p class="muted lab-sub">' + (orb ? 'New coins circle the core while they cook — the further out, the closer to graduating. Cross the gold ring and they break out into the open market.' : 'Buys lift a coin, sells sink it. Fill the bonding curve to break through the line — then it\'s a race to $100M.') + '</p></div>' +
+      '<div class="lab-right"><div class="seg sm viz-seg"><button class="' + (orb ? 'on' : '') + '" data-act="viz" data-arg="orbit">Orbit</button><button class="' + (!orb ? 'on' : '') + '" data-act="viz" data-arg="ascent">Ascent</button></div>' +
+      '<div class="asc-key"><span><i class="k-up"></i>buy</span><span><i class="k-dn"></i>sell</span><span><i class="k-sz"></i>size = market cap</span></div></div></div>' +
+      (orb ? orbitStage(a, cook, sent) : ascentStage(a, cook, sent)) + '</section>';
   }
   var LAB = { pos: {}, stage: null, raf: 0, hist: {} };
   var ASC_SPLIT = .52;
@@ -688,8 +699,80 @@
     var zs = st.querySelector('.z-sent'), zc = st.querySelector('.z-cook'); if (zs) zs.style.height = G.line + 'px'; if (zc) { zc.style.top = G.line + 'px'; zc.style.height = (G.h - G.line) + 'px'; }
     var cv = st.querySelector('#asc-cv'), dpr = Math.min(2, window.devicePixelRatio || 1); cv.width = G.w * dpr; cv.height = G.h * dpr; cv.style.width = G.w + 'px'; cv.style.height = G.h + 'px'; LAB.ctx = cv.getContext('2d'); LAB.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
+  // ---------- ORBIT ----------
+  var ORB = { rot: 0, vrot: 0, slow: 1, slowT: 1, drag: null, flash: 0 };
+  var OU0 = .17, OU1 = .62, OU2 = .96;
+  function orbU(t) { return t.prog < 100 ? OU0 + Math.max(0, Math.min(1, t.prog / 100)) * (OU1 - OU0 - .02) : OU1 + .03 + gameF(t) * (OU2 - OU1 - .03); }
+  function orbGeom(st) {
+    var r = st.getBoundingClientRect(), w = r.width, h = r.height, ry = h * .5 - 26, rx = Math.min(w * .5 - 30, ry * 2.35);
+    if (w < 760) { rx = w * .5 - 12; ry = Math.min(h * .5 - 28, rx * 1.1); }
+    return { w: w, h: h, cx: w / 2, cy: h / 2 + 4, rx: rx, ry: ry, k: Math.max(.5, Math.min(1, w / 1250)) };
+  }
+  function orbRings() {
+    var R = [[OU0 + .25 * (OU1 - OU0 - .02), '25%'], [OU0 + .5 * (OU1 - OU0 - .02), '50%'], [OU0 + .75 * (OU1 - OU0 - .02), '75%'], [OU1, 'GRADUATION', 'g']];
+    [['$1M', 1e6], ['$10M', 1e7], ['$100M', 1e8]].forEach(function (m) { R.push([OU1 + .03 + ((mcU(m[1]) - SPLIT) / (1 - SPLIT)) * (OU2 - OU1 - .03), m[0], 's']); });
+    return R;
+  }
+  function orbSetup(st, G) {
+    var cv = st.querySelector('#asc-cv'), dpr = Math.min(2, window.devicePixelRatio || 1); cv.width = G.w * dpr; cv.height = G.h * dpr; cv.style.width = G.w + 'px'; cv.style.height = G.h + 'px'; LAB.ctx = cv.getContext('2d'); LAB.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    var lb = st.querySelector('#orb-labels'); if (lb) lb.innerHTML = orbRings().map(function (r) { return '<span class="ol ' + (r[2] || '') + '" style="left:' + G.cx + 'px;top:' + (G.cy - G.ry * r[0] - 7) + 'px">' + r[1] + '</span>'; }).join('');
+    var core = st.querySelector('#orb-core'); if (core) { var cw = G.rx * OU0 * 2 * .82, chh = G.ry * OU0 * 2 * .82; core.style.width = cw + 'px'; core.style.height = chh + 'px'; core.style.left = (G.cx - cw / 2) + 'px'; core.style.top = (G.cy - chh / 2) + 'px'; }
+  }
+  function orbLoop(now, st) {
+    if (st !== LAB.stage || LAB.dirty) { LAB.stage = st; LAB.G = orbGeom(st); orbSetup(st, LAB.G); LAB.dirty = false; LAB.last = now; }
+    var G = LAB.G, ctx = LAB.ctx, dt = Math.min(50, now - (LAB.last || now)); LAB.last = now;
+    ORB.slow += (ORB.slowT - ORB.slow) * .06;
+    if (!ORB.drag) { ORB.rot += ORB.vrot; ORB.vrot *= .95; }
+    ctx.clearRect(0, 0, G.w, G.h);
+    // rings
+    var fl = Math.max(0, 1 - (now - ORB.flash) / 1200);
+    orbRings().forEach(function (r) {
+      var g = r[2] === 'g';
+      ctx.beginPath(); ctx.ellipse(G.cx, G.cy, G.rx * r[0], G.ry * r[0], 0, 0, 6.283);
+      ctx.strokeStyle = g ? 'rgba(243,229,200,' + (.55 + fl * .45) + ')' : r[2] === 's' ? 'rgba(243,229,200,.10)' : 'rgba(255,255,255,.07)';
+      ctx.lineWidth = g ? 1.6 + fl * 3 : 1; ctx.setLineDash(g || r[2] === 's' ? [] : [3, 6]); ctx.stroke();
+      if (g) { ctx.strokeStyle = 'rgba(243,229,200,' + (.08 + fl * .25) + ')'; ctx.lineWidth = 10 + fl * 18; ctx.stroke(); }
+    });
+    ctx.setLineDash([]);
+    // graduation ring travelling glint
+    var ga = (now / 2600) % 6.283; ctx.beginPath(); ctx.ellipse(G.cx, G.cy, G.rx * OU1, G.ry * OU1, 0, ga, ga + .5); ctx.strokeStyle = 'rgba(255,255,255,.9)'; ctx.lineWidth = 2.5; ctx.stroke();
+    var els = st.querySelectorAll('.lb'), NN = [];
+    for (var a1 = 0; a1 < els.length; a1++) { var tk1 = els[a1].getAttribute('data-lb'), p1 = LAB.pos[tk1]; if (p1 && p1.a != null) NN.push({ p: p1, r: labR(find(tk1) || BASE[0]) }); }
+    for (var a2 = 0; a2 < NN.length; a2++) for (var b2 = a2 + 1; b2 < NN.length; b2++) {
+      var A = NN[a2], B = NN[b2], dx = B.p.x - A.p.x, dy = B.p.y - A.p.y, d = Math.sqrt(dx * dx + dy * dy), mn = (A.r + B.r) * G.k + 14;
+      if (d < mn && Math.abs(A.p.u - B.p.u) < .09) { var df = Math.atan2(Math.sin(B.p.a - A.p.a), Math.cos(B.p.a - A.p.a)), k = .012 * (mn - d) / mn, sg = df >= 0 ? 1 : -1; A.p.a -= k * sg; B.p.a += k * sg; }
+    }
+    for (var i = 0; i < els.length; i++) {
+      var el = els[i], tk = el.getAttribute('data-lb'), t = find(tk); if (!t) continue;
+      var zone = t.prog < 100 ? 'c' : 's', tu = orbU(t), r0 = labR(t), p = LAB.pos[tk];
+      if (!p || p.a == null) { var h = hash(tk); p = LAB.pos[tk] = { a: (h % 6283) / 1000, u: tu * .4, vu: 0, zone: zone, x: G.cx, y: G.cy }; }
+      if (p.zone !== zone) { p.zone = zone; ORB.flash = now; ascBurst(p.x, p.y, '#F3E5C8', 30); }
+      p.vu += (tu - p.u) * .03; p.vu *= .86; p.u += p.vu;
+      var T = 16000 * Math.pow(Math.max(.15, p.u) / .3, 1.5); p.a += dt * 6.283 / T * ORB.slow;
+      var ang = p.a + ORB.rot, depth = Math.sin(ang), sc = (.74 + .32 * (depth + 1) / 2) * G.k;
+      p.x = G.cx + Math.cos(ang) * G.rx * p.u; p.y = G.cy + Math.sin(ang) * G.ry * p.u;
+      el.style.transform = 'translate(' + (p.x - r0).toFixed(1) + 'px,' + (p.y - r0).toFixed(1) + 'px) scale(' + sc.toFixed(3) + ')';
+      el.style.zIndex = Math.round(200 + depth * 100); el.style.opacity = (.55 + .45 * (depth + 1) / 2).toFixed(2);
+      var hs = LAB.hist[tk] || (LAB.hist[tk] = []); hs.push([p.x, p.y, p.vu]); if (hs.length > 34) hs.shift();
+      if (hs.length > 2) {
+        var kick = hs.reduce(function (m, q) { return Math.abs(q[2]) > Math.abs(m) ? q[2] : m; }, 0), col = kick > .004 ? '61,220,151' : kick < -.004 ? '242,112,138' : zone === 's' ? '243,229,200' : '237,233,225', base = (Math.abs(kick) > .004 ? .55 : .18) * (.6 + .4 * (depth + 1) / 2);
+        for (var j = 1; j < hs.length; j++) { var al = (j / hs.length) * base; ctx.strokeStyle = 'rgba(' + col + ',' + al.toFixed(3) + ')'; ctx.lineWidth = (j / hs.length) * r0 * sc * .7; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(hs[j - 1][0], hs[j - 1][1]); ctx.lineTo(hs[j][0], hs[j][1]); ctx.stroke(); }
+      }
+    }
+    LAB.parts = (LAB.parts || []).filter(function (q) { q.life -= 1; return q.life > 0; });
+    LAB.parts.forEach(function (q) { q.x += q.vx; q.y += q.vy; q.vy += .02; q.vx *= .97; ctx.fillStyle = q.c; ctx.globalAlpha = Math.max(0, q.life / q.max); ctx.beginPath(); ctx.arc(q.x, q.y, q.s, 0, 6.283); ctx.fill(); });
+    ctx.globalAlpha = 1;
+  }
+  document.addEventListener('pointerdown', function (e) {
+    var st = e.target.closest && e.target.closest('.orb-stage'); if (!st || e.target.closest('.lb') || e.button > 0) return;
+    ORB.drag = { x: e.clientX, last: e.clientX, t: performance.now() }; st.classList.add('spinning');
+  });
+  document.addEventListener('pointermove', function (e) { if (!ORB.drag) return; var dx = e.clientX - ORB.drag.last; ORB.drag.last = e.clientX; ORB.rot += dx * .006; ORB.vrot = dx * .006; });
+  document.addEventListener('pointerup', function () { if (!ORB.drag) return; ORB.drag = null; var st = document.querySelector('.orb-stage'); if (st) st.classList.remove('spinning'); });
+  document.addEventListener('mouseover', function (e) { ORB.slowT = e.target.closest && e.target.closest('.orb-stage .lb') ? .15 : e.target.closest && e.target.closest('.orb-stage') ? .55 : 1; });
   function labLoop(now) {
     var st = document.getElementById('lab'); if (!st) { LAB.raf = 0; LAB.stage = null; return; }
+    if (st.getAttribute('data-mode') === 'orbit') { orbLoop(now, st); LAB.raf = requestAnimationFrame(labLoop); return; }
     if (st !== LAB.stage || LAB.dirty) { LAB.stage = st; LAB.G = ascGeom(st); ascGridPos(st, LAB.G); LAB.dirty = false; }
     var G = LAB.G, ctx = LAB.ctx, els = st.querySelectorAll('.lb'), nodes = [], slots = {};
     ['c', 's'].forEach(function (z) { var l = all().filter(function (t) { return (t.prog < 100) === (z === 'c'); }).sort(function (a, b) { return (hash(a.tick) % 997) - (hash(b.tick) % 997); }); l.forEach(function (t, i) { slots[t.tick] = (i + .5) / l.length; }); });
@@ -698,7 +781,7 @@
       var r = labR(t), h = hash(tk), zone = t.prog < 100 ? 'c' : 's';
       var tx = 60 + (slots[tk] != null ? slots[tk] : .5) * (G.w - 120) + Math.sin(now / 2600 + h) * 10, ty = ascY(G, t);
       var p = LAB.pos[tk];
-      if (!p) p = LAB.pos[tk] = { x: tx, y: G.bot + 40, vx: 0, vy: 0, zone: zone };
+      if (!p || p.a != null) p = LAB.pos[tk] = { x: tx, y: G.bot + 40, vx: 0, vy: 0, zone: zone };
       if (p.zone !== zone) { p.zone = zone; ascBurst(p.x, p.y, '#F3E5C8', 26); }
       p.vx += (tx - p.x) * .008; p.vy += (ty - p.y) * .02; nodes.push({ el: el, p: p, r: r, t: t, tk: tk });
     }
@@ -732,7 +815,8 @@
     e.textContent = (up ? '+' : '−') + (sol >= 10 ? sol.toFixed(0) : sol.toFixed(2)) + ' SOL'; e.style.left = p.x + 'px'; e.style.top = (p.y - r - 6) + 'px';
     if (sol >= 5) e.classList.add('big');
     fx.appendChild(e); setTimeout(function () { e.remove(); }, 1500);
-    p.vy += up ? -Math.min(14, 3 + sol) : Math.min(12, 2 + sol);
+    if (p.a != null) { p.vu += (up ? 1 : -1) * Math.min(.05, .012 + sol * .004); ORB.coreHit = performance.now(); var core = document.getElementById('orb-core'); if (core) { core.classList.remove('hit', 'hitd'); void core.offsetWidth; core.classList.add(up ? 'hit' : 'hitd'); } }
+    else p.vy += up ? -Math.min(14, 3 + sol) : Math.min(12, 2 + sol);
   }
   function labKick() { if (!LAB.raf && document.getElementById('lab')) LAB.raf = requestAnimationFrame(labLoop); }
   window.addEventListener('resize', function () { LAB.dirty = true; });
@@ -1873,6 +1957,7 @@
       case 'rz': var dd = stageWH(); if (dd) zoomAt(dd.w / 2, dd.h / 2, arg === 'in' ? 1.6 : 1 / 1.6, true); break;
       case 'rzp': zoomPreset(arg); break;
       case 'rtab': S.raceTab = arg; S.raceAll = false; var rs = document.getElementById('race'); if (rs) rs.outerHTML = raceSection(); break;
+      case 'viz': S.viz = arg; try { localStorage.setItem('dl.viz', arg); } catch (er) {} LAB.hist = {}; LAB.stage = null; render(); break;
       case 'rsort': S.raceSort = arg; document.querySelectorAll('[data-act=rsort]').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-arg') === arg); }); raceRefresh(); break;
       case 'rall': S.raceAll = !S.raceAll; var rs2 = document.getElementById('race'); if (rs2) rs2.outerHTML = raceSection(); break;
       case 'rzat': var za = arg.split('|'), dz = stageWH(); if (dz) { var px0 = +za[0] / 100 * dz.w * RZ.z + RZ.x, py0 = +za[1] / 100 * dz.h * RZ.z + RZ.y; zoomAt(px0, py0, 2.6, true); } break;

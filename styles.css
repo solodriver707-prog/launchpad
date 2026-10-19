@@ -2470,3 +2470,34 @@ header::before{background:linear-gradient(90deg,transparent,rgba(216,195,160,.6)
 .lcoin.blast::after{content:"";position:absolute;left:50%;top:70%;width:18px;height:70px;margin-left:-9px;border-radius:50%;background:linear-gradient(180deg,#FBF3E2,#D8C3A0 30%,rgba(242,112,138,.6) 60%,transparent);filter:blur(3px);animation:flame .12s linear infinite alternate}
 @keyframes blast{0%{transform:translateX(-50%) scale(1)}20%{transform:translate(-50%,6px) scale(1.05,.92)}100%{transform:translate(40px,-260px) scale(.7) rotate(18deg);opacity:0}}
 @keyframes flame{to{transform:scaleY(1.25)}}
+/* ===================== THE ORBIT ===================== */
+.lab-right{display:flex;flex-direction:column;align-items:flex-end;gap:10px}
+.viz-seg button{min-height:30px;font-size:12.5px;padding:0 14px}
+.orb-stage{position:relative;height:600px;border-radius:24px;overflow:hidden;cursor:grab;touch-action:pan-y;
+  background:radial-gradient(50% 60% at 50% 52%,rgba(243,229,200,.06),transparent 70%),radial-gradient(120% 100% at 50% 50%,#0C0C0E,#060607);box-shadow:inset 0 0 0 1px #1E1E21}
+.orb-stage.spinning{cursor:grabbing}
+.orb-stage::before{content:"";position:absolute;inset:0;opacity:.45;pointer-events:none;background-image:radial-gradient(1px 1px at 6% 12%,#fff,transparent),radial-gradient(1px 1px at 18% 78%,#fff,transparent),radial-gradient(1.2px 1.2px at 33% 8%,#fff,transparent),radial-gradient(1px 1px at 47% 92%,#fff,transparent),radial-gradient(1px 1px at 62% 6%,#fff,transparent),radial-gradient(1.3px 1.3px at 78% 88%,#fff,transparent),radial-gradient(1px 1px at 91% 16%,#fff,transparent),radial-gradient(1px 1px at 96% 70%,#fff,transparent),radial-gradient(1px 1px at 3% 55%,#fff,transparent);animation:twinkle 7s ease-in-out infinite alternate}
+.orb-stage .asc-cv{z-index:1}
+.orb-stage .lab-nodes{z-index:auto}
+.orb-stage .lb{transform-origin:50% 50%;transition:none}
+.orb-stage .lb:hover{z-index:999!important;opacity:1!important}
+.orb-core{position:absolute;z-index:200;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;pointer-events:none;
+  background:radial-gradient(circle at 38% 32%,#2A2A2E,#0E0E10 62%,#060607);box-shadow:inset 0 0 0 1px rgba(243,229,200,.25),inset 0 -14px 30px rgba(0,0,0,.8),0 0 60px rgba(243,229,200,.10)}
+.oc-glow{position:absolute;inset:-30%;border-radius:50%;background:radial-gradient(closest-side,rgba(243,229,200,.16),transparent);animation:ocPulse 4s ease-in-out infinite;z-index:-1}
+@keyframes ocPulse{50%{transform:scale(1.12);opacity:.6}}
+.orb-core b{font:800 22px Manrope,sans-serif;letter-spacing:-.05em;color:var(--ivory)}
+.orb-core small{font-size:9.5px;color:var(--muted);letter-spacing:.02em}
+.orb-core small span{color:var(--soft)}
+.orb-core.hit{animation:coreHit .5s ease-out}.orb-core.hitd{animation:coreHitD .5s ease-out}
+@keyframes coreHit{30%{box-shadow:inset 0 0 0 1.5px #3DDC97,0 0 50px rgba(61,220,151,.35)}}
+@keyframes coreHitD{30%{box-shadow:inset 0 0 0 1.5px #F2708A,0 0 50px rgba(242,112,138,.3)}}
+.orb-labels{position:absolute;inset:0;z-index:150;pointer-events:none}
+.ol{position:absolute;transform:translateY(-50%);font:600 9.5px var(--mono);color:rgba(255,255,255,.28);white-space:nowrap}
+.ol.g{color:var(--gold2);font-weight:800;letter-spacing:.16em;font-size:9px}
+.ol.s{color:rgba(243,229,200,.4)}
+.orb-hint{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);font-size:10px;color:rgba(255,255,255,.28);z-index:150;pointer-events:none;letter-spacing:.06em}
+.orbv .lb-tag{background:transparent}
+@media (max-width:700px){.orb-stage{height:520px}.lab-right{align-items:flex-start}}
+.ol{transform:translate(-50%,-50%);padding:1px 6px;border-radius:99px;background:rgba(6,6,7,.7)}
+.ol.g{background:rgba(6,6,7,.85);box-shadow:0 0 0 1px rgba(243,229,200,.35)}
+@media (max-width:760px){.orb-stage{height:440px}.ol:not(.g){display:none}.orb-stage .lb-tag em{display:none}.orb-stage .lb-tag{font-size:9px}.orb-core b{font-size:14px}.orb-core small{display:none}.orb-hint{font-size:9px;white-space:nowrap}}
