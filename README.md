@@ -1,4 +1,6 @@
-# Diamond Launchpad (beta)
+# UNDERDOG (beta)
+
+Every legend starts at zero. Launch tokens. Trade against anything.
 
 Tīrs HTML/CSS/JS — bez npm un build soļa. Faili: index.html, styles.css, avatars.js, app.js.
 
