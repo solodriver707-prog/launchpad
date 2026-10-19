@@ -2362,3 +2362,4 @@ header::before{background:linear-gradient(90deg,transparent,rgba(216,195,160,.6)
 .brand{gap:9px}
 .brand-name{font-family:Manrope,sans-serif;font-stretch:100%;font-weight:800;font-size:22px;letter-spacing:-.035em;-webkit-text-fill-color:var(--ivory);color:var(--ivory);background:none;transform:none}
 .foot .logo,footer .logo{--ls:22px}
+.tcard,.wl-row{cursor:pointer}.tcard:hover{border-color:#34343A}

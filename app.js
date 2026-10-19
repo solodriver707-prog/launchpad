@@ -378,7 +378,7 @@
     var tmax = Math.max(t.buy, t.sell), on = S.watch.indexOf(t.tick) !== -1, c = chg(t), done = t.prog >= 100, fr = freshness(t), fl = redFlags(t);
     var flags = fl.length ? '<div class="tc-flags bad" data-tip="' + esc(fl.join(' · ')) + '"><span class="fl-ic">!</span><span>' + esc(fl.slice(0, 2).join(' · ')) + (fl.length > 2 ? ' +' + (fl.length - 2) : '') + '</span></div>' :
       '<div class="tc-flags ok"><span class="fl-ic">✓</span><span>No red flags</span></div>';
-    return '<article class="tcard' + (S.newTick === t.tick ? ' is-new' : '') + ' ' + fr.cls + '" data-card="' + esc(t.tick) + '">' +
+    return '<article class="tcard' + (S.newTick === t.tick ? ' is-new' : '') + ' ' + fr.cls + '" data-card="' + esc(t.tick) + '" data-act="open" data-arg="' + esc(t.tick) + '">' +
       '<div class="tc-age ' + fr.cls + '"><span class="ag-dot"></span><span class="ag-lab">' + fr.lab + '</span><b class="mono" data-t="' + t.born + '">' + ago(t.born) + '</b>' + (done ? '<span class="ag-grad">GRADUATED</span>' : '') + '</div>' +
       '<div class="tc-top"><button class="tc-id" data-act="open" data-arg="' + esc(t.tick) + '">' + avatarHTML(t, 52) +
         '<span class="tc-name"><b>' + esc(t.name) + '</b><span>$' + esc(t.tick) + '</span></span></button>' +
@@ -613,7 +613,7 @@
     }
     return '<main class="wrap wl">' + head + '<div class="wl-list"><div class="wl-cols"><span>Coin</span><span>Paired with</span><span>Tax</span><span class="r">Market cap</span><span class="r">24h</span><span>Chart</span><span>Curve</span><span></span></div>' +
       list.map(function (t, i) { var c = chg(t), tm = Math.max(t.buy, t.sell), id = esc(t.tick), up = c >= 0;
-        return '<div class="wl-row" data-wl="' + id + '" style="--i:' + i + '">' +
+        return '<div class="wl-row" data-wl="' + id + '" data-act="open" data-arg="' + id + '" style="--i:' + i + '">' +
           '<button class="wl-coin" data-act="open" data-arg="' + id + '">' + avatarHTML(t, 42) + '<span><b>' + esc(t.name) + '</b><small class="mono">$' + id + ' · <span data-t="' + t.born + '">' + ago(t.born) + '</span></small></span></button>' +
           '<span class="wl-pair">' + coinHTML(t.pair, 24) + '<b>' + esc(pairLabel(t.pair)) + '</b></span>' +
           '<span class="tax wl-tax" style="background:' + taxBg(tm) + '"><b>' + tm + '%</b></span>' +
