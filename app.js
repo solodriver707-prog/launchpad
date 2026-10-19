@@ -1154,36 +1154,55 @@
   }
 
   S.lbTab = 'mcap';
+  function lbSpark(t, w, h, id) {
+    var d = t.hist.slice(-40), mx = Math.max.apply(null, d), mn = Math.min.apply(null, d), sp = (mx - mn) || 1, up = d[d.length - 1] >= d[0];
+    var line = 'M' + d.map(function (v, i) { return (i * w / (d.length - 1)).toFixed(1) + ' ' + (h - 3 - (v - mn) / sp * (h - 6)).toFixed(1); }).join(' L');
+    return '<svg class="lb-spark" viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="none" aria-hidden="true"><path d="' + line + ' L' + w + ' ' + h + ' L0 ' + h + ' Z" fill="url(#' + (up ? 'ccUp' : 'ccDn') + ')"/><path class="draw" d="' + line + '" fill="none" stroke="' + (up ? '#3DDC97' : '#F2708A') + '" stroke-width="2" vector-effect="non-scaling-stroke" pathLength="1"/></svg>';
+  }
   function leadersPage() {
-    var a = all(), tabs = [['mcap', 'Biggest'], ['gain', 'Top gainers'], ['vol', 'Most volume'], ['holders', 'Most holders'], ['traders', 'Top traders']];
-    var body;
+    var a = all(), tabs = [['mcap', 'Biggest', 'Market cap'], ['gain', 'Top gainers', '24h change'], ['vol', 'Most volume', '24h volume'], ['holders', 'Most holders', 'Holders'], ['traders', 'Top traders', 'Profit']];
+    var cur = tabs.filter(function (x) { return x[0] === S.lbTab; })[0], ti = tabs.indexOf(cur);
+    var tabBar = '<div class="lb-tabs" style="--i:' + ti + ';--n:' + tabs.length + '"><span class="lb-ind"></span>' + tabs.map(function (x) { return '<button class="' + (S.lbTab === x[0] ? 'on' : '') + '" data-act="lbtab" data-arg="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div>';
+    var rows, champ, side = '';
     if (S.lbTab === 'traders') {
       var m = {};
-      S.trades.forEach(function (x) { var e = m[x.wallet] = m[x.wallet] || { a: x.wallet, b: 0, s: 0, n: 0, coins: {} }; e.n++; e.coins[x.tick] = 1; if (x.side === 'buy') e.b += x.sol; else e.s += x.sol; });
-      var list = Object.keys(m).map(function (k) { var e = m[k]; e.pnl = e.s - e.b * 0.82 + (hash(k) % 50) / 100; e.nc = Object.keys(e.coins).length; return e; }).sort(function (x, y) { return y.pnl - x.pnl; }).slice(0, 25);
-      body = '<div class="lb-list">' + list.map(function (e, i) {
-        return '<button class="lb-row" data-act="walletAny" data-arg="' + esc(e.a) + '"><span class="lb-rank r' + (i + 1) + '">' + (i + 1) + '</span><span class="av" style="width:40px;height:40px">' + A.svg(walletSpec(e.a)) + '</span>' +
-          '<span class="lb-name"><b>' + esc(walletName(e.a)) + '</b><small class="muted mono">' + e.n + ' trades · ' + e.nc + ' coins</small></span><span class="lb-v mono">' + (e.b + e.s).toFixed(1) + ' SOL vol</span><span class="lb-big mono ' + (e.pnl >= 0 ? 'up' : 'down') + '">' + (e.pnl >= 0 ? '+' : '') + e.pnl.toFixed(2) + ' SOL</span></button>';
-      }).join('') + '</div>';
+      S.trades.forEach(function (x) { var e2 = m[x.wallet] = m[x.wallet] || { a: x.wallet, b: 0, s: 0, n: 0, coins: {} }; e2.n++; e2.coins[x.tick] = 1; if (x.side === 'buy') e2.b += x.sol; else e2.s += x.sol; });
+      var list = Object.keys(m).map(function (k2) { var e2 = m[k2]; e2.pnl = e2.s - e2.b * 0.82 + (hash(k2) % 50) / 100; e2.nc = Object.keys(e2.coins).length; return e2; }).sort(function (x, y) { return y.pnl - x.pnl; }).slice(0, 20);
+      var mxp = Math.max.apply(null, list.map(function (e2) { return Math.abs(e2.pnl); }).concat([.01]));
+      var w0 = list[0];
+      champ = '<div class="champ"><div class="rays"></div><div class="champ-av"><span class="av" style="width:150px;height:150px">' + A.svg(walletSpec(w0.a)) + '</span><span class="crown">♛</span></div>' +
+        '<div class="champ-info"><span class="kicker">#1 TRADER</span><h2>' + esc(walletName(w0.a)) + '</h2><div class="champ-v mono up">+' + w0.pnl.toFixed(2) + ' SOL</div><div class="champ-sub">' + w0.n + ' trades · ' + w0.nc + ' coins · ' + (w0.b + w0.s).toFixed(1) + ' SOL volume</div>' +
+        '<button class="btn pri" data-act="walletAny" data-arg="' + esc(w0.a) + '">View wallet</button></div></div>';
+      side = [1, 2].map(function (k2) { var e2 = list[k2]; if (!e2) return ''; return '<button class="podc p' + (k2 + 1) + '" data-act="walletAny" data-arg="' + esc(e2.a) + '"><span class="podc-r">' + (k2 + 1) + '</span><span class="av" style="width:64px;height:64px">' + A.svg(walletSpec(e2.a)) + '</span><b>' + esc(walletName(e2.a)) + '</b><span class="mono up">+' + e2.pnl.toFixed(2) + ' SOL</span><small>' + e2.n + ' trades</small></button>'; }).join('');
+      rows = list.slice(3).map(function (e2, i) {
+        var mv = ((hash(e2.a) % 7) - 3);
+        return '<button class="lrow" style="--d:' + (i * 45) + 'ms" data-act="walletAny" data-arg="' + esc(e2.a) + '"><span class="lr-rank">' + (i + 4) + '</span><span class="lr-mv ' + (mv > 0 ? 'up' : mv < 0 ? 'down' : '') + '">' + (mv > 0 ? '▲' + mv : mv < 0 ? '▼' + (-mv) : '–') + '</span><span class="av" style="width:42px;height:42px">' + A.svg(walletSpec(e2.a)) + '</span>' +
+          '<span class="lr-name"><b>' + esc(walletName(e2.a)) + '</b><small class="mono">' + e2.n + ' trades · ' + e2.nc + ' coins</small></span><span class="lr-bar"><i style="--w:' + (Math.abs(e2.pnl) / mxp * 100).toFixed(1) + '%" class="' + (e2.pnl >= 0 ? '' : 'neg') + '"></i></span>' +
+          '<span class="lr-chg mono"></span><span class="lr-big mono ' + (e2.pnl >= 0 ? 'up' : 'down') + '">' + (e2.pnl >= 0 ? '+' : '') + e2.pnl.toFixed(2) + ' SOL</span></button>';
+      }).join('');
     } else {
       var key = { mcap: function (t) { return t.mcN; }, gain: function (t) { return chg(t); }, vol: function (t) { return t.vol; }, holders: function (t) { return t.holders; } }[S.lbTab];
-      var list2 = a.slice().sort(function (x, y) { return key(y) - key(x); }).slice(0, 25), mx = key(list2[0]) || 1;
       var fmt = { mcap: function (t) { return fmtK(t.mcN); }, gain: function (t) { return chgTxt(chg(t)); }, vol: function (t) { return fmtK(t.vol); }, holders: function (t) { return fmtNum(t.holders); } }[S.lbTab];
-      var podium = '<div class="podium lb-pod">' + [1, 0, 2].filter(function (k) { return list2[k]; }).map(function (k) {
-        var t = list2[k];
-        return '<button class="pod p' + (k + 1) + '" data-act="open" data-arg="' + esc(t.tick) + '" style="--md:' + ['#E8E8EA', '#A9ADB5', '#8A7B6A'][k] + '"><span class="pod-av">' + avatarHTML(t, k ? 64 : 84) + '<span class="medal">' + (k + 1) + '</span></span><b class="pod-name">$' + esc(t.tick) + '</b><span class="pod-pnl mono">' + fmt(t) + '</span><span class="pod-base">' + (k + 1) + '</span></button>';
-      }).join('') + '</div>';
-      body = podium + '<div class="lb-list">' + list2.map(function (t, i) {
-        var v = Math.max(2, Math.abs(key(t)) / Math.abs(mx) * 100), c = chg(t);
-        return '<button class="lb-row" data-act="open" data-arg="' + esc(t.tick) + '"><span class="lb-rank r' + (i + 1) + '">' + (i + 1) + '</span>' + avatarHTML(t, 40) +
-          '<span class="lb-name"><b>' + esc(t.name) + '</b><small class="muted mono">$' + esc(t.tick) + ' · ' + coinHTML(t.pair, 14) + ' ' + esc(pairLabel(t.pair)) + '</small></span>' +
-          '<span class="lb-bar"><i style="width:' + v.toFixed(1) + '%"></i></span><span class="lb-v mono ' + (c >= 0 ? 'up' : 'down') + '">' + chgTxt(c) + '</span><span class="lb-big mono">' + fmt(t) + '</span></button>';
-      }).join('') + '</div>';
+      var l2 = a.slice().sort(function (x, y) { return key(y) - key(x); }).slice(0, 20), mx = Math.abs(key(l2[0])) || 1, c0 = l2[0], cc = chg(c0);
+      var live = S.lbTab === 'mcap' ? ' data-mc="' + esc(c0.tick) + '" data-v="' + fmtK(c0.mcN) + '"' : '';
+      champ = '<div class="champ"><div class="rays"></div><div class="champ-av">' + avatarHTML(c0, 150) + '<span class="crown">♛</span></div>' +
+        '<div class="champ-info"><span class="kicker">#1 · ' + cur[2].toUpperCase() + '</span><h2>' + esc(c0.name) + ' <span>$' + esc(c0.tick) + '</span></h2><div class="champ-v mono"' + live + '>' + fmt(c0) + '</div>' +
+        '<div class="champ-sub"><span class="chgpill ' + (cc >= 0 ? 'up' : 'down') + '">' + chgTxt(cc) + '</span>' + coinHTML(c0.pair, 16) + ' paired with ' + esc(pairLabel(c0.pair)) + ' · ' + fmtNum(c0.holders) + ' holders</div>' +
+        '<div class="champ-chart">' + lbSpark(c0, 400, 90) + '</div><button class="btn pri" data-act="open" data-arg="' + esc(c0.tick) + '">Trade $' + esc(c0.tick) + '</button></div></div>';
+      side = [1, 2].map(function (k2) { var t = l2[k2]; if (!t) return ''; var c2 = chg(t); return '<button class="podc p' + (k2 + 1) + '" data-act="open" data-arg="' + esc(t.tick) + '"><span class="podc-r">' + (k2 + 1) + '</span>' + avatarHTML(t, 64) + '<b>$' + esc(t.tick) + '</b><span class="mono"' + (S.lbTab === 'mcap' ? ' data-mc="' + esc(t.tick) + '" data-v="' + fmtK(t.mcN) + '"' : '') + '>' + fmt(t) + '</span><small class="' + (c2 >= 0 ? 'up' : 'down') + '">' + chgTxt(c2) + '</small>' + lbSpark(t, 200, 40) + '</button>'; }).join('');
+      rows = l2.slice(3).map(function (t, i) {
+        var v = Math.max(2, Math.abs(key(t)) / mx * 100), c = chg(t), mv = ((hash(t.tick + S.lbTab) % 7) - 3);
+        return '<button class="lrow" style="--d:' + (i * 45) + 'ms" data-act="open" data-arg="' + esc(t.tick) + '"><span class="lr-rank">' + (i + 4) + '</span><span class="lr-mv ' + (mv > 0 ? 'up' : mv < 0 ? 'down' : '') + '">' + (mv > 0 ? '▲' + mv : mv < 0 ? '▼' + (-mv) : '–') + '</span>' + avatarHTML(t, 42) +
+          '<span class="lr-name"><b>' + esc(t.name) + '</b><small class="mono">$' + esc(t.tick) + ' · ' + coinHTML(t.pair, 13) + ' ' + esc(pairLabel(t.pair)) + '</small></span>' +
+          '<span class="lr-bar"><i style="--w:' + v.toFixed(1) + '%"></i>' + lbSpark(t, 160, 28) + '</span><span class="lr-chg mono ' + (c >= 0 ? 'up' : 'down') + '" data-chg2="' + esc(t.tick) + '">' + chgTxt(c) + '</span>' +
+          '<span class="lr-big mono"' + (S.lbTab === 'mcap' ? ' data-mc="' + esc(t.tick) + '" data-v="' + fmtK(t.mcN) + '"' : '') + '>' + fmt(t) + '</span></button>';
+      }).join('');
     }
-    return '<main class="wrap" style="padding-top:26px;max-width:1100px"><span class="kicker">HALL OF CHADS</span><h1 class="title-xl" style="font-size:40px;margin:8px 0 18px">Leaderboard</h1>' +
-      '<div class="seg" style="margin-bottom:18px">' + tabs.map(function (x) { return '<button class="' + (S.lbTab === x[0] ? 'on' : '') + '" data-act="lbtab" data-arg="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div>' +
-      '<section class="card-s" style="padding:18px">' + body + '</section><p class="note" style="margin-top:12px">Rankings use the simulated market data in this beta.</p></main>';
+    return '<main class="wrap lbpage" style="padding-top:22px"><section class="lb-hero"><div class="lb-glow"></div><div class="lb-head"><div><span class="kicker"><span class="livedot"></span>LIVE RANKINGS</span><h1>Hall of Chads</h1></div>' + tabBar + '</div>' +
+      '<div class="lb-stage" key="' + S.lbTab + '">' + champ + '<div class="podcs">' + side + '</div></div></section>' +
+      '<section class="lb-list card-s">' + rows + '</section><p class="note" style="margin-top:12px">Rankings use simulated market data in this beta.</p></main>';
   }
+
 
   function tokenPage() {
     var t = find(S.tick) || featured(), on = S.watch.indexOf(t.tick) !== -1, c = chg(t), id = esc(t.tick);
