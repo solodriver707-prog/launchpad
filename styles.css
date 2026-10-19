@@ -2030,3 +2030,78 @@ header::before{content:"";position:absolute;left:0;right:0;bottom:-1px;height:1p
  .toolbar .seg::-webkit-scrollbar{display:none}
  .toolbar .seg button{white-space:nowrap}
 }
+/* ===================== memzy branding ===================== */
+.logo .lg-rise{display:none}
+.logo svg{-webkit-mask-image:none!important;mask-image:none!important;overflow:visible}
+.logo::after{animation-duration:6s}
+.mz-body{transform-origin:32px 50px;animation:mzBounce 2.4s cubic-bezier(.3,1.4,.5,1) infinite}
+.mz-eyes{transform-origin:32px 13px;animation:mzBlink 4.2s infinite,mzHop 2.4s cubic-bezier(.3,1.4,.5,1) infinite}
+.mz-pup{animation:mzLook 6s ease-in-out infinite}
+@keyframes mzBounce{0%,100%{transform:scale(1,1)}12%{transform:scale(1.08,.88)}26%{transform:scale(.95,1.06)}40%{transform:scale(1,1)}}
+@keyframes mzHop{0%,100%{translate:0 0}12%{translate:0 3px}26%{translate:0 -3px}40%{translate:0 0}}
+@keyframes mzBlink{0%,45%,49%,100%{transform:scaleY(1)}47%{transform:scaleY(.1)}}
+@keyframes mzLook{0%,20%{transform:translate(0,0)}30%,45%{transform:translate(-2.4px,-.6px)}55%,70%{transform:translate(1.6px,1px)}80%,100%{transform:translate(0,0)}}
+.brand:hover .mz-pup{animation:none;transform:translate(1.5px,1.5px)}
+.brand:hover .mz-body{animation-duration:.8s}
+.brand-name{transform:none;font-stretch:112%;font-weight:900;font-size:23px;letter-spacing:-.02em;text-transform:none;line-height:1}
+.brand-name span{font-weight:900}
+/* draggable range window over the steps */
+.sf-bar{position:relative;cursor:pointer}
+.sf-b{position:relative;z-index:2;pointer-events:none}
+.sf-b.in{color:#fff}
+.sf-b.on,.sf-b.on.s0.s1{background:transparent!important;color:inherit}
+.ir-tax .sf-b.in{color:#fff}
+.sf-win{position:absolute;top:2px;bottom:2px;z-index:1;border-radius:7px;background:color-mix(in srgb,var(--ac) 26%,transparent);box-shadow:inset 0 0 0 1.5px var(--ac),0 4px 14px -6px var(--ac);cursor:grab;transition:left .22s cubic-bezier(.2,1.3,.4,1),width .22s cubic-bezier(.2,1.3,.4,1),background .2s,box-shadow .2s}
+.ir-tax .sf-win{background:linear-gradient(90deg,rgba(61,220,151,.22),rgba(255,209,92,.22),rgba(242,112,138,.22));box-shadow:inset 0 0 0 1.5px var(--ac)}
+.sf-win.any{background:rgba(255,255,255,.035);box-shadow:inset 0 0 0 1px rgba(255,255,255,.1)}
+.sf-bar.drag .sf-win{cursor:grabbing;background:color-mix(in srgb,var(--ac) 34%,transparent)}
+.sf-h{position:absolute;top:50%;width:10px;height:22px;margin-top:-11px;border-radius:5px;background:var(--ac);cursor:ew-resize;z-index:3;box-shadow:0 2px 8px rgba(0,0,0,.6),0 0 0 2px #0B0A12;transition:transform .15s}
+.sf-h::after{content:"";position:absolute;left:50%;top:6px;bottom:6px;width:2px;margin-left:-1px;border-radius:2px;background:rgba(0,0,0,.4)}
+.sf-h.h0{left:-5px}.sf-h.h1{right:-5px}
+.sf-h:hover,.sf-bar.drag .sf-h{transform:scaleY(1.15)}
+.sf-win.any .sf-h{background:#5A5470}
+.ir-tax .sf-b::before{z-index:-1}
+.irange.sf .sf-bar{overflow:visible;margin:0 4px}
+.irange.sf .sf-bar{position:relative!important}
+/* ===== The Climb — airy / organic ===== */
+.race.tw{background:radial-gradient(120% 80% at 20% 0%,rgba(123,92,255,.10),transparent 60%),radial-gradient(90% 70% at 90% 10%,rgba(255,95,162,.07),transparent 60%),var(--s1);border-color:rgba(199,181,255,.10)}
+.tw-wrap{gap:28px}
+.tw-panel,.tw-panel.moon{background:none;border:0;padding:0;position:relative}
+.tw-panel.moon::before{content:"";position:absolute;inset:30px 0 0;pointer-events:none;opacity:.5;
+  background-image:radial-gradient(1px 1px at 12% 22%,#fff,transparent),radial-gradient(1px 1px at 38% 12%,#fff,transparent),radial-gradient(1.5px 1.5px at 66% 30%,#fff,transparent),radial-gradient(1px 1px at 84% 18%,#fff,transparent),radial-gradient(1px 1px at 52% 46%,#fff,transparent),radial-gradient(1px 1px at 22% 58%,#fff,transparent),radial-gradient(1px 1px at 90% 52%,#fff,transparent);animation:twinkle 5s ease-in-out infinite alternate}
+@keyframes twinkle{to{opacity:.2}}
+.tw-moonorb{position:absolute;right:6%;top:18px;width:54px;height:54px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#FFF6E0,#F3D9A4 45%,#B98F5A);box-shadow:0 0 40px 10px rgba(255,220,160,.25),0 0 90px 30px rgba(194,77,255,.15);pointer-events:none;animation:tcFloat 6s ease-in-out infinite;z-index:0}
+.tw-ph{margin-bottom:0;padding:0 2px}
+.tw-ph b{font-size:16px}
+.tw-ph small{font-size:11px;opacity:.7}
+.tw-stage{padding-left:0}
+.tw-grid i{left:0;border-top:1px solid rgba(255,255,255,.035)}
+.tw-grid u{left:4px;top:-14px;width:auto;text-align:left;font-size:9px;color:rgba(255,255,255,.28);font-weight:600}
+.tw-start{display:none}
+.tw-fin,.moon .tw-fin{left:0;height:0;border:0;border-image:none}
+.tw-fin::before{content:"";position:absolute;left:0;right:0;top:-1px;height:2px;border-radius:2px;background:linear-gradient(90deg,transparent,rgba(199,181,255,.7) 20%,#fff 50%,rgba(255,95,162,.7) 80%,transparent);box-shadow:0 0 18px 2px rgba(194,77,255,.45)}
+.tw-fin::after{content:"";position:absolute;left:0;right:0;bottom:0;height:60px;background:linear-gradient(180deg,transparent,rgba(194,77,255,.10));pointer-events:none}
+.tw-fin u{position:absolute;right:auto;left:50%;transform:translateX(-50%);top:-24px;font:700 10px Manrope,sans-serif;letter-spacing:.14em;text-transform:uppercase;color:#fff;padding:3px 10px;border-radius:99px;background:rgba(194,77,255,.25);backdrop-filter:blur(6px);white-space:nowrap}
+.tw-scroll{scrollbar-width:none;padding-top:54px;-webkit-mask-image:linear-gradient(90deg,transparent,#000 3%,#000 95%,transparent);mask-image:linear-gradient(90deg,transparent,#000 3%,#000 95%,transparent)}
+.tw-scroll::-webkit-scrollbar{display:none}
+.tw-grid{top:54px}
+.tw-row{gap:10px;padding:0 18px 4px}
+.tw-col{width:62px}
+.tw-lane::before{display:none}
+.tw-trail{width:2px;margin-left:-1px;background:linear-gradient(0deg,transparent,rgba(123,92,255,.55) 45%,#E3B6FF);box-shadow:none}
+.tw-trail::before{content:"";position:absolute;left:50%;bottom:0;top:0;width:18px;margin-left:-9px;border-radius:99px;background:linear-gradient(0deg,transparent,rgba(194,77,255,.18));filter:blur(6px)}
+.moon .tw-trail{background:linear-gradient(0deg,transparent,rgba(255,95,162,.5) 45%,#FFD0E6)}
+.tw-run .av{transform:scale(var(--s,1));box-shadow:0 0 0 2px rgba(11,10,18,.9),0 10px 24px -6px rgba(0,0,0,.8),0 0 22px -4px rgba(194,77,255,.55);animation:twBob 3.4s ease-in-out infinite;animation-delay:var(--bob,0s)}
+.tw-run:hover .av{transform:scale(calc(var(--s,1)*1.2))}
+@keyframes twBob{50%{translate:0 -5px}}
+.tw-col.lead .tw-run .av{box-shadow:0 0 0 2px rgba(11,10,18,.9),0 0 0 4px #FFD15C,0 0 30px rgba(255,209,92,.55)}
+.tw-val{background:none;font-size:10.5px;color:rgba(255,255,255,.85);bottom:calc(100% + 6px + (var(--s,1) - 1) * 18px);text-shadow:0 1px 6px rgba(0,0,0,.9)}
+.tw-crown{top:calc(-16px - (var(--s,1) - 1) * 18px)}
+.tw-col.lead .tw-val{bottom:calc(100% + 20px + (var(--s,1) - 1) * 18px)}
+.tw-lab{margin-top:10px;gap:2px;padding:4px 2px}
+.tw-lab b{display:flex;align-items:center;gap:4px;font-size:11.5px;max-width:62px}
+.tw-lab b .coin,.tw-lab b img,.tw-lab b svg{flex:none}
+.tw-lab em{font-size:10.5px}
+.tw-lab small{display:none}
+.tw-ctrl .seg.sm{background:rgba(255,255,255,.03);border-color:transparent}
+.tw-col{width:70px}.tw-lab b{max-width:70px;font-size:11px}.tw-lab b span:last-child{overflow:hidden;text-overflow:ellipsis}
