@@ -1,4 +1,4 @@
-# GIGAPAD (beta)
+# CHADPAD (beta)
 
 Launch a token. Pair it with anything.
 

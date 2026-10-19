@@ -1,4 +1,4 @@
-/* GIGAPAD — no build step, no dependencies.
+/* CHADPAD — no build step, no dependencies.
    Real: Solana wallet connection (Wallet Standard) + devnet SOL balance & airdrop.
    Simulated: tokens, prices, trades, launches (clearly marked as beta/simulated in the footer). */
 (function () {
@@ -64,7 +64,7 @@
     dice: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8.5" cy="8.5" r="1.3" fill="currentColor"/><circle cx="15.5" cy="15.5" r="1.3" fill="currentColor"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/></svg>',
     up: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></svg>'
   };
-  var LOGO = '<svg viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="lgS" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset=".45" stop-color="#C9CBD1"/><stop offset=".55" stop-color="#8E9198"/><stop offset="1" stop-color="#E6E7EA"/></linearGradient></defs><path d="M32 3 L57 13 L57 34 C57 48 46 57 32 61 C18 57 7 48 7 34 L7 13 Z" fill="#0B0B0D" stroke="url(#lgS)" stroke-width="2.5"/><path d="M43 21 L24 21 L19 26 L19 39 L24 45 L41 45 L45 40 L45 32 L32 32 L32 37 L38 37 L38 39 L27 39 L26 38 L26 28 L27 27 L43 27 Z" fill="url(#lgS)"/><path d="M7 34 L19 39 M57 34 L45 40" stroke="#3A3C42" stroke-width="1"/></svg>';
+  var LOGO = '<svg viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="lgS" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset=".45" stop-color="#C9CBD1"/><stop offset=".55" stop-color="#8E9198"/><stop offset="1" stop-color="#E6E7EA"/></linearGradient></defs><path d="M32 3 L57 13 L57 34 C57 48 46 57 32 61 C18 57 7 48 7 34 L7 13 Z" fill="#0B0B0D" stroke="url(#lgS)" stroke-width="2.5"/><path d="M44 21 L24 21 L19 26 L19 40 L24 45 L44 45 L44 39 L27 39 L26 38 L26 28 L27 27 L44 27 Z" fill="url(#lgS)"/><path d="M7 34 L19 39 M57 34 L45 40" stroke="#3A3C42" stroke-width="1"/></svg>';
 
   // ================= DATA =================
   function mk(name, tick, kind, skinI, bgI, eyes, mouth, acc, buy, sell, pair, mcN, c24, prog, ageM, holders, soc, rewards, burn) {
@@ -303,7 +303,7 @@
       right = '<button class="btn sec" data-act="openWallet">Connect wallet</button>';
     }
     return '<header><div class="wrap hdr">' +
-      '<button class="brand" data-act="home" aria-label="GIGAPAD home">' + LOGO + '<span class="brand-name">GIGA<span>PAD</span></span><span class="beta">BETA</span></button>' +
+      '<button class="brand" data-act="home" aria-label="CHADPAD home">' + LOGO + '<span class="brand-name">CHAD<span>PAD</span></span><span class="beta">BETA</span></button>' +
       '<nav class="navlinks"><button class="' + (S.screen === 'home' ? 'on' : '') + '" data-act="home">Board</button><button class="' + (S.screen === 'create' ? 'on' : '') + '" data-act="create">Create</button><button class="' + (S.screen === 'leaders' ? 'on' : '') + '" data-act="leaders">Leaderboard</button><button data-act="how">How it works</button></nav>' +
       '<button class="searchbtn" data-act="palette">' + I.search + '<span>Search tokens or paste CA</span><span class="kbd">Ctrl K</span></button>' +
       '<div class="hdr-right"><button class="btn pri" data-act="create">+ Launch token</button>' + right + '</div>' +
@@ -464,7 +464,7 @@
         '<path data-ha="' + id + '" d="' + ch.area + '" fill="url(#hg' + id + ')"/><path data-hl="' + id + '" d="' + ch.line + '" fill="none" stroke="#E8E8EA" stroke-opacity=".3" stroke-width="2" vector-effect="non-scaling-stroke"/>' +
         '<path data-hl="' + id + '" class="flow" d="' + ch.line + '" fill="none" stroke="#E8E8EA" stroke-width="2.5" vector-effect="non-scaling-stroke"/></svg>' +
       '<div class="hs-left">' +
-        '<span class="kicker"><span class="livedot"></span><span class="rank">#' + (rank + 1) + '</span> TOP GIGA</span>' +
+        '<span class="kicker"><span class="livedot"></span><span class="rank">#' + (rank + 1) + '</span> TOP CHAD</span>' +
         '<div class="title-xl hs-title">' + esc(t.name) + ' <span class="tk">$' + id + '</span></div>' +
         '<div class="hs-pills"><span class="pill" style="padding-left:11px">' + fmtNum(t.holders) + ' holders</span>' +
           '<button class="pill copy2" data-act="ca" data-arg="' + id + '">' + esc(short(t.ca)) + ' ' + I.copy + '</button>' + (t.rewards ? '<span class="pill i">' + I.gift + ' Rewards</span>' : '') + (t.burn ? '<span class="pill i">' + I.flame + ' Burn</span>' : '') + '</div>' +
@@ -751,7 +751,7 @@
           (id === 'All' ? 'All ' + CATS.filter(function (c) { return c[0] === S.cat; })[0][1].toLowerCase() : coinHTML(id, 22) + '<span>' + esc(pairLabel(id)) + '</span><span class="cnt">' + n + '</span>') + '</button>';
       }).join('') + '</div>';
     }
-    return '<div class="pair-head"><span class="kicker">PAIRED WITH</span><span class="muted" style="font-size:13px">Coins on GIGAPAD trade against anything — drag to explore</span></div>' +
+    return '<div class="pair-head"><span class="kicker">PAIRED WITH</span><span class="muted" style="font-size:13px">Coins on CHADPAD trade against anything — drag to explore</span></div>' +
       '<div class="cats drag-scroll">' + tiles + '</div>' + sub + '<div style="height:18px"></div>';
   }
 
@@ -889,6 +889,37 @@
     });
     if (g && S.view !== 'bubbles') g.innerHTML = list.length ? list.map(function (t) { return card(t); }).join('') : '<div class="empty"><b style="font-size:19px">No coins in this range</b><span class="muted">Widen a slider or hit Reset.</span><button class="btn pri" data-act="reset">Reset filters</button></div>';
   }
+  function introHTML() {
+    var st = stats();
+    var rings = [
+      { r: 118, dur: 26, ids: ['SOL', 'BTC', 'ETH'] },
+      { r: 178, dur: 38, ids: ['GOLD', 'ONDO', 'EUR', 'USDC'] },
+      { r: 236, dur: 54, ids: ['NVDAx', BASE[0].tick, 'OIL', BASE[8].tick, 'JPY'] }
+    ];
+    var orbit = rings.map(function (rg, ri) {
+      return '<div class="ring3" style="--r:' + rg.r + 'px;--dur:' + rg.dur + 's;--dir:' + (ri % 2 ? -1 : 1) + '">' + rg.ids.map(function (id, k) {
+        return '<span class="orb3" style="--a:' + (k * 360 / rg.ids.length + ri * 20) + 'deg"><span class="orb3-in">' + coinHTML(id, ri === 0 ? 46 : ri === 1 ? 40 : 34) + '</span></span>';
+      }).join('') + '</div>';
+    }).join('');
+    var dust = ''; for (var d = 0; d < 26; d++) dust += '<i style="--x:' + (Math.random() * 100).toFixed(1) + '%;--d:' + (6 + Math.random() * 10).toFixed(1) + 's;--dl:-' + (Math.random() * 12).toFixed(1) + 's;--s:' + (1 + Math.random() * 2).toFixed(1) + 'px"></i>';
+    return '<section class="intro" id="intro">' +
+      '<div class="aurora"><span class="a1"></span><span class="a2"></span><span class="a3"></span></div><div class="floor"></div><div class="dust">' + dust + '</div>' +
+      '<div class="intro-l">' +
+        '<span class="intro-k"><span class="livedot"></span>LIVE ON SOLANA · BETA</span>' +
+        '<h1 class="intro-h"><span class="ln"><span>Every legend</span></span><span class="ln"><span>starts at <em>zero.</em></span></span></h1>' +
+        '<p class="intro-p">Launch a token in a minute. Pair it with anything — SOL, gold, stocks, or another meme. Tax shown up front. Rugs get binned.</p>' +
+        '<div class="intro-cta"><button class="btn pri big" data-act="create">Launch a token <span aria-hidden="true">→</span></button><button class="btn sec big" data-act="palette">' + I.search + 'Find a coin</button></div>' +
+        '<div class="intro-stats"><div><b data-count="' + st.tokens + '">' + st.tokens + '</b><span>coins live</span></div><div><b data-count="' + Math.round(st.vol) + '" data-fmt="k">' + fmtK(st.vol) + '</b><span>24h volume</span></div><div><b data-count="' + st.grad + '">' + st.grad + '</b><span>graduated</span></div><div><b>14</b><span>pair assets</span></div></div>' +
+      '</div>' +
+      '<div class="intro-r" data-parallax2><div class="orbit3">' + orbit + '<div class="core"><span class="core-glow"></span><span class="core-logo">' + LOGO + '</span></div></div></div>' +
+    '</section>';
+  }
+  document.addEventListener('mousemove', function (e) {
+    var it = e.target.closest && e.target.closest('#intro'); if (!it) return;
+    var r = it.getBoundingClientRect(), px = (e.clientX - r.left) / r.width - 0.5, py = (e.clientY - r.top) / r.height - 0.5;
+    var o = it.querySelector('.orbit3'); if (o) o.style.transform = 'rotateX(' + (62 - py * 10).toFixed(1) + 'deg) rotateZ(' + (px * 12).toFixed(1) + 'deg)';
+    var a = it.querySelector('.aurora'); if (a) a.style.transform = 'translate(' + (px * -30).toFixed(1) + 'px,' + (py * -20).toFixed(1) + 'px)';
+  });
   function home() {
     var hero = heroHTML();
 
@@ -903,14 +934,14 @@
     var grid = (!S.loading && S.view === 'bubbles') ? bubblesHTML(list) : '<section class="grid" id="grid">' + (S.loading ? [0, 1, 2, 3, 4, 5].map(skeletonCard).join('') : list.length ? list.map(function (t) { return card(t); }).join('') :
       '<div class="empty"><b style="font-size:19px">No tokens match these filters</b><span class="muted">Loosen the tax or market cap filters.</span><button class="btn pri" data-act="reset">Reset filters</button></div>') + '</section>';
 
-    var how = '<section id="how" style="margin-top:56px"><h2 class="h2" style="margin-bottom:16px">How GIGAPAD works</h2><div class="row">' +
+    var how = '<section id="how" style="margin-top:56px"><h2 class="h2" style="margin-bottom:16px">How CHADPAD works</h2><div class="row">' +
       [['01', 'Pick a name & logo', 'Use the built-in mascot builder or upload your own image. Takes under a minute.'],
        ['02', 'Set your buy & sell tax', 'From 0% to 10%. The tax is shown on every card in colour, so traders always know the cost.'],
        ['03', 'Launch on a bonding curve', 'Price rises as people buy. When the curve fills, liquidity graduates to Raydium automatically.']].map(function (s) {
         return '<div class="card-s" style="flex:1 1 260px;padding:22px;display:flex;flex-direction:column;gap:8px"><span class="mono" style="color:var(--ice);font-size:13px">' + s[0] + '</span><b style="font-size:17px">' + s[1] + '</b><span class="muted" style="line-height:1.55">' + s[2] + '</span></div>';
       }).join('') + '</div></section>';
 
-    var slogan = '<section class="slogan"><div><h1>Every legend starts at <em>zero.</em></h1><p>Launch a token. Pair it with anything.</p></div><div class="slogan-cta"><button class="btn pri" data-act="create">Launch a token</button><button class="btn sec" data-act="palette">Find a coin</button></div></section>' + quickPairs();
+    var slogan = introHTML() + quickPairs();
     return '<main class="wrap">' + slogan + hero + '<div id="board"></div>' + toolbar + filters + '<div class="layout full">' + grid + '</div>' + raceSection() + machineSection() + '</main>';
   }
 
@@ -949,7 +980,7 @@
       '<line x1="0" x2="' + W + '" y1="' + ly.toFixed(1) + '" y2="' + ly.toFixed(1) + '" stroke="' + lcol + '" stroke-opacity=".6" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"/></svg>' + labels +
       '<span class="lastlab" style="top:' + (ly / H * 100).toFixed(2) + '%;background:' + lcol + '">' + yLabel(last.c) + '</span>' +
       '<div class="xh" id="xh"></div><div class="xh-dot" id="xhd" style="background:#fff"></div><div class="xh-tip" id="xht"></div>' +
-      '<span class="wm">' + LOGO + 'gigapad</span>';
+      '<span class="wm">' + LOGO + 'chadpad</span>';
   }
 
   // wallets pool so makers repeat (enables top traders / holders / maker filter)
@@ -1114,7 +1145,7 @@
           '<span class="lb-bar"><i style="width:' + v.toFixed(1) + '%"></i></span><span class="lb-v mono ' + (c >= 0 ? 'up' : 'down') + '">' + chgTxt(c) + '</span><span class="lb-big mono">' + fmt(t) + '</span></button>';
       }).join('') + '</div>';
     }
-    return '<main class="wrap" style="padding-top:26px;max-width:1100px"><span class="kicker">HALL OF GIGAS</span><h1 class="title-xl" style="font-size:40px;margin:8px 0 18px">Leaderboard</h1>' +
+    return '<main class="wrap" style="padding-top:26px;max-width:1100px"><span class="kicker">HALL OF CHADS</span><h1 class="title-xl" style="font-size:40px;margin:8px 0 18px">Leaderboard</h1>' +
       '<div class="seg" style="margin-bottom:18px">' + tabs.map(function (x) { return '<button class="' + (S.lbTab === x[0] ? 'on' : '') + '" data-act="lbtab" data-arg="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div>' +
       '<section class="card-s" style="padding:18px">' + body + '</section><p class="note" style="margin-top:12px">Rankings use the simulated market data in this beta.</p></main>';
   }
@@ -1307,7 +1338,7 @@
   }
 
   function footer() {
-    return '<footer><div class="wrap foot"><span style="display:flex;align-items:center;gap:8px"><span style="width:22px;height:22px;display:inline-block">' + LOGO + '</span><b style="color:var(--soft)">GIGAPAD</b></span>' +
+    return '<footer><div class="wrap foot"><span style="display:flex;align-items:center;gap:8px"><span style="width:22px;height:22px;display:inline-block">' + LOGO + '</span><b style="color:var(--soft)">CHADPAD</b></span>' +
       '<span>Beta · market data on this page is simulated · wallet connects to Solana ' + CLUSTER + '</span>' +
       '<span style="margin-left:auto;display:flex;gap:16px"><a href="#machine" data-act="how">How it works</a><a href="#" data-act="social">X</a><a href="#" data-act="social">Telegram</a><a href="#" data-act="social">Terms</a></span></div></footer>';
   }
@@ -1561,7 +1592,7 @@
           soc: !!(c.x || c.tg || c.web), links: { web: linkOf(c.web), x: linkOf(c.x), tg: linkOf(c.tg), demo: false }, rewards: false, burn: false, ca: fakeCA(), vol: 0, hist: [5, 5], desc: c.desc.trim(), creator: S.account };
         S.created.unshift(nt); saveCreated();
         S.c = { name: '', tick: '', desc: '', x: '', tg: '', web: '', pair: 'SOL', buy: 0, sell: 0, img: null, spec: { kind: pick(A.KINDS), skin: pick(A.SKINS), bg: pick(A.BGS), eyes: 'normal', mouth: 'smile', acc: 'none' } };
-        openToken(nt.tick); confetti(); toast('$' + nt.tick + ' is live on GIGAPAD', nt); break;
+        openToken(nt.tick); confetti(); toast('$' + nt.tick + ' is live on CHADPAD', nt); break;
     }
   });
 
