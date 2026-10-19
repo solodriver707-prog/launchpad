@@ -408,6 +408,7 @@
       if (S.gradOnly && d.prog < 100) return false;
       if (S.rewardsOnly && !d.rewards) return false;
       if (S.watchOnly && S.watch.indexOf(d.tick) === -1) return false;
+      if (S.cleanOnly && riskMetrics(d).some(function (m) { return m.lv === 'r'; })) return false;
       if (d.prog < S.minProg || d.mcN < S.minMc) return false;
       if (S.cat !== 'all' && pairInfo(d.pair).cat !== S.cat) return false;
       if (S.pair !== 'All' && d.pair !== S.pair) return false;
@@ -781,6 +782,30 @@
     }).join('') + '<span class="bub-hint">Drag and throw bubbles · size = market cap · colour = 24h change · click to open</span></div></section>';
   }
 
+  S.fpop = null; S.cleanOnly = false;
+  var FOPT = {
+    tax: { lab: 'Tax', key: 'maxTax', def: 10, opts: [[10, 'Any'], [0, '0%'], [3, '≤ 3%'], [6, '≤ 6%']] },
+    prog: { lab: 'Curve', key: 'minProg', def: 0, opts: [[0, 'Any'], [25, '≥ 25%'], [50, '≥ 50%'], [75, '≥ 75%'], [90, '≥ 90%']] },
+    mc: { lab: 'MCap', key: 'minMc', def: 0, opts: [[0, 'Any'], [10, '≥ $10K'], [50, '≥ $50K'], [100, '≥ $100K'], [500, '≥ $500K'], [1000, '≥ $1M']] }
+  };
+  function filterBar() {
+    var active = 0;
+    var drops = Object.keys(FOPT).map(function (k) {
+      var f = FOPT[k], v = S[f.key], cur = f.opts.filter(function (o) { return o[0] === v; })[0], on = v !== f.def; if (on) active++;
+      var label = cur ? cur[1] : (k === 'tax' ? '≤ ' + v + '%' : k === 'prog' ? '≥ ' + v + '%' : '≥ ' + fmtK(v));
+      return '<div class="fdrop"><button class="fchip' + (on ? ' on' : '') + (S.fpop === k ? ' open' : '') + '" data-act="fpop" data-arg="' + k + '"><span class="fc-l">' + f.lab + '</span><b>' + label + '</b><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg></button>' +
+        (S.fpop === k ? '<div class="fpop">' + f.opts.map(function (o) {
+          var sw = k === 'tax' && o[0] !== 10 ? '<i style="background:' + taxBg(o[0]) + '"></i>' : '';
+          return '<button class="fopt' + (o[0] === v ? ' on' : '') + '" data-act="fset" data-arg="' + k + '|' + o[0] + '">' + sw + o[1] + '</button>';
+        }).join('') + '</div>' : '') + '</div>';
+    }).join('');
+    var tg = [['zeroOnly', '0% tax', ''], ['gradOnly', 'Graduated', ''], ['rewardsOnly', 'Rewards', I.gift], ['watchOnly', 'Watchlist', I.star(false)], ['cleanOnly', 'No warnings', '<span class="fdot"></span>']].map(function (t) {
+      var on = !!S[t[0]]; if (on) active++;
+      return '<button class="ftog' + (on ? ' on' : '') + '" data-act="toggle" data-arg="' + t[0] + '" aria-pressed="' + on + '">' + t[2] + t[1] + '</button>';
+    }).join('');
+    return '<div class="fbar"><span class="fb-ic" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 6h16M7 12h10M10 18h4"/></svg></span>' + drops + '<span class="fb-sep"></span>' + tg +
+      (active ? '<button class="freset" data-act="reset">Reset · ' + active + '</button>' : '') + '</div>';
+  }
   function home() {
     var hero = heroHTML();
 
@@ -790,17 +815,7 @@
     }).join('') + '</div><div class="seg" role="group" aria-label="View"><button class="' + (S.view === 'grid' ? 'on' : '') + '" data-act="view" data-arg="grid">Grid</button><button class="' + (S.view === 'bubbles' ? 'on' : '') + '" data-act="view" data-arg="bubbles">Bubbles</button></div><span class="mono muted" style="margin-left:auto;font-size:12.5px" id="count">' + list.length + ' of ' + all().length + ' tokens</span></div>' +
       (S.cat !== 'all' ? subPairs() : '');
 
-    var filters = '<aside class="card-s filters">' +
-      '<div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:16px">Filters</b><button class="link" style="color:var(--ice);font-weight:700;font-size:13.5px" data-act="reset">Reset</button></div>' +
-      '<div class="field"><div class="lbl"><label for="f-tax">Max tax</label><span>' + S.maxTax + '%</span></div><input id="f-tax" type="range" min="0" max="10" step="1" value="' + S.maxTax + '" data-bind="maxTax" data-num="1"></div>' +
-      '<div class="field"><div class="lbl"><label for="f-prog">Bonding curve ≥</label><span>' + S.minProg + '%</span></div><input id="f-prog" type="range" min="0" max="100" step="5" value="' + S.minProg + '" data-bind="minProg" data-num="1"></div>' +
-      '<div class="field"><div class="lbl"><label for="f-mc">Market cap ≥</label><span>' + (S.minMc ? fmtK(S.minMc) : 'Any') + '</span></div><input id="f-mc" type="range" min="0" max="1000" step="25" value="' + S.minMc + '" data-bind="minMc" data-num="1"></div>' +
-      '<div>' + TOGGLES.map(function (t) {
-        var on = !!S[t[0]];
-        return '<button class="switch' + (on ? ' on' : '') + '" role="switch" aria-checked="' + on + '" data-act="toggle" data-arg="' + t[0] + '"><span>' + t[1] + '</span><span class="track"><i></i></span></button>';
-      }).join('') + '</div>' +
-      '<div class="tags" style="gap:8px"><span class="tag" style="background:var(--up);color:#04140C">0%</span><span class="tag" style="background:var(--yellow);color:#1A1200">≤3%</span><span class="tag" style="background:var(--orange);color:#1A0B00">≤6%</span><span class="tag" style="background:var(--pink);color:#1A0409">6%+</span></div>' +
-      '<span class="muted" style="font-size:12.5px;line-height:1.5;margin-top:-12px">Tax colours: buyers see the exit cost before they click.</span></aside>';
+    var filters = filterBar();
 
     var grid = (!S.loading && S.view === 'bubbles') ? bubblesHTML(list) : '<section class="grid" id="grid">' + (S.loading ? [0, 1, 2, 3, 4, 5].map(skeletonCard).join('') : list.length ? list.map(function (t) { return card(t); }).join('') :
       '<div class="empty"><b style="font-size:19px">No tokens match these filters</b><span class="muted">Loosen the tax or market cap filters.</span><button class="btn pri" data-act="reset">Reset filters</button></div>') + '</section>';
@@ -813,7 +828,7 @@
       }).join('') + '</div></section>';
 
     var slogan = '<section class="slogan"><div><h1>Every legend starts at <em>zero.</em></h1><p>Launch a token. Pair it with anything.</p></div><div class="slogan-cta"><button class="btn pri" data-act="create">Launch a token</button><button class="btn sec" data-act="palette">Find a coin</button></div></section>' + quickPairs();
-    return '<main class="wrap">' + slogan + hero + '<div id="board"></div>' + toolbar + '<div class="layout">' + filters + grid + '</div>' + raceSection() + machineSection() + '</main>';
+    return '<main class="wrap">' + slogan + hero + '<div id="board"></div>' + toolbar + filters + '<div class="layout full">' + grid + '</div>' + raceSection() + machineSection() + '</main>';
   }
 
   // ================= PRO TOKEN PAGE (pump.fun / dexscreener style) =================
@@ -1351,6 +1366,7 @@
 
   document.addEventListener('click', function (e) {
     var el = e.target.closest('[data-act]');
+    if (S.fpop && !e.target.closest('.fdrop')) { S.fpop = null; if (!el) { render(); return; } }
     if (S.walletMenu && !e.target.closest('.wpill') && !(el && /airdrop|refresh|copyAddr|disconnect/.test(el.getAttribute('data-act')))) { S.walletMenu = false; if (!el) { render(); return; } }
     if (!el) return;
     var act = el.getAttribute('data-act'), arg = el.getAttribute('data-arg');
@@ -1376,7 +1392,7 @@
       case 'sort': set({ sort: arg }); break;
       case 'pair': set({ pair: arg }); break;
       case 'toggle': var o = {}; o[arg] = !S[arg]; set(o); break;
-      case 'reset': set({ maxTax: 10, minProg: 0, minMc: 0, pair: 'All', cat: 'all', zeroOnly: false, gradOnly: false, rewardsOnly: false, watchOnly: false }); break;
+      case 'reset': set({ fpop: null, cleanOnly: false, maxTax: 10, minProg: 0, minMc: 0, pair: 'All', cat: 'all', zeroOnly: false, gradOnly: false, rewardsOnly: false, watchOnly: false }); break;
       case 'tf': set({ tf: arg }); break;
       case 'tpTab': set({ tpTab: arg }); break;
       case 'side': set({ side: arg }); break;
@@ -1393,6 +1409,8 @@
       case 'clearImg': setC({ img: null }); break;
       case 'cpair': setC({ pair: arg }); break;
       case 'cat': set({ cat: arg, pair: 'All' }); break;
+      case 'fpop': set({ fpop: S.fpop === arg ? null : arg }); break;
+      case 'fset': var fs = arg.split('|'), fo = {}; fo[FOPT[fs[0]].key] = +fs[1]; fo.fpop = null; set(fo); break;
       case 'rz': var dd = stageWH(); if (dd) zoomAt(dd.w / 2, dd.h / 2, arg === 'in' ? 1.6 : 1 / 1.6, true); break;
       case 'rzp': zoomPreset(arg); break;
       case 'soc': var sp0 = arg.split('|'), st0 = find(sp0[0]), so0 = st0 && socialsOf(st0), u0 = so0 && so0[sp0[1]];
