@@ -344,6 +344,24 @@
     if (m < 1440) return { cls: 'f2', lab: 'TODAY' };
     return { cls: 'f3', lab: 'LIVE FOR' };
   }
+  function riskMetrics(t) {
+    var h = hash(t.tick + 'r'), devSold = (h >> 4) % 7 === 0 && t.prog < 100;
+    function lv(v, a, b) { return v < a ? 'g' : v < b ? 'y' : 'r'; }
+    var dev = devSold ? 0 : ((h % 80) / 10), top = 16 + (h >> 2) % 52, sn = (h >> 5) % 19, bu = (h >> 8) % 16;
+    if (t.creator && S.account && t.creator === S.account) { dev = 2.1; top = 22; sn = 0; bu = 0; devSold = false; }
+    return [
+      { k: 'dev', lab: 'DEV', val: devSold ? 'SOLD' : dev.toFixed(1) + '%', lv: devSold ? 'r' : lv(dev, 3, 8), tip: devSold ? 'The creator already sold their tokens' : 'Share of supply the creator still holds' },
+      { k: 'top', lab: 'TOP 10', val: top + '%', lv: lv(top, 30, 45), tip: 'Share of supply held by the 10 biggest wallets (excl. curve)' },
+      { k: 'sn', lab: 'SNIPERS', val: sn + '%', lv: lv(sn, 5, 12), tip: 'Supply bought by bots in the first seconds after launch' },
+      { k: 'bu', lab: 'BUNDLES', val: bu + '%', lv: lv(bu, 4, 9), tip: 'Supply bought by linked wallets in the same block' }
+    ];
+  }
+  function riskTiles(t) {
+    var r = riskMetrics(t);
+    return '<div class="risk">' + r.map(function (m) {
+      return '<span class="rk-t ' + m.lv + '" data-tip="' + esc(m.tip) + '"><span class="rk-l"><i></i>' + m.lab + '</span><b class="mono">' + m.val + '</b></span>';
+    }).join('') + '</div>';
+  }
   function redFlags(t) {
     var f = [], h = hash(t.tick), tmax = Math.max(t.buy, t.sell), top10 = 18 + (h % 50);
     if (tmax >= 6) f.push('High tax ' + tmax + '%');
@@ -364,7 +382,7 @@
         '<span class="tc-name"><b>' + esc(t.name) + '</b><span>$' + esc(t.tick) + '</span></span></button>' +
         '<div class="pairmini" data-tip="Paired with ' + esc(pairInfo(t.pair).name) + '">' + coinHTML(t.pair, 26) + '<small>PAIR</small><b>' + esc(pairLabel(t.pair)) + '</b></div>' +
         '<div class="tax" style="background:' + taxBg(tmax) + '" data-tip="Buy ' + t.buy + '% · Sell ' + t.sell + '%"><small>TAX</small><b>' + tmax + '%</b></div></div>' +
-      flags + socialsHTML(t) +
+      riskTiles(t) + socialsHTML(t) +
       '<div class="tc-mid"><div class="tc-mc"><div class="v"><span data-mc="' + esc(t.tick) + '" data-v="' + fmtK(t.mcN) + '">' + fmtK(t.mcN) + '</span>' +
         '<span class="chgpill ' + (c >= 0 ? 'up' : 'down') + '" data-chg="' + esc(t.tick) + '">' + chgTxt(c) + '</span></div><div class="l">market cap · ' + fmtNum(t.holders) + ' holders · vol ' + fmtK(t.vol) + '</div></div></div>' +
       '<div class="tc-chart ' + (c >= 0 ? 'up' : 'down') + '" data-cchart="' + esc(t.tick) + '">' + cardChart(t) + '</div>' +
@@ -1004,10 +1022,15 @@
     if (!devPct) devPct = (hash(t.tick) % 40) / 10;
     function lvl(v, a, b) { return v < a ? ['ok', 'Low'] : v < b ? ['mid', 'Medium'] : ['bad', 'High']; }
     var l1 = lvl(top10S, 25, 45), l2 = lvl(devPct, 3, 8), l3 = lvl(Math.max(t.buy, t.sell), 4, 7);
-    var safety = '<section class="card-s panel safety"><div style="display:flex;justify-content:space-between;align-items:center"><b>Safety check</b><span class="muted mono" style="font-size:11px">SIMULATED</span></div>' +
-      [['Top 10 holders', top10S.toFixed(1) + '%', l1, top10S], ['Creator holds', devPct.toFixed(2) + '%', l2, devPct * 5], ['Max tax', Math.max(t.buy, t.sell) + '%', l3, Math.max(t.buy, t.sell) * 10]].map(function (r) {
-        return '<div class="sf-row"><div class="sf-top"><span>' + r[0] + '</span><b class="mono">' + r[1] + '</b><span class="sf-tag ' + r[2][0] + '">' + r[2][1] + ' risk</span></div><div class="sf-bar"><i class="' + r[2][0] + '" style="width:' + Math.min(100, r[3]).toFixed(0) + '%"></i></div></div>';
-      }).join('') + '<div class="sf-row sf-flags"><span class="sf-ok">✓ Mint authority revoked</span><span class="sf-ok">✓ Freeze authority revoked</span><span class="' + (t.prog >= 100 ? 'sf-ok">✓ LP burned' : 'sf-mid">• LP locked in curve') + '</span></div></section>';
+    var rmS = riskMetrics(t), warnS = rmS.filter(function (m) { return m.lv === 'r'; }).length, cautS = rmS.filter(function (m) { return m.lv === 'y'; }).length;
+    var lvTxt = { g: 'Looks normal', y: 'Watch', r: 'Warning' };
+    var safety = '<section class="card-s panel safety"><div style="display:flex;justify-content:space-between;align-items:center"><b>What we can see</b><span class="sf-sum ' + (warnS ? 'r' : cautS ? 'y' : 'g') + '">' + (warnS ? warnS + ' warning' + (warnS > 1 ? 's' : '') : cautS ? cautS + ' to watch' : 'Nothing unusual seen') + '</span></div>' +
+      rmS.map(function (m) {
+        var w = m.val === 'SOLD' ? 100 : Math.min(100, parseFloat(m.val) * (m.k === 'top' ? 1.4 : m.k === 'dev' ? 9 : 6));
+        return '<div class="sf-row" data-tip="' + esc(m.tip) + '"><div class="sf-top"><span class="rk-dot ' + m.lv + '"></span><span>' + m.lab.charAt(0) + m.lab.slice(1).toLowerCase() + '</span><b class="mono">' + m.val + '</b><span class="sf-tag ' + ({ g: 'ok', y: 'mid', r: 'bad' })[m.lv] + '">' + lvTxt[m.lv] + '</span></div><div class="sf-bar"><i class="' + ({ g: 'ok', y: 'mid', r: 'bad' })[m.lv] + '" style="width:' + w.toFixed(0) + '%"></i></div></div>';
+      }).join('') +
+      '<div class="sf-row sf-flags"><span class="sf-ok">✓ Mint authority revoked</span><span class="sf-ok">✓ Freeze authority revoked</span><span class="' + (t.prog >= 100 ? 'sf-ok">✓ LP burned' : 'sf-mid">• Liquidity held by bonding curve') + '</span><span class="' + (Math.max(t.buy, t.sell) >= 6 ? 'sf-bad">! High tax ' + Math.max(t.buy, t.sell) + '%' : 'sf-ok">✓ Tax ' + Math.max(t.buy, t.sell) + '% or less') + '</span></div>' +
+      '<span class="note" style="text-align:left">These checks only show what is visible on-chain. They are not a guarantee — always do your own research. Simulated in this beta.</span></section>';
     var curve = '<section class="card-s panel" style="display:flex;flex-direction:column;gap:10px"><div style="display:flex;justify-content:space-between"><b>' + (t.prog >= 100 ? 'Graduated to Raydium' : 'Bonding curve') + '</b><span class="mono" style="color:var(--ice)" data-prog="' + id + '">' + Math.min(100, t.prog).toFixed(0) + '%</span></div>' +
       '<div class="bar" style="height:12px"><i class="' + (t.prog >= 100 ? 'done' : '') + '" data-bar="' + id + '" style="width:' + Math.max(1, Math.min(100, t.prog)) + '%"></i></div>' +
       '<span class="muted" style="font-size:12.5px;line-height:1.55">' + (t.prog >= 100 ? 'Liquidity is live on Raydium.' : curveSol + ' SOL in the curve. Graduates to Raydium at 100%.') + '</span></section>';
