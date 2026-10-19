@@ -819,3 +819,38 @@ header{background:rgba(5,5,5,.8)}
 .lcoin.s4{animation:flyoff 1.3s cubic-bezier(.5,0,.6,1) forwards}
 .lcoin.s4 .lc-face .av{box-shadow:0 0 0 3px var(--ice),0 0 24px rgba(200,255,61,.8)}
 @keyframes flyoff{0%{translate:0 0}20%{translate:20px -10px}100%{translate:160px -220px;opacity:0;rotate:30deg}}
+
+/* ===================== RACE TO RAYDIUM ===================== */
+.race{margin-top:16px;padding:24px;overflow:hidden}
+.race-stats{display:flex;gap:10px;align-items:stretch;flex-wrap:wrap}
+.race-stats>div{display:flex;flex-direction:column;gap:2px;padding:8px 14px;border-radius:12px;background:#09090A;border:1px solid #1E1E22;font-size:12px}
+.race-stats b{font-size:20px}
+.race-lead{display:flex;align-items:center;gap:10px;padding:6px 14px 6px 6px;border-radius:12px;background:rgba(200,255,61,.08);border:1px solid rgba(200,255,61,.35);text-align:left}
+.race-lead small{display:block;font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;color:var(--ice)}
+.race-lead b{font-size:14px}
+.race-stage{position:relative;height:380px;margin-top:16px;border-radius:18px;background:radial-gradient(ellipse at 90% 10%,rgba(200,255,61,.08),transparent 50%),#08080A;border:1px solid #1A1A1D;overflow:hidden}
+.race-stage svg{position:absolute;inset:0;width:100%;height:100%}
+.hill-path{filter:drop-shadow(0 0 6px rgba(200,255,61,.5))}
+.rmark{position:absolute;transform:translate(-50%,0);display:flex;flex-direction:column;align-items:center;pointer-events:none}
+.rmark i{width:1px;height:60px;background:repeating-linear-gradient(180deg,rgba(255,255,255,.18) 0 4px,transparent 4px 8px)}
+.rmark b{font-family:var(--mono);font-size:10.5px;color:var(--faint);margin-top:4px}
+.startline{position:absolute;left:1.5%;top:91%;font-family:var(--mono);font-size:10px;font-weight:800;color:var(--faint);letter-spacing:.12em}
+.summit{position:absolute;left:87.5%;top:calc(18% - 46px);pointer-events:none;z-index:1}
+.flagpole{position:absolute;left:0;top:0;width:3px;height:44px;background:#C9C9CF;border-radius:2px}
+.flagcloth{position:absolute;left:3px;top:2px;font-family:var(--mono);font-size:10px;font-weight:800;color:#0A0A0A;background:var(--ice);padding:3px 8px 3px 6px;clip-path:polygon(0 0,100% 0,88% 50%,100% 100%,0 100%);animation:wave2 1.6s ease-in-out infinite;transform-origin:left}
+@keyframes wave2{50%{transform:skewY(-4deg) scaleX(.96)}}
+.rb{position:absolute;transform:translate(-50%,-100%);width:var(--sz);height:var(--sz);padding:0;border:0;background:none;border-radius:99px;transition:left 1s cubic-bezier(.2,.8,.2,1),top 1s cubic-bezier(.2,.8,.2,1);z-index:2;cursor:pointer}
+.rb .av{width:100%!important;height:100%!important;box-shadow:0 0 0 2px #08080A,0 0 0 3.5px #3A3A42;animation:climb 1.4s ease-in-out infinite alternate}
+.rb:nth-child(2n) .av{animation-delay:-.5s}.rb:nth-child(3n) .av{animation-delay:-.9s}
+@keyframes climb{from{transform:translateY(0) rotate(-6deg)}to{transform:translateY(-4px) rotate(6deg)}}
+.rb-pct{position:absolute;left:50%;top:100%;transform:translateX(-50%);margin-top:3px;font-size:9.5px;font-weight:700;color:var(--soft);background:rgba(0,0,0,.6);padding:0 4px;border-radius:4px;white-space:nowrap;pointer-events:none}
+.rb:hover{z-index:5}
+.rb:hover .av{box-shadow:0 0 0 2px #08080A,0 0 0 4px var(--ice);animation-play-state:paused;transform:scale(1.15)}
+.rb.up-hit .av{animation:hitUp .6s ease-out}
+.rb.down-hit .av{animation:hitDown .6s ease-out}
+@keyframes hitUp{0%{box-shadow:0 0 0 2px #08080A,0 0 0 4px var(--up),0 0 20px var(--up);transform:translateY(-8px) scale(1.12)}100%{transform:none}}
+@keyframes hitDown{0%{box-shadow:0 0 0 2px #08080A,0 0 0 4px var(--down),0 0 20px var(--down);transform:translateY(4px) scale(.94)}100%{transform:none}}
+.rb.done .av{box-shadow:0 0 0 2px #08080A,0 0 0 3.5px var(--ice),0 0 16px rgba(200,255,61,.5);animation:party 1s ease-in-out infinite alternate}
+@keyframes party{from{transform:translateY(0) rotate(-10deg)}to{transform:translateY(-8px) rotate(10deg)}}
+.rb.done .rb-pct{color:var(--ice)}
+@media (max-width:720px){.race-stage{height:300px}}

@@ -412,6 +412,51 @@
         '<span class="hs-av">' + avatarHTML(t, 200) + '</span></div></div>' +
     '</div>';
   }
+  // ================= RACE TO RAYDIUM (all coins climbing the hill) =================
+  var RACE_OFF = {};
+  function hillXY(p) { var k = Math.max(0, Math.min(1, p / 100)); return { x: 5 + k * 82, y: 88 - Math.pow(k, 1.55) * 70 }; }
+  function raceSize(t) { return Math.max(30, Math.min(58, 24 + Math.sqrt(t.mcN) * 1.1)); }
+  function raceSection() {
+    var a = all(), climbing = a.filter(function (t) { return t.prog < 100; }).sort(function (x, y) { return x.prog - y.prog; }), grad = a.filter(function (t) { return t.prog >= 100; });
+    var bubbles = '', prevs = [];
+    climbing.forEach(function (t) {
+      var near = prevs.filter(function (pp) { return Math.abs(pp - t.prog) < 4.5; }).length; prevs.push(t.prog);
+      RACE_OFF[t.tick] = near;
+      bubbles += raceBubble(t);
+    });
+    grad.forEach(function (t, i) { RACE_OFF[t.tick] = i; bubbles += raceBubble(t); });
+    var leader = climbing[climbing.length - 1];
+    var marks = [25, 50, 75].map(function (m) { var h = hillXY(m); return '<span class="rmark" style="left:' + h.x + '%;top:' + h.y + '%"><i></i><b>' + m + '%</b></span>'; }).join('');
+    return '<section class="race card-s" id="race"><div class="m-head"><div><span class="kicker"><span class="livedot"></span>LIVE</span><h2 class="title-xl" style="font-size:30px;margin:8px 0 4px">Race to Raydium</h2>' +
+      '<p class="muted" style="margin:0">Every coin is climbing the bonding curve. Buys push it up the hill, sells slide it down. Reach the top and it graduates.</p></div>' +
+      '<div class="race-stats"><div><span class="muted">Climbing</span><b class="mono">' + climbing.length + '</b></div><div><span class="muted">Graduated</span><b class="mono" style="color:var(--ice)">' + grad.length + '</b></div>' +
+      (leader ? '<button class="race-lead" data-act="open" data-arg="' + esc(leader.tick) + '">' + avatarHTML(leader, 26) + '<span><small>CLOSEST TO THE TOP</small><b>$' + esc(leader.tick) + ' · <span data-rlead>' + leader.prog.toFixed(0) + '%</span></b></span></button>' : '') + '</div></div>' +
+      '<div class="race-stage" id="race-stage"><svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="hillg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#C8FF3D" stop-opacity=".18"/><stop offset="1" stop-color="#C8FF3D" stop-opacity="0"/></linearGradient></defs>' +
+        '<path d="' + (function () { var d = 'M0,100 L0,88 L5,88'; for (var i = 0; i <= 50; i++) { var h = hillXY(i * 2); d += ' L' + h.x.toFixed(2) + ',' + h.y.toFixed(2); } return d + ' L100,18 L100,100 Z'; })() + '" fill="url(#hillg)"/>' +
+        '<path d="' + (function () { var d = 'M0,88 L5,88'; for (var i = 0; i <= 50; i++) { var h = hillXY(i * 2); d += ' L' + h.x.toFixed(2) + ',' + h.y.toFixed(2); } return d + ' L100,18'; })() + '" fill="none" stroke="#C8FF3D" stroke-width="2.5" vector-effect="non-scaling-stroke" class="hill-path"/></svg>' +
+        marks + '<span class="summit"><span class="flagpole"></span><span class="flagcloth">RAYDIUM</span></span><span class="startline">START</span>' +
+        '<div id="race-b">' + bubbles + '</div></div></section>';
+  }
+  function racePos(t) {
+    var sz = raceSize(t), off = RACE_OFF[t.tick] || 0;
+    if (t.prog >= 100) { var col = off % 4, row = Math.floor(off / 4); return { l: 91 + col * 2.4, t: 18 - row * 11, sz: sz * 0.72 }; }
+    var h = hillXY(t.prog); return { l: h.x, t: h.y - 4 - off * 9, sz: sz };
+  }
+  function raceBubble(t) {
+    var p = racePos(t), c = chg(t);
+    return '<button class="rb ' + (t.prog >= 100 ? 'done' : '') + '" data-race="' + esc(t.tick) + '" data-act="open" data-arg="' + esc(t.tick) + '" style="left:' + p.l + '%;top:' + p.t + '%;--sz:' + p.sz + 'px" data-tip="$' + esc(t.tick) + ' · ' + Math.min(100, t.prog).toFixed(0) + '% up · ' + fmtK(t.mcN) + '">' +
+      avatarHTML(t, Math.round(p.sz)) + '<span class="rb-pct mono">' + Math.min(100, t.prog).toFixed(0) + '%</span></button>';
+  }
+  function raceUpdate(t, side) {
+    var el = document.querySelector('.rb[data-race="' + t.tick + '"]'); if (!el) return;
+    var p = racePos(t); el.style.left = p.l + '%'; el.style.top = p.t + '%';
+    var pc = el.querySelector('.rb-pct'); if (pc) pc.textContent = Math.min(100, t.prog).toFixed(0) + '%';
+    el.setAttribute('data-tip', '$' + t.tick + ' · ' + Math.min(100, t.prog).toFixed(0) + '% up · ' + fmtK(t.mcN));
+    el.classList.remove('up-hit', 'down-hit'); void el.offsetWidth; el.classList.add(side === 'buy' ? 'up-hit' : 'down-hit');
+    if (t.prog >= 100 && !el.classList.contains('done')) { el.classList.add('done'); RACE_OFF[t.tick] = document.querySelectorAll('.rb.done').length - 1; var p2 = racePos(t); el.style.left = p2.l + '%'; el.style.top = p2.t + '%'; }
+  }
+
+
   function heroHTML() {
     var st = stats(), slides = HERO.map(function (tk, i) { return heroSlide(find(tk), i); }).join('');
     var avs = all().slice(0, 7).map(function (t, i) { return '<span style="--i:' + i + '">' + avatarHTML(t, 30) + '</span>'; }).join('');
@@ -582,7 +627,7 @@
       }).join('') + '</div></section>';
 
     var slogan = '<section class="slogan"><div><h1>Every legend<br>starts at <em>zero.</em></h1><p>Launch tokens. Trade against anything.</p></div><div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn pri" data-act="create" style="min-height:50px;padding:0 22px">Launch a token</button><button class="btn sec" data-act="palette" style="min-height:50px">Find a coin</button></div></section>';
-    return '<main class="wrap">' + slogan + hero + toolbar + '<div class="layout">' + filters + grid + '</div>' + machineSection() + '</main>';
+    return '<main class="wrap">' + slogan + hero + raceSection() + toolbar + '<div class="layout">' + filters + grid + '</div>' + machineSection() + '</main>';
   }
 
   // ================= PRO TOKEN PAGE (pump.fun / dexscreener style) =================
@@ -917,6 +962,7 @@
     var cardEl = document.querySelector('.tcard[data-card="' + t.tick + '"]');
     if (cardEl) { cardEl.classList.remove('shake', 'shake-s'); void cardEl.offsetWidth; cardEl.classList.add(side === 'buy' ? 'shake' : 'shake-s'); if (S.sort === 'bump' && S.screen === 'home' && !cardEl.matches(':hover')) { var gp = cardEl.parentNode; if (gp && gp.firstChild !== cardEl) gp.insertBefore(cardEl, gp.firstChild); } }
     machineTrade(t, tr);
+    if (S.screen === 'home') raceUpdate(t, side);
     if (!wasGrad && t.prog >= 100) { machineGrad(t); toast('$' + t.tick + ' graduated to Raydium', t); if (S.screen === 'token' && S.tick === t.tick) confetti(); }
     return tr;
   }
