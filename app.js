@@ -308,11 +308,12 @@
     return '<article class="tcard' + (S.newTick === t.tick ? ' is-new' : '') + '" data-card="' + esc(t.tick) + '">' +
       '<div class="tc-top"><button class="tc-id" data-act="open" data-arg="' + esc(t.tick) + '">' + avatarHTML(t, 58) +
         '<span class="tc-name"><b>' + esc(t.name) + '</b><span>$' + esc(t.tick) + ' · <span data-t="' + t.born + '">' + ago(t.born) + '</span></span></span></button>' +
+        '<div class="pairmini" data-tip="Paired with ' + esc(pairInfo(t.pair).name) + '">' + coinHTML(t.pair, 26) + '<small>PAIR</small><b>' + esc(pairLabel(t.pair)) + '</b></div>' +
         '<div class="tax" style="background:' + taxBg(tmax) + '" data-tip="Buy ' + t.buy + '% · Sell ' + t.sell + '%"><small>TAX</small><b>' + tmax + '%</b></div></div>' +
       '<div class="tc-mid"><div class="tc-mc"><div class="l">Market cap</div><div class="v"><span data-mc="' + esc(t.tick) + '" data-v="' + fmtK(t.mcN) + '">' + fmtK(t.mcN) + '</span>' +
         '<span class="chgpill ' + (c >= 0 ? 'up' : 'down') + '" data-chg="' + esc(t.tick) + '">' + chgTxt(c) + '</span></div></div>' +
         '<svg class="spark" viewBox="0 0 110 40" preserveAspectRatio="none" aria-hidden="true"><polyline data-spark="' + esc(t.tick) + '" points="' + spark(t) + '" fill="none" stroke="' + (c >= 0 ? '#34E39A' : '#FF5C7C') + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg></div>' +
-      '<div class="tags"><span class="tag">Buy ' + t.buy + '%</span><span class="tag">Sell ' + t.sell + '%</span><span class="tag v pairtag">' + coinHTML(t.pair, 16) + esc(pairLabel(t.pair)) + '</span>' + badges + '</div>' +
+      '<div class="tags"><span class="tag">Buy ' + t.buy + '%</span><span class="tag">Sell ' + t.sell + '%</span>' + badges + '</div>' +
       '<div class="prog"><div class="l"><span>' + (done ? 'Graduated to Raydium' : 'Bonding curve') + '</span><span class="mono" data-prog="' + esc(t.tick) + '">' + Math.min(100, t.prog).toFixed(0) + '%</span></div>' +
         '<div class="bar"><i class="' + (done ? 'done' : '') + '" data-bar="' + esc(t.tick) + '" style="width:' + Math.max(1, Math.min(100, t.prog)) + '%"></i></div></div>' +
       (opts.preview ? '' : '<div class="tc-act"><button class="btn pri" data-act="open" data-arg="' + esc(t.tick) + '">Trade</button>' +
@@ -383,11 +384,13 @@
       '<div class="hs-left">' +
         '<span class="kicker"><span class="livedot"></span><span class="rank">#' + (rank + 1) + '</span> DIAMOND OF THE HOUR</span>' +
         '<div class="title-xl hs-title">' + esc(t.name) + ' <span class="tk">$' + id + '</span></div>' +
-        '<div class="hs-pills"><span class="pill">' + coinHTML(t.pair, 20) + 'paired with ' + esc(pairLabel(t.pair)) + '</span><span class="pill">' + fmtNum(t.holders) + ' holders</span>' +
+        '<div class="hs-pills"><span class="pill" style="padding-left:11px">' + fmtNum(t.holders) + ' holders</span>' +
           '<button class="pill copy2" data-act="ca" data-arg="' + id + '">' + esc(short(t.ca)) + ' ' + I.copy + '</button>' + (t.rewards ? '<span class="pill i">' + I.gift + ' Rewards</span>' : '') + (t.burn ? '<span class="pill i">' + I.flame + ' Burn</span>' : '') + '</div>' +
-        '<div class="hs-stats"><div class="stat"><div class="l">Market cap</div><div class="v" data-mc="' + id + '" data-v="' + fmtK(t.mcN) + '">' + fmtK(t.mcN) + '</div></div>' +
+        '<div class="hs-stats"><div class="tax" style="background:' + taxBg(tmax) + ';padding:9px 14px"><small>TAX</small><b style="font-size:26px">' + tmax + '%</b></div>' +
+          '<div class="pairbig" data-act="pairOpen" data-arg="' + esc(t.pair) + '">' + coinHTML(t.pair, 46) + '<div><small>PAIRED WITH</small><b>' + esc(pairLabel(t.pair)) + '</b><span>' + esc(pairInfo(t.pair).name) + '</span></div></div>' +
+          '<div class="stat"><div class="l">Market cap</div><div class="v" data-mc="' + id + '" data-v="' + fmtK(t.mcN) + '">' + fmtK(t.mcN) + '</div></div>' +
           '<div class="stat"><div class="l">24h</div><div class="v ' + (c >= 0 ? 'up' : 'down') + '" data-chg2="' + id + '">' + chgTxt(c) + '</div></div>' +
-          '<div class="tax" style="background:' + taxBg(tmax) + ';padding:9px 14px"><small>TAX</small><b style="font-size:24px">' + tmax + '%</b></div></div>' +
+          '</div>' +
         '<div class="press"><div class="press-l"><span class="up">Buys</span><span class="muted">Buy pressure · last 40 trades</span><span class="down">Sells</span></div>' +
           '<div class="press-bar"><i data-press="' + id + '" style="width:' + pr.toFixed(0) + '%"></i><span class="press-knob" data-pressk="' + id + '" style="left:' + pr.toFixed(0) + '%"></span></div>' +
           '<div class="press-l mono"><span class="up" data-presst="' + id + '">' + pr.toFixed(0) + '%</span><span class="down" data-pressts="' + id + '">' + (100 - pr).toFixed(0) + '%</span></div></div>' +
@@ -894,11 +897,12 @@
       case 'clearImg': setC({ img: null }); break;
       case 'cpair': setC({ pair: arg }); break;
       case 'cat': set({ cat: arg, pair: 'All' }); break;
+      case 'pairOpen': set({ cat: pairInfo(arg).cat, pair: arg }); setTimeout(function () { var g = document.getElementById('grid') || document.getElementById('bubbles'); if (g) g.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 30); break;
       case 'hero': heroGo(S.heroIdx + (+arg)); break;
       case 'heroGo': heroGo(+arg); break;
       case 'view': set({ view: arg }); break;
       case 'swipe': flyOut(arg); break;
-      case 'mstep': for (var mi = 0; mi < MSTEPS.length; mi++) { if (MSTEPS[mi][0] === arg || (arg === 'holders' || arg === 'creators') && MSTEPS[mi][0] === 'vault') { mSetStep(mi); break; } } break;
+      case 'mstep': for (var mi = 0; mi < MSTEPS.length; mi++) { if (MSTEPS[mi][0] === arg) { M.pos = mi * 20 + 10; M.paused = 2500; mSetStep(mi); break; } } break;
       case 'mlaunch': newLaunch(); break;
       case 'trade':
         if (!S.account) { set({ walletOpen: true }); break; }
@@ -977,124 +981,104 @@
     }
   });
 
-  // ================= THE MACHINE (ecosystem diagram) =================
-  var M = { launched: all().length, vol: 0, tax: 0, holders: 0, creators: 0, vault: 0, grad: BASE.filter(function (t) { return t.prog >= 100; }).length, step: 0, hover: false };
+  // ================= THE DIAMOND FACTORY (fun how-it-works) =================
+  var M = { launched: all().length, tax: 0, creators: 0, holders: 0, vault: 0, grad: BASE.filter(function (t) { return t.prog >= 100; }).length, step: 0, pos: 0, rider: null, paused: 0 };
   var MSTEPS = [
-    ['creator', '01', 'Launch', 'Anyone launches a coin in under a minute — name, logo and a buy/sell tax from 0–10%. No code, no presale.'],
-    ['curve', '02', 'Bonding curve', 'Price is set by a curve: every buy pushes it up, every sell brings it down. Everyone gets the same fair price.'],
-    ['traders', '03', 'Trade', 'Traders buy and sell with SOL. The tax is shown in colour on every card, so nobody gets surprised on exit.'],
-    ['tax', '04', 'Tax engine', 'Every trade’s tax is split automatically: 50% to the creator, 30% to holders, 20% to the Diamond Vault.'],
-    ['vault', '05', 'Rewards & burn', 'Holders earn a share of fees just for holding. The Vault buys back and burns, shrinking supply.'],
-    ['raydium', '06', 'Graduation', 'When the curve fills to 100%, liquidity migrates to Raydium and the coin trades on the open market.']
+    ['make', '1', 'Make a coin', 'Pick a name, build a mascot, choose your tax. Done in a minute.'],
+    ['climb', '2', 'Climb the hill', 'Every buy pushes the price up the hill. Every sell slides it back down.'],
+    ['trade', '3', 'Traders pile in', 'People buy and sell with SOL. The tax is shown up front — no surprises.'],
+    ['jar', '4', 'The tax jars', 'A tiny fee from every trade gets shared: creator, holders, and a burn jar.'],
+    ['blast', '5', 'Blast off!', 'Reach the top of the hill and your coin graduates to Raydium — the big leagues.']
   ];
-  var MNODES = { creator: [100, 240], traders: [420, 66], curve: [420, 250], tax: [720, 250], holders: [1070, 130], creators: [1070, 250], vault: [1070, 370], raydium: [420, 412] };
-  var MPATHS = {
-    launch: 'M162,240 C260,240 290,250 345,250',
-    buy: 'M402,118 L402,196', sell: 'M438,196 L438,118',
-    fee: 'M495,250 C580,250 600,250 652,250',
-    toHolders: 'M788,250 C900,250 900,130 1008,130', toCreators: 'M788,250 L1008,250', toVault: 'M788,250 C900,250 900,370 1008,370',
-    grad: 'M420,304 L420,366'
-  };
   function hotToken() { var l = all().filter(function (t) { return t.prog < 100; }).sort(function (a, b) { return b.prog - a.prog; }); return l[0] || BASE[0]; }
-  function curvePt(p) { var x = 14 + p / 100 * 132, y = 74 - Math.pow(p / 100, 2) * 60; return [x, y]; }
+  function hillPos(p) { var k = p / 100; return { x: 8 + k * 78, y: 12 + Math.pow(k, 1.6) * 62 }; }
+  function jarH(v) { return Math.min(92, 8 + Math.sqrt(v) * 38); }
   function machineSection() {
-    var ht = hotToken(), cp = curvePt(ht.prog), lastL = S.launched[0] || all()[0];
-    var trAv = all().slice(3, 6).map(function (t) { return avatarHTML(t, 30); }).join('');
-    function node(id, inner, label, counter, cls) {
-      var xy = MNODES[id];
-      return '<button class="mnode ' + (cls || '') + '" data-mnode="' + id + '" style="left:' + xy[0] + 'px;top:' + xy[1] + 'px" data-act="mstep" data-arg="' + id + '">' + inner +
-        '<span class="mlabel">' + label + '</span>' + (counter ? '<span class="mcount mono" id="mc-' + id + '">' + counter + '</span>' : '') + '</button>';
-    }
-    var paths = Object.keys(MPATHS).map(function (k) { return '<path id="mp-' + k + '" class="mpath mp-' + k + '" d="' + MPATHS[k] + '"/>'; }).join('');
-    return '<section class="machine card-s" id="machine">' +
-      '<div class="m-head"><div><span class="kicker"><span class="livedot"></span>THE MACHINE</span><h2 class="title-xl" style="font-size:30px;margin:8px 0 4px">How Diamond works</h2>' +
-        '<p class="muted" style="margin:0;max-width:560px;line-height:1.55">Every coin, trade and fee on Diamond flows through one machine. This is it running live — click any part to see what it does.</p></div>' +
-        '<button class="btn pri" data-act="mlaunch">Launch a test coin</button></div>' +
-      '<div class="m-stage" id="m-stage"><div id="m-spacer" style="height:1px"></div><div class="m-inner" id="m-inner">' +
-        '<svg class="m-svg" viewBox="0 0 1200 460" aria-hidden="true"><defs><filter id="mglow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="3.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>' +
-          paths + '<g id="mparts" filter="url(#mglow)"></g></svg>' +
-        node('creator', '<span class="mic big">' + avatarHTML(lastL, 64) + '</span>', 'Creators', fmtNum(M.launched) + ' coins') +
-        node('traders', '<span class="mic stack">' + trAv + '</span>', 'Traders', '', 'small') +
-        node('curve', '<span class="mcurve"><svg viewBox="0 0 160 84"><path d="M14,74 Q90,74 146,14" class="mc-line"/><path d="M14,74 Q90,74 146,14 L146,74 Z" class="mc-fill"/><circle id="mc-dot" cx="' + cp[0].toFixed(1) + '" cy="' + cp[1].toFixed(1) + '" r="6"/></svg>' +
-          '<span class="mc-meta mono"><span id="mc-tk">$' + esc(ht.tick) + '</span><span id="mc-pr">' + ht.prog.toFixed(0) + '%</span></span></span>', 'Bonding curve', fmtK(M.vol * SOL_USD / 1000) + ' traded', 'wide') +
-        node('tax', '<span class="mic gear"><svg viewBox="0 0 64 64"><path d="M32 6l4 6 7-2 1 7 7 2-2 7 6 4-6 4 2 7-7 2-1 7-7-2-4 6-4-6-7 2-1-7-7-2 2-7-6-4 6-4-2-7 7-2 1-7 7 2z" fill="#18243F" stroke="#7DE3FF" stroke-width="2"/></svg><b>TAX</b></span>', 'Tax engine', M.tax.toFixed(2) + ' SOL') +
-        node('holders', '<span class="mic sm" style="--mc:#34E39A">' + I.gift + '</span>', 'Holders · 30%', M.holders.toFixed(3) + ' SOL', 'right') +
-        node('creators', '<span class="mic sm" style="--mc:#9B8CFF"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/></svg></span>', 'Creator · 50%', M.creators.toFixed(3) + ' SOL', 'right') +
-        node('vault', '<span class="mic sm" style="--mc:#FF9A4D">' + I.flame + '</span>', 'Vault burn · 20%', M.vault.toFixed(3) + ' SOL', 'right') +
-        node('raydium', '<span class="mic sm" style="--mc:#7DE3FF">' + I.gem + '</span>', 'Graduates to Raydium', M.grad + ' coins', 'small') +
-      '</div></div>' +
-      '<div class="m-steps">' + MSTEPS.map(function (st, i) { return '<button class="m-step' + (i === M.step ? ' on' : '') + '" data-act="mstep" data-arg="' + st[0] + '"><span class="mono">' + st[1] + '</span>' + st[2] + '</button>'; }).join('') + '</div>' +
-      '<div class="m-info" id="m-info"><span class="mono" style="color:var(--ice)">' + MSTEPS[M.step][1] + '</span><b>' + MSTEPS[M.step][2] + '</b><span class="muted">' + MSTEPS[M.step][3] + '</span></div>' +
+    var ht = hotToken(), hp = hillPos(ht.prog), last = S.launched[0] || all()[0];
+    var panel = function (i, art, extra) {
+      var st = MSTEPS[i];
+      return '<button class="fpanel" data-fp="' + st[0] + '" data-act="mstep" data-arg="' + st[0] + '" style="--d:' + (i * 80) + 'ms">' +
+        '<span class="fnum">' + st[1] + '</span><span class="fart">' + art + '</span>' +
+        '<span class="ftitle">' + st[2] + '</span><span class="ftext">' + st[3] + '</span>' + (extra || '') + '</button>';
+    };
+    var p1 = panel(0, '<span class="f-machine"><span class="fm-box"><span class="fm-light"></span><span class="fm-light l2"></span><span class="fm-light l3"></span></span><span class="fm-pop" id="f-pop">' + avatarHTML(last, 64) + '</span><span class="fm-spark a"></span><span class="fm-spark b"></span><span class="fm-spark c"></span></span>',
+      '<span class="fstat" id="fs-make">' + fmtNum(M.launched) + ' coins made</span>');
+    var p2 = panel(1, '<span class="f-hill"><svg viewBox="0 0 100 80" preserveAspectRatio="none"><path d="M0,80 L0,74 Q50,74 100,8 L100,80 Z" class="hill-fill"/><path d="M0,74 Q50,74 100,8" class="hill-line"/></svg><span class="flag">TOP</span>' +
+      '<span class="climber" id="f-climb" style="left:' + hp.x + '%;bottom:' + hp.y + '%">' + avatarHTML(ht, 38) + '</span></span>',
+      '<span class="fstat" id="fs-climb">$' + esc(ht.tick) + ' is ' + ht.prog.toFixed(0) + '% up</span>');
+    var p3 = panel(2, '<span class="f-rain" id="f-rain"><span class="bucket"><b>SOL</b></span></span>',
+      '<span class="fstat"><span class="up">buys</span> &amp; <span class="down">sells</span> live</span>');
+    var p4 = panel(3, '<span class="f-jars">' +
+      [['creators', 'Creator', '50%', '#9B8CFF'], ['holders', 'Holders', '30%', '#34E39A'], ['vault', 'Burn', '20%', '#FF9A4D']].map(function (j) {
+        return '<span class="jarw"><span class="jar" style="--jc:' + j[3] + '"><span class="jar-liq" id="fj-' + j[0] + '" style="height:' + jarH(M[j[0]]) + '%"></span><span class="jar-pct">' + j[2] + '</span></span><span class="jar-lbl">' + j[1] + '</span></span>';
+      }).join('') + '</span>', '<span class="fstat" id="fs-jar">' + M.tax.toFixed(2) + ' SOL shared</span>');
+    var p5 = panel(4, '<span class="f-rocket" id="f-rocket"><span class="stars"></span><svg viewBox="0 0 80 120" class="rk"><path d="M40 4 C60 22 64 50 60 82 L20 82 C16 50 20 22 40 4Z" fill="#E9EEF9"/><path d="M20 70 L6 92 L22 86Z M60 70 L74 92 L58 86Z" fill="#9B8CFF"/><circle cx="40" cy="44" r="15" fill="#0E1628" stroke="#7DE3FF" stroke-width="3"/><path d="M30 82 h20 l-4 8 h-12z" fill="#7C89A6"/></svg>' +
+      '<span class="rk-win">' + avatarHTML(BASE[0], 26) + '</span><span class="flame"></span></span>',
+      '<span class="fstat" id="fs-blast">' + M.grad + ' coins graduated</span>');
+    return '<section class="factory card-s" id="machine">' +
+      '<div class="m-head"><div><span class="kicker"><span class="livedot"></span>HOW IT WORKS</span><h2 class="title-xl" style="font-size:32px;margin:8px 0 4px">The Diamond Factory</h2>' +
+        '<p class="muted" style="margin:0;max-width:520px;line-height:1.55">From idea to the moon in 5 steps. Watch a coin ride through — or tap any step.</p></div>' +
+        '<button class="btn pri" data-act="mlaunch">Make a test coin</button></div>' +
+      '<div class="f-wrap drag-scroll"><div class="f-row">' + p1 + p2 + p3 + p4 + p5 + '</div>' +
+        '<div class="belt"><span class="belt-track"></span><span class="rider" id="f-rider">' + avatarHTML(all()[2], 40) + '</span></div></div>' +
       '</section>';
   }
   function mSetStep(i) {
     M.step = (i + MSTEPS.length) % MSTEPS.length;
-    document.querySelectorAll('.m-step').forEach(function (b, k) { b.classList.toggle('on', k === M.step); });
-    var key = MSTEPS[M.step][0], map = { vault: ['holders', 'creators', 'vault'] };
-    var hl = map[key] || [key];
-    document.querySelectorAll('.mnode').forEach(function (n) { n.classList.toggle('lit', hl.indexOf(n.getAttribute('data-mnode')) !== -1); });
-    var info = document.getElementById('m-info');
-    if (info) { info.classList.remove('swap'); void info.offsetWidth; info.classList.add('swap'); info.innerHTML = '<span class="mono" style="color:var(--ice)">' + MSTEPS[M.step][1] + '</span><b>' + MSTEPS[M.step][2] + '</b><span class="muted">' + MSTEPS[M.step][3] + '</span>'; }
+    document.querySelectorAll('.fpanel').forEach(function (p, k) { p.classList.toggle('here', k === M.step); });
   }
-  setInterval(function () { if (S.screen === 'home' && !M.hover && document.getElementById('machine')) mSetStep(M.step + 1); }, 4500);
-  document.addEventListener('mouseover', function (e) { M.hover = !!(e.target.closest && e.target.closest('#machine')); });
-  function mFit() {
-    var st = document.getElementById('m-stage'), inn = document.getElementById('m-inner'); if (!st || !inn) return;
-    var sc = Math.max(0.62, Math.min(1, st.clientWidth / 1200)); inn.style.transform = 'scale(' + sc + ')'; st.style.height = (460 * sc + 6) + 'px';
-    var sp = document.getElementById('m-spacer'); if (sp) sp.style.width = (1200 * sc) + 'px';
-    st.classList.toggle('drag-scroll', st.clientWidth < 1200 * sc);
-  }
-  window.addEventListener('resize', mFit);
-  // particles
-  var MP = [];
-  function mPulse(id) { var n = document.querySelector('.mnode[data-mnode="' + id + '"]'); if (n) { n.classList.remove('hit'); void n.offsetWidth; n.classList.add('hit'); } }
-  function mCount(id, txt) { var e = document.getElementById('mc-' + id); if (e) e.textContent = txt; }
-  function emit(pathKey, color, r, dur, onEnd) {
-    var g = document.getElementById('mparts'), path = document.getElementById('mp-' + pathKey);
-    if (!g || !path || MP.length > 60) { if (onEnd) onEnd(); return; }
-    var c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-    c.setAttribute('r', r); c.setAttribute('fill', color); g.appendChild(c);
-    path.classList.add('flow'); clearTimeout(path._t); path._t = setTimeout(function () { path.classList.remove('flow'); }, dur + 400);
-    MP.push({ el: c, path: path, len: path.getTotalLength(), t0: performance.now(), dur: dur, onEnd: onEnd });
-  }
-  (function mLoop(now) {
-    for (var i = MP.length - 1; i >= 0; i--) {
-      var p = MP[i], k = Math.min(1, (now - p.t0) / p.dur), e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
-      var pt = p.path.getPointAtLength(p.len * e); p.el.setAttribute('cx', pt.x); p.el.setAttribute('cy', pt.y);
-      if (k >= 1) { p.el.remove(); MP.splice(i, 1); if (p.onEnd) p.onEnd(); }
+  function mFit() {}
+  // rider loop: travels the belt, lighting each station as it passes
+  var riderT = performance.now();
+  (function ride(now) {
+    var dt = Math.min(64, now - riderT); riderT = now;
+    var r = document.getElementById('f-rider');
+    if (r && S.screen === 'home') {
+      if (M.paused > 0) M.paused -= dt; else M.pos += dt / 140;
+      if (M.pos >= 100) {
+        M.pos = 0; var pool = all(); r.innerHTML = avatarHTML(pool[Math.floor(Math.random() * pool.length)], 40);
+        var rk = document.getElementById('f-rocket'); if (rk) { rk.classList.remove('launch'); void rk.offsetWidth; rk.classList.add('launch'); }
+      }
+      r.style.left = M.pos + '%';
+      var st = Math.min(4, Math.floor(M.pos / 20));
+      if (st !== M.step) { mSetStep(st); r.classList.remove('hop'); void r.offsetWidth; r.classList.add('hop'); }
     }
-    requestAnimationFrame(mLoop);
-  })(performance.now());
+    requestAnimationFrame(ride);
+  })(riderT);
+  function onHome() { return S.screen === 'home' && document.getElementById('machine'); }
+  function setTxt(id, t) { var e = document.getElementById(id); if (e) e.textContent = t; }
   function machineTrade(t, tr) {
-    if (S.screen !== 'home' || !document.getElementById('machine')) return;
-    var buy = tr.side === 'buy', r = Math.max(3, Math.min(8, 3 + tr.sol * 1.2));
-    emit(buy ? 'buy' : 'sell', buy ? '#34E39A' : '#FF5C7C', r, 900, function () {
-      mPulse('curve'); M.vol += tr.sol; mCount('curve', fmtK(M.vol * SOL_USD / 1000) + ' traded');
-      var ht = hotToken(), cp = curvePt(ht.prog), dot = document.getElementById('mc-dot');
-      if (dot) { dot.setAttribute('cx', cp[0].toFixed(1)); dot.setAttribute('cy', cp[1].toFixed(1)); }
-      var tk = document.getElementById('mc-tk'); if (tk) tk.textContent = '$' + ht.tick;
-      var pr = document.getElementById('mc-pr'); if (pr) pr.textContent = ht.prog.toFixed(0) + '%';
-      if (tr.tax <= 0) return;
-      emit('fee', '#FFD15C', 4, 800, function () {
-        mPulse('tax'); M.tax += tr.tax; mCount('tax', M.tax.toFixed(2) + ' SOL');
-        var g = document.querySelector('.mic.gear svg'); if (g) { g.classList.remove('spin'); void g.getBoundingClientRect(); g.classList.add('spin'); }
-        emit('toHolders', '#34E39A', 3, 1000, function () { mPulse('holders'); M.holders += tr.tax * 0.3; mCount('holders', M.holders.toFixed(3) + ' SOL'); });
-        emit('toCreators', '#9B8CFF', 3, 900, function () { mPulse('creators'); M.creators += tr.tax * 0.5; mCount('creators', M.creators.toFixed(3) + ' SOL'); });
-        emit('toVault', '#FF9A4D', 3, 1100, function () { mPulse('vault'); M.vault += tr.tax * 0.2; mCount('vault', M.vault.toFixed(3) + ' SOL'); });
-      });
-    });
+    if (!onHome()) return;
+    var rain = document.getElementById('f-rain');
+    if (rain) {
+      var c = document.createElement('span');
+      c.className = 'fcoin ' + (tr.side === 'buy' ? 'b' : 's');
+      c.style.left = (15 + Math.random() * 70) + '%';
+      c.style.setProperty('--sz', Math.max(14, Math.min(30, 12 + tr.sol * 5)) + 'px');
+      c.textContent = tr.side === 'buy' ? '+' : '−';
+      rain.appendChild(c); setTimeout(function () { c.remove(); }, 1300);
+    }
+    var ht = hotToken(), hp = hillPos(ht.prog), cl = document.getElementById('f-climb');
+    if (cl) { if (cl.getAttribute('data-tk') !== ht.tick) { cl.innerHTML = avatarHTML(ht, 38); cl.setAttribute('data-tk', ht.tick); } cl.style.left = hp.x + '%'; cl.style.bottom = hp.y + '%'; }
+    setTxt('fs-climb', '$' + ht.tick + ' is ' + ht.prog.toFixed(0) + '% up');
+    if (tr.tax > 0) {
+      M.tax += tr.tax; M.creators += tr.tax * 0.5; M.holders += tr.tax * 0.3; M.vault += tr.tax * 0.2;
+      ['creators', 'holders', 'vault'].forEach(function (k) { var e = document.getElementById('fj-' + k); if (e) { e.style.height = jarH(M[k]) + '%'; e.parentNode.classList.remove('drip'); void e.offsetWidth; e.parentNode.classList.add('drip'); } });
+      setTxt('fs-jar', M.tax.toFixed(2) + ' SOL shared');
+    }
   }
   function machineLaunch(t) {
     M.launched++;
-    if (S.screen !== 'home' || !document.getElementById('machine')) return;
-    var ic = document.querySelector('.mnode[data-mnode="creator"] .mic'); if (ic) ic.innerHTML = avatarHTML(t, 64);
-    mPulse('creator'); mCount('creator', fmtNum(M.launched) + ' coins');
-    emit('launch', '#7DE3FF', 9, 1300, function () { mPulse('curve'); });
+    if (!onHome()) return;
+    var pop = document.getElementById('f-pop'); if (pop) { pop.innerHTML = avatarHTML(t, 64); pop.classList.remove('go'); void pop.offsetWidth; pop.classList.add('go'); }
+    setTxt('fs-make', fmtNum(M.launched) + ' coins made');
   }
   function machineGrad(t) {
     M.grad++;
-    if (S.screen !== 'home' || !document.getElementById('machine')) return;
-    emit('grad', '#FFD15C', 10, 1400, function () { mPulse('raydium'); mCount('raydium', M.grad + ' coins'); });
+    if (!onHome()) return;
+    var rk = document.getElementById('f-rocket');
+    if (rk) { var w = rk.querySelector('.rk-win'); if (w) w.innerHTML = avatarHTML(t, 26); rk.classList.remove('launch'); void rk.offsetWidth; rk.classList.add('launch'); }
+    setTxt('fs-blast', M.grad + ' coins graduated');
   }
 
   // ================= MOTION & DRAG ENGINE =================
