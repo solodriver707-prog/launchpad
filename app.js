@@ -673,7 +673,8 @@
   }
   function orbitStage(a, cook, sent) {
     return '<div class="lab-stage orb-stage" id="lab" data-mode="orbit"><canvas class="asc-cv" id="asc-cv"></canvas>' +
-      '<div class="orb-core" id="orb-core"><span class="oc-glow"></span><b>treid</b><small class="mono"><span id="az-c">' + cook.length + '</span> cooking · <span id="az-s">' + sent.length + '</span> sent</small></div>' +
+      '<div class="orb-core" id="orb-core"><span class="oc-glow"></span><div class="oc-idle"><b>treid</b><small class="mono"><span id="az-c">' + cook.length + '</span> cooking · <span id="az-s">' + sent.length + '</span> sent</small></div><div class="oc-live" id="oc-live"></div></div>' +
+      '<div class="orb-banner" id="orb-banner"></div>' +
       '<div class="orb-labels" id="orb-labels"></div>' +
       '<div class="lab-nodes" id="lab-nodes">' + a.map(labBubble).join('') + '</div><div class="asc-fx" id="asc-fx"></div>' +
       '<div class="orb-hint mono">drag to spin · tap a coin to trade</div></div>';
@@ -737,6 +738,8 @@
     // graduation ring travelling glint
     var ga = (now / 2600) % 6.283; ctx.beginPath(); ctx.ellipse(G.cx, G.cy, G.rx * OU1, G.ry * OU1, 0, ga, ga + .5); ctx.strokeStyle = 'rgba(255,255,255,.9)'; ctx.lineWidth = 2.5; ctx.stroke();
     var els = st.querySelectorAll('.lb'), NN = [];
+    if (!ORB.hotT || now - ORB.hotT > 1000) { ORB.hotT = now; var hot = all().filter(function (t) { return t.prog < 100; }).sort(function (a, b) { return b.prog - a.prog; }).slice(0, 3).map(function (t) { return t.tick; });
+      for (var hh = 0; hh < els.length; hh++) els[hh].classList.toggle('hot', hot.indexOf(els[hh].getAttribute('data-lb')) !== -1); }
     for (var a1 = 0; a1 < els.length; a1++) { var tk1 = els[a1].getAttribute('data-lb'), p1 = LAB.pos[tk1]; if (p1 && p1.a != null) NN.push({ p: p1, r: labR(find(tk1) || BASE[0]) }); }
     for (var a2 = 0; a2 < NN.length; a2++) for (var b2 = a2 + 1; b2 < NN.length; b2++) {
       var A = NN[a2], B = NN[b2], dx = B.p.x - A.p.x, dy = B.p.y - A.p.y, d = Math.sqrt(dx * dx + dy * dy), mn = (A.r + B.r) * G.k + 14;
@@ -746,7 +749,7 @@
       var el = els[i], tk = el.getAttribute('data-lb'), t = find(tk); if (!t) continue;
       var zone = t.prog < 100 ? 'c' : 's', tu = orbU(t), r0 = labR(t), p = LAB.pos[tk];
       if (!p || p.a == null) { var h = hash(tk); p = LAB.pos[tk] = { a: (h % 6283) / 1000, u: tu * .4, vu: 0, zone: zone, x: G.cx, y: G.cy }; }
-      if (p.zone !== zone) { p.zone = zone; ORB.flash = now; ascBurst(p.x, p.y, '#F3E5C8', 30); }
+      if (p.zone !== zone) { var was = p.zone; p.zone = zone; ORB.flash = now; ascBurst(p.x, p.y, '#F3E5C8', 36); if (was === 'c') orbBanner(t); }
       p.vu += (tu - p.u) * .03; p.vu *= .86; p.u += p.vu;
       var T = 16000 * Math.pow(Math.max(.15, p.u) / .3, 1.5); p.a += dt * 6.283 / T * ORB.slow;
       var ang = p.a + ORB.rot, depth = Math.sin(ang), sc = (.74 + .32 * (depth + 1) / 2) * G.k;
@@ -815,8 +818,18 @@
     e.textContent = (up ? '+' : '−') + (sol >= 10 ? sol.toFixed(0) : sol.toFixed(2)) + ' SOL'; e.style.left = p.x + 'px'; e.style.top = (p.y - r - 6) + 'px';
     if (sol >= 5) e.classList.add('big');
     fx.appendChild(e); setTimeout(function () { e.remove(); }, 1500);
-    if (p.a != null) { p.vu += (up ? 1 : -1) * Math.min(.05, .012 + sol * .004); ORB.coreHit = performance.now(); var core = document.getElementById('orb-core'); if (core) { core.classList.remove('hit', 'hitd'); void core.offsetWidth; core.classList.add(up ? 'hit' : 'hitd'); } }
+    if (p.a != null) { if (sol >= 1.5 || Math.random() < .35) orbCore(t, up, sol); p.vu += (up ? 1 : -1) * Math.min(.05, .012 + sol * .004); ORB.coreHit = performance.now(); var core = document.getElementById('orb-core'); if (core) { core.classList.remove('hit', 'hitd'); void core.offsetWidth; core.classList.add(up ? 'hit' : 'hitd'); } }
     else p.vy += up ? -Math.min(14, 3 + sol) : Math.min(12, 2 + sol);
+  }
+  function orbBanner(t) {
+    var b = document.getElementById('orb-banner'); if (!b) return;
+    b.innerHTML = avatarHTML(t, 30) + '<span><b>$' + esc(t.tick) + '</b> just graduated</span><em class="mono">' + fmtK(t.mcN) + '</em>';
+    b.classList.remove('go'); void b.offsetWidth; b.classList.add('go');
+  }
+  function orbCore(t, up, sol) {
+    var c = document.getElementById('oc-live'), core = document.getElementById('orb-core'); if (!c || !core) return;
+    c.innerHTML = avatarHTML(t, 34) + '<b class="mono ' + (up ? 'up' : 'down') + '">' + (up ? '+' : '−') + (sol >= 10 ? sol.toFixed(0) : sol.toFixed(2)) + '</b><small>$' + esc(t.tick) + '</small>';
+    core.classList.add('showing'); clearTimeout(orbCore._t); orbCore._t = setTimeout(function () { core.classList.remove('showing'); }, 1600);
   }
   function labKick() { if (!LAB.raf && document.getElementById('lab')) LAB.raf = requestAnimationFrame(labLoop); }
   window.addEventListener('resize', function () { LAB.dirty = true; });
@@ -824,7 +837,7 @@
   function raceRefresh() {
     var box = document.getElementById('lab-nodes'); if (!box) return;
     var have = {}; box.querySelectorAll('.lb').forEach(function (el) { have[el.getAttribute('data-lb')] = el; });
-    all().forEach(function (t) {
+    (box.closest('.orb-inline') ? filtered() : all()).forEach(function (t) {
       var el = have[t.tick], cook = t.prog < 100;
       if (!el) { box.insertAdjacentHTML('beforeend', labBubble(t)); el = box.lastElementChild; el.classList.add('pop'); }
       else if (el.classList.contains('cook') !== cook) { el.outerHTML = labBubble(t); el = box.querySelector('[data-lb="' + t.tick + '"]'); el.classList.add('pop', 'grad'); }
@@ -1274,6 +1287,7 @@
       var c = document.getElementById('rpc-' + k); if (c) c.textContent = list.length + ' coins match';
       var ir = e && e.closest('.irange'); if (ir) ir.classList.toggle('on', l !== 'Any');
     });
+    if (S.view === 'orbit') raceRefresh();
     if (g && S.view !== 'bubbles') g.innerHTML = list.length ? list.map(function (t) { return card(t); }).join('') : '<div class="empty"><b style="font-size:19px">No coins in this range</b><span class="muted">Widen a slider or hit Reset.</span><button class="btn pri" data-act="reset">Reset filters</button></div>';
   }
   var SLOGANS = ['The market', 'is yours.'];
@@ -1326,12 +1340,12 @@
     var list = filtered();
     var toolbar = '<div class="toolbar"><h2 class="h2">Tokens</h2><span class="demo" data-tip="Market data is simulated until on-chain launch goes live. Wallet + SOL balance are real (devnet).">DEMO DATA</span><div class="seg">' + SORTS.map(function (s) {
       return '<button class="' + (S.sort === s[0] ? 'on' : '') + '" aria-pressed="' + (S.sort === s[0]) + '" data-act="sort" data-arg="' + s[0] + '">' + s[1] + '</button>';
-    }).join('') + '</div><div class="seg" role="group" aria-label="View"><button class="' + (S.view === 'grid' ? 'on' : '') + '" data-act="view" data-arg="grid">Grid</button><button class="' + (S.view === 'bubbles' ? 'on' : '') + '" data-act="view" data-arg="bubbles">Bubbles</button></div><span class="mono muted" style="margin-left:auto;font-size:12.5px" id="count">' + list.length + ' of ' + all().length + ' tokens</span></div>' +
+    }).join('') + '</div><div class="seg" role="group" aria-label="View"><button class="' + (S.view === 'grid' ? 'on' : '') + '" data-act="view" data-arg="grid">Grid</button><button class="' + (S.view === 'bubbles' ? 'on' : '') + '" data-act="view" data-arg="bubbles">Bubbles</button><button class="' + (S.view === 'orbit' ? 'on' : '') + '" data-act="view" data-arg="orbit">Orbit</button></div><span class="mono muted" style="margin-left:auto;font-size:12.5px" id="count">' + list.length + ' of ' + all().length + ' tokens</span></div>' +
       '';
 
     var filters = filterBar();
 
-    var grid = (!S.loading && S.view === 'bubbles') ? bubblesHTML(list) : '<section class="grid" id="grid">' + (S.loading ? [0, 1, 2, 3, 4, 5].map(skeletonCard).join('') : list.length ? list.map(function (t) { return card(t); }).join('') :
+    var grid = (!S.loading && S.view === 'orbit') ? (function () { var a = list; return '<div class="orb-inline">' + orbitStage(a, a.filter(function (t) { return t.prog < 100; }), a.filter(function (t) { return t.prog >= 100; })) + '</div>'; })() : (!S.loading && S.view === 'bubbles') ? bubblesHTML(list) : '<section class="grid" id="grid">' + (S.loading ? [0, 1, 2, 3, 4, 5].map(skeletonCard).join('') : list.length ? list.map(function (t) { return card(t); }).join('') :
       '<div class="empty"><b style="font-size:19px">No tokens match these filters</b><span class="muted">Loosen the tax or market cap filters.</span><button class="btn pri" data-act="reset">Reset filters</button></div>') + '</section>';
 
     var how = '<section id="how" style="margin-top:56px"><h2 class="h2" style="margin-bottom:16px">How treid works</h2><div class="row">' +
@@ -1342,7 +1356,7 @@
       }).join('') + '</div></section>';
 
     var slogan = introHTML();
-    return '<main class="wrap">' + slogan + '<div id="board"></div>' + toolbar + filters + '<div class="layout full">' + grid + '</div>' + raceSection() + machineSection() + '</main>';
+    return '<main class="wrap">' + slogan + '<div id="board"></div>' + toolbar + filters + '<div class="layout full">' + grid + '</div>' + (S.view === 'orbit' ? '' : raceSection()) + machineSection() + '</main>';
   }
 
   // ================= PRO TOKEN PAGE (pump.fun / dexscreener style) =================
