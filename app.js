@@ -64,7 +64,7 @@
     dice: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8.5" cy="8.5" r="1.3" fill="currentColor"/><circle cx="15.5" cy="15.5" r="1.3" fill="currentColor"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/></svg>',
     up: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></svg>'
   };
-  var LOGO = '<span class="logo" aria-hidden="true"><svg viewBox="0 0 64 64"><g class="mz-body"><path d="M13 50 V33 Q13 24 22 24 Q31 24 31 33 V50 M31 33 Q31 24 40 24 Q49 24 49 33 V50" fill="none" stroke="#fff" stroke-width="7.5" stroke-linecap="round" stroke-linejoin="round"/></g><g class="mz-eyes"><circle cx="22" cy="13" r="6" fill="#fff"/><circle cx="40" cy="13" r="6" fill="#fff"/><g class="mz-pup"><circle cx="23" cy="14" r="2.6" fill="#1B0B3A"/><circle cx="41" cy="14" r="2.6" fill="#1B0B3A"/></g></g></svg></span>';
+  var LOGO = '<span class="logo" aria-hidden="true"><svg viewBox="0 0 64 64"><g class="mz-body"><path d="M13 50 V33 Q13 24 22 24 Q31 24 31 33 V50 M31 33 Q31 24 40 24 Q49 24 49 33 V50" fill="none" stroke="#0A0A0A" stroke-width="7.5" stroke-linecap="round" stroke-linejoin="round"/></g><g class="mz-eyes"><circle cx="22" cy="13" r="6" fill="#fff"/><circle cx="40" cy="13" r="6" fill="#fff"/><g class="mz-pup"><circle cx="23" cy="14" r="2.6" fill="#0A0A0A"/><circle cx="41" cy="14" r="2.6" fill="#0A0A0A"/></g></g></svg></span>';
 
   // ================= DATA =================
   function mk(name, tick, kind, skinI, bgI, eyes, mouth, acc, buy, sell, pair, mcN, c24, prog, ageM, holders, soc, rewards, burn) {
@@ -652,37 +652,85 @@
         '<span class="tw-fin"><u>' + (isC ? 'Raydium' : 'The Moon · $100M') + '</u></span></div>' + (isC ? '' : '<span class="tw-moonorb"></span>') +
         '<div class="tw-scroll drag-scroll" id="tw-' + kind + '"><div class="tw-row">' + l.map(function (t) { return twColHTML(t, kind, ld && t.tick === ld.tick); }).join('') + '</div></div></div></div>';
   }
-  function raceSection() {
-    return '<section class="race card-s tw" id="race"><div class="m-head"><div><span class="kicker"><span class="livedot"></span>LIVE RACE</span><h2 class="title-xl" style="font-size:28px;margin:6px 0 2px">The Climb</h2>' +
-      '<p class="muted" style="margin:0;max-width:520px">Buys push coins up, sells pull them down. Bigger bubble = bigger market cap.</p></div>' +
-      '<div class="tw-ctrl"><span class="muted" style="font-size:12px;font-weight:700">Order by</span><div class="seg sm">' + [['pos', 'Highest'], ['mc', 'Market cap'], ['new', 'Newest'], ['old', 'Oldest'], ['chg', '24h']].map(function (x) { return '<button class="' + (S.raceSort === x[0] ? 'on' : '') + '" data-act="rsort" data-arg="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div><span class="muted mono" style="font-size:11px">⇆ drag sideways</span></div></div>' +
-      '<div class="tw-wrap">' + twPanel('curve') + twPanel('moon') + '</div></section>';
+  // ===== THE MEME LAB: a bubbling flask (Cooking) piped into an open sky (Sent) =====
+  function labR(t) { return Math.round(Math.max(17, Math.min(31, 13 + (Math.log10(Math.max(1, t.mcN)) - 1) * 5.2))); }
+  function labBubble(t) {
+    var r = labR(t), id = esc(t.tick), cook = t.prog < 100, c = chg(t);
+    return '<button class="lb ' + (cook ? 'cook' : 'sent') + '" data-lb="' + id + '" data-act="open" data-arg="' + id + '" style="--r:' + r + 'px">' +
+      avatarHTML(t, r * 2) + '<span class="lb-tag"><b>$' + id + '</b><em class="mono">' + (cook ? Math.min(99, Math.floor(t.prog)) + '%' : fmtK(t.mcN)) + '</em></span>' +
+      '<span class="lb-card"><b>' + esc(t.name) + '</b><span>' + coinHTML(t.pair, 14) + esc(pairLabel(t.pair)) + ' · tax ' + Math.max(t.buy, t.sell) + '%</span><span class="mono">' + fmtK(t.mcN) + ' <i class="' + (c >= 0 ? 'up' : 'down') + '">' + chgTxt(c) + '</i></span></span></button>';
   }
+  function raceSection() {
+    var a = all(), cook = a.filter(function (t) { return t.prog < 100; }), sent = a.filter(function (t) { return t.prog >= 100; });
+    var micro = ''; for (var m = 0; m < 16; m++) micro += '<i style="left:' + ((m * 37) % 96 + 2) + '%;--d:' + (3 + (m % 5)) + 's;--dl:-' + (m * .7).toFixed(1) + 's;--z:' + (3 + m % 4) + 'px"></i>';
+    var alt = [['$1M', 1e6], ['$10M', 1e7], ['$50M', 5e7]].map(function (x) { var f = (mcU(x[1]) - SPLIT) / (1 - SPLIT); return '<i style="bottom:calc(' + (f * 100).toFixed(1) + '% * .84 + 8%)"><u>' + x[0] + '</u></i>'; }).join('');
+    return '<section class="race card-s lab" id="race"><div class="lab-head"><div><span class="kicker"><span class="livedot"></span>LIVE</span><h2 class="title-xl lab-title">The Meme Lab</h2>' +
+      '<p class="muted lab-sub">Fresh coins <b>cook</b> on the bonding curve. Hit 100% and they get <b>sent</b> — graduated, flying toward $100M.</p></div>' +
+      '<div class="lab-legend"><span><i class="lg-h">↕</i>height = progress</span><span><i class="lg-s">●</i>size = market cap</span><span><i class="lg-t">☝</i>tap to trade</span></div></div>' +
+      '<div class="lab-stage" id="lab">' +
+        '<div class="lab-zone cook"><div class="lz-lab"><b>🔥 Cooking</b><span class="mono">' + cook.length + '</span><small>bonding curve</small></div>' +
+          '<div class="flask"><div class="liquid"><svg class="wave" viewBox="0 0 400 20" preserveAspectRatio="none"><path d="M0 10 Q25 0 50 10 T100 10 T150 10 T200 10 T250 10 T300 10 T350 10 T400 10 V20 H0Z"/></svg><div class="micro">' + micro + '</div></div>' +
+          '<div class="lvl">' + [25, 50, 75].map(function (v) { return '<i style="bottom:calc(' + v + '% * .84 + 8%)"><u>' + v + '%</u></i>'; }).join('') + '</div>' +
+          '<div class="neck"><span>100% → graduate</span></div></div></div>' +
+        '<div class="lab-pipe"><svg viewBox="0 0 80 400" preserveAspectRatio="none"><path class="p0" d="M0 40 C 55 40, 25 360, 80 360"/><path class="p1" d="M0 40 C 55 40, 25 360, 80 360"/></svg><span>graduation pipe</span></div>' +
+        '<div class="lab-zone sent"><div class="lz-lab"><b>🚀 Sent</b><span class="mono">' + sent.length + '</span><small>graduated · market cap</small></div>' +
+          '<div class="sky"><div class="stars"></div><div class="lvl">' + alt + '</div><div class="ceiling"><span>$100M</span></div></div></div>' +
+        '<div class="lab-nodes" id="lab-nodes">' + a.map(labBubble).join('') + '</div>' +
+      '</div></section>';
+  }
+  var LAB = { pos: {}, stage: null, raf: 0, t0: 0 };
+  function labZones(st) {
+    var sr = st.getBoundingClientRect(), c = st.querySelector('.cook .flask').getBoundingClientRect(), s = st.querySelector('.sent .sky').getBoundingClientRect();
+    var z = function (r) { return { x0: r.left - sr.left, x1: r.right - sr.left, y0: r.top - sr.top, y1: r.bottom - sr.top }; };
+    return { c: z(c), s: z(s) };
+  }
+  function labTarget(t, Z, now) {
+    var cook = t.prog < 100, z = cook ? Z.c : Z.s, h = hash(t.tick), r = labR(t);
+    var f = cook ? Math.max(0, Math.min(1, t.prog / 100)) : gameF(t);
+    var w = z.x1 - z.x0 - 2 * r - 16, hx = ((h % 1000) / 1000);
+    var x = z.x0 + r + 8 + hx * w + Math.sin(now / 1700 + h) * 7;
+    var top = z.y0 + (z.y1 - z.y0) * .08, bot = z.y1 - (z.y1 - z.y0) * .08;
+    var y = bot - f * (bot - top) + Math.cos(now / 1300 + h) * 4;
+    return { x: x, y: y, r: r, zone: cook ? 'c' : 's', z: z };
+  }
+  function labLoop(now) {
+    var st = document.getElementById('lab'); if (!st) { LAB.raf = 0; LAB.stage = null; return; }
+    if (st !== LAB.stage) { LAB.stage = st; LAB.Z = labZones(st); LAB.zt = now; }
+    if (now - LAB.zt > 1000) { LAB.Z = labZones(st); LAB.zt = now; }
+    var els = st.querySelectorAll('.lb'), nodes = [];
+    for (var i = 0; i < els.length; i++) {
+      var el = els[i], tk = el.getAttribute('data-lb'), t = find(tk); if (!t) continue;
+      var T = labTarget(t, LAB.Z, now), p = LAB.pos[tk];
+      if (!p || p.zone !== T.zone) { p = LAB.pos[tk] = { x: T.x + (Math.random() - .5) * 20, y: p && p.zone !== T.zone ? T.z.y1 : T.y + 30, vx: 0, vy: 0, zone: T.zone }; }
+      p.vx += (T.x - p.x) * .012; p.vy += (T.y - p.y) * .018; nodes.push({ el: el, p: p, T: T });
+    }
+    for (var a = 0; a < nodes.length; a++) for (var b = a + 1; b < nodes.length; b++) {
+      var A = nodes[a], B = nodes[b]; if (A.p.zone !== B.p.zone) continue;
+      var dx = B.p.x - A.p.x, dy = B.p.y - A.p.y, ey = dy / 1.55, d = Math.sqrt(dx * dx + ey * ey) || .01, min = A.T.r + B.T.r + 10;
+      if (d < min) { var k = (min - d) / d * .16; A.p.vx -= dx * k * 1.2; A.p.vy -= dy * k; B.p.vx += dx * k * 1.2; B.p.vy += dy * k; }
+    }
+    nodes.forEach(function (n) {
+      var p = n.p, z = n.T.z, r = n.T.r; p.vx *= .86; p.vy *= .86; p.x += p.vx; p.y += p.vy;
+      p.x = Math.max(z.x0 + r + 2, Math.min(z.x1 - r - 2, p.x)); p.y = Math.max(z.y0 + r + 2, Math.min(z.y1 - r - 2, p.y));
+      n.el.style.transform = 'translate(' + (p.x - r).toFixed(1) + 'px,' + (p.y - r).toFixed(1) + 'px)';
+    });
+    LAB.raf = requestAnimationFrame(labLoop);
+  }
+  function labKick() { if (!LAB.raf && document.getElementById('lab')) LAB.raf = requestAnimationFrame(labLoop); }
+  window.addEventListener('resize', function () { if (LAB.stage) LAB.zt = 0; });
   var raceT2 = 0;
   function raceRefresh() {
-    ['curve', 'moon'].forEach(function (kind) {
-      var sc = document.getElementById('tw-' + kind); if (!sc) return; var row = sc.firstElementChild;
-      var l = twList(kind), ld = twLead(kind), first = {}, keep = {};
-      row.querySelectorAll('.tw-col').forEach(function (el) { first[el.getAttribute('data-tw')] = el.getBoundingClientRect().left; });
-      l.forEach(function (t) {
-        var el = row.querySelector('.tw-col[data-tw="' + t.tick + '"]'), f = twF(t, kind) * 100, isL = ld && ld.tick === t.tick;
-        if (!el) { row.insertAdjacentHTML('beforeend', twColHTML(t, kind, isL)); el = row.lastElementChild; el.classList.add('enter'); }
-        el.classList.toggle('lead', !!isL);
-        el.querySelector('.tw-trail').style.height = f.toFixed(2) + '%';
-        var r = el.querySelector('.tw-run'); r.style.bottom = f.toFixed(2) + '%';
-        el.querySelector('.tw-val').textContent = twVal(t, kind);
-        var cr = r.querySelector('.tw-crown'); if (isL && !cr) r.insertAdjacentHTML('beforeend', '<i class="tw-crown">♛</i>'); if (!isL && cr) cr.remove();
-        var em = el.querySelector('.tw-lab em'); em.textContent = chgTxt(chg(t)); em.className = 'mono ' + (chg(t) >= 0 ? 'up' : 'down');
-        row.appendChild(el); keep[t.tick] = 1;
-      });
-      row.querySelectorAll('.tw-col').forEach(function (el) { if (!keep[el.getAttribute('data-tw')]) el.remove(); });
-      row.querySelectorAll('.tw-col').forEach(function (el) {
-        var k = el.getAttribute('data-tw'); if (first[k] == null) return;
-        var dx = first[k] - el.getBoundingClientRect().left; if (!dx) return;
-        el.style.transition = 'none'; el.style.transform = 'translateX(' + dx + 'px)';
-        requestAnimationFrame(function () { el.style.transition = 'transform .6s cubic-bezier(.2,.8,.2,1)'; el.style.transform = ''; });
-      });
+    var box = document.getElementById('lab-nodes'); if (!box) return;
+    var have = {}; box.querySelectorAll('.lb').forEach(function (el) { have[el.getAttribute('data-lb')] = el; });
+    all().forEach(function (t) {
+      var el = have[t.tick], cook = t.prog < 100;
+      if (!el) { box.insertAdjacentHTML('beforeend', labBubble(t)); el = box.lastElementChild; el.classList.add('pop'); }
+      else if (el.classList.contains('cook') !== cook) { el.outerHTML = labBubble(t); el = box.querySelector('[data-lb="' + t.tick + '"]'); el.classList.add('pop', 'grad'); }
+      else { var em = el.querySelector('.lb-tag em'); if (em) em.textContent = cook ? Math.min(99, Math.floor(t.prog)) + '%' : fmtK(t.mcN); }
+      delete have[t.tick];
     });
+    Object.keys(have).forEach(function (k) { have[k].remove(); });
+    var cs = document.querySelectorAll('.lab .lz-lab .mono'); if (cs.length === 2) { cs[0].textContent = all().filter(function (t) { return t.prog < 100; }).length; cs[1].textContent = all().filter(function (t) { return t.prog >= 100; }).length; }
   }
   function raceBubble(t) {
     var p = trackPt(coinU(t)), sz = raceSize(t), done = t.prog >= 100, lab = done ? fmtK(t.mcN) : Math.min(100, t.prog).toFixed(0) + '%';
@@ -690,8 +738,8 @@
       avatarHTML(t, Math.round(sz)) + '<span class="rb-pct mono">' + lab + '</span></button>';
   }
   function raceUpdate(t, side) {
-    var el = document.querySelector('.tw-col[data-tw="' + t.tick + '"] .tw-run');
-    if (el) { el.classList.remove('up-hit', 'down-hit'); void el.offsetWidth; el.classList.add(side === 'buy' ? 'up-hit' : 'down-hit'); }
+    var el = document.querySelector('.lb[data-lb="' + t.tick + '"]');
+    if (el) { el.classList.remove('up-hit', 'down-hit'); void el.offsetWidth; el.classList.add(side === 'buy' ? 'up-hit' : 'down-hit'); var p = LAB.pos[t.tick]; if (p) p.vy += side === 'buy' ? -5 : 4; }
     if (Date.now() - raceT2 > 800) { raceT2 = Date.now(); raceRefresh(); } else { clearTimeout(raceUpdate._t); raceUpdate._t = setTimeout(function () { raceT2 = Date.now(); raceRefresh(); }, 820); }
   }
 
@@ -711,7 +759,7 @@
         '<div class="vtile"><div class="l">24h volume</div><div class="v" id="stat-vol">' + fmtK(st.vol) + '</div><div class="vbars" id="vbars">' + vbars() + '</div></div>' +
         '<div class="vtile"><div class="l"><span class="livedot"></span> Trades</div><div class="v" id="stat-trades">' + fmtNum(st.trades) + '</div><svg class="tline" viewBox="0 0 150 40" preserveAspectRatio="none" aria-hidden="true"><polyline id="tline" points="' + tline() + '" fill="none" stroke="#A3B1C2" stroke-width="2" stroke-linejoin="round"/></svg></div>' +
         '<div class="vtile ring-t"><div><div class="l">Graduated</div><div class="v" data-count="' + st.grad + '">' + st.grad + '</div><div class="muted" style="font-size:11.5px">to Raydium</div></div>' +
-          '<svg class="ring2" viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="26" fill="none" stroke="#201D2A" stroke-width="7"/><circle cx="32" cy="32" r="26" fill="none" stroke="url(#rg)" stroke-width="7" stroke-linecap="round" stroke-dasharray="' + (C * gradPct / 100).toFixed(1) + ' ' + C.toFixed(1) + '" transform="rotate(-90 32 32)" class="ringarc"/><defs><linearGradient id="rg"><stop offset="0" stop-color="#E8E8EA"/><stop offset="1" stop-color="#A3B1C2"/></linearGradient></defs><g transform="translate(23 23) scale(.75)" fill="#E8E8EA"><path d="M6 3h12l4 6-10 12L2 9z"/></g></svg></div>' +
+          '<svg class="ring2" viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="26" fill="none" stroke="#1E1E1F" stroke-width="7"/><circle cx="32" cy="32" r="26" fill="none" stroke="url(#rg)" stroke-width="7" stroke-linecap="round" stroke-dasharray="' + (C * gradPct / 100).toFixed(1) + ' ' + C.toFixed(1) + '" transform="rotate(-90 32 32)" class="ringarc"/><defs><linearGradient id="rg"><stop offset="0" stop-color="#E8E8EA"/><stop offset="1" stop-color="#A3B1C2"/></linearGradient></defs><g transform="translate(23 23) scale(.75)" fill="#E8E8EA"><path d="M6 3h12l4 6-10 12L2 9z"/></g></svg></div>' +
       '</div>' +
       '<div class="card-s feed"><div class="feed-h"><span class="livedot"></span>Live trades<div class="seg sm">' + [['all', 'All'], ['whale', 'Whales'], ['follow', 'Following']].map(function (f) { return '<button class="' + (S.feedF === f[0] ? 'on' : '') + '" data-act="feedf" data-arg="' + f[0] + '">' + f[1] + '</button>'; }).join('') + '</div></div>' +
         '<div class="feed-list" id="feed">' + feedList() + '</div></div></div>' +
@@ -1206,7 +1254,7 @@
     var vmx = Math.max.apply(null, cs.map(function (c) { return c.v; }));
     var slots = Math.max(cs.length, 44), off0 = (slots - cs.length) * (W / slots), Y = function (v) { return top + (mx - v) / sp * ph; }, cw = W / slots, bw = Math.max(3, cw * 0.62);
     var g = '', pts = [];
-    for (var k = 1; k < 5; k++) g += '<line x1="0" x2="' + W + '" y1="' + (top + k * ph / 5) + '" y2="' + (top + k * ph / 5) + '" stroke="#1A1724" vector-effect="non-scaling-stroke"/>';
+    for (var k = 1; k < 5; k++) g += '<line x1="0" x2="' + W + '" y1="' + (top + k * ph / 5) + '" y2="' + (top + k * ph / 5) + '" stroke="#18181A" vector-effect="non-scaling-stroke"/>';
     var bars = cs.map(function (c, i) {
       var x = off0 + i * cw + cw / 2, up = c.c >= c.o, col = up ? '#3DDC97' : '#F2708A', y1 = Y(Math.max(c.o, c.c)), y2 = Y(Math.min(c.o, c.c));
       pts.push({ x: x, y: Y(c.c), v: c.c, o: c.o, h: c.h, l: c.l });
@@ -1451,10 +1499,10 @@
     } else if (S.tpTab === 'holders') {
       var hs = holdersOf(t), cols = ['#E8E8EA', '#A3B1C2', '#3DDC97', '#FFD15C', '#FF9A4D', '#FF6B8B', '#5CE1E6', '#C4B5FD'];
       var top10 = 0; hs.slice(1, 11).forEach(function (h) { top10 += h.pct; });
-      body = '<div class="hdist">' + hs.slice(0, 9).map(function (h, i) { return '<i style="flex:' + h.pct.toFixed(2) + ';background:' + (i ? cols[(i - 1) % cols.length] : '#3B3650') + '" title="' + (h.label || short(h.a)) + ' ' + h.pct.toFixed(2) + '%"></i>'; }).join('') + '<i style="flex:12;background:#201D2A"></i></div>' +
+      body = '<div class="hdist">' + hs.slice(0, 9).map(function (h, i) { return '<i style="flex:' + h.pct.toFixed(2) + ';background:' + (i ? cols[(i - 1) % cols.length] : '#3A3A3C') + '" title="' + (h.label || short(h.a)) + ' ' + h.pct.toFixed(2) + '%"></i>'; }).join('') + '<i style="flex:12;background:#1E1E1F"></i></div>' +
         '<div class="muted" style="font-size:12.5px;margin:6px 0 12px">Top 10 holders own <b style="color:' + (top10 > 40 ? 'var(--down)' : 'var(--up)') + '">' + top10.toFixed(1) + '%</b> · ' + fmtNum(t.holders) + ' holders</div>' +
-        hs.map(function (h, i) { return '<div class="hrow"><span class="mono muted">' + (i + 1) + '</span>' + (h.label ? '<span class="maker"><span class="av" style="width:20px;height:20px;background:#3B3650"></span><span>' + h.label + '</span><span class="bdg pool">' + (h.a === 'curve' ? 'CURVE' : 'POOL') + '</span></span>' : makerHTML(h.a, t)) +
-          '<span class="hbar"><i style="width:' + Math.min(100, h.pct * 2).toFixed(1) + '%;background:' + (i ? cols[(i - 1) % cols.length] : '#3B3650') + '"></i></span><span class="mono r">' + h.pct.toFixed(2) + '%</span></div>'; }).join('');
+        hs.map(function (h, i) { return '<div class="hrow"><span class="mono muted">' + (i + 1) + '</span>' + (h.label ? '<span class="maker"><span class="av" style="width:20px;height:20px;background:#3A3A3C"></span><span>' + h.label + '</span><span class="bdg pool">' + (h.a === 'curve' ? 'CURVE' : 'POOL') + '</span></span>' : makerHTML(h.a, t)) +
+          '<span class="hbar"><i style="width:' + Math.min(100, h.pct * 2).toFixed(1) + '%;background:' + (i ? cols[(i - 1) % cols.length] : '#3A3A3C') + '"></i></span><span class="mono r">' + h.pct.toFixed(2) + '%</span></div>'; }).join('');
     } else {
       var tl = topTraders(t), maxAbs = Math.max.apply(null, tl.map(function (e) { return Math.abs(e.pnl); }).concat([0.01])), maxB = Math.max.apply(null, tl.map(function (e) { return Math.max(e.b, e.s); }).concat([0.01]));
       var medal = ['#FFD15C', '#D7DEEA', '#E0A36B'], order = [1, 0, 2];
@@ -1614,7 +1662,7 @@
     if (S.palOpen && !fid) { var p = document.getElementById('pal'); if (p) p.focus(); }
     if (S.screen === 'home' && !S.loading && firstCount) { firstCount = false; countUp(); }
     if (typeof reveal === 'function') reveal();
-    setTimeout(function () { navInd(); }, 0);
+    setTimeout(function () { navInd(); labKick(); }, 0);
     mFit(); if (S.screen === 'home') mSetStep(M.step);
   }
   function countUp() {
@@ -1955,7 +2003,7 @@
       ['tax', POS.tax, 'TAX STAMP', '#FFD15C', '2', 'Set the tax', '0–10%, shown to everyone'],
       ['scan', POS.scan, 'RUG SCANNER', '#F2708A', '3', 'Rug check', 'Bad coins get thrown out'],
       ['pump', POS.pump, 'PUMP', '#3DDC97', '4', 'Traders pump it', 'Every buy pushes the price up'],
-      ['launch', POS.launch, 'LAUNCHER', '#F1ECFF', '5', 'Graduate', 'Hits 100% → Raydium']
+      ['launch', POS.launch, 'LAUNCHER', '#F3F0EA', '5', 'Graduate', 'Hits 100% → Raydium']
     ];
     var html = mach.map(function (m) {
       return '<div class="mach m-' + m[0] + '" id="mach-' + m[0] + '" style="left:' + m[1] + '%;--mc:' + m[3] + '">' +
