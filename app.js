@@ -862,6 +862,7 @@
     return [r[0], r[1]]; }
   function ageTxt(m) { return m < 60 ? Math.round(m) + 'm' : m < 1440 ? (m / 60).toFixed(m < 600 ? 1 : 0).replace('.0', '') + 'h' : Math.round(m / 1440) + 'd'; }
   function rLabel(k) {
+    if (typeof RS !== 'undefined' && RS[k]) return rsLabel(k);
     var r = S.r[k], d = RDEF[k], v = rv(k);
     if (r[0] === d[0] && r[1] === d[1]) return 'Any';
     function one(x, isMax) {
@@ -1011,15 +1012,69 @@
     for (var i = 0; i < bs.length; i++) bs[i].classList.toggle('in', !w.any && i >= w.a && i <= w.b);
     if (win) { win.setAttribute('style', w.style); win.classList.toggle('any', w.any); }
   }
+  // ---- snap range slider: single-value stops, two handles ----
+  var mcS = function (k) { return 20 * Math.log10(k); };
+  var RS = {
+    mc: [[0, '0'], [mcS(5), '5K'], [mcS(10), '10K'], [mcS(20), '20K'], [mcS(30), '30K'], [mcS(50), '50K'], [40, '100K'], [mcS(250), '250K'], [60, '1M'], [100, '∞']],
+    age: [[0, '0'], [ageS(5), '5m'], [ageS(15), '15m'], [ageS(30), '30m'], [ageS(60), '1h'], [ageS(360), '6h'], [ageS(1440), '1d'], [ageS(10080), '7d'], [100, '∞']],
+    prog: [[0, '0'], [10, '10'], [25, '25'], [50, '50'], [75, '75'], [90, '90'], [100, '100']],
+    tax: [[0, '0'], [1, '1'], [2, '2'], [3, '3'], [4, '4'], [5, '5'], [6, '6'], [7, '7'], [8, '8'], [9, '9'], [10, '10']]
+  };
+  var RSU = { mc: ['$', ''], age: ['', ''], prog: ['', '%'], tax: ['', '%'] };
+  function rsIdx(k) { var st = RS[k], r = S.r[k], a = 0, b = st.length - 1, da = 1e9, db = 1e9;
+    st.forEach(function (x, i) { var d0 = Math.abs(x[0] - r[0]), d1 = Math.abs(x[0] - r[1]); if (d0 < da) { da = d0; a = i; } if (d1 <= db) { db = d1; b = i; } });
+    return [a, b]; }
+  function rsTxt(k, i) { var l = RS[k][i][1], u = RSU[k]; return l === '∞' ? '∞' : u[0] + l + u[1]; }
+  function rsLabel(k) { var ix = rsIdx(k), n = RS[k].length - 1;
+    if (ix[0] === 0 && ix[1] === n) return 'Any';
+    if (ix[0] === 0) return '≤ ' + rsTxt(k, ix[1]);
+    if (ix[1] === n) return '≥ ' + rsTxt(k, ix[0]);
+    if (ix[0] === ix[1]) return rsTxt(k, ix[0]);
+    return rsTxt(k, ix[0]) + ' – ' + rsTxt(k, ix[1]); }
+  function rsPct(k, i) { return i / (RS[k].length - 1) * 100; }
   function inlineRange(k) {
-    var c = RCFG[k], on = rLabel(k) !== 'Any', sel = sfSel(k);
+    var c = RCFG[k], ix = rsIdx(k), on = rLabel(k) !== 'Any', n = RS[k].length;
     var ic = { mc: '$', age: '◷', prog: '▲', tax: '%' }[k];
-    var bt = SB[k].map(function (x, i) { var o = sel[0] > -1 && i >= sel[0] && i <= sel[1];
-      return '<button class="sf-b' + (o ? ' in' : '') + '" data-sfb="' + k + '|' + i + '"' + (k === 'tax' ? ' style="--tc:' + TAXC[i] + '"' : '') + '>' + x[0] + '</button>'; }).join('');
-    var w = sfWin(k);
-    return '<div class="irange sf ir-' + k + (on ? ' on' : '') + '"><div class="ir-h"><span><i>' + ic + '</i>' + c.lab + '</span><b id="fcl-' + k + '">' + rLabel(k) + '</b></div>' +
-      '<div class="sf-bar" data-sfbar="' + k + '"><span class="sf-win' + (w.any ? ' any' : '') + '" style="' + w.style + '"><i class="sf-h h0" data-sfh="0"></i><i class="sf-h h1" data-sfh="1"></i></span>' + bt + '</div></div>';
+    var lab = RS[k].map(function (x, i) { return '<span class="rs-t' + (i >= ix[0] && i <= ix[1] && on ? ' in' : '') + '" style="left:' + rsPct(k, i) + '%' + (k === 'tax' ? ';--tc:' + taxBg(i) : '') + '">' + x[1] + '</span>'; }).join('');
+    return '<div class="irange rsx ir-' + k + (on ? ' on' : '') + '"><div class="ir-h"><span><i>' + ic + '</i>' + c.lab + '</span><b id="fcl-' + k + '">' + rLabel(k) + '</b></div>' +
+      '<div class="rs" data-rs="' + k + '" style="--a:' + rsPct(k, ix[0]) + '%;--b:' + rsPct(k, ix[1]) + '%"><div class="rs-rail"><div class="rs-track"><i class="rs-fill"></i>' +
+      RS[k].map(function (x, i) { return '<b class="rs-dot" style="left:' + rsPct(k, i) + '%"></b>'; }).join('') + '</div>' +
+      '<span class="rs-h h0" data-h="0"><em>' + rsTxt(k, ix[0]) + '</em></span><span class="rs-h h1" data-h="1"><em>' + rsTxt(k, ix[1]) + '</em></span></div>' +
+      '<div class="rs-labs">' + lab + '</div></div></div>';
   }
+  var rsD = null;
+  function rsSet(el, k, a, b, live) {
+    el.style.setProperty('--a', (typeof a === 'number' ? a : 0) + '%'); el.style.setProperty('--b', b + '%');
+  }
+  function rsCommit(k, ia, ib) {
+    var st = RS[k]; S.r[k] = [st[ia][0], st[ib][0]];
+    var box = document.querySelector('.ir-' + k); if (box) {
+      box.querySelectorAll('.rs-t').forEach(function (e, i) { e.classList.toggle('in', i >= ia && i <= ib && !(ia === 0 && ib === st.length - 1)); });
+      var h = box.querySelectorAll('.rs-h em'); h[0].textContent = rsTxt(k, ia); h[1].textContent = rsTxt(k, ib);
+    }
+    refreshGrid();
+  }
+  document.addEventListener('pointerdown', function (e) {
+    var el = e.target.closest && e.target.closest('[data-rs]'); if (!el || e.button > 0) return;
+    e.preventDefault(); var k = el.getAttribute('data-rs'), rail = el.querySelector('.rs-rail').getBoundingClientRect(), n = RS[k].length - 1, ix = rsIdx(k);
+    var f = Math.max(0, Math.min(1, (e.clientX - rail.left) / rail.width)), pa = ix[0] / n, pb = ix[1] / n;
+    var h = e.target.closest('[data-h]'), which = h ? +h.getAttribute('data-h') : (Math.abs(f - pa) < Math.abs(f - pb) || (pa === pb && f < pa)) ? 0 : 1;
+    rsD = { el: el, k: k, rail: rail, n: n, which: which, ia: ix[0], ib: ix[1] };
+    el.classList.add('drag'); el.classList.toggle('w0', which === 0); el.classList.toggle('w1', which === 1);
+    try { el.setPointerCapture(e.pointerId); } catch (er) {}
+    rsMove(e.clientX);
+  });
+  function rsMove(x) {
+    var d = rsD, f = Math.max(0, Math.min(1, (x - d.rail.left) / d.rail.width)), idx = Math.round(f * d.n);
+    if (d.which === 0) { f = Math.min(f, d.ib / d.n); idx = Math.min(idx, d.ib); d.el.style.setProperty('--a', (f * 100) + '%'); if (idx !== d.ia) { d.ia = idx; rsCommit(d.k, d.ia, d.ib); } }
+    else { f = Math.max(f, d.ia / d.n); idx = Math.max(idx, d.ia); d.el.style.setProperty('--b', (f * 100) + '%'); if (idx !== d.ib) { d.ib = idx; rsCommit(d.k, d.ia, d.ib); } }
+  }
+  document.addEventListener('pointermove', function (e) { if (rsD) rsMove(e.clientX); });
+  document.addEventListener('pointerup', function () {
+    if (!rsD) return; var d = rsD; rsD = null; d.el.classList.remove('drag');
+    d.el.style.setProperty('--a', (d.ia / d.n * 100) + '%'); d.el.style.setProperty('--b', (d.ib / d.n * 100) + '%');
+    var box = d.el.closest('.irange'); if (box) box.classList.toggle('on', rLabel(d.k) !== 'Any');
+  });
   var sfD = null;
   function sfIdx(bar, k, x) { var r = bar.getBoundingClientRect(), n = SB[k].length; return Math.max(0, Math.min(n - 1, Math.floor((x - r.left) / r.width * n))); }
   document.addEventListener('pointerdown', function (e) {
