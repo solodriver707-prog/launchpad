@@ -1,4 +1,4 @@
-/* memzy — no build step, no dependencies.
+/* treid — no build step, no dependencies.
    Real: Solana wallet connection (Wallet Standard) + devnet SOL balance & airdrop.
    Simulated: tokens, prices, trades, launches (clearly marked as beta/simulated in the footer). */
 (function () {
@@ -64,7 +64,7 @@
     dice: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8.5" cy="8.5" r="1.3" fill="currentColor"/><circle cx="15.5" cy="15.5" r="1.3" fill="currentColor"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/></svg>',
     up: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></svg>'
   };
-  var LOGO = '<span class="logo" aria-hidden="true"><svg viewBox="0 0 64 64"><g class="mz-body"><path d="M13 50 V33 Q13 24 22 24 Q31 24 31 33 V50 M31 33 Q31 24 40 24 Q49 24 49 33 V50" fill="none" stroke="#0A0A0A" stroke-width="7.5" stroke-linecap="round" stroke-linejoin="round"/></g><g class="mz-eyes"><circle cx="22" cy="13" r="6" fill="#fff"/><circle cx="40" cy="13" r="6" fill="#fff"/><g class="mz-pup"><circle cx="23" cy="14" r="2.6" fill="#0A0A0A"/><circle cx="41" cy="14" r="2.6" fill="#0A0A0A"/></g></g></svg></span>';
+  var LOGO = '<span class="logo" aria-hidden="true"><svg viewBox="0 0 64 64"><path d="M27 11 V41 Q27 52 38 52 H46" fill="none" stroke="#0A0A0A" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/><path class="tr-line" d="M12 33 L21 28 L29 32 L46 19" fill="none" stroke="#0A0A0A" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" pathLength="100"/><circle class="tr-dot" cx="47" cy="18.5" r="4.6" fill="#fff"/></svg></span>';
 
   // ================= DATA =================
   function mk(name, tick, kind, skinI, bgI, eyes, mouth, acc, buy, sell, pair, mcN, c24, prog, ageM, holders, soc, rewards, burn) {
@@ -303,7 +303,7 @@
       right = '<button class="btn sec" data-act="openWallet">Connect wallet</button>';
     }
     return '<header><div class="wrap hdr">' +
-      '<button class="brand" data-act="home" aria-label="memzy home">' + LOGO + '<span class="brand-name">mem<span>zy</span></span></button><span class="hlive"><span class="livedot"></span><b class="mono" id="hlive-n">' + all().length + '</b> live</span>' +
+      '<button class="brand" data-act="home" aria-label="treid home">' + LOGO + '<span class="brand-name">tre<span>i</span>d</span></button><span class="hlive"><span class="livedot"></span><b class="mono" id="hlive-n">' + all().length + '</b> live</span>' +
       '<nav class="navlinks"><span class="nav-ind" id="nav-ind"></span><button class="' + (S.screen === 'home' ? 'on' : '') + '" data-act="home">Board</button><button class="' + (S.screen === 'create' ? 'on' : '') + '" data-act="create">Create</button><button class="' + (S.screen === 'leaders' ? 'on' : '') + '" data-act="leaders">Leaderboard</button><button data-act="how">How it works</button></nav>' +
       '<button class="searchbtn" data-act="palette">' + I.search + '<span>Search tokens or paste CA</span><span class="kbd">Ctrl K</span></button>' +
       '<div class="hdr-right"><button class="wl-btn' + (S.screen === 'watch' ? ' on' : '') + '" data-act="watchPage" aria-label="Watchlist" data-tip="Your watchlist">' + I.star(S.watch.length > 0) + (S.watch.length ? '<b class="mono" id="wl-n">' + S.watch.length + '</b>' : '') + '</button><button class="btn pri" data-act="create">+ Launch token</button>' + right + '</div>' +
@@ -857,7 +857,7 @@
           (id === 'All' ? 'All ' + CATS.filter(function (c) { return c[0] === S.cat; })[0][1].toLowerCase() : coinHTML(id, 22) + '<span>' + esc(pairLabel(id)) + '</span><span class="cnt">' + n + '</span>') + '</button>';
       }).join('') + '</div>';
     }
-    return '<div class="pair-head"><span class="kicker">PAIRED WITH</span><span class="muted" style="font-size:13px">Coins on memzy trade against anything — drag to explore</span></div>' +
+    return '<div class="pair-head"><span class="kicker">PAIRED WITH</span><span class="muted" style="font-size:13px">Coins on treid trade against anything — drag to explore</span></div>' +
       '<div class="cats drag-scroll">' + tiles + '</div>' + sub + '<div style="height:18px"></div>';
   }
 
@@ -1172,7 +1172,7 @@
     });
     if (g && S.view !== 'bubbles') g.innerHTML = list.length ? list.map(function (t) { return card(t); }).join('') : '<div class="empty"><b style="font-size:19px">No coins in this range</b><span class="muted">Widen a slider or hit Reset.</span><button class="btn pri" data-act="reset">Reset filters</button></div>';
   }
-  var SLOGANS = ['Your meme.', 'Your market.'];
+  var SLOGANS = ['The market', 'is yours.'];
   function tcHTML(t, k) {
     var c = chg(t), tm = Math.max(t.buy, t.sell), id = esc(t.tick);
     return '<div class="tc-in" role="button" tabindex="0" data-act="open" data-arg="' + id + '">' +
@@ -1195,8 +1195,8 @@
     return '<section class="intro3" id="intro"><div class="aurora"><span class="a1"></span><span class="a2"></span><span class="a3"></span></div>' +
       '<div class="i3-l"><div class="i3-kick"><span class="livedot"></span><b data-count="' + st.tokens + '">' + st.tokens + '</b> coins live <i>·</i> <b data-count="' + Math.round(st.vol) + '" data-fmt="k">' + fmtK(st.vol) + '</b> volume <i>·</i> <b id="i2-tr">' + fmtNum(st.trades) + '</b> trades</div>' +
         '<h1 class="i3-h">' + SLOGANS.map(function (w, k) { return '<span style="--k:' + k + '">' + w + '</span>'; }).join(' ') + '</h1>' +
-        '<p class="i3-p"><b>Where memes become markets.</b> Launch anything — pair it with SOL, gold, stocks or another meme. Trade everything, tax always upfront.</p>' +
-        '<div class="i3-cta"><button class="btn pri" data-act="create">Launch anything <span aria-hidden="true">→</span></button><button class="btn sec" data-act="board">Trade everything ↓</button></div></div>' +
+        '<p class="i3-p"><b>Trade anything. Meme everything.</b> Anything can be a market — pair any coin with SOL, gold, stocks or another meme.</p>' +
+        '<div class="i3-cta"><button class="btn pri" data-act="create">Launch a coin <span aria-hidden="true">→</span></button><button class="btn sec" data-act="board">Trade anything ↓</button></div></div>' +
       '<div class="tc" id="tc">' + tcHTML(t0, tcI) + '<span class="tc-timer"></span></div>' +
       '<div class="i2-live"><div class="i2-lh"><span class="livedot"></span>JUST LAUNCHED<span class="muted mono" id="i2-cnt">' + st.tokens + ' live</span></div><div id="i2-fresh">' + fresh.map(i2Row).join('') + '</div></div>' +
     '</section>';
@@ -1223,7 +1223,7 @@
     var grid = (!S.loading && S.view === 'bubbles') ? bubblesHTML(list) : '<section class="grid" id="grid">' + (S.loading ? [0, 1, 2, 3, 4, 5].map(skeletonCard).join('') : list.length ? list.map(function (t) { return card(t); }).join('') :
       '<div class="empty"><b style="font-size:19px">No tokens match these filters</b><span class="muted">Loosen the tax or market cap filters.</span><button class="btn pri" data-act="reset">Reset filters</button></div>') + '</section>';
 
-    var how = '<section id="how" style="margin-top:56px"><h2 class="h2" style="margin-bottom:16px">How memzy works</h2><div class="row">' +
+    var how = '<section id="how" style="margin-top:56px"><h2 class="h2" style="margin-bottom:16px">How treid works</h2><div class="row">' +
       [['01', 'Pick a name & logo', 'Use the built-in mascot builder or upload your own image. Takes under a minute.'],
        ['02', 'Set your buy & sell tax', 'From 0% to 10%. The tax is shown on every card in colour, so traders always know the cost.'],
        ['03', 'Launch on a bonding curve', 'Price rises as people buy. When the curve fills, liquidity graduates to Raydium automatically.']].map(function (s) {
@@ -1269,7 +1269,7 @@
       '<line x1="0" x2="' + W + '" y1="' + ly.toFixed(1) + '" y2="' + ly.toFixed(1) + '" stroke="' + lcol + '" stroke-opacity=".6" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"/></svg>' + labels +
       '<span class="lastlab" style="top:' + (ly / H * 100).toFixed(2) + '%;background:' + lcol + '">' + yLabel(last.c) + '</span>' +
       '<div class="xh" id="xh"></div><div class="xh-dot" id="xhd" style="background:#fff"></div><div class="xh-tip" id="xht"></div>' +
-      '<span class="wm">' + LOGO + 'memzy.fun</span>';
+      '<span class="wm">' + LOGO + 'treid.fun</span>';
   }
 
   // wallets pool so makers repeat (enables top traders / holders / maker filter)
@@ -1646,7 +1646,7 @@
   }
 
   function footer() {
-    return '<footer><div class="wrap foot"><span style="display:flex;align-items:center;gap:8px"><span style="width:22px;height:22px;display:inline-block">' + LOGO + '</span><b style="color:var(--soft)">memzy<span class="muted" style="font-weight:600">.fun</span></b></span>' +
+    return '<footer><div class="wrap foot"><span style="display:flex;align-items:center;gap:8px"><span style="width:22px;height:22px;display:inline-block">' + LOGO + '</span><b style="color:var(--soft)">treid<span class="muted" style="font-weight:600">.fun</span></b></span>' +
       '<span>Beta · market data on this page is simulated · wallet connects to Solana ' + CLUSTER + '</span>' +
       '<span style="margin-left:auto;display:flex;gap:16px"><a href="#machine" data-act="how">How it works</a><a href="#" data-act="social">X</a><a href="#" data-act="social">Telegram</a><a href="#" data-act="social">Terms</a></span></div></footer>';
   }
@@ -1917,7 +1917,7 @@
           soc: !!(c.x || c.tg || c.web), links: { web: linkOf(c.web), x: linkOf(c.x), tg: linkOf(c.tg), demo: false }, rewards: false, burn: false, ca: fakeCA(), vol: 0, hist: [5, 5], desc: c.desc.trim(), creator: S.account };
         S.created.unshift(nt); saveCreated();
         S.c = { name: '', tick: '', desc: '', x: '', tg: '', web: '', pair: 'SOL', buy: 0, sell: 0, img: null, spec: { kind: pick(A.KINDS), skin: pick(A.SKINS), bg: pick(A.BGS), eyes: 'normal', mouth: 'smile', acc: 'none' } };
-        openToken(nt.tick); confetti(); toast('$' + nt.tick + ' is live on memzy', nt); break;
+        openToken(nt.tick); confetti(); toast('$' + nt.tick + ' is live on treid', nt); break;
     }
   });
 

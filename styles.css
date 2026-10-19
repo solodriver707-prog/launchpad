@@ -2030,7 +2030,7 @@ header::before{content:"";position:absolute;left:0;right:0;bottom:-1px;height:1p
  .toolbar .seg::-webkit-scrollbar{display:none}
  .toolbar .seg button{white-space:nowrap}
 }
-/* ===================== memzy branding ===================== */
+/* ===================== (old mascot logo) ===================== */
 .logo .lg-rise{display:none}
 .logo svg{-webkit-mask-image:none!important;mask-image:none!important;overflow:visible}
 .logo::after{animation-duration:6s}
@@ -2194,7 +2194,7 @@ header::before{content:"";position:absolute;left:0;right:0;bottom:-1px;height:1p
 @keyframes lbPop{from{transform:scale(0)}}
 @media (max-width:900px){.lab-stage{grid-template-columns:1fr;grid-template-rows:380px 40px 320px;height:auto}.lab-pipe{margin:0}.lab-pipe svg{display:none}.lab-pipe>span{transform:translate(-50%,-50%)}}
 /* =====================================================================
-   memzy · LAVA — black, bone, molten orange. Editorial + instrument-grade.
+   treid · LAVA — black, bone, molten orange. Editorial + instrument-grade.
    ===================================================================== */
 :root{
   --bg:#070707; --bg2:#0C0C0C; --s1:#111111; --s2:#171717; --s3:#1E1E1E;
@@ -2274,3 +2274,11 @@ header::before{background:linear-gradient(90deg,transparent,#FF5A1F,transparent)
 .rs-h em{color:#0A0A0A}
 /* scrollbars */
 *{scrollbar-color:#2C2C2C transparent}
+/* ===================== treid mark: "t" whose crossbar is a live chart ===================== */
+.tr-line{stroke-dasharray:100;animation:trDraw 3.6s cubic-bezier(.6,0,.2,1) infinite}
+.tr-dot{transform-origin:47px 18.5px;animation:trDot 3.6s cubic-bezier(.6,0,.2,1) infinite}
+@keyframes trDraw{0%{stroke-dashoffset:100}35%,85%{stroke-dashoffset:0}100%{stroke-dashoffset:-100}}
+@keyframes trDot{0%,25%{transform:scale(0)}38%{transform:scale(1.35)}46%,82%{transform:scale(1)}92%,100%{transform:scale(0)}}
+.brand:hover .tr-line,.brand:hover .tr-dot{animation-duration:1.4s}
+.brand-name{font-size:24px;letter-spacing:-.03em}
+.brand-name span{position:relative}
