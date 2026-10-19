@@ -322,6 +322,21 @@
     return h.map(function (v, i) { return (i * 110 / (h.length - 1)).toFixed(1) + ',' + (36 - (v - mn) / sp * 32).toFixed(1); }).join(' ');
   }
 
+  function linkOf(u) { if (!u) return null; u = String(u).trim(); if (!u) return null; if (!/^https?:\/\//i.test(u)) u = 'https://' + u; return /^https:\/\/[^\s"'<>]+$/i.test(u) ? u : null; }
+  function socialsOf(t) {
+    if (t.links) return t.links;
+    if (!t.soc) return { web: null, x: null, tg: null, demo: true };
+    var h = hash(t.tick);
+    return { web: h % 3 !== 0 ? '#' : null, x: '#', tg: (h >> 2) % 2 === 0 ? '#' : null, demo: true };
+  }
+  function socialsHTML(t, big) {
+    var so = socialsOf(t), items = [['web', 'Website', I.web], ['x', 'X', I.x], ['tg', 'Telegram', I.tg]];
+    return '<div class="soc' + (big ? ' big' : '') + '">' + items.map(function (it) {
+      var has = !!so[it[0]];
+      return has ? '<button class="sbtn2 on" data-act="soc" data-arg="' + esc(t.tick) + '|' + it[0] + '" aria-label="' + it[1] + '">' + it[2] + '<span>' + it[1] + '</span></button>' :
+        '<span class="sbtn2 off" title="No ' + it[1] + '">' + it[2] + '<span>' + it[1] + '</span></span>';
+    }).join('') + '</div>';
+  }
   function freshness(t) {
     var m = (Date.now() - t.born) / 60000;
     if (m < 5) return { cls: 'f0', lab: 'JUST LAUNCHED' };
@@ -349,7 +364,7 @@
         '<span class="tc-name"><b>' + esc(t.name) + '</b><span>$' + esc(t.tick) + '</span></span></button>' +
         '<div class="pairmini" data-tip="Paired with ' + esc(pairInfo(t.pair).name) + '">' + coinHTML(t.pair, 26) + '<small>PAIR</small><b>' + esc(pairLabel(t.pair)) + '</b></div>' +
         '<div class="tax" style="background:' + taxBg(tmax) + '" data-tip="Buy ' + t.buy + '% · Sell ' + t.sell + '%"><small>TAX</small><b>' + tmax + '%</b></div></div>' +
-      flags +
+      flags + socialsHTML(t) +
       '<div class="tc-mid"><div class="tc-mc"><div class="v"><span data-mc="' + esc(t.tick) + '" data-v="' + fmtK(t.mcN) + '">' + fmtK(t.mcN) + '</span>' +
         '<span class="chgpill ' + (c >= 0 ? 'up' : 'down') + '" data-chg="' + esc(t.tick) + '">' + chgTxt(c) + '</span></div><div class="l">market cap · ' + fmtNum(t.holders) + ' holders · vol ' + fmtK(t.vol) + '</div></div></div>' +
       '<div class="tc-chart ' + (c >= 0 ? 'up' : 'down') + '" data-cchart="' + esc(t.tick) + '">' + cardChart(t) + '</div>' +
@@ -910,7 +925,7 @@
     var head = '<section class="card-s tp-head2">' + avatarHTML(t, 84) +
       '<div class="tp-id"><div class="title-xl" style="margin:0;font-size:30px">' + esc(t.name) + ' <span class="tk">$' + id + '</span></div>' +
         '<div class="hs-pills" style="margin-top:8px"><button class="pill copy2" data-act="ca" data-arg="' + id + '">CA ' + esc(short(t.ca)) + ' ' + I.copy + '</button><span class="pill" style="padding-left:11px">created <span data-t="' + t.born + '">&nbsp;' + ago(t.born) + '</span>&nbsp;ago by&nbsp;' + makerHTML(devOf(t), t) + '</span>' +
-        '<button class="iconbtn" data-act="social" aria-label="X">' + I.x + '</button><button class="iconbtn" data-act="social" aria-label="Telegram">' + I.tg + '</button><button class="iconbtn" data-act="social" aria-label="Website">' + I.web + '</button>' +
+        socialsHTML(t, true) +
         '<button class="iconbtn" data-act="star" data-arg="' + id + '" aria-label="Watchlist" aria-pressed="' + on + '">' + I.star(on) + '</button><button class="iconbtn" data-act="share" aria-label="Copy link"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8h16v-8M12 3v13M7 8l5-5 5 5"/></svg></button></div></div>' +
       '<div class="tp-key"><div class="tax" style="background:' + taxBg(tmax) + ';padding:9px 14px"><small>TAX</small><b style="font-size:24px">' + t.buy + '/' + t.sell + '</b><small style="letter-spacing:.04em;font-size:9px">BUY/SELL %</small></div>' +
         '<button class="pairbig" data-act="pairOpen" data-arg="' + esc(t.pair) + '">' + coinHTML(t.pair, 42) + '<div><small>PAIRED WITH</small><b>' + esc(pairLabel(t.pair)) + '</b><span>' + esc(pairInfo(t.pair).name) + '</span></div></button></div></section>';
@@ -1267,6 +1282,8 @@
       case 'clearImg': setC({ img: null }); break;
       case 'cpair': setC({ pair: arg }); break;
       case 'cat': set({ cat: arg, pair: 'All' }); break;
+      case 'soc': var sp0 = arg.split('|'), st0 = find(sp0[0]), so0 = st0 && socialsOf(st0), u0 = so0 && so0[sp0[1]];
+        if (so0 && !so0.demo && u0) window.open(u0, '_blank', 'noopener'); else toast('Demo coin — its ' + ({ web: 'website', x: 'X account', tg: 'Telegram' })[sp0[1]] + ' opens here once real coins go live', st0); break;
       case 'quick': var qq0 = QUICK.filter(function (x) { return x[0] === arg; })[0]; if (qq0 && qq0[2]) set({ cat: pairInfo(qq0[2]).cat, pair: qq0[2], view: 'grid' }); else set({ cat: arg, pair: 'All', view: 'grid' }); setTimeout(function () { var bd = document.getElementById('board'); if (bd) bd.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 30); break;
       case 'feedf': S.feedF = arg; render(); break;
       case 'leaders': set({ screen: 'leaders', palOpen: false }); window.scrollTo(0, 0); break;
@@ -1321,7 +1338,7 @@
         if (!c.name.trim() || c.tick.length < 2) { toast('Add a name and a ticker (2+ characters)'); break; }
         if (find(c.tick)) { toast('$' + c.tick + ' is already taken'); break; }
         var nt = { name: c.name.trim(), tick: c.tick, spec: c.spec, img: c.img, buy: c.buy, sell: c.sell, pair: c.pair, mcN: 5, mc0: 5, prog: 1, born: Date.now(), holders: 1,
-          soc: !!(c.x || c.tg || c.web), rewards: false, burn: false, ca: fakeCA(), vol: 0, hist: [5, 5], desc: c.desc.trim(), creator: S.account };
+          soc: !!(c.x || c.tg || c.web), links: { web: linkOf(c.web), x: linkOf(c.x), tg: linkOf(c.tg), demo: false }, rewards: false, burn: false, ca: fakeCA(), vol: 0, hist: [5, 5], desc: c.desc.trim(), creator: S.account };
         S.created.unshift(nt); saveCreated();
         S.c = { name: '', tick: '', desc: '', x: '', tg: '', web: '', pair: 'SOL', buy: 0, sell: 0, img: null, spec: { kind: pick(A.KINDS), skin: pick(A.SKINS), bg: pick(A.BGS), eyes: 'normal', mouth: 'smile', acc: 'none' } };
         openToken(nt.tick); confetti(); toast('$' + nt.tick + ' is live on GIGAPAD', nt); break;
