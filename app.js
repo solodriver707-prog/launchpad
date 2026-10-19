@@ -359,7 +359,7 @@
   function riskTiles(t) {
     var r = riskMetrics(t);
     return '<div class="risk">' + r.map(function (m) {
-      return '<span class="rk-t ' + m.lv + '" data-tip="' + esc(m.tip) + '"><span class="rk-l"><i></i>' + m.lab + '</span><b class="mono">' + m.val + '</b></span>';
+      return '<span class="rk-t lv-' + m.lv + '" data-tip="' + esc(m.tip) + '"><span class="rk-l"><i></i>' + m.lab + '</span><b class="mono">' + m.val + '</b></span>';
     }).join('') + '</div>';
   }
   function redFlags(t) {
@@ -1027,7 +1027,7 @@
     var safety = '<section class="card-s panel safety"><div style="display:flex;justify-content:space-between;align-items:center"><b>What we can see</b><span class="sf-sum ' + (warnS ? 'r' : cautS ? 'y' : 'g') + '">' + (warnS ? warnS + ' warning' + (warnS > 1 ? 's' : '') : cautS ? cautS + ' to watch' : 'Nothing unusual seen') + '</span></div>' +
       rmS.map(function (m) {
         var w = m.val === 'SOLD' ? 100 : Math.min(100, parseFloat(m.val) * (m.k === 'top' ? 1.4 : m.k === 'dev' ? 9 : 6));
-        return '<div class="sf-row" data-tip="' + esc(m.tip) + '"><div class="sf-top"><span class="rk-dot ' + m.lv + '"></span><span>' + m.lab.charAt(0) + m.lab.slice(1).toLowerCase() + '</span><b class="mono">' + m.val + '</b><span class="sf-tag ' + ({ g: 'ok', y: 'mid', r: 'bad' })[m.lv] + '">' + lvTxt[m.lv] + '</span></div><div class="sf-bar"><i class="' + ({ g: 'ok', y: 'mid', r: 'bad' })[m.lv] + '" style="width:' + w.toFixed(0) + '%"></i></div></div>';
+        return '<div class="sf-row" data-tip="' + esc(m.tip) + '"><div class="sf-top"><span class="rk-dot lv-' + m.lv + '"></span><span>' + m.lab.charAt(0) + m.lab.slice(1).toLowerCase() + '</span><b class="mono">' + m.val + '</b><span class="sf-tag ' + ({ g: 'ok', y: 'mid', r: 'bad' })[m.lv] + '">' + lvTxt[m.lv] + '</span></div><div class="sf-bar"><i class="' + ({ g: 'ok', y: 'mid', r: 'bad' })[m.lv] + '" style="width:' + w.toFixed(0) + '%"></i></div></div>';
       }).join('') +
       '<div class="sf-row sf-flags"><span class="sf-ok">✓ Mint authority revoked</span><span class="sf-ok">✓ Freeze authority revoked</span><span class="' + (t.prog >= 100 ? 'sf-ok">✓ LP burned' : 'sf-mid">• Liquidity held by bonding curve') + '</span><span class="' + (Math.max(t.buy, t.sell) >= 6 ? 'sf-bad">! High tax ' + Math.max(t.buy, t.sell) + '%' : 'sf-ok">✓ Tax ' + Math.max(t.buy, t.sell) + '% or less') + '</span></div>' +
       '<span class="note" style="text-align:left">These checks only show what is visible on-chain. They are not a guarantee — always do your own research. Simulated in this beta.</span></section>';
