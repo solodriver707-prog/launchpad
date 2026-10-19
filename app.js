@@ -322,26 +322,40 @@
     return h.map(function (v, i) { return (i * 110 / (h.length - 1)).toFixed(1) + ',' + (36 - (v - mn) / sp * 32).toFixed(1); }).join(' ');
   }
 
+  function freshness(t) {
+    var m = (Date.now() - t.born) / 60000;
+    if (m < 5) return { cls: 'f0', lab: 'JUST LAUNCHED' };
+    if (m < 60) return { cls: 'f1', lab: 'NEW' };
+    if (m < 1440) return { cls: 'f2', lab: 'TODAY' };
+    return { cls: 'f3', lab: 'LIVE FOR' };
+  }
+  function redFlags(t) {
+    var f = [], h = hash(t.tick), tmax = Math.max(t.buy, t.sell), top10 = 18 + (h % 50);
+    if (tmax >= 6) f.push('High tax ' + tmax + '%');
+    if (t.sell - t.buy >= 3) f.push('Sell tax ' + t.sell + '%');
+    if (top10 > 48) f.push('Top 10 hold ' + top10 + '%');
+    if ((h >> 4) % 6 === 0 && t.prog < 100) f.push('Dev sold');
+    if (!t.soc && t.prog > 20) f.push('No socials');
+    return f;
+  }
   function card(t, opts) {
     opts = opts || {};
-    var tmax = Math.max(t.buy, t.sell), on = S.watch.indexOf(t.tick) !== -1, c = chg(t), done = t.prog >= 100;
-    var badges = (t.rewards ? '<span class="tag i" data-tip="Holders earn a share of trading fees">' + I.gift + ' Rewards</span>' : '') +
-      (t.burn ? '<span class="tag i" data-tip="Platform revenue buys back & burns">' + I.flame + ' Burn</span>' : '');
-    return '<article class="tcard' + (S.newTick === t.tick ? ' is-new' : '') + '" data-card="' + esc(t.tick) + '">' +
-      '<div class="tc-top"><button class="tc-id" data-act="open" data-arg="' + esc(t.tick) + '">' + avatarHTML(t, 58) +
-        '<span class="tc-name"><b>' + esc(t.name) + (chg(t) > 50 ? ' <span class="hot">HOT</span>' : '') + '</b><span>$' + esc(t.tick) + ' · <span data-t="' + t.born + '">' + ago(t.born) + '</span></span></span></button>' +
+    var tmax = Math.max(t.buy, t.sell), on = S.watch.indexOf(t.tick) !== -1, c = chg(t), done = t.prog >= 100, fr = freshness(t), fl = redFlags(t);
+    var flags = fl.length ? '<div class="tc-flags bad" data-tip="' + esc(fl.join(' · ')) + '"><span class="fl-ic">!</span><span>' + esc(fl.slice(0, 2).join(' · ')) + (fl.length > 2 ? ' +' + (fl.length - 2) : '') + '</span></div>' :
+      '<div class="tc-flags ok"><span class="fl-ic">✓</span><span>No red flags</span></div>';
+    return '<article class="tcard' + (S.newTick === t.tick ? ' is-new' : '') + ' ' + fr.cls + '" data-card="' + esc(t.tick) + '">' +
+      '<div class="tc-age ' + fr.cls + '"><span class="ag-dot"></span><span class="ag-lab">' + fr.lab + '</span><b class="mono" data-t="' + t.born + '">' + ago(t.born) + '</b>' + (done ? '<span class="ag-grad">GRADUATED</span>' : '') + '</div>' +
+      '<div class="tc-top"><button class="tc-id" data-act="open" data-arg="' + esc(t.tick) + '">' + avatarHTML(t, 52) +
+        '<span class="tc-name"><b>' + esc(t.name) + '</b><span>$' + esc(t.tick) + '</span></span></button>' +
         '<div class="pairmini" data-tip="Paired with ' + esc(pairInfo(t.pair).name) + '">' + coinHTML(t.pair, 26) + '<small>PAIR</small><b>' + esc(pairLabel(t.pair)) + '</b></div>' +
         '<div class="tax" style="background:' + taxBg(tmax) + '" data-tip="Buy ' + t.buy + '% · Sell ' + t.sell + '%"><small>TAX</small><b>' + tmax + '%</b></div></div>' +
-      '<div class="tc-mid"><div class="tc-mc"><div class="l">Market cap</div><div class="v"><span data-mc="' + esc(t.tick) + '" data-v="' + fmtK(t.mcN) + '">' + fmtK(t.mcN) + '</span>' +
-        '<span class="chgpill ' + (c >= 0 ? 'up' : 'down') + '" data-chg="' + esc(t.tick) + '">' + chgTxt(c) + '</span></div></div>' +
-        '</div>' +
-      '<div class="tc-stats"><div><span>Vol 24h</span><b class="mono">' + fmtK(t.vol) + '</b></div><div><span>Holders</span><b class="mono">' + fmtNum(t.holders) + '</b></div><div><span>Age</span><b class="mono" data-t="' + t.born + '">' + ago(t.born) + '</b></div></div>' +
+      flags +
+      '<div class="tc-mid"><div class="tc-mc"><div class="v"><span data-mc="' + esc(t.tick) + '" data-v="' + fmtK(t.mcN) + '">' + fmtK(t.mcN) + '</span>' +
+        '<span class="chgpill ' + (c >= 0 ? 'up' : 'down') + '" data-chg="' + esc(t.tick) + '">' + chgTxt(c) + '</span></div><div class="l">market cap · ' + fmtNum(t.holders) + ' holders · vol ' + fmtK(t.vol) + '</div></div></div>' +
       '<div class="tc-chart ' + (c >= 0 ? 'up' : 'down') + '" data-cchart="' + esc(t.tick) + '">' + cardChart(t) + '</div>' +
-      '<div class="tags"><span class="tag">Buy ' + t.buy + '%</span><span class="tag">Sell ' + t.sell + '%</span>' + badges + '</div>' +
-      '<div class="prog"><div class="l"><span>' + (done ? 'Graduated to Raydium' : 'Bonding curve') + '</span><span class="mono" data-prog="' + esc(t.tick) + '">' + Math.min(100, t.prog).toFixed(0) + '%</span></div>' +
+      '<div class="prog"><div class="l"><span>' + (done ? 'On Raydium' : 'Bonding curve') + '</span><span class="mono" data-prog="' + esc(t.tick) + '">' + Math.min(100, t.prog).toFixed(0) + '%</span></div>' +
         '<div class="bar"><i class="' + (done ? 'done' : '') + '" data-bar="' + esc(t.tick) + '" style="width:' + Math.max(1, Math.min(100, t.prog)) + '%"></i></div></div>' +
       (opts.preview ? '' : '<div class="tc-act"><button class="btn pri" data-act="open" data-arg="' + esc(t.tick) + '">Trade</button>' +
-        '<button class="iconbtn" data-act="ca" data-arg="' + esc(t.tick) + '" aria-label="Copy contract address" data-tip="Copy CA">' + I.copy + '</button>' +
         '<button class="iconbtn" data-act="star" data-arg="' + esc(t.tick) + '" aria-label="Add to watchlist" aria-pressed="' + on + '">' + I.star(on) + '</button></div>') +
       '</article>';
   }
@@ -1376,62 +1390,122 @@
   function hotToken() { var l = all().filter(function (t) { return t.prog < 100; }).sort(function (a, b) { return b.prog - a.prog; }); return l[0] || BASE[0]; }
   function hillPos(p) { var k = p / 100; return { x: 8 + k * 78, y: 12 + Math.pow(k, 1.6) * 62 }; }
   function jarH(v) { return Math.min(92, 8 + Math.sqrt(v) * 38); }
+  var RUGS = 0, CLEAN = 0;
+  var POS = { press: 18, tax: 34, scan: 48, pick: 56, bin: 64, pump: 76, launch: 91 };
   function machineSection() {
     var mach = [
-      ['press', 22, 'MASCOT PRESS', '#A3B1C2', '1', 'Give it a face', 'Name, ticker &amp; mascot'],
-      ['tax', 44, 'TAX STAMP', '#FFD15C', '2', 'Set the tax', '0–10%, shown to everyone'],
-      ['pump', 66, 'PUMP', '#3DDC97', '3', 'Traders pump it', 'Every buy pushes the price up'],
-      ['launch', 88, 'LAUNCHER', '#E8E8EA', '4', 'Graduate', 'Hits 100% → Raydium']
+      ['press', POS.press, 'MASCOT PRESS', '#A3B1C2', '1', 'Give it a face', 'Name, ticker &amp; mascot'],
+      ['tax', POS.tax, 'TAX STAMP', '#FFD15C', '2', 'Set the tax', '0–10%, shown to everyone'],
+      ['scan', POS.scan, 'RUG SCANNER', '#F2708A', '3', 'Rug check', 'Bad coins get thrown out'],
+      ['pump', POS.pump, 'PUMP', '#3DDC97', '4', 'Traders pump it', 'Every buy pushes the price up'],
+      ['launch', POS.launch, 'LAUNCHER', '#ECECEE', '5', 'Graduate', 'Hits 100% → Raydium']
     ];
     var html = mach.map(function (m) {
       return '<div class="mach m-' + m[0] + '" id="mach-' + m[0] + '" style="left:' + m[1] + '%;--mc:' + m[3] + '">' +
         '<div class="mach-body"><span class="mach-name">' + m[2] + '</span><span class="mach-lights"><i></i><i></i><i></i></span>' +
         (m[0] === 'pump' ? '<span class="gauge"><i id="pump-g"></i></span>' : '') + (m[0] === 'launch' ? '<span class="ramp"></span>' : '') + '</div>' +
-        '<div class="piston"><i></i></div></div>' +
+        '<div class="piston"><i></i></div>' + (m[0] === 'scan' ? '<span class="beam"></span>' : '') + '</div>' +
         '<div class="mlab" style="left:' + m[1] + '%"><span class="mstepn">' + m[4] + '</span><b>' + m[5] + '</b><span>' + m[6] + '</span></div>';
     }).join('');
+    var crane = '<div class="crane"><span class="rail" style="left:' + (POS.pick - 3) + '%;width:' + (POS.bin - POS.pick + 6) + '%"></span>' +
+      '<div class="trolley" id="trolley" style="left:' + POS.pick + '%"><span class="tr-body"></span><span class="cable" id="cable"></span>' +
+      '<span class="claw" id="claw"><span class="claw-hub"></span><span class="finger l"></span><span class="finger r"></span><span class="claw-hold" id="claw-hold"></span></span></div>' +
+      '<span class="crane-tag" style="left:' + ((POS.pick + POS.bin) / 2) + '%">RUG CATCHER</span></div>';
+    var bin = '<div class="rugbin" id="rugbin" style="left:' + POS.bin + '%"><span class="bin-lid"></span><span class="bin-body"><b id="rug-n">' + RUGS + '</b><small>RUGS</small></span></div>';
     var split = '<div class="split"><div class="split-h"><b>Where does the tax go?</b><span class="muted">Every trade pays the tax shown on the coin. It gets shared like this:</span><span class="mono split-tot" id="fs-jar">' + M.tax.toFixed(2) + ' SOL shared so far</span></div>' +
       '<div class="split-bar"><span class="sp c" style="flex:50"><b>50%</b> Creator</span><span class="sp h" style="flex:30"><b>30%</b> Holders</span><span class="sp v" style="flex:20"><b>20%</b> Burn</span></div></div>';
     return '<section class="factory card-s" id="machine">' +
       '<div class="m-head"><div><span class="kicker"><span class="livedot"></span>HOW IT WORKS</span><h2 class="title-xl" style="font-size:32px;margin:8px 0 4px">From raw coin to legend</h2>' +
-        '<p class="muted" style="margin:0">Every coin on GIGAPAD rides the same line. Watch it get built.</p></div>' +
-        '<button class="btn pri" data-act="mlaunch">Drop a coin in</button></div>' +
+        '<p class="muted" style="margin:0">Every coin rides the same line. Rugs get caught and binned. Only the strong reach Raydium.</p></div>' +
+        '<div class="line-stats"><div><span class="muted">Rugs binned</span><b class="mono down" id="ls-rug">' + RUGS + '</b></div><div><span class="muted">Passed</span><b class="mono up" id="ls-ok">' + CLEAN + '</b></div><button class="btn pri" data-act="mlaunch">Drop a coin in</button></div></div>' +
       '<div class="line-wrap drag-scroll"><div class="line" id="line">' +
-        '<div class="hopper"><span>RAW<br>COINS</span></div>' + html +
+        '<div class="hopper"><span>RAW<br>COINS</span></div>' + html + crane +
         '<div class="belt2"><span class="belt2-track"></span><span class="roller r1"></span><span class="roller r2"></span><span class="roller r3"></span><span class="roller r4"></span><span class="roller r5"></span></div>' +
-        '<div id="coins"></div><div class="exit"><span>RAYDIUM</span></div></div></div>' + split + '</section>';
+        bin + '<div id="coins"></div><div class="exit"><span>RAYDIUM</span></div></div></div>' + split + '</section>';
   }
-  // conveyor engine
-  var LC = [], lastSpawn = 0, LT = performance.now();
-  function spawnCoin(tok) {
+  // ---------- conveyor + crane engine ----------
+  var LC = [], lastSpawn = 0, LT = performance.now(), ARM = { busy: false };
+  function spawnCoin(tok, forceRug) {
     var box = document.getElementById('coins'); if (!box) return;
-    var src = tok || pick(all()), el = document.createElement('div');
+    var src = tok || pick(all()), el = document.createElement('div'), rug = forceRug != null ? forceRug : (!tok && Math.random() < 0.3);
+    var tx = rug ? 6 + Math.floor(Math.random() * 4) : Math.max(src.buy, src.sell);
     el.className = 'lcoin s0';
-    el.innerHTML = '<span class="lc-raw">?</span><span class="lc-face">' + avatarHTML(src, 46) + '</span><span class="lc-tax" style="background:' + taxBg(Math.max(src.buy, src.sell)) + '">' + Math.max(src.buy, src.sell) + '%</span><span class="lc-mc mono">$5K</span>';
+    el.innerHTML = '<span class="lc-raw">?</span><span class="lc-face">' + avatarHTML(src, 46) + '</span><span class="lc-tax" style="background:' + taxBg(tx) + '">' + tx + '%</span><span class="lc-mc mono">$5K</span><span class="lc-rug">RUG</span><span class="lc-ok">✓</span>';
     box.appendChild(el);
-    LC.push({ el: el, x: 2, st: 0, mc: 5, tok: src });
+    LC.push({ el: el, x: 2, st: 0, mc: 5, tok: src, rug: rug, scanned: false, held: false, gone: false });
   }
   function stampMachine(id) { var m = document.getElementById('mach-' + id); if (!m) return; m.classList.remove('hit'); void m.offsetWidth; m.classList.add('hit'); }
+  function setCount(id, v) { var e = document.getElementById(id); if (e) { e.textContent = v; e.classList.remove('bump'); void e.offsetWidth; e.classList.add('bump'); } }
+  function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  function catchRug(c) {
+    ARM.busy = true;
+    var tro = document.getElementById('trolley'), cab = document.getElementById('cable'), claw = document.getElementById('claw'), hold = document.getElementById('claw-hold'), bin = document.getElementById('rugbin');
+    if (!tro || !cab || !claw || !hold) { ARM.busy = false; c.el.remove(); c.gone = true; return; }
+    claw.classList.add('open');
+    cab.style.height = '118px';
+    wait(620).then(function () {
+      claw.classList.remove('open'); claw.classList.add('grip');
+      return wait(260);
+    }).then(function () {
+      c.el.classList.add('grabbed'); c.el.style.left = ''; hold.appendChild(c.el);
+      cab.style.height = '26px';
+      return wait(560);
+    }).then(function () {
+      tro.style.left = POS.bin + '%';
+      return wait(760);
+    }).then(function () {
+      cab.style.height = '96px';
+      if (bin) bin.classList.add('open');
+      return wait(560);
+    }).then(function () {
+      claw.classList.remove('grip'); claw.classList.add('open');
+      c.el.classList.add('drop');
+      return wait(420);
+    }).then(function () {
+      c.el.remove(); c.gone = true; RUGS++;
+      setCount('rug-n', RUGS); setCount('ls-rug', RUGS);
+      if (bin) { bin.classList.remove('open', 'shake'); void bin.offsetWidth; bin.classList.add('shake'); }
+      cab.style.height = '26px'; claw.classList.remove('open');
+      return wait(380);
+    }).then(function () {
+      tro.style.left = POS.pick + '%';
+      return wait(700);
+    }).then(function () { ARM.busy = false; });
+  }
   (function lineLoop(now) {
     var dt = Math.min(50, now - LT); LT = now;
     var box = document.getElementById('coins');
     if (box && S.screen === 'home') {
-      if (now - lastSpawn > 1900) { lastSpawn = now; spawnCoin(); }
-      for (var i = LC.length - 1; i >= 0; i--) {
-        var c = LC[i];
-        if (!c.el.isConnected) { LC.splice(i, 1); continue; }
-        var slow = 0; [22, 44, 66].forEach(function (mx) { if (Math.abs(c.x - mx) < 1.6) slow = 1; });
-        c.x += dt * (slow ? 0.0028 : 0.0085);
-        var st = c.x < 22 ? 0 : c.x < 44 ? 1 : c.x < 66 ? 2 : c.x < 88 ? 3 : 4;
-        if (st !== c.st) {
-          c.st = st; c.el.className = 'lcoin s' + st;
-          stampMachine(['', 'press', 'tax', 'pump', 'launch'][st]);
-          if (st === 4) { (function (cc) { setTimeout(function () { cc.el.remove(); }, 1300); })(c); }
+      if (now - lastSpawn > 1700) { lastSpawn = now; spawnCoin(); }
+      LC = LC.filter(function (c) { return !c.gone && (c.el.isConnected || c.held); });
+      var belt = LC.filter(function (c) { return !c.held || !c.el.classList.contains('grabbed'); }).sort(function (a, b) { return b.x - a.x; });
+      for (var i = 0; i < belt.length; i++) {
+        var c = belt[i]; if (c.st >= 4) continue;
+        var ahead = i > 0 ? belt[i - 1] : null, blocked = ahead && ahead.st < 4 && ahead.x - c.x < 5.2;
+        if (c.held) {
+          if (!ARM.busy && !c.el.classList.contains('grabbed')) catchRug(c);
+          continue;
         }
-        if (st === 3) { c.mc += dt * 0.09 * (1 + c.mc / 60); var mcEl = c.el.querySelector('.lc-mc'); if (mcEl) mcEl.textContent = fmtK(c.mc); c.el.style.setProperty('--grow', Math.min(1.35, 1 + (c.x - 66) / 60)); }
+        if (!blocked) {
+          var slow = 0; [POS.press, POS.tax, POS.scan, POS.pump].forEach(function (mx) { if (Math.abs(c.x - mx) < 1.6) slow = 1; });
+          c.x += dt * (slow ? 0.0026 : 0.0082);
+        }
+        if (!c.scanned && c.x >= POS.scan) {
+          c.scanned = true; stampMachine('scan');
+          c.el.classList.add(c.rug ? 'rug' : 'clean');
+          if (!c.rug) { CLEAN++; setCount('ls-ok', CLEAN); }
+        }
+        if (c.rug && c.scanned && c.x >= POS.pick) { c.x = POS.pick; c.held = true; }
+        var st = c.x < POS.press ? 0 : c.x < POS.tax ? 1 : c.x < POS.pump ? 2 : c.x < POS.launch ? 3 : 4;
+        if (st !== c.st) {
+          c.st = st; c.el.classList.remove('s0', 's1', 's2', 's3', 's4'); c.el.classList.add('s' + st);
+          stampMachine(['', 'press', 'tax', 'pump', 'launch'][st]);
+          if (st === 4) { (function (cc) { setTimeout(function () { cc.el.remove(); cc.gone = true; }, 1300); })(c); }
+        }
+        if (st === 3) { c.mc += dt * 0.09 * (1 + c.mc / 60); var mcEl = c.el.querySelector('.lc-mc'); if (mcEl) mcEl.textContent = fmtK(c.mc); c.el.style.setProperty('--grow', Math.min(1.35, 1 + (c.x - POS.pump) / 50)); }
         if (st < 4) c.el.style.left = c.x + '%';
       }
-    } else if (!box && LC.length) { LC = []; }
+    } else if (!box && LC.length) { LC = []; ARM.busy = false; }
     requestAnimationFrame(lineLoop);
   })(LT);
 
