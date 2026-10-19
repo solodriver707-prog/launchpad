@@ -2403,3 +2403,4 @@ header::before{background:linear-gradient(90deg,transparent,rgba(216,195,160,.6)
 .tch-star:hover{transform:scale(1.12);border-color:#FFD15C}
 .tch-star.on{border-color:rgba(255,209,92,.6);background:rgba(255,209,92,.14)}
 .tcard .prog{margin-bottom:2px}
+.tch-age .ag-lab{display:none}.tch-age b{margin-left:0}
