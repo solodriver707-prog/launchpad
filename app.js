@@ -101,12 +101,12 @@
     mk('Laser Frog', 'ZAP', 'frog', 9, 0, 'laser', 'grin', 'none', 3, 6, 'SILVER', 156, -18.5, 44, 260, 590, false, 0, 1)
   ];
   var PAIR_INFO = {
-    SOL: { name: 'Solana', cat: 'crypto', g: '◎', c: '#9B8CFF' }, USDC: { name: 'USD Coin', cat: 'crypto', g: '$', c: '#5B9BFF' },
-    ETH: { name: 'Ether', cat: 'crypto', g: 'Ξ', c: '#A5B4FC' }, BTC: { name: 'Bitcoin', cat: 'crypto', g: '₿', c: '#FFA94D' },
+    SOL: { img: 'icons/sol.svg', name: 'Solana', cat: 'crypto', g: '◎', c: '#9B8CFF' }, USDC: { img: 'icons/usdc.svg', name: 'USD Coin', cat: 'crypto', g: '$', c: '#5B9BFF' },
+    ETH: { img: 'icons/eth.svg', name: 'Ether', cat: 'crypto', g: 'Ξ', c: '#A5B4FC' }, BTC: { img: 'icons/btc.svg', name: 'Bitcoin', cat: 'crypto', g: '₿', c: '#FFA94D' },
     SPYx: { name: 'S&P 500', cat: 'stocks', g: 'S&P', c: '#34E39A' }, TSLAx: { name: 'Tesla', cat: 'stocks', g: 'T', c: '#FF7A93' },
     NVDAx: { name: 'Nvidia', cat: 'stocks', g: 'N', c: '#9BE15D' }, AAPLx: { name: 'Apple', cat: 'stocks', g: 'A', c: '#D7DEEA' },
-    GOLD: { name: 'Gold', cat: 'commod', g: 'Au', c: '#FFD15C' }, SILVER: { name: 'Silver', cat: 'commod', g: 'Ag', c: '#CBD5E1' }, OIL: { name: 'Crude oil', cat: 'commod', g: 'Oil', c: '#F59E6B' },
-    EUR: { name: 'Euro', cat: 'fx', g: '€', c: '#7DB8FF' }, JPY: { name: 'Yen', cat: 'fx', g: '¥', c: '#FF9AA8' }, GBP: { name: 'Pound', cat: 'fx', g: '£', c: '#C4B5FD' }
+    GOLD: { img: 'icons/gold.svg', name: 'Gold', cat: 'commod', g: 'Au', c: '#FFD15C' }, SILVER: { name: 'Silver', cat: 'commod', g: 'Ag', c: '#CBD5E1' }, OIL: { name: 'Crude oil', cat: 'commod', g: 'Oil', c: '#F59E6B' },
+    EUR: { img: 'icons/eur.svg', name: 'Euro', cat: 'fx', g: '€', c: '#7DB8FF' }, JPY: { img: 'icons/jpy.svg', name: 'Yen', cat: 'fx', g: '¥', c: '#FF9AA8' }, GBP: { img: 'icons/gbp.svg', name: 'Pound', cat: 'fx', g: '£', c: '#C4B5FD' }
   };
   var CATS = [
     ['all', 'Everything', 'Pair with anything', '#7DE3FF'], ['memes', 'Memes', 'Meme paired with meme', '#FF6B8B'],
@@ -119,6 +119,7 @@
   function coinHTML(id, size) {
     var p = pairInfo(id);
     if (p.meme) return avatarHTML(p.meme, size);
+    if (p.img) return '<span class="coin img" style="width:' + size + 'px;height:' + size + 'px"><img src="' + p.img + '" alt="' + esc(p.name) + '"></span>';
     var fs = Math.round(size * (p.g.length > 2 ? 0.3 : p.g.length > 1 ? 0.38 : 0.52));
     return '<span class="coin" style="width:' + size + 'px;height:' + size + 'px;background:' + p.c + ';font-size:' + fs + 'px">' + esc(p.g) + '</span>';
   }
@@ -902,7 +903,7 @@
       case 'heroGo': heroGo(+arg); break;
       case 'view': set({ view: arg }); break;
       case 'swipe': flyOut(arg); break;
-      case 'mstep': for (var mi = 0; mi < MSTEPS.length; mi++) { if (MSTEPS[mi][0] === arg) { M.pos = mi * 20 + 10; M.paused = 2500; mSetStep(mi); break; } } break;
+      case 'mstep': for (var mi = 0; mi < MSTEPS.length; mi++) { if (MSTEPS[mi][0] === arg) { M.paused = 5000; mSetStep(mi); break; } } break;
       case 'mlaunch': newLaunch(); break;
       case 'trade':
         if (!S.account) { set({ walletOpen: true }); break; }
@@ -983,51 +984,36 @@
 
   // ================= THE DIAMOND FACTORY (fun how-it-works) =================
   var M = { launched: all().length, tax: 0, creators: 0, holders: 0, vault: 0, grad: BASE.filter(function (t) { return t.prog >= 100; }).length, step: 0, pos: 0, rider: null, paused: 0 };
-  var MSTEPS = [
-    ['make', '1', 'Make a coin', 'Pick a name, build a mascot, choose your tax. Done in a minute.'],
-    ['climb', '2', 'Climb the hill', 'Every buy pushes the price up the hill. Every sell slides it back down.'],
-    ['trade', '3', 'Traders pile in', 'People buy and sell with SOL. The tax is shown up front — no surprises.'],
-    ['jar', '4', 'The tax jars', 'A tiny fee from every trade gets shared: creator, holders, and a burn jar.'],
-    ['blast', '5', 'Blast off!', 'Reach the top of the hill and your coin graduates to Raydium — the big leagues.']
-  ];
+  var MSTEPS = [['make'], ['climb'], ['blast']];
+  setInterval(function () { if (S.screen === 'home' && document.getElementById('machine') && !(M.paused > 0)) mSetStep(M.step + 1); }, 2600);
   function hotToken() { var l = all().filter(function (t) { return t.prog < 100; }).sort(function (a, b) { return b.prog - a.prog; }); return l[0] || BASE[0]; }
   function hillPos(p) { var k = p / 100; return { x: 8 + k * 78, y: 12 + Math.pow(k, 1.6) * 62 }; }
   function jarH(v) { return Math.min(92, 8 + Math.sqrt(v) * 38); }
   function machineSection() {
     var ht = hotToken(), hp = hillPos(ht.prog), last = S.launched[0] || all()[0];
-    var panel = function (i, art, extra) {
-      var st = MSTEPS[i];
-      return '<button class="fpanel" data-fp="' + st[0] + '" data-act="mstep" data-arg="' + st[0] + '" style="--d:' + (i * 80) + 'ms">' +
-        '<span class="fnum">' + st[1] + '</span><span class="fart">' + art + '</span>' +
-        '<span class="ftitle">' + st[2] + '</span><span class="ftext">' + st[3] + '</span>' + (extra || '') + '</button>';
-    };
-    var p1 = panel(0, '<span class="f-machine"><span class="fm-box"><span class="fm-light"></span><span class="fm-light l2"></span><span class="fm-light l3"></span></span><span class="fm-pop" id="f-pop">' + avatarHTML(last, 64) + '</span><span class="fm-spark a"></span><span class="fm-spark b"></span><span class="fm-spark c"></span></span>',
-      '<span class="fstat" id="fs-make">' + fmtNum(M.launched) + ' coins made</span>');
-    var p2 = panel(1, '<span class="f-hill"><svg viewBox="0 0 100 80" preserveAspectRatio="none"><path d="M0,80 L0,74 Q50,74 100,8 L100,80 Z" class="hill-fill"/><path d="M0,74 Q50,74 100,8" class="hill-line"/></svg><span class="flag">TOP</span>' +
-      '<span class="climber" id="f-climb" style="left:' + hp.x + '%;bottom:' + hp.y + '%">' + avatarHTML(ht, 38) + '</span></span>',
-      '<span class="fstat" id="fs-climb">$' + esc(ht.tick) + ' is ' + ht.prog.toFixed(0) + '% up</span>');
-    var p3 = panel(2, '<span class="f-rain" id="f-rain"><span class="bucket"><b>SOL</b></span></span>',
-      '<span class="fstat"><span class="up">buys</span> &amp; <span class="down">sells</span> live</span>');
-    var p4 = panel(3, '<span class="f-jars">' +
-      [['creators', 'Creator', '50%', '#9B8CFF'], ['holders', 'Holders', '30%', '#34E39A'], ['vault', 'Burn', '20%', '#FF9A4D']].map(function (j) {
-        return '<span class="jarw"><span class="jar" style="--jc:' + j[3] + '"><span class="jar-liq" id="fj-' + j[0] + '" style="height:' + jarH(M[j[0]]) + '%"></span><span class="jar-pct">' + j[2] + '</span></span><span class="jar-lbl">' + j[1] + '</span></span>';
-      }).join('') + '</span>', '<span class="fstat" id="fs-jar">' + M.tax.toFixed(2) + ' SOL shared</span>');
-    var p5 = panel(4, '<span class="f-rocket" id="f-rocket"><span class="stars"></span><svg viewBox="0 0 80 120" class="rk"><path d="M40 4 C60 22 64 50 60 82 L20 82 C16 50 20 22 40 4Z" fill="#E9EEF9"/><path d="M20 70 L6 92 L22 86Z M60 70 L74 92 L58 86Z" fill="#9B8CFF"/><circle cx="40" cy="44" r="15" fill="#0E1628" stroke="#7DE3FF" stroke-width="3"/><path d="M30 82 h20 l-4 8 h-12z" fill="#7C89A6"/></svg>' +
-      '<span class="rk-win">' + avatarHTML(BASE[0], 26) + '</span><span class="flame"></span></span>',
-      '<span class="fstat" id="fs-blast">' + M.grad + ' coins graduated</span>');
+    var steps = [
+      ['1', 'Launch', 'Make a coin in 1 minute.<br>Pick a name, a mascot and your tax.', '<span class="f-machine"><span class="fm-box"><span class="fm-light"></span><span class="fm-light l2"></span><span class="fm-light l3"></span></span><span class="fm-pop" id="f-pop">' + avatarHTML(last, 64) + '</span><span class="fm-spark a"></span><span class="fm-spark b"></span><span class="fm-spark c"></span></span>', '<span id="fs-make">' + fmtNum(M.launched) + ' coins made</span>'],
+      ['2', 'Trade', 'People buy &amp; sell.<br>Every buy pushes the price up the hill.', '<span class="f-hill"><svg viewBox="0 0 100 80" preserveAspectRatio="none"><path d="M0,80 L0,74 Q50,74 100,8 L100,80 Z" class="hill-fill"/><path d="M0,74 Q50,74 100,8" class="hill-line"/></svg><span class="flag">100%</span><span class="climber" id="f-climb" style="left:' + hp.x + '%;bottom:' + hp.y + '%">' + avatarHTML(ht, 38) + '</span></span>', '<span id="fs-climb">$' + esc(ht.tick) + ' is ' + ht.prog.toFixed(0) + '% up</span>'],
+      ['3', 'Graduate', 'Hit 100% and the coin<br>moves to Raydium. To the moon.', '<span class="f-rocket" id="f-rocket"><span class="stars"></span><svg viewBox="0 0 80 120" class="rk"><path d="M40 4 C60 22 64 50 60 82 L20 82 C16 50 20 22 40 4Z" fill="#E9EEF9"/><path d="M20 70 L6 92 L22 86Z M60 70 L74 92 L58 86Z" fill="#9B8CFF"/><circle cx="40" cy="44" r="15" fill="#0E1628" stroke="#7DE3FF" stroke-width="3"/><path d="M30 82 h20 l-4 8 h-12z" fill="#7C89A6"/></svg><span class="rk-win">' + avatarHTML(BASE[0], 26) + '</span><span class="flame"></span></span>', '<span id="fs-blast">' + M.grad + ' coins graduated</span>']
+    ];
+    var cards = steps.map(function (st, k) {
+      return (k ? '<span class="s-arrow" aria-hidden="true"><i></i><i></i><i></i></span>' : '') +
+        '<button class="scard fpanel" data-fp="' + MSTEPS[k][0] + '" data-act="mstep" data-arg="' + MSTEPS[k][0] + '"><span class="snum">' + st[0] + '</span>' +
+        '<span class="fart">' + st[3] + '</span><span class="stitle">' + st[1] + '</span><span class="stext">' + st[2] + '</span><span class="fstat">' + st[4] + '</span></button>';
+    }).join('');
+    var split = '<div class="split"><div class="split-h"><b>Where does the tax go?</b><span class="muted">Every trade pays the tax shown on the coin. It gets shared like this:</span><span class="mono split-tot" id="fs-jar">' + M.tax.toFixed(2) + ' SOL shared so far</span></div>' +
+      '<div class="split-bar"><span class="sp c" style="flex:50"><b>50%</b> Creator</span><span class="sp h" style="flex:30"><b>30%</b> Holders</span><span class="sp v" style="flex:20"><b>20%</b> Burn</span></div></div>';
     return '<section class="factory card-s" id="machine">' +
-      '<div class="m-head"><div><span class="kicker"><span class="livedot"></span>HOW IT WORKS</span><h2 class="title-xl" style="font-size:32px;margin:8px 0 4px">The Diamond Factory</h2>' +
-        '<p class="muted" style="margin:0;max-width:520px;line-height:1.55">From idea to the moon in 5 steps. Watch a coin ride through — or tap any step.</p></div>' +
+      '<div class="m-head"><div><span class="kicker"><span class="livedot"></span>HOW IT WORKS</span><h2 class="title-xl" style="font-size:32px;margin:8px 0 4px">3 simple steps</h2></div>' +
         '<button class="btn pri" data-act="mlaunch">Make a test coin</button></div>' +
-      '<div class="f-wrap drag-scroll"><div class="f-row">' + p1 + p2 + p3 + p4 + p5 + '</div>' +
-        '<div class="belt"><span class="belt-track"></span><span class="rider" id="f-rider">' + avatarHTML(all()[2], 40) + '</span></div></div>' +
-      '</section>';
+      '<div class="steps3">' + cards + '</div>' + split + '</section>';
   }
   function mSetStep(i) {
     M.step = (i + MSTEPS.length) % MSTEPS.length;
     document.querySelectorAll('.fpanel').forEach(function (p, k) { p.classList.toggle('here', k === M.step); });
   }
   function mFit() {}
+  setInterval(function () { if (M.paused > 0) M.paused -= 500; }, 500);
   // rider loop: travels the belt, lighting each station as it passes
   var riderT = performance.now();
   (function ride(now) {
