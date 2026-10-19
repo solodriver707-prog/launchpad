@@ -2398,3 +2398,8 @@ header::before{background:linear-gradient(90deg,transparent,rgba(216,195,160,.6)
 .tc-name2 b{font-size:18px;font-weight:800;letter-spacing:-.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tc-name2 span{font-size:12px;color:var(--muted)}
 .tcard>.tc-age,.tcard>.tc-top{display:none}
+.tc-hero{height:212px}
+.tch-star{position:absolute;left:10px;bottom:10px;z-index:3;width:36px;height:36px;border-radius:11px;border:1px solid rgba(255,255,255,.12);background:rgba(8,8,10,.6);backdrop-filter:blur(8px);color:#fff;display:flex;align-items:center;justify-content:center;transition:transform .2s cubic-bezier(.2,1.6,.4,1),border-color .15s}
+.tch-star:hover{transform:scale(1.12);border-color:#FFD15C}
+.tch-star.on{border-color:rgba(255,209,92,.6);background:rgba(255,209,92,.14)}
+.tcard .prog{margin-bottom:2px}
