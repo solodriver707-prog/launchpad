@@ -1,5 +1,7 @@
 # GIGAPAD (beta)
 
+Launch a token. Pair it with anything.
+
 Every legend starts at zero. Launch tokens. Trade against anything.
 
 Tīrs HTML/CSS/JS — bez npm un build soļa. Faili: index.html, styles.css, avatars.js, app.js.
