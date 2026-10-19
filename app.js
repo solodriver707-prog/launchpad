@@ -64,7 +64,7 @@
     dice: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8.5" cy="8.5" r="1.3" fill="currentColor"/><circle cx="15.5" cy="15.5" r="1.3" fill="currentColor"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/></svg>',
     up: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></svg>'
   };
-  var LOGO = '<svg viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="lgS" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset=".45" stop-color="#C9CBD1"/><stop offset=".55" stop-color="#8E9198"/><stop offset="1" stop-color="#E6E7EA"/></linearGradient></defs><path d="M32 3 L57 13 L57 34 C57 48 46 57 32 61 C18 57 7 48 7 34 L7 13 Z" fill="#0B0B0D" stroke="url(#lgS)" stroke-width="2.5"/><path d="M44 21 L24 21 L19 26 L19 40 L24 45 L44 45 L44 39 L27 39 L26 38 L26 28 L27 27 L44 27 Z" fill="url(#lgS)"/><path d="M7 34 L19 39 M57 34 L45 40" stroke="#3A3C42" stroke-width="1"/></svg>';
+  var LOGO = '<svg viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="lgS" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset=".5" stop-color="#D3D5DA"/><stop offset="1" stop-color="#9A9DA4"/></linearGradient></defs><rect x="2" y="2" width="60" height="60" rx="17" fill="url(#lgS)"/><path d="M46 21.5 A16 16 0 1 0 46 42.5" fill="none" stroke="#0A0A0B" stroke-width="9.5" stroke-linecap="round"/><path d="M40 13 L52 13 L52 25 Z" fill="#0A0A0B"/><circle cx="32" cy="32" r="3.6" fill="#0A0A0B"/></svg>';
 
   // ================= DATA =================
   function mk(name, tick, kind, skinI, bgI, eyes, mouth, acc, buy, sell, pair, mcN, c24, prog, ageM, holders, soc, rewards, burn) {
@@ -894,59 +894,60 @@
       }).join('') : '<div class="muted" style="padding:14px">No pair found</div>') + '</div>' +
       '<div class="rp-foot"><span class="mono muted">' + filtered().length + ' coins match</span><button class="link" style="min-height:0;font-size:12.5px" data-act="pclear">Clear</button></div></div>';
   }
+  function inlineRange(k) {
+    var c = RCFG[k], r = S.r[k], on = rLabel(k) !== 'Any';
+    return '<div class="irange' + (on ? ' on' : '') + '"><div class="ir-h"><span>' + c.lab + '</span><b id="fcl-' + k + '">' + rLabel(k) + '</b></div>' +
+      '<div class="dual sm' + (k === 'tax' ? ' taxg' : '') + '"><div class="dual-track"><i id="rpf-' + k + '" style="' + rFill(k) + '"></i></div>' +
+      '<input type="range" min="0" max="' + c.max + '" step="' + c.step + '" value="' + r[0] + '" data-range="' + k + '|0" aria-label="' + c.title + ' minimum">' +
+      '<input type="range" min="0" max="' + c.max + '" step="' + c.step + '" value="' + r[1] + '" data-range="' + k + '|1" aria-label="' + c.title + ' maximum"></div>' +
+      '<div class="ir-s mono"><span>' + c.scale[0] + '</span><span>' + c.scale[c.scale.length - 1] + '</span></div></div>';
+  }
   function filterBar() {
     var active = 0;
-    var drops = ['mc', 'age', 'prog', 'tax'].map(function (k) {
-      var c = RCFG[k], lbl = rLabel(k), on = lbl !== 'Any'; if (on) active++;
-      return '<div class="fdrop"><button class="fchip' + (on ? ' on' : '') + (S.fpop === k ? ' open' : '') + '" data-act="fpop" data-arg="' + k + '"><span class="fc-l">' + c.lab + '</span><b id="fcl-' + k + '">' + lbl + '</b><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg></button>' +
-        (S.fpop === k ? rangePop(k) : '') + '</div>';
-    }).join('');
+    ['mc', 'age', 'prog', 'tax'].forEach(function (k) { if (rLabel(k) !== 'Any') active++; });
+    var pairOn = S.pair !== 'All' || S.cat !== 'all'; if (pairOn) active++;
+    var pl = S.pair !== 'All' ? coinHTML(S.pair, 20) + '<b>' + esc(pairLabel(S.pair)) + '</b>' : S.cat !== 'all' ? '<b>' + CATS.filter(function (c) { return c[0] === S.cat; })[0][1] + '</b>' : '<b>Any</b>';
+    var pairChip = '<div class="fdrop"><button class="fchip pairchip big' + (pairOn ? ' on' : '') + (S.fpop === 'pair' ? ' open' : '') + '" data-act="fpop" data-arg="pair"><span class="fc-l">Paired with</span>' + pl + '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg></button>' + (S.fpop === 'pair' ? pairPop() : '') + '</div>';
     var tg = [['zeroOnly', '0% tax', ''], ['gradOnly', 'Graduated', ''], ['rewardsOnly', 'Rewards', I.gift], ['watchOnly', 'Watchlist', I.star(false)], ['cleanOnly', 'No warnings', '<span class="fdot"></span>']].map(function (t) {
       var on = !!S[t[0]]; if (on) active++;
       return '<button class="ftog' + (on ? ' on' : '') + '" data-act="toggle" data-arg="' + t[0] + '" aria-pressed="' + on + '">' + t[2] + t[1] + '</button>';
     }).join('');
-    var pairOn = S.pair !== 'All' || S.cat !== 'all'; if (pairOn) active++;
-    var pl = S.pair !== 'All' ? coinHTML(S.pair, 20) + '<b>' + esc(pairLabel(S.pair)) + '</b>' : S.cat !== 'all' ? '<b>' + CATS.filter(function (c) { return c[0] === S.cat; })[0][1] + '</b>' : '<b>Any</b>';
-    var pairChip = '<div class="fdrop"><button class="fchip pairchip' + (pairOn ? ' on' : '') + (S.fpop === 'pair' ? ' open' : '') + '" data-act="fpop" data-arg="pair"><span class="fc-l">Paired with</span>' + pl + '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg></button>' + (S.fpop === 'pair' ? pairPop() : '') + '</div>';
-    drops = pairChip + drops;
-    return '<div class="fbar"><span class="fb-ic" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 6h16M7 12h10M10 18h4"/></svg></span>' + drops + '<span class="fb-sep"></span>' + tg +
-      (active ? '<button class="freset" data-act="reset">Reset · ' + active + '</button>' : '') + '</div>';
+    return '<div class="fbar2"><div class="fb2-row">' + pairChip + ['mc', 'age', 'prog', 'tax'].map(inlineRange).join('') + '</div>' +
+      '<div class="fb2-row sub">' + tg + '<span class="mono muted" style="margin-left:auto;font-size:12px" id="rpc-all">' + filtered().length + ' coins match</span>' + (active ? '<button class="freset" style="margin-left:10px" data-act="reset">Reset · ' + active + '</button>' : '') + '</div></div>';
   }
   function refreshGrid() {
     var list = filtered(), g = document.getElementById('grid'), cnt = document.getElementById('count');
     if (cnt) cnt.textContent = list.length + ' of ' + all().length + ' tokens';
+    var ca = document.getElementById('rpc-all'); if (ca) ca.textContent = list.length + ' coins match';
     ['mc', 'age', 'prog', 'tax'].forEach(function (k) {
-      var l = rLabel(k), e = document.getElementById('fcl-' + k); if (e) { e.textContent = l; e.parentNode.classList.toggle('on', l !== 'Any'); }
+      var l = rLabel(k), e = document.getElementById('fcl-' + k); if (e) { e.textContent = l; }
       var v = document.getElementById('rpv-' + k); if (v) v.textContent = l;
       var f = document.getElementById('rpf-' + k); if (f) f.setAttribute('style', rFill(k));
       var c = document.getElementById('rpc-' + k); if (c) c.textContent = list.length + ' coins match';
+      var ir = e && e.closest('.irange'); if (ir) ir.classList.toggle('on', l !== 'Any');
     });
     if (g && S.view !== 'bubbles') g.innerHTML = list.length ? list.map(function (t) { return card(t); }).join('') : '<div class="empty"><b style="font-size:19px">No coins in this range</b><span class="muted">Widen a slider or hit Reset.</span><button class="btn pri" data-act="reset">Reset filters</button></div>';
   }
+  var SLOGANS = ['Launch it.', 'Pair it.', 'Send it.'];
   function introHTML() {
-    var st = stats();
-    var rings = [
-      { r: 118, dur: 26, ids: ['SOL', 'BTC', 'ETH'] },
-      { r: 178, dur: 38, ids: ['GOLD', 'ONDO', 'EUR', 'USDC'] },
-      { r: 236, dur: 54, ids: ['NVDAx', BASE[0].tick, 'OIL', BASE[8].tick, 'JPY'] }
-    ];
-    var orbit = rings.map(function (rg, ri) {
-      return '<div class="ring3" style="--r:' + rg.r + 'px;--dur:' + rg.dur + 's;--dir:' + (ri % 2 ? -1 : 1) + '">' + rg.ids.map(function (id, k) {
-        return '<span class="orb3" style="--a:' + (k * 360 / rg.ids.length + ri * 20) + 'deg"><span class="orb3-in">' + coinHTML(id, ri === 0 ? 46 : ri === 1 ? 40 : 34) + '</span></span>';
-      }).join('') + '</div>';
+    var st = stats(), fresh = all().slice().sort(function (a, b) { return b.born - a.born; }).slice(0, 4);
+    var floaters = ['SOL', 'BTC', 'GOLD', 'ETH', 'ONDO', 'EUR', BASE[0].tick, BASE[8].tick].map(function (id, k) {
+      return '<span class="fl" style="--x:' + (52 + (k * 6.1) % 46) + '%;--y:' + (12 + (k * 37) % 70) + '%;--d:' + (5 + k % 4) + 's;--dl:-' + k + 's">' + coinHTML(id, 26 + (k % 3) * 8) + '</span>';
     }).join('');
-    var dust = ''; for (var d = 0; d < 26; d++) dust += '<i style="--x:' + (Math.random() * 100).toFixed(1) + '%;--d:' + (6 + Math.random() * 10).toFixed(1) + 's;--dl:-' + (Math.random() * 12).toFixed(1) + 's;--s:' + (1 + Math.random() * 2).toFixed(1) + 'px"></i>';
-    return '<section class="intro" id="intro">' +
-      '<div class="aurora"><span class="a1"></span><span class="a2"></span><span class="a3"></span></div><div class="floor"></div><div class="dust">' + dust + '</div>' +
-      '<div class="intro-l">' +
-        '<span class="intro-k"><span class="livedot"></span>LIVE ON SOLANA · BETA</span>' +
-        '<h1 class="intro-h"><span class="ln"><span>Every legend</span></span><span class="ln"><span>starts at <em>zero.</em></span></span></h1>' +
-        '<p class="intro-p">Launch a token in a minute. Pair it with anything — SOL, gold, stocks, or another meme. Tax shown up front. Rugs get binned.</p>' +
+    return '<section class="intro2" id="intro">' +
+      '<div class="aurora"><span class="a1"></span><span class="a2"></span><span class="a3"></span></div><div class="floaters">' + floaters + '</div>' +
+      '<div class="i2-l">' +
+        '<h1 class="i2-h">' + SLOGANS.map(function (w, k) { return '<span style="--k:' + k + '">' + w + '</span>'; }).join(' ') + '</h1>' +
+        '<p class="i2-p">The launchpad where any coin can pair with <b>anything</b> — SOL, gold, stocks, even another meme.</p>' +
         '<div class="intro-cta"><button class="btn pri big" data-act="create">Launch a token <span aria-hidden="true">→</span></button><button class="btn sec big" data-act="palette">' + I.search + 'Find a coin</button></div>' +
-        '<div class="intro-stats"><div><b data-count="' + st.tokens + '">' + st.tokens + '</b><span>coins live</span></div><div><b data-count="' + Math.round(st.vol) + '" data-fmt="k">' + fmtK(st.vol) + '</b><span>24h volume</span></div><div><b data-count="' + st.grad + '">' + st.grad + '</b><span>graduated</span></div><div><b>14</b><span>pair assets</span></div></div>' +
       '</div>' +
-      '<div class="intro-r" data-parallax2><div class="orbit3">' + orbit + '<div class="core"><span class="core-glow"></span><span class="core-logo">' + LOGO + '</span></div></div></div>' +
+      '<div class="i2-r"><div class="i2-live"><div class="i2-lh"><span class="livedot"></span>JUST LAUNCHED<span class="muted mono" id="i2-cnt">' + st.tokens + ' live</span></div><div id="i2-fresh">' +
+        fresh.map(i2Row).join('') + '</div>' +
+        '<div class="i2-stats"><div><b data-count="' + Math.round(st.vol) + '" data-fmt="k">' + fmtK(st.vol) + '</b><span>24h volume</span></div><div><b id="i2-tr">' + fmtNum(st.trades) + '</b><span>trades</span></div><div><b data-count="' + st.grad + '">' + st.grad + '</b><span>graduated</span></div></div></div></div>' +
     '</section>';
+  }
+  function i2Row(t) {
+    return '<button class="i2-row" data-act="open" data-arg="' + esc(t.tick) + '">' + avatarHTML(t, 34) + '<span class="i2-n"><b>' + esc(t.name) + '</b><small>$' + esc(t.tick) + ' · ' + coinHTML(t.pair, 13) + esc(pairLabel(t.pair)) + '</small></span><span class="i2-age mono" data-t="' + t.born + '">' + ago(t.born) + '</span><span class="tax" style="background:' + taxBg(Math.max(t.buy, t.sell)) + ';min-width:38px;padding:3px 5px"><b style="font-size:12px">' + Math.max(t.buy, t.sell) + '%</b></span></button>';
   }
   document.addEventListener('mousemove', function (e) {
     var it = e.target.closest && e.target.closest('#intro'); if (!it) return;
@@ -1452,6 +1453,7 @@
     q(attr('data-prog', t.tick)).forEach(function (el) { el.textContent = Math.min(100, t.prog).toFixed(0) + '%'; });
     q(attr('data-bar', t.tick)).forEach(function (el) { el.style.width = Math.max(1, Math.min(100, t.prog)) + '%'; if (t.prog >= 100) el.classList.add('done'); });
     var st = document.getElementById('stat-trades'); if (st) st.textContent = fmtNum(S.trades.length + S.tradeCount);
+    var i2t = document.getElementById('i2-tr'); if (i2t) { i2t.textContent = fmtNum(S.trades.length + S.tradeCount); i2t.classList.remove('tick'); void i2t.offsetWidth; i2t.classList.add('tick'); }
     var feed = document.getElementById('feed');
     if (feed) {
       if (feedOk(tr)) { var em = feed.querySelector('.muted'); if (em) em.remove(); feed.insertAdjacentHTML('afterbegin', feedRow(tr, true)); }
@@ -1498,6 +1500,7 @@
     toast('New launch: ' + name + ' $' + tick, t);
     machineLaunch(t);
     raceRefresh();
+    var i2 = document.getElementById('i2-fresh'); if (i2) { i2.insertAdjacentHTML('afterbegin', i2Row(t)); i2.firstElementChild.classList.add('enter'); while (i2.children.length > 4) i2.removeChild(i2.lastChild); }
     if (S.screen === 'home' && S.sort === 'newest') {
       S.newTick = tick;
       var grid = document.getElementById('grid'), ok = filtered().indexOf(t) !== -1;
