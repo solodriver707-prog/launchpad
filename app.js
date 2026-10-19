@@ -942,18 +942,15 @@
     if (k === 'age') return v === Infinity ? '∞' : v === 0 ? 'new' : ageTxt(Math.max(1, v));
     return Math.round(v) + '%';
   }
-  function histHTML(k) {
-    var c = RCFG[k], b = [], i, mx = 1, r = S.r[k];
-    for (i = 0; i < HB; i++) b.push(0);
-    all().forEach(function (d) { var x = Math.min(HB - 1, Math.floor(sPos(k, d) / c.max * HB)); b[x]++; });
-    b.forEach(function (n) { if (n > mx) mx = n; });
-    return b.map(function (n, j) { var mid = (j + .5) / HB * c.max, on = mid >= r[0] && mid <= r[1];
-      return '<i class="' + (on ? 'in' : '') + '" style="height:' + (n ? 18 + n / mx * 82 : 6) + '%;--d:' + (j * 18) + 'ms"></i>'; }).join('');
+  function dotsHTML(k) {
+    var c = RCFG[k], r = S.r[k];
+    return all().map(function (d) { var v = sPos(k, d), on = v >= r[0] && v <= r[1];
+      return '<i data-p="' + v.toFixed(2) + '" class="' + (on ? 'in' : '') + '" style="left:' + (v / c.max * 100).toFixed(2) + '%"></i>'; }).join('');
   }
   function irUpdate(k, idx) {
     var c = RCFG[k], r = S.r[k], box = document.querySelector('.ir-' + k); if (!box) return;
-    var h = box.querySelectorAll('.ir-hist i');
-    for (var j = 0; j < h.length; j++) { var mid = (j + .5) / HB * c.max; h[j].classList.toggle('in', mid >= r[0] && mid <= r[1]); }
+    var h = box.querySelectorAll('.ir-dots i');
+    for (var j = 0; j < h.length; j++) { var pv = +h[j].getAttribute('data-p'); h[j].classList.toggle('in', pv >= r[0] && pv <= r[1]); }
     var lit = box.querySelector('.ir-rule.lit'); if (lit) lit.style.clipPath = 'inset(0 ' + (100 - r[1] / c.max * 100) + '% 0 ' + (r[0] / c.max * 100) + '%)';
     var tl = box.querySelectorAll('.ir-rule.lit em');
     rTicks(k).forEach(function (t, j) { var e = tl[j]; if (!e) return; var inr = t[0] >= r[0] && t[0] <= r[1]; e.classList.toggle('in', inr); });
@@ -973,8 +970,8 @@
     var tk = rTicks(k).map(function (t) { return '<em style="left:' + (t[0] / c.max * 100) + '%"><u>' + t[1] + '</u></em>'; }).join('');
     var minor = k === 'tax' ? 10 : 20;
     return '<div class="irange ir-' + k + (on ? ' on' : '') + '" style="--minor:' + (100 / minor) + '%"><div class="ir-h"><span><i>' + ic + '</i>' + c.lab + '</span><b id="fcl-' + k + '">' + rLabel(k) + '</b></div>' +
-      '<div class="ir-body"><div class="ir-hist">' + histHTML(k) + '</div>' +
-      '<div class="dual sm' + (k === 'tax' ? ' taxg' : '') + '"><div class="dual-track"><i id="rpf-' + k + '" style="' + rFill(k) + '"></i></div>' +
+      '<div class="ir-body">' +
+      '<div class="dual sm' + (k === 'tax' ? ' taxg' : '') + '"><div class="dual-track"><i id="rpf-' + k + '" style="' + rFill(k) + '"></i></div><div class="ir-dots">' + dotsHTML(k) + '</div>' +
       '<input type="range" min="0" max="' + c.max + '" step="' + c.step + '" value="' + r[0] + '" data-range="' + k + '|0" aria-label="' + c.title + ' minimum">' +
       '<input type="range" min="0" max="' + c.max + '" step="' + c.step + '" value="' + r[1] + '" data-range="' + k + '|1" aria-label="' + c.title + ' maximum"><span class="ir-flag"></span></div>' +
       '<div class="ir-rules"><div class="ir-rule">' + tk + '</div><div class="ir-rule lit" style="clip-path:inset(0 ' + (100 - r[1] / c.max * 100) + '% 0 ' + (r[0] / c.max * 100) + '%)">' + tk + '</div></div></div>' +

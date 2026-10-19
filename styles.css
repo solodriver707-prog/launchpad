@@ -1764,3 +1764,17 @@ header::after{display:none}
 .irange.drag{border-color:color-mix(in srgb,var(--ac) 60%,#26262B)}
 .dual.sm input[type=range]::-webkit-slider-thumb:active{transform:scale(1.35);background:var(--ac);box-shadow:0 0 0 6px color-mix(in srgb,var(--ac) 22%,transparent)}
 .pr-drop .pp-item,.pr-drop .pp-item.empty{display:flex!important;flex-direction:row!important;align-items:center;text-align:left;min-height:44px}.pr-drop .pp-item .pp-c{margin-left:auto}
+/* calmer: coin dots on the track instead of histogram bars */
+.ir-hist{display:none}
+.ir-body{margin-top:4px}
+.ir-dots{position:absolute;left:7px;right:7px;top:50%;height:0;pointer-events:none;z-index:1}
+.ir-dots i{position:absolute;top:-2.5px;width:5px;height:5px;margin-left:-2.5px;border-radius:99px;background:#3A3B42;transition:background .2s,transform .2s,box-shadow .2s}
+.ir-dots i.in{background:#fff;box-shadow:0 0 0 1.5px color-mix(in srgb,var(--ac) 70%,transparent);transform:scale(1.15)}
+.irange .dual-track i{opacity:.55}
+.ir-rule{opacity:.8}
+.ir-rule em u{color:#4A4B52}
+.ir-rule.lit em u{color:var(--soft)}
+.ir-rule.lit em.pop u{animation:tickPop2 .35s cubic-bezier(.2,1.8,.4,1)}
+@keyframes tickPop2{40%{scale:1.35;translate:0 -2px;color:var(--ac)}}
+.ir-flag{bottom:calc(100% + 6px)}
+.ir-dots i{width:4px;height:4px;top:-2px;margin-left:-2px}.ir-dots i.in{background:#F2F2F4;box-shadow:none;transform:none;opacity:.9}
