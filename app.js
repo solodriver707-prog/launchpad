@@ -896,11 +896,12 @@
   }
   function inlineRange(k) {
     var c = RCFG[k], r = S.r[k], on = rLabel(k) !== 'Any';
-    return '<div class="irange' + (on ? ' on' : '') + '"><div class="ir-h"><span>' + c.lab + '</span><b id="fcl-' + k + '">' + rLabel(k) + '</b></div>' +
+    var ic = { mc: '$', age: '◷', prog: '▲', tax: '%' }[k];
+    return '<div class="irange ir-' + k + (on ? ' on' : '') + '"><div class="ir-h"><span><i>' + ic + '</i>' + c.lab + '</span><b id="fcl-' + k + '">' + rLabel(k) + '</b></div>' +
       '<div class="dual sm' + (k === 'tax' ? ' taxg' : '') + '"><div class="dual-track"><i id="rpf-' + k + '" style="' + rFill(k) + '"></i></div>' +
       '<input type="range" min="0" max="' + c.max + '" step="' + c.step + '" value="' + r[0] + '" data-range="' + k + '|0" aria-label="' + c.title + ' minimum">' +
       '<input type="range" min="0" max="' + c.max + '" step="' + c.step + '" value="' + r[1] + '" data-range="' + k + '|1" aria-label="' + c.title + ' maximum"></div>' +
-      '<div class="ir-s mono"><span>' + c.scale[0] + '</span><span>' + c.scale[c.scale.length - 1] + '</span></div></div>';
+'</div>';
   }
   function filterBar() {
     var active = 0;
