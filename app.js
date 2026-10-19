@@ -600,11 +600,12 @@
         g.items.slice(0, 2).map(function (c) { return avatarHTML(c.t, 22); }).join('') + '<b>+' + g.items.length + ' more</b></button>';
     }).join('');
   }
-  S.raceTab = 'curve'; S.raceAll = false;
+  S.raceTab = 'curve'; S.raceAll = true; S.raceSort = 'pos';
   function raceList() {
     var a = all();
-    if (S.raceTab === 'curve') return a.filter(function (t) { return t.prog < 100; }).sort(function (x, y) { return y.prog - x.prog; });
-    return a.filter(function (t) { return t.prog >= 100; }).sort(function (x, y) { return y.mcN - x.mcN; });
+    var l = S.raceTab === 'curve' ? a.filter(function (t) { return t.prog < 100; }) : a.filter(function (t) { return t.prog >= 100; });
+    var srt = { pos: function (x, y) { return laneF(y) - laneF(x); }, mc: function (x, y) { return y.mcN - x.mcN; }, new: function (x, y) { return y.born - x.born; }, old: function (x, y) { return x.born - y.born; }, chg: function (x, y) { return chg(y) - chg(x); } }[S.raceSort];
+    return l.sort(srt);
   }
   function laneF(t) { return S.raceTab === 'curve' ? Math.max(0, Math.min(1, t.prog / 100)) : gameF(t); }
   function laneVal(t) { return S.raceTab === 'curve' ? Math.min(100, t.prog).toFixed(0) + '%' : fmtK(t.mcN); }
@@ -612,11 +613,11 @@
     var f = laneF(t), fresh = (Date.now() - t.born) < 300000, lead = i === 0;
     return '<div class="lane' + (lead ? ' lead' : '') + '" data-lane="' + esc(t.tick) + '">' +
       '<span class="ln-rank mono">' + (i + 1) + '</span>' +
-      '<button class="ln-id" data-act="open" data-arg="' + esc(t.tick) + '"><b>$' + esc(t.tick) + '</b>' + (fresh ? '<span class="ln-new">NEW</span>' : '') + '<small>' + coinHTML(t.pair, 14) + esc(pairLabel(t.pair)) + '</small></button>' +
+      '<button class="ln-id" data-act="open" data-arg="' + esc(t.tick) + '"><b>$' + esc(t.tick) + '</b>' + (fresh ? '<span class="ln-new">NEW</span>' : '') + '<small>' + coinHTML(t.pair, 13) + esc(pairLabel(t.pair)) + ' · <span data-t="' + t.born + '">' + ago(t.born) + '</span></small></button>' +
       '<div class="ln-track"><span class="ln-trail" style="width:' + (f * 100).toFixed(2) + '%"></span>' +
         '<button class="ln-runner" data-act="open" data-arg="' + esc(t.tick) + '" style="left:' + (f * 100).toFixed(2) + '%">' + avatarHTML(t, 34) + (lead ? '<span class="ln-crown">♛</span>' : '') + '</button>' +
         '<span class="ln-val mono" style="left:' + (f * 100).toFixed(2) + '%">' + laneVal(t) + '</span></div>' +
-      '<span class="ln-chg mono ' + (chg(t) >= 0 ? 'up' : 'down') + '">' + chgTxt(chg(t)) + '</span></div>';
+      '<span class="ln-mc mono">' + fmtK(t.mcN) + '</span><span class="ln-chg mono ' + (chg(t) >= 0 ? 'up' : 'down') + '">' + chgTxt(chg(t)) + '</span></div>';
   }
   function raceRowsHTML() {
     var l = raceList(), show = S.raceAll ? l : l.slice(0, 10);
@@ -629,10 +630,9 @@
     return '<section class="race card-s" id="race"><div class="m-head"><div><span class="kicker"><span class="livedot"></span>LIVE RACE</span><h2 class="title-xl" style="font-size:30px;margin:8px 0 4px">' + (isC ? 'Race to Raydium' : 'Race to the Moon') + '</h2>' +
       '<p class="muted" style="margin:0;max-width:600px">' + (isC ? 'Every coin on the bonding curve gets a lane. Buys push it forward, sells pull it back. First to the finish line graduates to Raydium.' : 'Graduated coins race on market cap. Next stops: $1M, $10M, $50M — the finish line is the moon at $100M.') + '</p></div>' +
       '<div class="race-tabs"><button class="' + (isC ? 'on' : '') + '" data-act="rtab" data-arg="curve"><span>Race to Raydium</span><b class="mono">' + cur.length + '</b></button><button class="' + (!isC ? 'on' : '') + '" data-act="rtab" data-arg="moon"><span>Race to the Moon</span><b class="mono">' + grad.length + '</b></button></div></div>' +
-      '<div class="lanes-wrap"><div class="lanes-head"><span></span><span>COIN</span><div class="lh-track">' + '<span class="lh-tick" style="left:0">' + (isC ? 'START' : '$500K') + '</span>' + ticks.map(function (k) { return '<span class="lh-tick" style="left:' + k[1].toFixed(1) + '%">' + k[0] + '</span>'; }).join('') + '<span class="lh-tick fin" style="left:100%">' + (isC ? 'RAYDIUM' : 'MOON $100M') + '</span></div><span class="r">24H</span></div>' +
-        '<div class="lanes" id="lanes" style="--ticks:' + ticks.map(function (k) { return k[1].toFixed(1); }).join(',') + '">' +
-          '<div class="lane-grid">' + ticks.map(function (k) { return '<i style="left:' + k[1].toFixed(1) + '%"></i>'; }).join('') + '<span class="finish"></span></div>' + raceRowsHTML() + '</div>' +
-        (list.length > 10 ? '<button class="lanes-more" data-act="rall">' + (S.raceAll ? 'Show top 10' : 'Show all ' + list.length + ' coins') + '</button>' : '') + '</div></section>';
+      '<div class="lanes-wrap"><div class="lanes-bar"><span class="muted" style="font-size:12px;font-weight:700">Sort lanes</span><div class="seg sm">' + [['pos', 'Position'], ['mc', 'Market cap'], ['new', 'Newest'], ['old', 'Oldest'], ['chg', '24h change']].map(function (x) { return '<button class="' + (S.raceSort === x[0] ? 'on' : '') + '" data-act="rsort" data-arg="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div><span class="muted mono" style="margin-left:auto;font-size:11.5px">' + list.length + ' coins · drag to scroll</span></div><div class="lanes-head"><span></span><span>COIN</span><div class="lh-track">' + '<span class="lh-tick" style="left:0">' + (isC ? 'START' : '$500K') + '</span>' + ticks.map(function (k) { return '<span class="lh-tick" style="left:' + k[1].toFixed(1) + '%">' + k[0] + '</span>'; }).join('') + '<span class="lh-tick fin" style="left:100%">' + (isC ? 'RAYDIUM' : 'MOON $100M') + '</span></div><span class="r">MCAP</span><span class="r">24H</span></div>' +
+        '<div class="lanes-scroll" id="lanes-scroll"><div class="lanes" id="lanes" style="--ticks:' + ticks.map(function (k) { return k[1].toFixed(1); }).join(',') + '">' +
+          '<div class="lane-grid">' + ticks.map(function (k) { return '<i style="left:' + k[1].toFixed(1) + '%"></i>'; }).join('') + '<span class="finish"></span></div>' + raceRowsHTML() + '</div></div></div></section>';
   }
   var raceT2 = 0;
   function raceRefresh() {
@@ -649,6 +649,7 @@
       el.querySelector('.ln-runner').style.left = (f * 100).toFixed(2) + '%';
       var v = el.querySelector('.ln-val'); v.style.left = (f * 100).toFixed(2) + '%'; v.textContent = laneVal(t);
       var c = el.querySelector('.ln-chg'); c.textContent = chgTxt(chg(t)); c.className = 'ln-chg mono ' + (chg(t) >= 0 ? 'up' : 'down');
+      var mcE = el.querySelector('.ln-mc'); if (mcE) mcE.textContent = fmtK(t.mcN);
       var cr = el.querySelector('.ln-crown'); if (i === 0 && !cr) el.querySelector('.ln-runner').insertAdjacentHTML('beforeend', '<span class="ln-crown">♛</span>'); if (i !== 0 && cr) cr.remove();
       box.appendChild(el); keep[t.tick] = 1;
     });
@@ -1590,6 +1591,7 @@
       case 'rz': var dd = stageWH(); if (dd) zoomAt(dd.w / 2, dd.h / 2, arg === 'in' ? 1.6 : 1 / 1.6, true); break;
       case 'rzp': zoomPreset(arg); break;
       case 'rtab': S.raceTab = arg; S.raceAll = false; var rs = document.getElementById('race'); if (rs) rs.outerHTML = raceSection(); break;
+      case 'rsort': S.raceSort = arg; document.querySelectorAll('[data-act=rsort]').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-arg') === arg); }); raceRefresh(); break;
       case 'rall': S.raceAll = !S.raceAll; var rs2 = document.getElementById('race'); if (rs2) rs2.outerHTML = raceSection(); break;
       case 'rzat': var za = arg.split('|'), dz = stageWH(); if (dz) { var px0 = +za[0] / 100 * dz.w * RZ.z + RZ.x, py0 = +za[1] / 100 * dz.h * RZ.z + RZ.y; zoomAt(px0, py0, 2.6, true); } break;
       case 'soc': var sp0 = arg.split('|'), st0 = find(sp0[0]), so0 = st0 && socialsOf(st0), u0 = so0 && so0[sp0[1]];
@@ -1937,6 +1939,22 @@
     }
   });
 
+  // --- vertical drag-scroll for race lanes ---
+  var vs = null;
+  document.addEventListener('pointerdown', function (e) {
+    var box = e.target.closest && e.target.closest('#lanes-scroll'); if (!box || e.pointerType === 'touch' || e.button !== 0) return;
+    vs = { box: box, y: e.clientY, top: box.scrollTop, v: 0, ly: e.clientY, lt: performance.now(), moved: false };
+  });
+  document.addEventListener('pointermove', function (e) {
+    if (!vs) return; var dy = e.clientY - vs.y;
+    if (Math.abs(dy) > 5) { vs.moved = true; vs.box.classList.add('dragging'); }
+    if (!vs.moved) return;
+    vs.box.scrollTop = vs.top - dy; var now = performance.now(); vs.v = (e.clientY - vs.ly) / Math.max(1, now - vs.lt); vs.ly = e.clientY; vs.lt = now;
+  });
+  document.addEventListener('pointerup', function () {
+    if (!vs) return; var d = vs; vs = null; d.box.classList.remove('dragging');
+    if (d.moved) { suppressClick = true; setTimeout(function () { suppressClick = false; }, 60); var v = d.v * 16; (function glide() { if (Math.abs(v) < 0.4) return; d.box.scrollTop -= v; v *= 0.94; requestAnimationFrame(glide); })(); }
+  });
   // --- swipe deck ---
   var sw = null;
   function topCard() { return document.querySelector('.swipe-card.top'); }
