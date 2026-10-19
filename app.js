@@ -662,62 +662,80 @@
   }
   function raceSection() {
     var a = all(), cook = a.filter(function (t) { return t.prog < 100; }), sent = a.filter(function (t) { return t.prog >= 100; });
-    var micro = ''; for (var m = 0; m < 16; m++) micro += '<i style="left:' + ((m * 37) % 96 + 2) + '%;--d:' + (3 + (m % 5)) + 's;--dl:-' + (m * .7).toFixed(1) + 's;--z:' + (3 + m % 4) + 'px"></i>';
-    var alt = [['$1M', 1e6], ['$10M', 1e7], ['$50M', 5e7]].map(function (x) { var f = (mcU(x[1]) - SPLIT) / (1 - SPLIT); return '<i style="bottom:calc(' + (f * 100).toFixed(1) + '% * .84 + 8%)"><u>' + x[0] + '</u></i>'; }).join('');
-    return '<section class="race card-s lab" id="race"><div class="lab-head"><div><span class="kicker"><span class="livedot"></span>LIVE</span><h2 class="title-xl lab-title">The Meme Lab</h2>' +
-      '<p class="muted lab-sub">Fresh coins <b>cook</b> on the bonding curve. Hit 100% and they get <b>sent</b> — graduated, flying toward $100M.</p></div>' +
-      '<div class="lab-legend"><span><i class="lg-h">↕</i>height = progress</span><span><i class="lg-s">●</i>size = market cap</span><span><i class="lg-t">☝</i>tap to trade</span></div></div>' +
-      '<div class="lab-stage" id="lab">' +
-        '<div class="lab-zone cook"><div class="lz-lab"><b>🔥 Cooking</b><span class="mono">' + cook.length + '</span><small>bonding curve</small></div>' +
-          '<div class="flask"><div class="liquid"><svg class="wave" viewBox="0 0 400 20" preserveAspectRatio="none"><path d="M0 10 Q25 0 50 10 T100 10 T150 10 T200 10 T250 10 T300 10 T350 10 T400 10 V20 H0Z"/></svg><div class="micro">' + micro + '</div></div>' +
-          '<div class="lvl">' + [25, 50, 75].map(function (v) { return '<i style="bottom:calc(' + v + '% * .84 + 8%)"><u>' + v + '%</u></i>'; }).join('') + '</div>' +
-          '<div class="neck"><span>100% → graduate</span></div></div></div>' +
-        '<div class="lab-pipe"><svg viewBox="0 0 80 400" preserveAspectRatio="none"><path class="p0" d="M0 40 C 55 40, 25 360, 80 360"/><path class="p1" d="M0 40 C 55 40, 25 360, 80 360"/></svg><span>graduation pipe</span></div>' +
-        '<div class="lab-zone sent"><div class="lz-lab"><b>🚀 Sent</b><span class="mono">' + sent.length + '</span><small>graduated · market cap</small></div>' +
-          '<div class="sky"><div class="stars"></div><div class="lvl">' + alt + '</div><div class="ceiling"><span>$100M</span></div></div></div>' +
-        '<div class="lab-nodes" id="lab-nodes">' + a.map(labBubble).join('') + '</div>' +
+    var alt = [['$1M', 1e6], ['$10M', 1e7], ['$50M', 5e7]].map(function (x) { return '<i data-f="' + ((mcU(x[1]) - SPLIT) / (1 - SPLIT)).toFixed(3) + '" data-z="s"><u>' + x[0] + '</u></i>'; }).join('') +
+      [25, 50, 75].map(function (v) { return '<i data-f="' + (v / 100) + '" data-z="c"><u>' + v + '%</u></i>'; }).join('');
+    return '<section class="race card-s lab asc" id="race"><div class="lab-head"><div><h2 class="title-xl lab-title">The Ascent</h2>' +
+      '<p class="muted lab-sub">Buys lift a coin, sells sink it. Fill the bonding curve to break through the line — then it\'s a race to $100M.</p></div>' +
+      '<div class="asc-key"><span><i class="k-up"></i>buy</span><span><i class="k-dn"></i>sell</span><span><i class="k-sz"></i>size = market cap</span></div></div>' +
+      '<div class="lab-stage asc-stage" id="lab"><canvas class="asc-cv" id="asc-cv"></canvas>' +
+        '<div class="asc-zone z-sent"><span class="az-l">Sent <b class="mono" id="az-s">' + sent.length + '</b><small>graduated · market cap</small></span><span class="az-top mono">$100M</span></div>' +
+        '<div class="asc-line"><span>graduation</span></div>' +
+        '<div class="asc-zone z-cook"><span class="az-l">Cooking <b class="mono" id="az-c">' + cook.length + '</b><small>bonding curve</small></span></div>' +
+        '<div class="asc-grid">' + alt + '</div>' +
+        '<div class="lab-nodes" id="lab-nodes">' + a.map(labBubble).join('') + '</div><div class="asc-fx" id="asc-fx"></div>' +
       '</div></section>';
   }
-  var LAB = { pos: {}, stage: null, raf: 0, t0: 0 };
-  function labZones(st) {
-    var sr = st.getBoundingClientRect(), c = st.querySelector('.cook .flask').getBoundingClientRect(), s = st.querySelector('.sent .sky').getBoundingClientRect();
-    var z = function (r) { return { x0: r.left - sr.left, x1: r.right - sr.left, y0: r.top - sr.top, y1: r.bottom - sr.top }; };
-    return { c: z(c), s: z(s) };
+  var LAB = { pos: {}, stage: null, raf: 0, hist: {} };
+  var ASC_SPLIT = .52;
+  function ascGeom(st) { var r = st.getBoundingClientRect(); return { w: r.width, h: r.height, top: 34, bot: r.height - 30, line: 34 + (r.height - 64) * (1 - ASC_SPLIT) }; }
+  function ascY(G, t) {
+    if (t.prog < 100) { var f = Math.max(0, Math.min(1, t.prog / 100)); return G.bot - f * (G.bot - G.line - 16); }
+    var g = gameF(t); return G.line - 16 - g * (G.line - 16 - G.top);
   }
-  function labTarget(t, Z, now) {
-    var cook = t.prog < 100, z = cook ? Z.c : Z.s, h = hash(t.tick), r = labR(t);
-    var f = cook ? Math.max(0, Math.min(1, t.prog / 100)) : gameF(t);
-    var w = z.x1 - z.x0 - 2 * r - 16, hx = ((h % 1000) / 1000);
-    var x = z.x0 + r + 8 + hx * w + Math.sin(now / 1700 + h) * 7;
-    var top = z.y0 + (z.y1 - z.y0) * .08, bot = z.y1 - (z.y1 - z.y0) * .08;
-    var y = bot - f * (bot - top) + Math.cos(now / 1300 + h) * 4;
-    return { x: x, y: y, r: r, zone: cook ? 'c' : 's', z: z };
+  function ascGridPos(st, G) {
+    st.querySelectorAll('.asc-grid i').forEach(function (e) { var f = +e.getAttribute('data-f'), y = e.getAttribute('data-z') === 'c' ? G.bot - f * (G.bot - G.line - 16) : G.line - 16 - f * (G.line - 16 - G.top); e.style.top = y + 'px'; });
+    var ln = st.querySelector('.asc-line'); if (ln) ln.style.top = G.line + 'px';
+    var zs = st.querySelector('.z-sent'), zc = st.querySelector('.z-cook'); if (zs) zs.style.height = G.line + 'px'; if (zc) { zc.style.top = G.line + 'px'; zc.style.height = (G.h - G.line) + 'px'; }
+    var cv = st.querySelector('#asc-cv'), dpr = Math.min(2, window.devicePixelRatio || 1); cv.width = G.w * dpr; cv.height = G.h * dpr; cv.style.width = G.w + 'px'; cv.style.height = G.h + 'px'; LAB.ctx = cv.getContext('2d'); LAB.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
   function labLoop(now) {
     var st = document.getElementById('lab'); if (!st) { LAB.raf = 0; LAB.stage = null; return; }
-    if (st !== LAB.stage) { LAB.stage = st; LAB.Z = labZones(st); LAB.zt = now; }
-    if (now - LAB.zt > 1000) { LAB.Z = labZones(st); LAB.zt = now; }
-    var els = st.querySelectorAll('.lb'), nodes = [];
+    if (st !== LAB.stage || LAB.dirty) { LAB.stage = st; LAB.G = ascGeom(st); ascGridPos(st, LAB.G); LAB.dirty = false; }
+    var G = LAB.G, ctx = LAB.ctx, els = st.querySelectorAll('.lb'), nodes = [], slots = {};
+    ['c', 's'].forEach(function (z) { var l = all().filter(function (t) { return (t.prog < 100) === (z === 'c'); }).sort(function (a, b) { return (hash(a.tick) % 997) - (hash(b.tick) % 997); }); l.forEach(function (t, i) { slots[t.tick] = (i + .5) / l.length; }); });
     for (var i = 0; i < els.length; i++) {
       var el = els[i], tk = el.getAttribute('data-lb'), t = find(tk); if (!t) continue;
-      var T = labTarget(t, LAB.Z, now), p = LAB.pos[tk];
-      if (!p || p.zone !== T.zone) { p = LAB.pos[tk] = { x: T.x + (Math.random() - .5) * 20, y: p && p.zone !== T.zone ? T.z.y1 : T.y + 30, vx: 0, vy: 0, zone: T.zone }; }
-      p.vx += (T.x - p.x) * .012; p.vy += (T.y - p.y) * .018; nodes.push({ el: el, p: p, T: T });
+      var r = labR(t), h = hash(tk), zone = t.prog < 100 ? 'c' : 's';
+      var tx = 60 + (slots[tk] != null ? slots[tk] : .5) * (G.w - 120) + Math.sin(now / 2600 + h) * 10, ty = ascY(G, t);
+      var p = LAB.pos[tk];
+      if (!p) p = LAB.pos[tk] = { x: tx, y: G.bot + 40, vx: 0, vy: 0, zone: zone };
+      if (p.zone !== zone) { p.zone = zone; ascBurst(p.x, p.y, '#F3E5C8', 26); }
+      p.vx += (tx - p.x) * .008; p.vy += (ty - p.y) * .02; nodes.push({ el: el, p: p, r: r, t: t, tk: tk });
     }
     for (var a = 0; a < nodes.length; a++) for (var b = a + 1; b < nodes.length; b++) {
-      var A = nodes[a], B = nodes[b]; if (A.p.zone !== B.p.zone) continue;
-      var dx = B.p.x - A.p.x, dy = B.p.y - A.p.y, ey = dy / 1.55, d = Math.sqrt(dx * dx + ey * ey) || .01, min = A.T.r + B.T.r + 10;
-      if (d < min) { var k = (min - d) / d * .16; A.p.vx -= dx * k * 1.2; A.p.vy -= dy * k; B.p.vx += dx * k * 1.2; B.p.vy += dy * k; }
+      var A = nodes[a], B = nodes[b], dx = B.p.x - A.p.x, dy = (B.p.y - A.p.y) / 1.5, d = Math.sqrt(dx * dx + dy * dy) || .01, min = A.r + B.r + 12;
+      if (d < min) { var k = (min - d) / d * .05; A.p.vx -= dx * k; B.p.vx += dx * k; A.p.vy -= dy * k * .5; B.p.vy += dy * k * .5; }
     }
+    ctx.clearRect(0, 0, G.w, G.h);
     nodes.forEach(function (n) {
-      var p = n.p, z = n.T.z, r = n.T.r; p.vx *= .86; p.vy *= .86; p.x += p.vx; p.y += p.vy;
-      p.x = Math.max(z.x0 + r + 2, Math.min(z.x1 - r - 2, p.x)); p.y = Math.max(z.y0 + r + 2, Math.min(z.y1 - r - 2, p.y));
-      n.el.style.transform = 'translate(' + (p.x - r).toFixed(1) + 'px,' + (p.y - r).toFixed(1) + 'px)';
+      var p = n.p; p.vx *= .9; p.vy *= .88; p.x += p.vx; p.y += p.vy;
+      p.x = Math.max(n.r + 6, Math.min(G.w - n.r - 6, p.x)); p.y = Math.max(G.top + n.r * .3, Math.min(G.bot + 6, p.y));
+      n.el.style.transform = 'translate(' + (p.x - n.r).toFixed(1) + 'px,' + (p.y - n.r).toFixed(1) + 'px)';
+      var hs = LAB.hist[n.tk] || (LAB.hist[n.tk] = []); hs.push([p.x, p.y]); if (hs.length > 46) hs.shift();
+      if (hs.length > 3) {
+        var mv = hs[hs.length - 1][1] - hs[0][1], col = mv < -3 ? '61,220,151' : mv > 3 ? '242,112,138' : '237,233,225', base = Math.min(1, Math.abs(mv) / 30) * .55 + .06;
+        for (var j = 1; j < hs.length; j++) { var al = (j / hs.length) * base; ctx.strokeStyle = 'rgba(' + col + ',' + al.toFixed(3) + ')'; ctx.lineWidth = (j / hs.length) * n.r * .9; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(hs[j - 1][0], hs[j - 1][1]); ctx.lineTo(hs[j][0], hs[j][1]); ctx.stroke(); }
+      }
+      var gl = ctx.createRadialGradient(p.x, p.y, n.r * .6, p.x, p.y, n.r * 2.4); gl.addColorStop(0, n.t.prog >= 100 ? 'rgba(243,229,200,.10)' : 'rgba(237,233,225,.05)'); gl.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = gl; ctx.beginPath(); ctx.arc(p.x, p.y, n.r * 2.4, 0, 6.283); ctx.fill();
     });
+    LAB.parts = (LAB.parts || []).filter(function (q) { q.life -= 1; return q.life > 0; });
+    LAB.parts.forEach(function (q) { q.x += q.vx; q.y += q.vy; q.vy += .03; q.vx *= .97; ctx.fillStyle = q.c; ctx.globalAlpha = Math.max(0, q.life / q.max); ctx.beginPath(); ctx.arc(q.x, q.y, q.s, 0, 6.283); ctx.fill(); });
+    ctx.globalAlpha = 1;
     LAB.raf = requestAnimationFrame(labLoop);
   }
+  function ascBurst(x, y, c, n) { LAB.parts = LAB.parts || []; for (var i = 0; i < n; i++) { var a = Math.random() * 6.283, v = 1 + Math.random() * 3; LAB.parts.push({ x: x, y: y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 1, s: 1 + Math.random() * 2, c: c, life: 40 + Math.random() * 30, max: 70 }); } }
+  function ascPop(t, side, sol) {
+    var p = LAB.pos[t.tick], fx = document.getElementById('asc-fx'); if (!p || !fx) return;
+    var up = side === 'buy', r = labR(t);
+    ascBurst(p.x, p.y + (up ? r : -r), up ? '#3DDC97' : '#F2708A', 8);
+    var e = document.createElement('span'); e.className = 'asc-num ' + (up ? 'up' : 'dn');
+    e.textContent = (up ? '+' : '−') + (sol >= 10 ? sol.toFixed(0) : sol.toFixed(2)) + ' SOL'; e.style.left = p.x + 'px'; e.style.top = (p.y - r - 6) + 'px';
+    if (sol >= 5) e.classList.add('big');
+    fx.appendChild(e); setTimeout(function () { e.remove(); }, 1500);
+    p.vy += up ? -Math.min(14, 3 + sol) : Math.min(12, 2 + sol);
+  }
   function labKick() { if (!LAB.raf && document.getElementById('lab')) LAB.raf = requestAnimationFrame(labLoop); }
-  window.addEventListener('resize', function () { if (LAB.stage) LAB.zt = 0; });
+  window.addEventListener('resize', function () { LAB.dirty = true; });
   var raceT2 = 0;
   function raceRefresh() {
     var box = document.getElementById('lab-nodes'); if (!box) return;
@@ -730,18 +748,20 @@
       delete have[t.tick];
     });
     Object.keys(have).forEach(function (k) { have[k].remove(); });
-    var cs = document.querySelectorAll('.lab .lz-lab .mono'); if (cs.length === 2) { cs[0].textContent = all().filter(function (t) { return t.prog < 100; }).length; cs[1].textContent = all().filter(function (t) { return t.prog >= 100; }).length; }
+    var c1 = document.getElementById('az-c'), c2 = document.getElementById('az-s'); if (c1) c1.textContent = all().filter(function (t) { return t.prog < 100; }).length; if (c2) c2.textContent = all().filter(function (t) { return t.prog >= 100; }).length;
   }
   function raceBubble(t) {
     var p = trackPt(coinU(t)), sz = raceSize(t), done = t.prog >= 100, lab = done ? fmtK(t.mcN) : Math.min(100, t.prog).toFixed(0) + '%';
     return '<button class="rb ' + (done ? 'done' : '') + '" data-race="' + esc(t.tick) + '" data-act="open" data-arg="' + esc(t.tick) + '" style="left:' + p.x.toFixed(2) + '%;top:' + p.y.toFixed(2) + '%;--sz:' + sz + 'px" data-tip="$' + esc(t.tick) + ' · ' + (done ? 'graduated · ' : Math.min(100, t.prog).toFixed(0) + '% of curve · ') + fmtK(t.mcN) + '">' +
       avatarHTML(t, Math.round(sz)) + '<span class="rb-pct mono">' + lab + '</span></button>';
   }
-  function raceUpdate(t, side) {
+  function raceUpdate(t, side, sol) {
     var el = document.querySelector('.lb[data-lb="' + t.tick + '"]');
-    if (el) { el.classList.remove('up-hit', 'down-hit'); void el.offsetWidth; el.classList.add(side === 'buy' ? 'up-hit' : 'down-hit'); var p = LAB.pos[t.tick]; if (p) p.vy += side === 'buy' ? -5 : 4; }
+    if (el) { el.classList.remove('up-hit', 'down-hit'); void el.offsetWidth; el.classList.add(side === 'buy' ? 'up-hit' : 'down-hit'); }
+    ascPop(t, side, sol || .5);
     if (Date.now() - raceT2 > 800) { raceT2 = Date.now(); raceRefresh(); } else { clearTimeout(raceUpdate._t); raceUpdate._t = setTimeout(function () { raceT2 = Date.now(); raceRefresh(); }, 820); }
   }
+
 
   function heroHTML() {
     var st = stats(), slides = HERO.map(function (tk, i) { return heroSlide(find(tk), i); }).join('');
@@ -1200,12 +1220,12 @@
     var st = stats(), fresh = all().slice().sort(function (a, b) { return b.born - a.born; }).slice(0, 3);
     var t0 = find(HERO[tcI]) || all()[0];
     return '<section class="intro3" id="intro"><div class="aurora"><span class="a1"></span><span class="a2"></span><span class="a3"></span></div>' +
-      '<div class="i3-l"><div class="i3-kick"><span class="livedot"></span><b data-count="' + st.tokens + '">' + st.tokens + '</b> coins live <i>·</i> <b data-count="' + Math.round(st.vol) + '" data-fmt="k">' + fmtK(st.vol) + '</b> volume <i>·</i> <b id="i2-tr">' + fmtNum(st.trades) + '</b> trades</div>' +
+      '<div class="i3-l">' +
         '<h1 class="kin"><span class="kin-a">trade</span> <span class="kin-slot"><span class="kin-roll" id="kin-roll">' + KIN.concat([KIN[0]]).map(function (x) { return '<span class="kin-w">' + (x[0] ? (x[0].charAt(0) === '$' ? avatarHTML(find(x[0].slice(1)) || BASE[0], 64) : coinHTML(x[0], 64)) : '') + '<b>' + x[1] + '</b></span>'; }).join('') + '</span></span></h1>' +
         '<p class="i3-p">Launch a coin. Pair it with anything. Tax is always on the label.</p>' +
         '<div class="i3-cta"><button class="btn pri" data-act="create">Launch a coin <span aria-hidden="true">→</span></button><button class="btn sec" data-act="board">Trade anything ↓</button></div></div>' +
       '<div class="tc" id="tc">' + tcHTML(t0, tcI) + '<span class="tc-timer"></span></div>' +
-      '<div class="i2-live"><div class="i2-lh"><span class="livedot"></span>JUST LAUNCHED<span class="muted mono" id="i2-cnt">' + st.tokens + ' live</span></div><div id="i2-fresh">' + fresh.map(i2Row).join('') + '</div></div>' +
+      '<div class="i2-live"><div class="i2-lh"><span class="livedot"></span>JUST LAUNCHED</div><div id="i2-fresh">' + fresh.map(i2Row).join('') + '</div></div>' +
     '</section>';
   }
   function i2Row(t) {
@@ -1459,7 +1479,7 @@
           '<span class="lr-big mono"' + (S.lbTab === 'mcap' ? ' data-mc="' + esc(t.tick) + '" data-v="' + fmtK(t.mcN) + '"' : '') + '>' + fmt(t) + '</span></button>';
       }).join('');
     }
-    return '<main class="wrap lbpage" style="padding-top:22px"><section class="lb-hero"><div class="lb-glow"></div><div class="lb-head"><div><span class="kicker"><span class="livedot"></span>LIVE RANKINGS</span><h1>Hall of Memes</h1></div>' + tabBar + '</div>' +
+    return '<main class="wrap lbpage" style="padding-top:22px"><section class="lb-hero"><div class="lb-glow"></div><div class="lb-head"><div><span class="kicker">RANKINGS</span><h1>Hall of Memes</h1></div>' + tabBar + '</div>' +
       '<div class="lb-stage" key="' + S.lbTab + '">' + champ + '<div class="podcs">' + side + '</div></div></section>' +
       '<section class="lb-list card-s">' + rows + '</section><p class="note" style="margin-top:12px">Rankings use simulated market data in this beta.</p></main>';
   }
@@ -1716,7 +1736,7 @@
     var cardEl = document.querySelector('.tcard[data-card="' + t.tick + '"]');
     if (cardEl) { cardEl.classList.remove('shake', 'shake-s'); void cardEl.offsetWidth; cardEl.classList.add(side === 'buy' ? 'shake' : 'shake-s'); if (S.sort === 'bump' && S.screen === 'home' && !cardEl.matches(':hover')) { var gp = cardEl.parentNode; if (gp && gp.firstChild !== cardEl) gp.insertBefore(cardEl, gp.firstChild); } }
     machineTrade(t, tr);
-    if (S.screen === 'home') raceUpdate(t, side);
+    if (S.screen === 'home') raceUpdate(t, side, sol);
     if (!wasGrad && t.prog >= 100) { machineGrad(t); toast('$' + t.tick + ' graduated to Raydium', t); if (S.screen === 'token' && S.tick === t.tick) confetti(); }
     return tr;
   }
@@ -2028,7 +2048,7 @@
     var split = '<div class="split"><div class="split-h"><b>Where does the tax go?</b><span class="muted">Every trade pays the tax shown on the coin. It gets shared like this:</span><span class="mono split-tot" id="fs-jar">' + M.tax.toFixed(2) + ' SOL shared so far</span></div>' +
       '<div class="split-bar"><span class="sp c" style="flex:50"><b>50%</b> Creator</span><span class="sp h" style="flex:30"><b>30%</b> Holders</span><span class="sp v" style="flex:20"><b>20%</b> Burn</span></div></div>';
     return '<section class="factory card-s" id="machine">' +
-      '<div class="m-head"><div><span class="kicker"><span class="livedot"></span>HOW IT WORKS</span><h2 class="title-xl" style="font-size:32px;margin:8px 0 4px">From raw coin to legend</h2>' +
+      '<div class="m-head"><div><span class="kicker">HOW IT WORKS</span><h2 class="title-xl" style="font-size:32px;margin:8px 0 4px">From raw coin to legend</h2>' +
         '<p class="muted" style="margin:0">Every coin rides the same line. Rugs get caught and binned. Only the strong reach Raydium.</p></div>' +
         '<div class="line-stats"><div><span class="muted">Rugs binned</span><b class="mono down" id="ls-rug">' + RUGS + '</b></div><div><span class="muted">Passed</span><b class="mono up" id="ls-ok">' + CLEAN + '</b></div><button class="btn pri" data-act="mlaunch">Drop a coin in</button></div></div>' +
       '<div class="line-wrap drag-scroll"><div class="line" id="line">' +
@@ -2045,7 +2065,16 @@
     el.className = 'lcoin s0';
     el.innerHTML = '<span class="lc-raw">?</span><span class="lc-face">' + avatarHTML(src, 46) + '</span><span class="lc-tax" style="background:' + taxBg(tx) + '">' + tx + '%</span><span class="lc-mc mono">$5K</span><span class="lc-rug">RUG</span><span class="lc-ok">✓</span>';
     box.appendChild(el);
-    LC.push({ el: el, x: 2, st: 0, mc: 5, tok: src, rug: rug, scanned: false, held: false, gone: false });
+    var whale = !rug && Math.random() < 0.18; if (whale) el.classList.add('whale');
+    LC.push({ el: el, x: 2, st: 0, mc: 5, tok: src, rug: rug, whale: whale, scanned: false, held: false, gone: false, nt: 0 });
+  }
+  function lineFx(kind, c, txt) {
+    var line = document.getElementById('line'); if (!line || !c.el.isConnected) return;
+    var lr = line.getBoundingClientRect(), er = c.el.getBoundingClientRect(), x = er.left + er.width / 2 - lr.left, y = er.top + er.height / 2 - lr.top;
+    var e = document.createElement('span'); e.className = 'lfx ' + kind; e.style.left = x + 'px'; e.style.top = y + 'px';
+    if (txt) e.textContent = txt;
+    if (kind === 'spark' || kind === 'burst') { var n = kind === 'burst' ? 14 : 8, R = kind === 'burst' ? 70 : 34; for (var i = 0; i < n; i++) { var q = document.createElement('i'), a = i / n * 6.283; q.style.setProperty('--dx', (Math.cos(a) * R).toFixed(0) + 'px'); q.style.setProperty('--dy', (Math.sin(a) * R).toFixed(0) + 'px'); e.appendChild(q); } }
+    line.appendChild(e); setTimeout(function () { e.remove(); }, kind === 'alarm' ? 1400 : 1200);
   }
   function stampMachine(id) { var m = document.getElementById('mach-' + id); if (!m) return; m.classList.remove('hit'); void m.offsetWidth; m.classList.add('hit'); }
   function setCount(id, v) { var e = document.getElementById(id); if (e) { e.textContent = v; e.classList.remove('bump'); void e.offsetWidth; e.classList.add('bump'); } }
@@ -2109,7 +2138,7 @@
         }
         if (!c.scanned && c.x >= POS.scan) {
           c.scanned = true; stampMachine('scan');
-          c.el.classList.add(c.rug ? 'rug' : 'clean');
+          c.el.classList.add(c.rug ? 'rug' : 'clean'); lineFx(c.rug ? 'alarm' : 'ok', c);
           if (!c.rug) { CLEAN++; setCount('ls-ok', CLEAN); }
         }
         if (c.rug && c.scanned && c.x >= POS.pick) { c.x = POS.pick; c.held = true; }
@@ -2117,9 +2146,13 @@
         if (st !== c.st) {
           c.st = st; c.el.classList.remove('s0', 's1', 's2', 's3', 's4'); c.el.classList.add('s' + st);
           stampMachine(['', 'press', 'tax', 'pump', 'launch'][st]);
+          if (st === 1) lineFx('spark', c);
+          if (st === 2) lineFx('stamp', c, 'TAX ' + c.el.querySelector('.lc-tax').textContent);
+          if (st === 4) { lineFx('burst', c); c.el.classList.add('blast'); }
           if (st === 4) { (function (cc) { setTimeout(function () { cc.el.remove(); cc.gone = true; }, 1300); })(c); }
         }
-        if (st === 3) { c.mc += dt * 0.09 * (1 + c.mc / 60); var mcEl = c.el.querySelector('.lc-mc'); if (mcEl) mcEl.textContent = fmtK(c.mc); c.el.style.setProperty('--grow', Math.min(1.35, 1 + (c.x - POS.pump) / 50)); }
+        if (st === 3 && (c.nt -= dt) <= 0) { c.nt = 260 + Math.random() * 260; var gain = (c.whale ? 4 : 1) * (0.4 + Math.random() * 2.2); lineFx('num', c, '+' + gain.toFixed(1) + ' SOL'); c.el.classList.remove('hop'); void c.el.offsetWidth; c.el.classList.add('hop'); }
+        if (st === 3) { c.mc += dt * 0.09 * (c.whale ? 2.2 : 1) * (1 + c.mc / 60); var mcEl = c.el.querySelector('.lc-mc'); if (mcEl) mcEl.textContent = fmtK(c.mc); c.el.style.setProperty('--grow', Math.min(1.35, 1 + (c.x - POS.pump) / 50)); }
         if (st < 4) c.el.style.left = c.x + '%';
       }
     } else if (!box && LC.length) { LC = []; ARM.busy = false; }
