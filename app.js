@@ -716,7 +716,7 @@
   }
   function orbSetup(st, G) {
     var cv = st.querySelector('#asc-cv'), dpr = Math.min(2, window.devicePixelRatio || 1); cv.width = G.w * dpr; cv.height = G.h * dpr; cv.style.width = G.w + 'px'; cv.style.height = G.h + 'px'; LAB.ctx = cv.getContext('2d'); LAB.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    var lb = st.querySelector('#orb-labels'); if (lb) lb.innerHTML = orbRings().map(function (r) { return '<span class="ol ' + (r[2] || '') + '" style="left:' + G.cx + 'px;top:' + (G.cy - G.ry * r[0] - 7) + 'px">' + r[1] + '</span>'; }).join('');
+    var lb = st.querySelector('#orb-labels'); if (lb) lb.innerHTML = orbRings().map(function (r) { return (r[2] === 'g' ? '<span class="ol g" style="left:' + G.cx + 'px;top:' + (G.cy - G.ry * r[0] - 1) + 'px">' + r[1] + '</span>' : '<span class="ol ' + (r[2] || '') + '" style="left:' + (G.cx + G.rx * r[0] * Math.cos(-.22)) + 'px;top:' + (G.cy + G.ry * r[0] * Math.sin(-.22) - 8) + 'px">' + r[1] + '</span>'); }).join('');
     var core = st.querySelector('#orb-core'); if (core) { var cw = G.rx * OU0 * 2 * .82, chh = G.ry * OU0 * 2 * .82; core.style.width = cw + 'px'; core.style.height = chh + 'px'; core.style.left = (G.cx - cw / 2) + 'px'; core.style.top = (G.cy - chh / 2) + 'px'; }
   }
   function orbLoop(now, st) {
