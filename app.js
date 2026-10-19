@@ -497,6 +497,78 @@
     d += ' L100,24';
     return close ? d + ' L100,100 Z' : d;
   }
+  // ----- race zoom / pan -----
+  var RZ = { z: 1, x: 0, y: 0, preset: 'all' };
+  var ZP = [['all', 'All', 0, 1, 0, 1], ['start', 'Start', 0, .22, .62, .98], ['p1', 'Phase 1', 0, .5, .4, .98], ['near', 'Near graduation', .3, .52, .4, .8], ['p2', 'Phase 2', .48, 1, .1, .62]];
+  function zoomStyle() { return 'transform:translate(' + RZ.x.toFixed(1) + 'px,' + RZ.y.toFixed(1) + 'px) scale(' + RZ.z.toFixed(3) + ');--z:' + RZ.z.toFixed(3); }
+  function zoomBar() {
+    return '<div class="zoombar"><button class="zb" data-act="rz" data-arg="out" aria-label="Zoom out">−</button><span class="zb-v mono" id="zb-v">' + Math.round(RZ.z * 100) + '%</span><button class="zb" data-act="rz" data-arg="in" aria-label="Zoom in">+</button>' +
+      '<span class="zb-sep"></span>' + ZP.map(function (p) { return '<button class="zp' + (RZ.preset === p[0] ? ' on' : '') + '" data-act="rzp" data-arg="' + p[0] + '">' + p[1] + '</button>'; }).join('') + '</div>';
+  }
+  function stageWH() { var st = document.getElementById('race-stage'); return st ? { w: st.clientWidth, h: st.clientHeight, el: st } : null; }
+  function zClamp() {
+    var d = stageWH(); if (!d) return;
+    RZ.z = Math.max(1, Math.min(8, RZ.z));
+    RZ.x = Math.min(0, Math.max(d.w - d.w * RZ.z, RZ.x)); RZ.y = Math.min(0, Math.max(d.h - d.h * RZ.z, RZ.y));
+  }
+  function zApply(anim) {
+    zClamp();
+    var el = document.getElementById('race-zoom'); if (!el) return;
+    el.style.transition = anim ? 'transform .45s cubic-bezier(.2,.8,.2,1)' : 'none';
+    el.style.transform = 'translate(' + RZ.x + 'px,' + RZ.y + 'px) scale(' + RZ.z + ')'; el.style.setProperty('--z', RZ.z);
+    var v = document.getElementById('zb-v'); if (v) v.textContent = Math.round(RZ.z * 100) + '%';
+    document.querySelectorAll('.zp').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-arg') === RZ.preset); });
+    var st = document.getElementById('race-stage'); if (st) st.classList.toggle('zoomed', RZ.z > 1.01);
+  }
+  function zoomAt(px, py, factor, anim) {
+    var nz = Math.max(1, Math.min(8, RZ.z * factor));
+    RZ.x = px - (px - RZ.x) * (nz / RZ.z); RZ.y = py - (py - RZ.y) * (nz / RZ.z); RZ.z = nz; RZ.preset = nz <= 1.01 ? 'all' : null; zApply(anim);
+  }
+  function zoomPreset(id) {
+    var p = ZP.filter(function (x) { return x[0] === id; })[0], d = stageWH(); if (!p || !d) return;
+    var z = Math.min(1 / (p[3] - p[2]), 1 / (p[5] - p[4]));
+    RZ.z = z; RZ.x = d.w / 2 - (p[2] + p[3]) / 2 * d.w * z; RZ.y = d.h / 2 - (p[4] + p[5]) / 2 * d.h * z; RZ.preset = id; zApply(true);
+  }
+  document.addEventListener('wheel', function (e) {
+    var st = e.target.closest && e.target.closest('#race-stage'); if (!st || !(e.ctrlKey || e.metaKey)) return;
+    e.preventDefault(); var r = st.getBoundingClientRect();
+    zoomAt(e.clientX - r.left, e.clientY - r.top, e.deltaY < 0 ? 1.18 : 1 / 1.18, false);
+  }, { passive: false });
+  document.addEventListener('dblclick', function (e) {
+    var st = e.target.closest && e.target.closest('#race-stage'); if (!st || e.target.closest('.zoombar')) return;
+    var r = st.getBoundingClientRect(); zoomAt(e.clientX - r.left, e.clientY - r.top, 2, true);
+  });
+  var rp = null, pinch = null;
+  document.addEventListener('pointerdown', function (e) {
+    var st = e.target.closest && e.target.closest('#race-stage'); if (!st || e.target.closest('.zoombar') || RZ.z <= 1.01 || e.pointerType === 'touch') return;
+    rp = { x: e.clientX, y: e.clientY, ox: RZ.x, oy: RZ.y, moved: false };
+  });
+  document.addEventListener('pointermove', function (e) {
+    if (!rp) return; var dx = e.clientX - rp.x, dy = e.clientY - rp.y;
+    if (Math.abs(dx) + Math.abs(dy) > 4) { rp.moved = true; var st = document.getElementById('race-stage'); if (st) st.classList.add('panning'); }
+    if (rp.moved) { RZ.x = rp.ox + dx; RZ.y = rp.oy + dy; RZ.preset = null; zApply(false); }
+  });
+  document.addEventListener('pointerup', function () {
+    if (!rp) return; if (rp.moved) { suppressClick = true; setTimeout(function () { suppressClick = false; }, 60); }
+    rp = null; var st = document.getElementById('race-stage'); if (st) st.classList.remove('panning');
+  });
+  document.addEventListener('touchstart', function (e) {
+    var st = e.target.closest && e.target.closest('#race-stage'); if (!st) return;
+    var r = st.getBoundingClientRect();
+    if (e.touches.length === 2) { var a = e.touches[0], b = e.touches[1]; pinch = { d: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY), cx: (a.clientX + b.clientX) / 2 - r.left, cy: (a.clientY + b.clientY) / 2 - r.top, z: RZ.z, x: RZ.x, y: RZ.y }; }
+    else if (e.touches.length === 1 && RZ.z > 1.01) { pinch = { pan: true, sx: e.touches[0].clientX, sy: e.touches[0].clientY, x: RZ.x, y: RZ.y }; }
+  }, { passive: true });
+  document.addEventListener('touchmove', function (e) {
+    if (!pinch) return;
+    if (pinch.pan && e.touches.length === 1) { RZ.x = pinch.x + e.touches[0].clientX - pinch.sx; RZ.y = pinch.y + e.touches[0].clientY - pinch.sy; RZ.preset = null; zApply(false); e.preventDefault(); return; }
+    if (e.touches.length === 2 && !pinch.pan) {
+      var a = e.touches[0], b = e.touches[1], d = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY), nz = Math.max(1, Math.min(8, pinch.z * d / pinch.d));
+      RZ.x = pinch.cx - (pinch.cx - pinch.x) * (nz / pinch.z); RZ.y = pinch.cy - (pinch.cy - pinch.y) * (nz / pinch.z); RZ.z = nz; RZ.preset = null; zApply(false); e.preventDefault();
+    }
+  }, { passive: false });
+  document.addEventListener('touchend', function () { pinch = null; });
+  window.addEventListener('resize', function () { zApply(false); });
+
   function raceSection() {
     var a = all(), climbing = a.filter(function (t) { return t.prog < 100; }).sort(function (x, y) { return x.prog - y.prog; }), grad = a.filter(function (t) { return t.prog >= 100; }).sort(function (x, y) { return x.mcN - y.mcN; });
     var bubbles = '', prevs = [], prevg = [];
@@ -510,13 +582,13 @@
       '<p class="muted" style="margin:0;max-width:640px">Phase 1: climb the bonding curve to graduate. Phase 2: after Raydium the real game starts — coins climb by market cap all the way to $100M.</p></div>' +
       '<div class="race-stats"><div><span class="muted">Climbing</span><b class="mono">' + climbing.length + '</b></div><div><span class="muted">Graduated</span><b class="mono" style="color:var(--ice)">' + grad.length + '</b></div>' +
       stat('CLOSEST TO GRADUATING', leader, leader ? leader.prog.toFixed(0) + '%' : '') + stat('HIGHEST ON THE MOUNTAIN', king, king ? fmtK(king.mcN) : '') + '</div></div>' +
-      '<div class="race-stage" id="race-stage"><div class="phase2bg"></div><svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="hillg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#E8E8EA" stop-opacity=".16"/><stop offset="1" stop-color="#E8E8EA" stop-opacity="0"/></linearGradient></defs>' +
+      '<div class="race-stage" id="race-stage">' + zoomBar() + '<div class="race-zoom" id="race-zoom" style="' + zoomStyle() + '"><div class="phase2bg"></div><svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="hillg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#E8E8EA" stop-opacity=".16"/><stop offset="1" stop-color="#E8E8EA" stop-opacity="0"/></linearGradient></defs>' +
         '<path d="' + racePath(true) + '" fill="url(#hillg)"/><path d="' + racePath(false) + '" fill="none" stroke="#E8E8EA" stroke-width="2.5" vector-effect="non-scaling-stroke" class="hill-path"/></svg>' +
         marks + miles +
         '<span class="rayflag" style="left:48%;top:54%"><span class="flagpole"></span><span class="flagcloth">RAYDIUM</span></span>' +
         '<span class="moonflag"><span class="moon"></span><b>MOON · $100M</b></span>' +
         '<span class="startline">START</span><span class="phase-l p1">PHASE 1 · BONDING CURVE</span><span class="phase-l p2">PHASE 2 · THE REAL GAME</span>' +
-        '<div id="race-b">' + bubbles + '</div></div></section>';
+        '<div id="race-b">' + bubbles + '</div></div><span class="zoom-hint">Ctrl + scroll to zoom · double-click to zoom in · drag to move</span></div></section>';
   }
   function racePos(t) {
     var sz = raceSize(t), off = RACE_OFF[t.tick] || 0;
@@ -1305,6 +1377,8 @@
       case 'clearImg': setC({ img: null }); break;
       case 'cpair': setC({ pair: arg }); break;
       case 'cat': set({ cat: arg, pair: 'All' }); break;
+      case 'rz': var dd = stageWH(); if (dd) zoomAt(dd.w / 2, dd.h / 2, arg === 'in' ? 1.6 : 1 / 1.6, true); break;
+      case 'rzp': zoomPreset(arg); break;
       case 'soc': var sp0 = arg.split('|'), st0 = find(sp0[0]), so0 = st0 && socialsOf(st0), u0 = so0 && so0[sp0[1]];
         if (so0 && !so0.demo && u0) window.open(u0, '_blank', 'noopener'); else toast('Demo coin — its ' + ({ web: 'website', x: 'X account', tg: 'Telegram' })[sp0[1]] + ' opens here once real coins go live', st0); break;
       case 'quick': var qq0 = QUICK.filter(function (x) { return x[0] === arg; })[0]; if (qq0 && qq0[2]) set({ cat: pairInfo(qq0[2]).cat, pair: qq0[2], view: 'grid' }); else set({ cat: arg, pair: 'All', view: 'grid' }); setTimeout(function () { var bd = document.getElementById('board'); if (bd) bd.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 30); break;

@@ -1227,3 +1227,26 @@ header{background:rgba(9,9,10,.78);border-bottom-color:#1C1C20}
 .tc-flags{display:none}
 
 .rk-t{text-align:left}
+/* race zoom */
+.race-stage{touch-action:pan-y}
+.race-zoom{position:absolute;inset:0;transform-origin:0 0;will-change:transform}
+.race-stage.zoomed{cursor:grab;touch-action:none}
+.race-stage.panning{cursor:grabbing}
+.race-stage.panning .rb{pointer-events:none}
+.rb{transform-origin:50% 100%;transform:translate(-50%,-100%) scale(calc(1 / var(--z,1)))}
+.rmark{transform-origin:50% 0;transform:translate(-50%,0) scale(calc(1 / var(--z,1)))}
+.rmile,.rayflag,.moonflag{transform-origin:50% 100%;transform:translate(-50%,-100%) scale(calc(1 / var(--z,1)))}
+.phase-l,.startline{transform-origin:0 100%;transform:scale(calc(1 / var(--z,1)))}
+.zoombar{position:absolute;left:12px;top:12px;z-index:6;display:flex;align-items:center;gap:4px;padding:4px;border-radius:11px;background:rgba(14,14,16,.88);border:1px solid #2C2D32;backdrop-filter:blur(8px);flex-wrap:wrap;max-width:calc(100% - 24px)}
+.zb{width:32px;height:32px;border-radius:8px;border:1px solid #2C2D32;background:#18181B;color:var(--text);font-size:18px;font-weight:700;line-height:1}
+.zb:hover{background:#ECECEE;color:#0A0A0B}
+.zb-v{min-width:46px;text-align:center;font-size:12px;color:var(--soft)}
+.zb-sep{width:1px;height:20px;background:#2C2D32;margin:0 4px}
+.zp{min-height:32px;padding:0 10px;border-radius:8px;border:0;background:none;color:var(--muted);font-size:12.5px;font-weight:700}
+.zp:hover{color:var(--text)}
+.zp.on{background:#ECECEE;color:#0A0A0B}
+.zoom-hint{position:absolute;right:12px;top:16px;z-index:6;font-size:11px;color:var(--faint);pointer-events:none}
+@media (max-width:900px){.zoom-hint{display:none}}
+.race-zoom .hill-path{stroke-width:calc(2.5px / var(--z,1))}
+.zoom-hint{top:auto;bottom:10px;right:14px}
+.phase2bg{border-left-width:calc(1px / var(--z,1))}
