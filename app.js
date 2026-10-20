@@ -1813,10 +1813,10 @@
   function position(t) { var p = S.pos[t.tick]; if (!p || p.tok <= 0) return null; var val = p.tok * price(t) / SOL_USD; return { tok: p.tok, cost: p.cost, val: val, pnl: val - p.cost, pct: p.cost ? (val / p.cost - 1) * 100 : 0 }; }
   function quoteFor(t) {
     var isBuy = S.side === 'buy', amt = parseFloat(String(S.amount).replace(',', '.')) || 0, px = price(t);
-    var sol = isBuy ? amt : amt * px / SOL_USD, pct = effTax(t), tax = sol * pct / 100, net = sol - tax;
+    var sol = isBuy ? amt : amt * px / SOL_USD, pct = effTax(t), tax = sol * pct / 100, fp = feeOf(t), fee = sol * fp / 100, net = sol - tax - fee;
     var impact = Math.min(25, net * 3 / Math.sqrt(Math.max(t.mcN, 4)));
     var outTok = isBuy ? net * SOL_USD / (px * (1 + impact / 200)) : 0, outSol = isBuy ? 0 : net * (1 - impact / 200);
-    return { isBuy: isBuy, amt: amt, sol: sol, pct: pct, tax: tax, impact: impact, out: isBuy ? outTok : outSol, min: (isBuy ? outTok : outSol) * (1 - S.slip / 100) };
+    return { isBuy: isBuy, amt: amt, sol: sol, pct: pct, tax: tax, fp: fp, fee: fee, impact: impact, out: isBuy ? outTok : outSol, min: (isBuy ? outTok : outSol) * (1 - S.slip / 100) };
   }
 
   // ================= WALLET PANEL (GMGN / Axiom style) =================
@@ -2088,7 +2088,7 @@
         return '<div class="st-box"><div class="st-h"><b>Activity</b><span class="st-pc ' + (pc >= 0 ? 'up' : 'down') + '">' + (pc >= 0 ? '↑ +' : '↓ ') + pc.toFixed(1) + '%</span><span class="st-vol muted">Vol <b class="mono">' + fmtK((bv + sv) / 1000) + '</b></span><div class="seg sm st-tf">' + ['5m', '1h', '24h'].map(function (x) { return '<button class="' + ((S.stf || '24h') === x ? 'on' : '') + '" data-act="stf" data-arg="' + x + '">' + x + '</button>'; }).join('') + '</div></div>' +
           row(['buys', 'sells'], b, se, fmtNum(b), fmtNum(se)) + row(['bought', 'sold'], bv, sv, fmtK(bv / 1000), fmtK(sv / 1000)) + row(['buyers', 'sellers'], nbw, nsw, fmtNum(nbw), fmtNum(nsw)) + '</div>' +
           '<div class="st-foot"><div><small>Pool</small><b class="mono">' + fmtK(curveSol * SOL_USD / 1000) + ' <em>(' + curveSol + ' SOL)</em></b><span class="muted">paired with ' + coinHTML(t.pair, 14) + ' ' + esc(pairLabel(t.pair)) + '</span></div>' +
-          '<div><small>Creator</small><b>' + makerHTML(devOf(t), t) + '</b><span class="muted">' + (splitOf(t) ? 'earns ' + splitOf(t).d + '% of tax' : 'no tax on this coin') + '</span></div>' +
+          '<div><small>Creator</small><b>' + makerHTML(devOf(t), t) + '</b><span class="muted">earns ' + (+creatorCut(t).toFixed(3)) + '% of every trade' + (Math.max(t.buy, t.sell) > 0 ? '' : ' (creator rewards)') + '</span></div>' +
           '<button class="st-bub" data-act="hmap" data-arg="' + id + '">◎ Bubble map</button></div>' +
           '</section>';
       })();
@@ -2149,7 +2149,9 @@
       (S.slipOpen ? '<div class="slipbox"><span class="muted" style="font-size:12px">Max slippage</span><div class="presets">' + [1, 3, 5, 10, 20].map(function (v) { return '<button class="' + (S.slip === v ? 'on' : '') + '" data-act="setslip" data-arg="' + v + '">' + v + '%</button>'; }).join('') + '</div><span class="muted" style="font-size:11.5px">Priority fee: 0.0001 SOL · MEV protection on</span></div>' : '') +
       '<div class="amtwrap"><input id="amt" class="inp" inputmode="decimal" data-bind="amount" value="' + esc(S.amount) + '" placeholder="0.0"><span>' + (q.isBuy ? coinHTML('SOL', 22) + 'SOL' : avatarHTML(t, 22) + '$' + id) + '</span></div>' +
       '<div class="presets">' + presets + '</div>' +
-      '<div class="quote"><div><span class="muted">' + (q.isBuy ? 'Buy' : 'Sell') + ' tax (' + q.pct + '%)</span><span style="color:' + taxBg(q.pct) + '">' + q.tax.toFixed(4) + ' SOL</span></div>' +
+      '<div class="quote">' + (q.pct > 0 ? '<div><span class="muted">Coin ' + (q.isBuy ? 'buy' : 'sell') + ' tax (' + q.pct + '%)</span><span style="color:' + taxBg(q.pct) + '">' + q.tax.toFixed(4) + ' SOL</span></div>' : '') +
+        '<div><span class="muted">treid fee (' + q.fp + '%)' + (q.pct > 0 ? '' : ' <em class="q-cr">' + FEE.creatorPlain + '% to creator</em>') + '</span><span>' + q.fee.toFixed(4) + ' SOL</span></div>' +
+        '<div class="q-tot"><span class="muted">Total cost</span><span class="mono">' + (q.pct + q.fp) + '% · ' + (q.tax + q.fee).toFixed(4) + ' SOL</span></div>' +
         '<div><span class="muted">Price impact</span><span class="' + (q.impact > 5 ? 'down' : '') + '">' + q.impact.toFixed(2) + '%</span></div>' +
         '<div><span class="muted">Min received (' + S.slip + '% slip)</span><span>' + (q.isBuy ? fmtNum(q.min) + ' $' + id : q.min.toFixed(4) + ' SOL') + '</span></div>' +
         '<div style="padding-top:9px;border-top:1px solid var(--line)"><span class="muted">You receive ≈</span><span style="font-weight:800;font-size:15px">' + (q.isBuy ? fmtNum(q.out) + ' $' + id : q.out.toFixed(4) + ' SOL') + '</span></div></div>' +
@@ -2242,6 +2244,9 @@
       var sv = e.querySelector('.hg-svg'); if (sv) sv.outerHTML = hgSVG(left / t.snipe.dur); var tt = e.querySelector('.hgt-t'); if (tt) tt.textContent = trapFmt(left); });
     document.querySelectorAll('[data-trapt]').forEach(function (e) { var t = find(e.getAttribute('data-trapt')); if (t) e.textContent = trapFmt(trapLeft(t)); });
   }, 250);
+  var FEE = { plain: 1, taxed: 0.5, creatorPlain: 0.5 }; // treid platform fee, % of each trade
+  function feeOf(t) { return Math.max(t.buy || 0, t.sell || 0) > 0 ? FEE.taxed : FEE.plain; }
+  function creatorCut(t) { var sp = splitOf(t), m = Math.max(t.buy || 0, t.sell || 0); return m > 0 ? (sp ? m * sp.d / 100 : 0) : FEE.creatorPlain; }
   function effTax(t, at) { return Math.max(Math.max(t.buy, t.sell), snipeNow(t, at)); }
   function devQuote(sol) {
     sol = Math.max(0, +sol || 0); var px0 = 5 * 1000 / 1e9, impact = Math.min(25, sol * 3 / Math.sqrt(5));
@@ -2321,7 +2326,7 @@
   function splitBar(sp, cls) { return '<span class="spbar ' + (cls || '') + '">' + ['h', 'b', 'd'].filter(function (k) { return sp[k] > 0; }).map(function (k) { return '<i style="flex:' + sp[k] + ';background:' + SPC[k][3] + '"></i>'; }).join('') + '</span>'; }
   function splitTip(t) { var sp = splitOf(t), m = Math.max(t.buy, t.sell); return sp ? 'Tax ' + m + '% → ' + sp.h + '% holders · ' + sp.b + '% burn · ' + sp.d + '% dev (locked)' : 'No tax — plain coin'; }
   function splitPicker(c) {
-    var base = c.buy; if (base <= 0) return '<div class="spk off"><b>Where the tax goes</b><small>0% tax — nothing to split. Your coin trades as a plain token.</small></div>';
+    var base = c.buy; if (base <= 0) return '<div class="spk off fee0"><div class="spk-h"><b>Your creator rewards</b><span class="spk-lock">' + ICO.lock + 'automatic</span></div><div class="fee-big"><b class="mono">' + FEE.creatorPlain + '%</b><span>of every trade on your coin goes to you</span></div><small>Plain coins pay a ' + FEE.plain + '% treid fee per trade. Half of it (' + FEE.creatorPlain + '%) is paid to you as creator rewards. Add a tax to earn from your own tax split instead — the treid fee then drops to ' + FEE.taxed + '%.</small></div>';
     var sp = c.split || (c.split = { p: 'community', h: 70, b: 20, d: 10 });
     var chips = Object.keys(SPRE).map(function (k) { var p = SPRE[k]; return '<button class="spc' + (sp.p === k ? ' on' : '') + '" data-act="spPre" data-arg="' + k + '"><span class="spc-ic">' + ICO[p[0]] + '</span><b>' + p[1] + '</b><small class="mono">' + p[2] + ' / ' + p[3] + ' / ' + p[4] + '</small>' + splitBar({ h: p[2], b: p[3], d: p[4] }) + '</button>'; }).join('') +
       '<button class="spc' + (sp.p === 'custom' ? ' on' : '') + '" data-act="spPre" data-arg="custom"><span class="spc-ic">' + ICO.custom + '</span><b>Custom</b><small>set it yourself</small><span class="spbar"><i style="flex:1;background:repeating-linear-gradient(90deg,#3a3a40 0 4px,#26262a 4px 8px)"></i></span></button>';
@@ -2329,18 +2334,18 @@
     var rows = ['h', 'b', 'd'].map(function (k) { var c0 = SPC[k]; return '<div class="spr" style="--c:' + c0[0] + '"><span class="spr-l"><span class="sp-ic">' + ICO[c0[1]] + '</span>' + c0[2] + '</span>' + (sp.p === 'custom' ? '<span class="spr-rg' + (k === 'd' ? ' cap' : '') + '"><input type="range" min="0" max="100" step="5" value="' + sp[k] + '" data-split="' + k + '">' + (k === 'd' ? '<em>cap 50%</em>' : '') + '</span>' : '<span class="spr-fill"><i style="width:' + sp[k] + '%;background:' + c0[3] + '"></i></span>') + '<b class="mono" data-spv="' + k + '">' + sp[k] + '%</b><small class="mono" data-spx="' + k + '">' + ex(k) + ' of each trade</small></div>'; }).join('');
     return '<div class="spk"><div class="spk-h"><b>Where the tax goes</b><span class="spk-lock">' + ICO.lock + 'Locked forever at launch</span></div><div class="spk-chips">' + chips + '</div>' +
       '<div class="spk-viz"><div class="spk-big" data-spbig>' + splitBar(sp, 'big') + '</div>' + rows + '</div>' +
-      '<small class="spk-note">Dev share is capped at 50%. The treid platform fee is separate and never comes out of this split.</small></div>';
+      '<small class="spk-note">Dev share is capped at 50%. Buyers also pay a ' + FEE.taxed + '% treid fee (total ' + (base + FEE.taxed) + '% per trade) — it never comes out of this split.</small></div>';
   }
   function spUpdate() {
     var sp = S.c.split, base = S.c.buy; ['h', 'b', 'd'].forEach(function (k) { var v = document.querySelector('[data-spv="' + k + '"]'), x = document.querySelector('[data-spx="' + k + '"]'), r = document.querySelector('[data-split="' + k + '"]'); if (v) v.textContent = sp[k] + '%'; if (x) x.textContent = (base * sp[k] / 100).toFixed(2).replace(/\.?0+$/, '') + '% of each trade'; if (r && +r.value !== sp[k]) r.value = sp[k]; });
     var bg = document.querySelector('[data-spbig]'); if (bg) bg.innerHTML = splitBar(sp, 'big');
   }
   function taxSplitPanel(t) {
-    var sp = splitOf(t), m = Math.max(t.buy, t.sell); if (!sp) return '<section class="card-s panel tsp-panel"><b>Where the tax goes</b><small class="muted">0% tax — plain coin, nothing is split.</small></section>';
+    var sp = splitOf(t), m = Math.max(t.buy, t.sell); if (!sp) return '<section class="card-s panel tsp-panel"><div class="tsp-h"><b>Fees on this coin</b><span class="tsp-p">plain coin · 0% tax</span></div><div class="tsp-rows" style="grid-template-columns:1fr 1fr"><div class="tsp-r" style="--c:#E6CB95"><em class="sp-ic">' + ICO.dev + '</em><span>Creator rewards</span><b class="mono">' + FEE.creatorPlain + '%</b><small class="mono">of every trade</small></div><div class="tsp-r" style="--c:#9a9aa2"><em class="sp-ic">' + ICO.lock + '</em><span>treid</span><b class="mono">' + (FEE.plain - FEE.creatorPlain) + '%</b><small class="mono">platform</small></div></div><small class="muted tsp-n">Buyers pay a ' + FEE.plain + '% treid fee per trade — half goes to the creator.</small></section>';
     var pre = SPRE[sp.p], name = pre ? pre[1] : 'Custom';
     return '<section class="card-s panel tsp-panel"><div class="tsp-h"><b>Where the ' + m + '% tax goes</b><span class="tsp-p">' + ICO.lock + name + ' · locked</span></div>' + splitBar(sp, 'big') +
       '<div class="tsp-rows">' + ['h', 'b', 'd'].map(function (k) { var c0 = SPC[k]; return '<div class="tsp-r" style="--c:' + c0[0] + '"><em class="sp-ic">' + ICO[c0[1]] + '</em><span>' + c0[2] + '</span><b class="mono">' + sp[k] + '%</b><small class="mono">' + (m * sp[k] / 100).toFixed(2).replace(/\.?0+$/, '') + '% / trade</small></div>'; }).join('') + '</div>' +
-      '<small class="muted tsp-n">On a 1 SOL buy: ' + ['h', 'b', 'd'].map(function (k) { return (m / 100 * sp[k] / 100).toFixed(4).replace(/0+$/, '') + ' SOL ' + SPC[k][2].toLowerCase(); }).join(' · ') + '</small></section>';
+      '<small class="muted tsp-n">Plus a ' + FEE.taxed + '% treid fee per trade (total ' + (m + FEE.taxed) + '%). On a 1 SOL buy: ' + ['h', 'b', 'd'].map(function (k) { return (m / 100 * sp[k] / 100).toFixed(4).replace(/0+$/, '') + ' SOL ' + SPC[k][2].toLowerCase(); }).join(' · ') + '</small></section>';
   }
   function taxPicker(c) {
     var sn = c.snipe || { on: false, start: 80, dur: 60 }, base = c.buy;
