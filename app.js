@@ -359,12 +359,16 @@
     if (m < 1440) return { cls: 'f2', lab: 'TODAY' };
     return { cls: 'f3', lab: 'LIVE FOR' };
   }
+  function liveBal(t) {
+    var m = {}; S.trades.forEach(function (x) { if (x.tick !== t.tick || !x.tokens) return; m[x.wallet] = Math.max(0, (m[x.wallet] || 0) + (x.side === 'buy' ? x.tokens : -x.tokens)); });
+    return Object.keys(m).filter(function (a) { return m[a] > 0; }).map(function (a) { return { a: a, tok: m[a], pct: m[a] / 1e9 * 100 }; }).sort(function (a, b) { return b.tok - a.tok; });
+  }
   function riskMetrics(t) {
     var h = hash(t.tick + 'r'), devSold = (h >> 4) % 7 === 0 && t.prog < 100;
     function lv(v, a, b) { return v < a ? 'g' : v < b ? 'y' : 'r'; }
     var dev = devSold ? 0 : ((h % 80) / 10), top = 16 + (h >> 2) % 52, sn = (h >> 5) % 19, bu = (h >> 8) % 16;
     if (t.creator && S.account && t.creator === S.account) { dev = 2.1; top = 22; sn = 0; bu = 0; devSold = false; }
-    if (t.devPct != null) { dev = t.devPct; top = Math.round(Math.max(t.devPct, 0)); sn = 0; bu = 0; devSold = false; }
+    if (t.devPct != null) { var lb = liveBal(t), dv = lb.filter(function (x) { return x.a === t.creator; })[0]; dev = lb.length ? (dv ? dv.pct : 0) : t.devPct; top = lb.slice(0, 10).reduce(function (a, x) { return a + x.pct; }, 0); if (!lb.length) top = Math.max(t.devPct, 0); top = top >= 10 ? Math.round(top) : +top.toFixed(1); sn = 0; bu = 0; devSold = !!(t.devPct > 0 && lb.length && !dv); }
     return [
       { k: 'dev', lab: 'DEV', val: devSold ? 'SOLD' : dev.toFixed(1) + '%', lv: devSold ? 'r' : lv(dev, 3, 8), tip: devSold ? 'The creator already sold their tokens' : 'Share of supply the creator still holds' },
       { k: 'top', lab: 'TOP 10', val: top + '%', lv: lv(top, 30, 45), tip: 'Share of supply held by the 10 biggest wallets (excl. curve)' },
@@ -1678,6 +1682,8 @@
   }
   function holdersOf(t) {
     var rm = riskMetrics(t), devP = rm[0].val === 'SOLD' ? 0 : parseFloat(rm[0].val), top = parseFloat(rm[1].val), sn = parseFloat(rm[2].val), bu = parseFloat(rm[3].val);
+    if (t.devPct != null) { var lb2 = liveBal(t); if (lb2.length) { var held = lb2.reduce(function (a, x) { return a + x.pct; }, 0), o3 = [{ a: 'curve', pct: Math.max(0, 100 - held), label: 'Bonding curve', kind: 'curve' }];
+      lb2.slice(0, 40).forEach(function (x) { var tg = []; if (x.a === t.creator) tg.push('dev'); if (S.account && x.a === S.account) tg.push('you'); o3.push({ a: x.a, pct: x.pct, tags: tg, first: (S.trades.filter(function (q) { return q.tick === t.tick && q.wallet === x.a; }).pop() || {}).t || t.born }); }); return o3; } }
     if (t.devPct != null && t.holders <= 3) { var o2 = [{ a: 'curve', pct: 100 - t.devPct, label: 'Bonding curve', kind: 'curve' }]; if (t.devPct > 0) o2.push({ a: t.creator || devOf(t), pct: t.devPct, tags: ['dev'].concat(S.account && t.creator === S.account ? ['you'] : []), first: t.born }); return o2; }
     var r = rng(hash(t.tick + 'hold')), dev = devOf(t), out = [], used = {}, B58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
     var fa = function () { var x = ''; for (var q = 0; q < 44; q++) x += B58[Math.floor(r() * 58)]; return x; };
