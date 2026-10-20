@@ -139,7 +139,7 @@
 
   // ================= STATE =================
   var S = {
-    screen: 'home', tick: null, side: 'buy', amount: '', tf: '1H', tpTab: 'trades',
+    screen: 'home', tick: null, side: 'buy', amount: '', tf: '1M', tpTab: 'trades',
     maxTax: 10, minProg: 0, minMc: 0, pair: 'All', cat: 'all', view: 'grid', deckIdx: 0, pctAmt: 0, sort: 'bump', zeroOnly: false, gradOnly: false, rewardsOnly: false, watchOnly: false,
     watch: [], created: [], launched: [], trades: [], tradeCount: 0, loading: true, newTick: null,
     palOpen: false, palQ: '', palIdx: 0,
@@ -1360,43 +1360,89 @@
   }
 
   // ================= PRO TOKEN PAGE (pump.fun / dexscreener style) =================
-  function tfPoints(t) { var n = { '5M': 40, '1H': 80, '6H': 120, '24H': 160 }[S.tf]; return t.hist.slice(-n); }
-  function candles(t) {
-    var d = tfPoints(t), per = Math.max(1, Math.round(d.length / 40)), out = [], r = rng(hash(t.tick + S.tf + d.length));
-    for (var i = 0; i < d.length; i += per) {
-      var seg = d.slice(i, i + per), o = i ? d[i - 1] : seg[0] * (1 + (r() - 0.5) * 0.02), c = seg[seg.length - 1];
-      var hi = Math.max.apply(null, seg.concat([o])), lo = Math.min.apply(null, seg.concat([o]));
-      hi *= 1 + r() * 0.012; lo *= 1 - r() * 0.012;
-      out.push({ o: o, h: hi, l: lo, c: c, v: 0.3 + r() * (Math.abs(c - o) / o * 60 + 0.6) });
+  // ===== time-based chart engine (1m … 1d candles, zoom, pan, line/candles, MA, trade markers) =====
+  var TFS = [['1M', '1m', 6e4], ['5M', '5m', 3e5], ['15M', '15m', 9e5], ['1H', '1h', 36e5], ['4H', '4h', 144e5], ['1D', '1d', 864e5]];
+  function tfMs() { for (var i = 0; i < TFS.length; i++) if (TFS[i][0] === S.tf) return TFS[i][2]; return 6e4; }
+  S.ctype = 'candle'; S.cma = true; S.cvol = true; S.cmarks = true; S.czoom = 70; S.cpan = 0; S.cfull = false;
+  function ensureTicks(t) {
+    if (t.tk) return t.tk;
+    var now = Date.now(), start = Math.max(t.born, now - 7 * 864e5), span = Math.max(60000, now - start), n = Math.min(2200, Math.max(30, Math.floor(span / 9000)));
+    var h = t.hist && t.hist.length ? t.hist : [t.mcN], r = rng(hash(t.tick + 'tk')), out = [];
+    for (var i = 0; i < n - 1; i++) {
+      var f = i / (n - 1), tf = 1 - Math.pow(1 - f, 2.2), idx = f * (h.length - 1), lo = Math.floor(idx), hi = Math.min(h.length - 1, lo + 1), base = h[lo] + (h[hi] - h[lo]) * (idx - lo);
+      out.push([start + tf * span, Math.max(1, base * (1 + (r() - .5) * .035)), r() * r() * 2.4]);
     }
+    out.push([now, t.mcN, .2]);
+    t.tk = out; return out;
+  }
+  function candles(t) {
+    var tk = ensureTicks(t), b = tfMs(), now = Date.now(), endB = Math.floor(now / b) - S.cpan, n = S.czoom, startB = endB - n + 1;
+    var firstB = Math.floor(tk[0][0] / b), lo = 0, hi = tk.length;
+    while (lo < hi) { var m = (lo + hi) >> 1; if (tk[m][0] < startB * b) lo = m + 1; else hi = m; }
+    var k = lo, prevC = k > 0 ? tk[k - 1][1] : tk[0][1], out = [];
+    for (var B = Math.max(startB, firstB); B <= endB; B++) {
+      var o = prevC, h2 = o, l2 = o, c = o, v = 0, any = false, bt = B * b, be = bt + b;
+      while (k < tk.length && tk[k][0] < be) { var x = tk[k]; if (x[0] >= bt) { any = true; h2 = Math.max(h2, x[1]); l2 = Math.min(l2, x[1]); c = x[1]; v += x[2]; } k++; }
+      out.push({ o: o, h: h2, l: l2, c: c, v: v, t: bt, flat: !any }); prevC = c;
+    }
+    if (!out.length) out.push({ o: t.mcN, h: t.mcN, l: t.mcN, c: t.mcN, v: 0, t: endB * b });
     return out;
   }
   function yLabel(v) { return S.chartMode === 'price' ? fmtPrice(v * 1000 / 1e9) : fmtK(v); }
+  function tLabel(ms) { var d = new Date(ms), p = function (x) { return (x < 10 ? '0' : '') + x; }; return tfMs() >= 864e5 ? (d.getMonth() + 1) + '/' + d.getDate() : p(d.getHours()) + ':' + p(d.getMinutes()); }
   function chartSVG(t) {
-    var cs = candles(t), W = 1000, H = 380, top = 16, vh = 70, ph = H - vh - top - 10;
+    var cs = candles(t), W = 1000, H = 400, top = 16, vh = S.cvol ? 64 : 0, bot = 22, ph = H - vh - top - bot - 8;
     var mx = Math.max.apply(null, cs.map(function (c) { return c.h; })), mn = Math.min.apply(null, cs.map(function (c) { return c.l; }));
-    var minSp = mx * 0.08; if (mx - mn < minSp) { var mid = (mx + mn) / 2; mx = mid + minSp / 2; mn = mid - minSp / 2; } var sp = mx - mn;
-    var vmx = Math.max.apply(null, cs.map(function (c) { return c.v; }));
-    var slots = Math.max(cs.length, 44), off0 = (slots - cs.length) * (W / slots), Y = function (v) { return top + (mx - v) / sp * ph; }, cw = W / slots, bw = Math.max(3, cw * 0.62);
-    var g = '', pts = [];
+    var minSp = mx * 0.06; if (mx - mn < minSp) { var mid = (mx + mn) / 2; mx = mid + minSp / 2; mn = mid - minSp / 2; } var pad = (mx - mn) * .06; mx += pad; mn -= pad; var sp = mx - mn;
+    var vmx = Math.max(.0001, Math.max.apply(null, cs.map(function (c) { return c.v; })));
+    var slots = Math.max(cs.length, S.czoom), cw = (W - 70) / slots, off0 = (slots - cs.length) * cw, Y = function (v) { return top + (mx - v) / sp * ph; }, bw = Math.max(1.5, cw * 0.64);
+    var g = '', pts = [], xl = '';
     for (var k = 1; k < 5; k++) g += '<line x1="0" x2="' + W + '" y1="' + (top + k * ph / 5) + '" y2="' + (top + k * ph / 5) + '" stroke="#18181A" vector-effect="non-scaling-stroke"/>';
-    var bars = cs.map(function (c, i) {
-      var x = off0 + i * cw + cw / 2, up = c.c >= c.o, col = up ? '#3DDC97' : '#F2708A', y1 = Y(Math.max(c.o, c.c)), y2 = Y(Math.min(c.o, c.c));
-      pts.push({ x: x, y: Y(c.c), v: c.c, o: c.o, h: c.h, l: c.l });
-      return '<line x1="' + x.toFixed(1) + '" x2="' + x.toFixed(1) + '" y1="' + Y(c.h).toFixed(1) + '" y2="' + Y(c.l).toFixed(1) + '" stroke="' + col + '" stroke-width="1.4" vector-effect="non-scaling-stroke"/>' +
-        '<rect x="' + (x - bw / 2).toFixed(1) + '" y="' + y1.toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + Math.max(1.5, y2 - y1).toFixed(1) + '" rx="1" fill="' + col + '"' + (i === cs.length - 1 ? ' class="lastc"' : '') + '/>' +
-        '<rect x="' + (x - bw / 2).toFixed(1) + '" y="' + (H - c.v / vmx * vh).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + (c.v / vmx * vh).toFixed(1) + '" fill="' + col + '" opacity=".28"/>';
-    }).join('');
-    S.chartPts = pts; S.chartW = W; S.chartH = H;
+    var every = Math.max(1, Math.round(slots / 7));
+    var body = '', vol = '', line = '', area = '';
+    cs.forEach(function (c, i) {
+      var x = off0 + i * cw + cw / 2, up = c.c >= c.o, col = c.flat ? '#3A3A3D' : up ? '#3DDC97' : '#F2708A', y1 = Y(Math.max(c.o, c.c)), y2 = Y(Math.min(c.o, c.c));
+      pts.push({ x: x, y: Y(c.c), v: c.c, o: c.o, h: c.h, l: c.l, vol: c.v, t: c.t });
+      if (S.ctype === 'candle') body += '<line x1="' + x.toFixed(1) + '" x2="' + x.toFixed(1) + '" y1="' + Y(c.h).toFixed(1) + '" y2="' + Y(c.l).toFixed(1) + '" stroke="' + col + '" stroke-width="1.2" vector-effect="non-scaling-stroke"/>' +
+        '<rect x="' + (x - bw / 2).toFixed(1) + '" y="' + y1.toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + Math.max(1.2, y2 - y1).toFixed(1) + '" rx="1" fill="' + col + '"' + (i === cs.length - 1 && !S.cpan ? ' class="lastc"' : '') + '/>';
+      line += (i ? 'L' : 'M') + x.toFixed(1) + ' ' + Y(c.c).toFixed(1);
+      if (S.cvol && c.v > 0) vol += '<rect x="' + (x - bw / 2).toFixed(1) + '" y="' + (H - bot - c.v / vmx * vh).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + (c.v / vmx * vh).toFixed(1) + '" fill="' + (up ? '#3DDC97' : '#F2708A') + '" opacity=".3"/>';
+      if ((slots - cs.length + i) % every === 0) xl += '<span class="xlab" style="left:' + (x / W * 100).toFixed(2) + '%">' + tLabel(c.t) + '</span>';
+    });
+    if (S.ctype === 'line') { var x0 = off0 + cw / 2, x1 = off0 + (cs.length - 1) * cw + cw / 2, upAll = cs[cs.length - 1].c >= cs[0].o, lc = upAll ? '#3DDC97' : '#F2708A';
+      area = '<defs><linearGradient id="cfill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="' + lc + '" stop-opacity=".25"/><stop offset="1" stop-color="' + lc + '" stop-opacity="0"/></linearGradient></defs><path d="' + line + 'L' + x1.toFixed(1) + ' ' + (top + ph) + 'L' + x0.toFixed(1) + ' ' + (top + ph) + 'Z" fill="url(#cfill)"/>';
+      body = '<path d="' + line + '" fill="none" stroke="' + lc + '" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>'; }
+    var ma = '';
+    if (S.cma && cs.length > 5) { var per = Math.min(20, Math.floor(cs.length / 2)), d = ''; for (var m = per - 1; m < cs.length; m++) { var sum = 0; for (var q2 = m - per + 1; q2 <= m; q2++) sum += cs[q2].c; d += (m === per - 1 ? 'M' : 'L') + (off0 + m * cw + cw / 2).toFixed(1) + ' ' + Y(sum / per).toFixed(1); }
+      ma = '<path d="' + d + '" fill="none" stroke="#D8C3A0" stroke-width="1.4" stroke-opacity=".85" vector-effect="non-scaling-stroke"/>'; }
+    var marks = '';
+    if (S.cmarks) { var b = tfMs(), t0 = cs[0].t, tEnd = cs[cs.length - 1].t + b;
+      var stack = {};
+      S.trades.filter(function (tr) { return tr.tick === t.tick && (tr.mine || tr.sol >= 1) && tr.t >= t0 && tr.t < tEnd; }).slice(0, 70).forEach(function (tr) {
+        var idx = Math.floor((tr.t - t0) / b), c = cs[idx]; if (!c) return; var n = stack[idx] = (stack[idx] || 0) + 1; if (n > 6) return;
+        var x = off0 + idx * cw + cw / 2, buy = tr.side === 'buy', y = Y(c.h) - 16 - (n - 1) * 22;
+        marks += '<span class="cmark ' + (buy ? 'b' : 's') + (tr.mine ? ' me' : '') + '" style="left:' + (x / W * 100).toFixed(2) + '%;top:' + (Math.max(2, y) / H * 100).toFixed(2) + '%" title="' + (tr.mine ? 'You' : short(tr.wallet)) + ' ' + (buy ? 'bought ' : 'sold ') + tr.sol.toFixed(2) + ' SOL">' + A.svg(walletSpec(tr.wallet)) + '</span>';
+      }); }
+    S.chartPts = pts; S.chartW = W; S.chartH = H; S.chartOff = off0; S.chartCw = cw;
     var last = cs[cs.length - 1], ly = Y(last.c), lcol = last.c >= last.o ? '#3DDC97' : '#F2708A';
     var labels = ''; for (var j = 0; j <= 4; j++) { var v = mx - j * sp / 4; labels += '<span class="ylab" style="top:' + ((top + j * ph / 4) / H * 100).toFixed(2) + '%">' + yLabel(v) + '</span>'; }
-    return '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" role="img" aria-label="Candlestick chart">' + g + bars +
-      '<line x1="0" x2="' + W + '" y1="' + ly.toFixed(1) + '" y2="' + ly.toFixed(1) + '" stroke="' + lcol + '" stroke-opacity=".6" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"/></svg>' + labels +
-      '<span class="lastlab" style="top:' + (ly / H * 100).toFixed(2) + '%;background:' + lcol + '">' + yLabel(last.c) + '</span>' +
-      '<div class="xh" id="xh"></div><div class="xh-dot" id="xhd" style="background:#fff"></div><div class="xh-tip" id="xht"></div>' +
-      '<span class="wm">' + LOGO + 'treid.fun</span>';
+    return '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" role="img" aria-label="Price chart">' + g + area + vol + body + ma +
+      '<line x1="0" x2="' + W + '" y1="' + ly.toFixed(1) + '" y2="' + ly.toFixed(1) + '" stroke="' + lcol + '" stroke-opacity=".55" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"/></svg>' + labels + xl + marks +
+      (S.cpan ? '' : '<span class="lastlab" style="top:' + (ly / H * 100).toFixed(2) + '%;background:' + lcol + '">' + yLabel(last.c) + '</span>') +
+      (S.cpan ? '<button class="c-live" data-act="cnow">Back to now →</button>' : '') +
+      '<div class="xh" id="xh"></div><div class="yh" id="yh"></div><div class="xh-dot" id="xhd" style="background:#fff"></div><div class="xh-tip" id="xht"></div>' +
+      '<span class="wm">treid.fun</span>';
   }
-
+  function chartRedraw() { var t = find(S.tick), box = document.getElementById('chart'); if (t && box) box.innerHTML = chartSVG(t); }
+  function chartToolbar(t) {
+    var id = esc(t.tick);
+    return '<div class="chart-tb"><div class="seg tfseg">' + TFS.map(function (x) { return '<button class="' + (S.tf === x[0] ? 'on' : '') + '" data-act="tf" data-arg="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div>' +
+      '<div class="seg"><button class="' + (S.ctype === 'candle' ? 'on' : '') + '" data-act="ctype" data-arg="candle" title="Candles"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 3v4M7 17v4M17 5v3M17 16v3"/><rect x="4" y="7" width="6" height="10" rx="1"/><rect x="14" y="8" width="6" height="8" rx="1"/></svg></button><button class="' + (S.ctype === 'line' ? 'on' : '') + '" data-act="ctype" data-arg="line" title="Line"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 17l6-6 4 4 8-8"/></svg></button></div>' +
+      '<div class="seg"><button class="' + (S.chartMode === 'mc' ? 'on' : '') + '" data-act="cmode" data-arg="mc">MCap</button><button class="' + (S.chartMode === 'price' ? 'on' : '') + '" data-act="cmode" data-arg="price">Price</button></div>' +
+      '<div class="ctog">' + [['cma', 'MA', S.cma], ['cvol', 'Vol', S.cvol], ['cmarks', 'Trades', S.cmarks]].map(function (x) { return '<button class="' + (x[2] ? 'on' : '') + '" data-act="ctog" data-arg="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div>' +
+      '<span class="muted mono c-pair">$' + id + '/' + esc(pairLabel(t.pair)) + '</span>' +
+      '<button class="iconbtn c-fs" data-act="cfull" aria-label="Fullscreen chart" title="Fullscreen">' + (S.cfull ? '✕' : '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>') + '</button></div>';
+  }
   // wallets pool so makers repeat (enables top traders / holders / maker filter)
   var HANDLES = ['degenfrog', 'solsurfer', 'paperhands', 'gemhunter', 'moonboi', 'bagholder', 'chartwizard', 'apeszn', 'diamondpaws', 'rugless', 'sniperjoe', 'whalewatch'];
   var WALLETS = []; for (var wi = 0; wi < 90; wi++) WALLETS.push({ a: b58(44), n: wi < HANDLES.length ? HANDLES[wi] : null, sp: { kind: pick(A.KINDS), skin: pick(A.SKINS), bg: pick(A.BGS), eyes: pick(A.EYES), mouth: pick(A.MOUTHS), acc: pick(A.ACCS) } });
@@ -1456,13 +1502,15 @@
     S.comments[t.tick] = out; return out;
   }
   function commentHTML(c, t, enter) {
-    var w = WMAP[c.w], me = S.account && c.w === S.account, dev = c.w === devOf(t);
-    return '<div class="cmt' + (enter ? ' enter' : '') + '"><span class="av" style="width:34px;height:34px">' + A.svg(walletSpec(c.w)) + '</span><div class="cmt-b">' +
-      '<div class="cmt-h"><b>' + (me ? 'You' : w && w.n ? '@' + w.n : short(c.w)) + '</b>' + (dev ? '<span class="bdg dev">DEV</span>' : '') + '<span class="muted mono" data-t="' + c.t + '">' + ago(c.t) + '</span><span class="muted mono">#' + (1000 + c.id) + '</span></div>' +
-      (c.reply != null ? '<div class="cmt-r">replying to #' + (1000 + c.reply) + '</div>' : '') +
-      '<div class="cmt-t">' + esc(c.text) + '</div>' +
-      '<div class="cmt-a"><button class="' + (c.liked ? 'on' : '') + '" data-act="like" data-arg="' + c.id + '">♥ ' + c.likes + '</button><button data-act="replyTo" data-arg="' + c.id + '">reply</button></div></div></div>';
+    var w = WMAP[c.w], me = S.account && c.w === S.account, dev = c.w === devOf(t), r = rng(hash(t.tick + c.id + 'co'));
+    if (c.pos == null) { c.pos = me ? 0 : Math.round(8 + r() * r() * 900); c.mc0 = t.mcN * (0.55 + r() * 0.8); c.views = Math.floor(20 + r() * 900); c.rt = Math.floor(r() * 6); }
+    var pnl = c.pos * (t.mcN / c.mc0 - 1), up = pnl >= 0, name = me ? 'You' : w && w.n ? w.n : short(c.w);
+    return '<article class="co' + (enter ? ' enter' : '') + '"><div class="co-h"><span class="av" style="width:30px;height:30px">' + A.svg(walletSpec(c.w)) + '</span><b>' + esc(name) + '</b>' + (dev ? '<span class="bdg dev">DEV</span>' : '') + '<span class="muted mono" data-t="' + c.t + '">' + ago(c.t) + '</span>' + (c.reply != null ? '<span class="co-re muted">↩ #' + (1000 + c.reply) + '</span>' : '') + '</div>' +
+      '<div class="co-t">' + esc(c.text) + '</div>' +
+      (c.pos > 0 ? '<div class="co-pos">' + avatarHTML(t, 22) + '<span><b>' + esc(t.tick) + '</b> <small>' + esc(t.name) + '</small></span><span class="co-pv"><small>Position</small> <b class="mono">$' + fmtNum(c.pos) + '</b> <small>PnL</small> <b class="mono ' + (up ? 'up' : 'down') + '">' + (up ? '+' : '−') + '$' + Math.abs(pnl).toFixed(2) + '</b></span></div>' : '') +
+      '<div class="co-a"><button data-act="replyTo" data-arg="' + c.id + '" title="Reply">↩</button><button title="Repost">⟳ ' + (c.rt || '') + '</button><button class="' + (c.liked ? 'on' : '') + '" data-act="like" data-arg="' + c.id + '" title="Like">♥ ' + c.likes + '</button><span class="muted">◉ ' + (c.views || 0) + '</span><span class="muted mono co-mc">' + fmtK(c.mc0 || t.mcN) + ' MC</span></div></article>';
   }
+
   function position(t) { var p = S.pos[t.tick]; if (!p || p.tok <= 0) return null; var val = p.tok * price(t) / SOL_USD; return { tok: p.tok, cost: p.cost, val: val, pnl: val - p.cost, pct: p.cost ? (val / p.cost - 1) * 100 : 0 }; }
   function quoteFor(t) {
     var isBuy = S.side === 'buy', amt = parseFloat(String(S.amount).replace(',', '.')) || 0, px = price(t);
@@ -1590,7 +1638,7 @@
     tt.forEach(function (x) { if (x.side === 'buy') { nb++; vb += x.sol; } else { ns++; vs += x.sol; } });
     var q = quoteFor(t), pos = position(t), tmax = Math.max(t.buy, t.sell);
     var curveSol = (t.prog / 100 * 85).toFixed(2);
-    var head = '<section class="card-s tp-head2">' + avatarHTML(t, 84) +
+    var head = '<section class="card-s tp-head2 tp-banner"><div class="tb-bg" aria-hidden="true">' + avatarHTML(t, 420) + '</div><div class="tb-av">' + avatarHTML(t, 104) + '</div>' +
       '<div class="tp-id"><div class="title-xl" style="margin:0;font-size:30px">' + esc(t.name) + ' <span class="tk">$' + id + '</span></div>' +
         '<div class="hs-pills" style="margin-top:8px"><button class="pill copy2" data-act="ca" data-arg="' + id + '">CA ' + esc(short(t.ca)) + ' ' + I.copy + '</button><span class="pill" style="padding-left:11px">created <span data-t="' + t.born + '">&nbsp;' + ago(t.born) + '</span>&nbsp;ago by&nbsp;' + makerHTML(devOf(t), t) + '</span>' +
         socialsHTML(t, true) +
@@ -1601,12 +1649,16 @@
         '<div class="ath"><div class="ath-l"><span class="muted">ATH</span><span class="mono">' + fmtK(ath) + '</span></div><div class="ath-bar"><i data-athbar="' + id + '" style="width:' + athPct.toFixed(1) + '%"></i></div></div></div>' +
       '<div class="mstats">' + [['Price', '<span data-price="' + id + '" data-v="' + fmtPrice(price(t)) + '">' + fmtPrice(price(t)) + '</span>'], ['24h vol', fmtK(t.vol)], ['Liquidity', curveSol + ' SOL'], ['Holders', fmtNum(t.holders)],
         ['Txns', '<span class="up">' + nb + '</span> / <span class="down">' + ns + '</span>'], ['Buy vol', '<span class="up">' + vb.toFixed(1) + '</span> / <span class="down">' + vs.toFixed(1) + '</span> SOL']].map(function (r) { return '<div><span class="muted">' + r[0] + '</span><b class="mono">' + r[1] + '</b></div>'; }).join('') + '</div></section>';
-    var chart = '<section class="card-s panel"><div class="chart-tb"><div class="seg">' + ['5M', '1H', '6H', '24H'].map(function (x) { return '<button class="' + (S.tf === x ? 'on' : '') + '" data-act="tf" data-arg="' + x + '">' + x + '</button>'; }).join('') + '</div>' +
-      '<div class="seg"><button class="' + (S.chartMode === 'mc' ? 'on' : '') + '" data-act="cmode" data-arg="mc">MCap</button><button class="' + (S.chartMode === 'price' ? 'on' : '') + '" data-act="cmode" data-arg="price">Price</button></div>' +
-      '<span class="muted mono" style="margin-left:auto;font-size:11.5px;display:flex;align-items:center;gap:6px"><span class="livedot"></span>$' + id + '/' + esc(pairLabel(t.pair)) + ' · live</span></div>' +
-      '<div class="chartbox" id="chart">' + chartSVG(t) + '</div></section>';
+    var chart = '<section class="card-s panel cpanel' + (S.cfull ? ' chart-fs' : '') + '">' + chartToolbar(t) +
+      '<div class="chartbox" id="chart">' + chartSVG(t) + '</div><div class="c-help muted">scroll to zoom · drag to pan</div></section>';
     // tabs
-    var tabs = [['trades', 'Trades'], ['thread', 'Thread (' + seedComments(t).length + ')'], ['holders', 'Holders'], ['top', 'Top traders']];
+    if (S.tpTab === 'thread') S.tpTab = 'trades';
+    var tabs = [['trades', 'Trades'], ['holders', 'Holders'], ['top', 'Top traders']];
+    var cmAll = seedComments(t);
+    var thread = '<aside class="tp-thread card-s"><div class="tt-h"><b>Callouts</b><span class="mono">' + cmAll.length + '</span><small class="muted">what holders are saying</small></div>' +
+      '<div class="composer">' + (S.account ? '<textarea id="cmt-in" class="inp" data-bind="cmtDraft" placeholder="' + (S.replyTo != null ? 'Replying to #' + (1000 + S.replyTo) + '…' : 'Call it: what\'s your take on $' + id + '?') + '" maxlength="280">' + esc(S.cmtDraft || '') + '</textarea><button class="btn pri" data-act="post">Post</button>' :
+        '<span class="muted">Connect a wallet to post a callout.</span><button class="btn sec" data-act="openWallet">Connect</button>') + '</div>' +
+      '<div id="cmts" class="tt-list">' + cmAll.slice().sort(function (a, b) { return b.t - a.t; }).map(function (x) { return commentHTML(x, t); }).join('') + '</div></aside>';
     var body = '';
     if (S.tpTab === 'trades') {
       var rows = tt.filter(tradeMatches).slice(0, 40);
@@ -1684,8 +1736,8 @@
     var curve = '<section class="card-s panel" style="display:flex;flex-direction:column;gap:10px"><div style="display:flex;justify-content:space-between"><b>' + (t.prog >= 100 ? 'Graduated to Raydium' : 'Bonding curve') + '</b><span class="mono" style="color:var(--ice)" data-prog="' + id + '">' + Math.min(100, t.prog).toFixed(0) + '%</span></div>' +
       '<div class="bar" style="height:12px"><i class="' + (t.prog >= 100 ? 'done' : '') + '" data-bar="' + id + '" style="width:' + Math.max(1, Math.min(100, t.prog)) + '%"></i></div>' +
       '<span class="muted" style="font-size:12.5px;line-height:1.55">' + (t.prog >= 100 ? 'Liquidity is live on Raydium.' : curveSol + ' SOL in the curve. Graduates to Raydium at 100%.') + '</span></section>';
-    return '<main class="wrap" style="padding-top:18px"><button class="link" data-act="home">' + I.back + 'Back to board</button>' + head +
-      '<div class="tp-grid"><div class="tp-main">' + mcrow + chart + tabsHTML + '</div><aside class="tp-side">' + panel + posCard + safety + curve + '</aside></div></main>';
+    return '<main class="wrap tp-env" style="padding-top:14px;--coin:' + ((t.spec && t.spec.bg) || '#2A2418') + '"><div class="tp-glow" aria-hidden="true">' + avatarHTML(t, 300) + '</div><button class="link" data-act="home">' + I.back + 'Back to board</button>' + head +
+      '<div class="tp-grid3">' + thread + '<div class="tp-main">' + mcrow + chart + tabsHTML + '</div><aside class="tp-side">' + panel + posCard + safety + curve + '</aside></div></main>';
   }
   // give seeded trades real makers / prices
   S.trades.forEach(function (tr) { var t = find(tr.tick); tr.wallet = pickWallet(); tr.price = t ? price(t) * (1 + (Math.random() - 0.5) * 0.12) : 0; tr.tokens = tr.sol * SOL_USD / (tr.price || 1); tr.sig = b58(64); });
@@ -1699,7 +1751,7 @@
     if (S.screen !== 'token') return; var t = find(S.tick); if (!t || Math.random() > 0.35) return;
     var cm = seedComments(t), w = WALLETS[Math.floor(Math.random() * WALLETS.length)];
     var c = { id: cm.length, w: w.a, text: pick(CMT), t: Date.now(), likes: 0, liked: false, reply: Math.random() < 0.3 && cm.length ? Math.floor(Math.random() * cm.length) : null };
-    cm.push(c); var box = document.getElementById('cmts'); if (box && S.tpTab === 'thread') box.insertAdjacentHTML('afterbegin', commentHTML(c, t, true));
+    cm.push(c); var box = document.getElementById('cmts'); if (box) box.insertAdjacentHTML('afterbegin', commentHTML(c, t, true));
   }, 6000);
 
   function createPage() {
@@ -1826,6 +1878,7 @@
     if (t.prog < 100) t.prog = Math.max(0, Math.min(100, t.prog + dir * sol * 0.25));
     if (side === 'buy' && Math.random() < 0.4) t.holders += 1;
     t.hist.push(t.mcN); if (t.hist.length > 160) t.hist.shift();
+    if (t.tk) { t.tk.push([Date.now(), t.mcN, sol]); if (t.tk.length > 5000) t.tk.splice(0, 500); }
     var tr = { tick: t.tick, side: side, sol: sol, wallet: wallet || pickWallet(), t: Date.now(), tax: sol * (side === 'buy' ? t.buy : t.sell) / 100, mine: !!mine, price: price(t), sig: b58(64) }; tr.tokens = sol * SOL_USD / tr.price;
     S.trades.unshift(tr); if (S.trades.length > 400) S.trades.pop();
     S.tradeCount++;
@@ -1914,7 +1967,7 @@
   setInterval(function () { q('[data-t]').forEach(function (el) { el.textContent = ago(+el.getAttribute('data-t')); }); }, 5000);
 
   // ================= EVENTS =================
-  function openToken(tick) { set({ walletView: null, screen: 'token', tick: tick, side: 'buy', amount: '', tf: '1H', tpTab: 'trades', palOpen: false, walletMenu: false }); window.scrollTo(0, 0); }
+  function openToken(tick) { S.cpan = 0; set({ walletView: null, screen: 'token', tick: tick, side: 'buy', amount: '', tf: S.tf || '1M', tpTab: 'trades', palOpen: false, walletMenu: false }); window.scrollTo(0, 0); }
 
   document.addEventListener('click', function (e) {
     var el = e.target.closest('[data-act]');
@@ -1945,7 +1998,11 @@
       case 'pair': set({ pair: arg }); break;
       case 'toggle': var o = {}; o[arg] = !S[arg]; set(o); break;
       case 'reset': S.r = JSON.parse(JSON.stringify(RDEF)); S.pairQ = ''; S.pairTab = 'all'; set({ fpop: null, cleanOnly: false, maxTax: 10, minProg: 0, minMc: 0, pair: 'All', cat: 'all', zeroOnly: false, gradOnly: false, rewardsOnly: false, watchOnly: false }); break;
-      case 'tf': set({ tf: arg }); break;
+      case 'tf': S.cpan = 0; set({ tf: arg }); break;
+      case 'ctype': set({ ctype: arg }); break;
+      case 'ctog': S[arg] = !S[arg]; render(); break;
+      case 'cfull': set({ cfull: !S.cfull }); break;
+      case 'cnow': S.cpan = 0; chartRedraw(); break;
       case 'tpTab': set({ tpTab: arg }); break;
       case 'side': set({ side: arg }); break;
       case 'preset': if (arg === 'reset') { set({ amount: '' }); break; } set({ pctAmt: 0, amount: arg === 'max' ? Math.max(0, S.balance - 0.01).toFixed(3) : arg }); break;
@@ -2095,19 +2152,36 @@
     var c = e.target.closest && e.target.closest('.tcard');
     if (c) { var r = c.getBoundingClientRect(); c.style.setProperty('--mx', (e.clientX - r.left) + 'px'); c.style.setProperty('--my', (e.clientY - r.top) + 'px'); }
     var box = e.target.closest && e.target.closest('#chart');
-    if (box && S.chartPts) {
-      var rb = box.getBoundingClientRect(), fx = (e.clientX - rb.left) / rb.width;
-      var i = Math.max(0, Math.min(S.chartPts.length - 1, Math.round(fx * (S.chartPts.length - 1)))), p = S.chartPts[i];
-      var xh = document.getElementById('xh'), d = document.getElementById('xhd'), tip = document.getElementById('xht');
-      if (!xh) return;
+    if (box && S.chartPts && !CDRAG) {
+      var rb = box.getBoundingClientRect(), fx = (e.clientX - rb.left) / rb.width * S.chartW;
+      var i = Math.max(0, Math.min(S.chartPts.length - 1, Math.round((fx - S.chartOff - S.chartCw / 2) / S.chartCw))), p = S.chartPts[i];
+      var xh = document.getElementById('xh'), yh = document.getElementById('yh'), d = document.getElementById('xhd'), tip = document.getElementById('xht');
+      if (!xh || !p) return;
       var px = p.x / S.chartW * rb.width, py = p.y / S.chartH * rb.height;
-      xh.style.display = d.style.display = tip.style.display = 'block';
-      xh.style.left = px + 'px'; d.style.left = px + 'px'; d.style.top = py + 'px';
-      var steps = S.chartPts.length - 1 - i, mins = { '5M': 10 / 60, '1H': 1, '6H': 6, '24H': 12 }[S.tf] * steps;
-      tip.innerHTML = 'O <b>' + yLabel(p.o) + '</b> H <b class="up">' + yLabel(p.h) + '</b> L <b class="down">' + yLabel(p.l) + '</b> C <b>' + yLabel(p.v) + '</b> · ' + (mins < 1 ? Math.round(mins * 60) + 's' : mins < 60 ? Math.round(mins) + 'm' : (mins / 60).toFixed(1) + 'h') + ' ago';
+      xh.style.display = d.style.display = tip.style.display = yh.style.display = 'block';
+      xh.style.left = px + 'px'; d.style.left = px + 'px'; d.style.top = py + 'px'; yh.style.top = (e.clientY - rb.top) + 'px';
+      var ch = (p.v - p.o) / p.o * 100;
+      tip.innerHTML = '<span class="muted">' + tLabel(p.t) + '</span> O <b>' + yLabel(p.o) + '</b> H <b class="up">' + yLabel(p.h) + '</b> L <b class="down">' + yLabel(p.l) + '</b> C <b>' + yLabel(p.v) + '</b> <b class="' + (ch >= 0 ? 'up' : 'down') + '">' + (ch >= 0 ? '+' : '') + ch.toFixed(2) + '%</b> <span class="muted">Vol</span> <b>' + p.vol.toFixed(2) + ' SOL</b>';
       tip.style.left = Math.min(rb.width - tip.offsetWidth - 4, Math.max(4, px + 12)) + 'px';
     }
   });
+  // chart: wheel zoom + drag pan + Esc to leave fullscreen + candle rollover
+  var CDRAG = null;
+  document.addEventListener('wheel', function (e) {
+    var box = e.target.closest && e.target.closest('#chart'); if (!box) return;
+    e.preventDefault(); S.czoom = Math.max(20, Math.min(220, Math.round(S.czoom * (e.deltaY > 0 ? 1.12 : .89)))); chartRedraw();
+  }, { passive: false });
+  document.addEventListener('pointerdown', function (e) {
+    var box = e.target.closest && e.target.closest('#chart'); if (!box || e.button > 0 || e.target.closest('button')) return;
+    CDRAG = { x: e.clientX, pan: S.cpan, w: box.getBoundingClientRect().width }; box.classList.add('panning');
+  });
+  document.addEventListener('pointermove', function (e) {
+    if (!CDRAG) return; var dx = e.clientX - CDRAG.x, np = Math.max(0, Math.round(CDRAG.pan + dx / CDRAG.w * S.czoom));
+    if (np !== S.cpan) { S.cpan = np; if (!CDRAG.raf) CDRAG.raf = requestAnimationFrame(function () { if (CDRAG) CDRAG.raf = 0; chartRedraw(); }); }
+  });
+  document.addEventListener('pointerup', function () { if (!CDRAG) return; CDRAG = null; var b = document.getElementById('chart'); if (b) b.classList.remove('panning'); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && S.cfull) set({ cfull: false }); });
+  setInterval(function () { if (S.screen !== 'token' || document.hidden || CDRAG) return; var b = document.getElementById('chart'); if (b && !b.matches(':hover')) chartRedraw(); }, 3000);
   document.addEventListener('mouseout', function (e) {
     if (e.target.closest && e.target.closest('#chart') && !(e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest('#chart'))) {
       ['xh', 'xhd', 'xht'].forEach(function (id) { var el = document.getElementById(id); if (el) el.style.display = 'none'; });
