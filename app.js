@@ -687,7 +687,7 @@
   }
   function orbitStage(a, cook, sent) {
     return '<div class="lab-stage orb-stage" id="lab" data-mode="orbit"><canvas class="asc-cv" id="asc-cv"></canvas>' +
-      '<div class="orb-core" id="orb-core"><span class="oc-glow"></span><div class="oc-idle"><b>treid</b><small class="mono"><span id="az-c">' + cook.length + '</span> cooking · <span id="az-s">' + sent.length + '</span> sent</small></div><div class="oc-live" id="oc-live"></div></div>' +
+      '<div class="orb-core pl" id="orb-core"><span class="oc-glow"></span><span class="pl-ring back"></span><span class="pl-body"><span class="pl-surf"></span><span class="pl-spots"></span><span class="pl-shade"></span></span><span class="pl-ring front"></span><span class="pl-moon"><i></i></span><div class="oc-idle"><b>treid</b><small class="mono"><span id="az-c">' + cook.length + '</span> cooking · <span id="az-s">' + sent.length + '</span> sent</small></div><div class="oc-live" id="oc-live"></div></div>' +
       '<div class="orb-banner" id="orb-banner"></div>' +
       '<div class="orb-labels" id="orb-labels"></div>' +
       '<div class="lab-nodes" id="lab-nodes">' + a.map(labBubble).join('') + '</div><div class="asc-fx" id="asc-fx"></div>' +
@@ -731,7 +731,7 @@
   function orbSetup(st, G) {
     var cv = st.querySelector('#asc-cv'), dpr = Math.min(2, window.devicePixelRatio || 1); cv.width = G.w * dpr; cv.height = G.h * dpr; cv.style.width = G.w + 'px'; cv.style.height = G.h + 'px'; LAB.ctx = cv.getContext('2d'); LAB.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     var lb = st.querySelector('#orb-labels'); if (lb) lb.innerHTML = orbRings().map(function (r) { return (r[2] === 'g' ? '<span class="ol g" style="left:' + G.cx + 'px;top:' + (G.cy - G.ry * r[0] - 1) + 'px">' + r[1] + '</span>' : '<span class="ol ' + (r[2] || '') + '" style="left:' + (G.cx + G.rx * r[0] * Math.cos(-.22)) + 'px;top:' + (G.cy + G.ry * r[0] * Math.sin(-.22) - 8) + 'px">' + r[1] + '</span>'); }).join('');
-    var core = st.querySelector('#orb-core'); if (core) { var cw = G.rx * OU0 * 2 * .82, chh = G.ry * OU0 * 2 * .82; core.style.width = cw + 'px'; core.style.height = chh + 'px'; core.style.left = (G.cx - cw / 2) + 'px'; core.style.top = (G.cy - chh / 2) + 'px'; }
+    var core = st.querySelector('#orb-core'); if (core) { var cw = G.rx * OU0 * 2 * .82, chh = G.ry * OU0 * 2 * .82; var pd = Math.min(cw * .78, chh * 1.55); core.style.width = pd + 'px'; core.style.height = pd + 'px'; core.style.left = (G.cx - pd / 2) + 'px'; core.style.top = (G.cy - pd / 2) + 'px'; }
   }
   function orbLoop(now, st) {
     if (st !== LAB.stage || LAB.dirty) { LAB.stage = st; LAB.G = orbGeom(st); orbSetup(st, LAB.G); LAB.dirty = false; LAB.last = now; }
