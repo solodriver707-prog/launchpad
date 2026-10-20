@@ -2338,7 +2338,7 @@
       case 'clearBanner': setC({ banner: null }); break;
       case 'cpair': setC({ pair: arg }); break;
       case 'stf': S.stf = arg; render(); break;
-      case 'fwGo': FW.i = +arg; FW.t0 = performance.now() - FW.ms * .31; FW.lastI = -1; if (FW.i < 3) { var rr2 = document.getElementById('fw-rider'); if (rr2) { rr2.classList.remove('flagged', 'grad', 'bad'); } } break;
+      case 'fwGo': FW.i = +arg; FW.t0 = performance.now(); FW.paused = false; fwCenter(FW.i); break;
       case 'demoImgs': set({ demoImgOpen: true }); break;
       case 'realMemes': try { localStorage.setItem('dl.realmemes', REAL_ON ? '0' : '1'); } catch (er) {} location.reload(); break;
       case 'demoImgsClose': if (e.target === el || el.tagName === 'BUTTON') set({ demoImgOpen: false }); break;
@@ -2595,61 +2595,47 @@
   function jarH(v) { return Math.min(92, 8 + Math.sqrt(v) * 38); }
   var RUGS = 0, CLEAN = 0;
   var POS = { press: 18, tax: 34, scan: 46, pick: 55, bin: 64, pump: 78, launch: 92 };
-  // ===== THE FLYWHEEL: how treid works, as one animated loop =====
-  var FWS = [
-    ['launch', '🚀', 'Launch', 'Upload a logo and banner, pick any pair and set one tax (0–10%). Optionally buy in first.'],
-    ['trap', '🪤', 'Sniper trap', 'Bots that buy in the first seconds pay up to 90% tax, fading to the normal tax.'],
-    ['trade', '📈', 'Trade the curve', 'Every buy pushes the price up the bonding curve. Every trade pays the tax shown on the coin.'],
-    ['risk', '🛡', 'Risk flags', 'We never hide or delete coins. We flag them — dev, top 10, snipers, bundles — so you decide.'],
-    ['grad', '🎓', 'Graduate', 'At ~$69K the curve is full and liquidity moves to Raydium. Milestone badges start here.'],
-    ['fly', '♻', 'Tax flywheel', 'Tax flows back: 50% creator, 30% holders, 20% burned. Rewards holders and fuels more trading.']
+  // ===== HOW IT WORKS: "A coin's life" — cinematic story, 6 scenes =====
+  var STS = [
+    ['Launch', 'Logo, banner, any pair, one tax. Live in seconds.'],
+    ['Sniper trap', 'Bots that rush in at launch pay a huge tax. When it drains, everyone pays the normal tax.'],
+    ['Trade the curve', 'Every buy pushes the price up the bonding curve. Every trade pays the tax shown on the coin.'],
+    ['Risk flags', 'We never hide or delete coins. We show dev, top 10, snipers and bundles — you decide.'],
+    ['Graduate', 'At ~$69K the curve fills, liquidity moves to Raydium and milestone badges start.'],
+    ['Tax flywheel', 'Every trade’s tax splits three ways: creator, holders and burn. More trading, more rewards.']
   ];
-  var FW = { i: 0, t0: 0, coin: null, ms: 3600, raf: 0, el: null, lastI: -1, laps: 0, sol: 0 };
-  function fwPos(k) { var a = -Math.PI / 2 + k / FWS.length * Math.PI * 2; return { x: 200 + Math.cos(a) * 162, y: 200 + Math.sin(a) * 162, a: a }; }
+  var FW = { i: 0, t0: 0, ms: 5200, raf: 0, el: null, coin: null, paused: false, pt: 0 };
   function machineSection() {
-    var nodes = FWS.map(function (st, k) { var p = fwPos(k); return '<button class="fw-node" data-act="fwGo" data-arg="' + k + '" data-fw="' + k + '" style="left:' + (p.x / 4) + '%;top:' + (p.y / 4) + '%"><span class="fw-ic">' + st[1] + '</span><span class="fw-lab">' + st[2] + '</span></button>'; }).join('');
-    var steps = FWS.map(function (st, k) { return '<button class="fw-step" data-act="fwGo" data-arg="' + k + '" data-fws="' + k + '"><span class="fw-n mono">' + (k + 1) + '</span><span class="fw-sb"><b>' + st[1] + ' ' + st[2] + '</b><small>' + st[3] + '</small></span><i class="fw-bar"><u></u></i></button>'; }).join('');
-    return '<section class="flyw card-s" id="machine"><div class="fw-head"><div><span class="kicker">HOW IT WORKS</span><h2 class="title-xl lab-title">The Flywheel</h2><p class="muted lab-sub">One loop, six moves. Watch a coin go around — or tap any step.</p></div>' +
-      '<div class="fw-stats"><div><small>Laps</small><b class="mono" id="fw-laps">0</b></div><div><small>Tax shared</small><b class="mono" id="fw-sol">0.00 SOL</b></div></div></div>' +
-      '<div class="fw-body"><div class="fw-wheel" id="fw-wheel"><svg viewBox="0 0 400 400" class="fw-svg"><defs><linearGradient id="fwg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FBF3E2"/><stop offset="1" stop-color="#A88D5F"/></linearGradient></defs>' +
-        '<circle cx="200" cy="200" r="116" fill="none" stroke="rgba(255,255,255,.06)" stroke-width="10"/><circle cx="200" cy="200" r="162" fill="none" stroke="rgba(255,255,255,.05)" stroke-width="1"/><circle id="fw-arc" cx="200" cy="200" r="116" fill="none" stroke="url(#fwg)" stroke-width="3" stroke-linecap="round" transform="rotate(-90 200 200)" stroke-dasharray="0 728.9"/>' +
-        '<circle cx="200" cy="200" r="116" fill="none" stroke="rgba(255,255,255,.12)" stroke-width="1" stroke-dasharray="2 10" class="fw-spin"/></svg>' + nodes +
-        '<div class="fw-rider" id="fw-rider"></div><div class="fw-center" id="fw-center"></div></div>' +
-        '<div class="fw-steps">' + steps + '</div></div></section>';
+    return '<section class="story card-s" id="machine"><div class="st2-head"><div><span class="kicker">HOW IT WORKS</span><h2 class="title-xl lab-title">A coin’s life in 30 seconds</h2></div><span class="muted st2-hint">hover to pause · tap a step</span></div>' +
+      '<div class="st2-bars">' + STS.map(function (x, k) { return '<button class="st2-bar" data-act="fwGo" data-arg="' + k + '" data-stb="' + k + '"><i><u></u></i><span><b class="mono">0' + (k + 1) + '</b> ' + x[0] + '</span></button>'; }).join('') + '</div>' +
+      '<div class="st2-stage" id="fw-wheel"><div class="st2-copy" id="st2-copy"></div><div class="st2-vis" id="st2-vis"></div></div></section>';
   }
-  function fwVisual(k, t) {
-    var tm = Math.max(t.buy, t.sell), rm = riskMetrics(t);
-    if (k === 0) return '<div class="fv-launch">' + avatarHTML(t, 64) + '<span><b>' + esc(t.name) + '</b><small class="mono">$' + esc(t.tick) + ' · ' + coinHTML(t.pair, 14) + ' ' + esc(pairLabel(t.pair)) + ' · tax ' + tm + '%</small></span></div>';
-    if (k === 1) return '<div class="fv-trap"><b class="mono" id="fv-trapn">90%</b><small>→ ' + tm + '% as the trap fades</small></div>';
-    if (k === 2) { var b = ''; for (var q = 0; q < 12; q++) b += '<i style="--h:' + (18 + q * 6 + (hash(t.tick + q) % 14)) + '%;--d:' + (q * 70) + 'ms"></i>'; return '<div class="fv-bars">' + b + '</div><small class="muted">price climbs with every buy</small>'; }
-    if (k === 3) return '<div class="fv-flags">' + rm.map(function (m, q) { return '<span class="ff ' + m.lv + '" style="--d:' + (q * 180) + 'ms"><small>' + m.lab + '</small><b class="mono">' + m.val + '</b></span>'; }).join('') + '</div><small class="muted">' + (rm.some(function (m) { return m.lv === 'r'; }) ? '⚠ flagged — still tradable, your call' : '✓ no red flags') + '</small>';
-    if (k === 4) return '<div class="fv-grad"><i><u></u></i><b>Raydium ✓</b></div><small class="muted">curve full · liquidity locked</small>';
-    return '<div class="fv-split"><span class="c"><b>50%</b><small>Creator</small></span><span class="h"><b>30%</b><small>Holders</small></span><span class="v"><b>20%</b><small>Burn 🔥</small></span></div>';
+  function storyScene(k, t) {
+    var tm = Math.max(t.buy, t.sell) || 2, nm = esc(t.name), tk = esc(t.tick), bg = (t.spec && t.spec.bg) || '#1B2440';
+    if (k === 0) return '<div class="sc sc1"><div class="s1-card"><div class="s1-ban" style="background:linear-gradient(120deg,' + bg + ',#0E0E10)"></div><div class="s1-av">' + avatarHTML(t, 92) + '</div><div class="s1-meta"><b class="s1-name">' + nm + '</b><span class="mono s1-tk">$' + tk + '</span></div><div class="s1-chips"><span class="s1-chip tax" style="background:' + taxBg(tm) + '">TAX ' + tm + '%</span><span class="s1-chip pair">' + coinHTML(t.pair, 18) + ' ' + esc(pairLabel(t.pair)) + '</span><span class="s1-chip live">● LIVE</span></div></div></div>';
+    if (k === 1) return '<div class="sc sc2"><div class="s2-lane bots">' + [0, 1, 2].map(function (q) { return '<span class="s2-who" style="--d:' + (q * .25) + 's">🤖<em>−80%</em></span>'; }).join('') + '</div>' +
+      '<div class="s2-box"><span class="s2-liq"></span><span class="s2-t"><small>SNIPER TAX</small><b class="mono s2-v">80%</b></span><span class="s2-ok"><small>TAX</small><b class="mono">' + tm + '%</b></span></div>' +
+      '<div class="s2-lane ppl">' + [0, 1, 2, 3].map(function (q) { return '<span class="s2-who" style="--d:' + (3.2 + q * .2) + 's">🙂<em class="ok">−' + tm + '%</em></span>'; }).join('') + '</div></div>';
+    if (k === 2) return '<div class="sc sc3"><svg class="s3-g" viewBox="0 0 400 200"><defs><linearGradient id="s3f" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3DDC97" stop-opacity=".35"/><stop offset="1" stop-color="#3DDC97" stop-opacity="0"/></linearGradient></defs><path class="s3-area" d="M10 185 C120 180 200 150 260 110 S360 30 390 18 L390 195 L10 195Z" fill="url(#s3f)"/><path class="s3-line" d="M10 185 C120 180 200 150 260 110 S360 30 390 18" fill="none" stroke="#3DDC97" stroke-width="3" stroke-linecap="round"/></svg>' +
+      [0, 1, 2, 3, 4, 5].map(function (q) { return '<span class="s3-b mono" style="left:' + (18 + q * 13) + '%;bottom:' + (12 + q * 12) + '%;--d:' + (.4 + q * .55) + 's">+' + (0.3 + (q * 0.37) % 2).toFixed(1) + ' SOL</span>'; }).join('') +
+      '<div class="s3-curve"><small>Bonding curve</small><i><u></u></i><b class="mono s3-p">0%</b></div></div>';
+    if (k === 3) { var rm = riskMetrics(t); return '<div class="sc sc4"><div class="s4-card">' + avatarHTML(t, 56) + '<b>' + nm + '</b><span class="s4-scan"></span><div class="s4-tiles">' + rm.map(function (m, q) { return '<span class="s4-t ' + m.lv + '" style="--d:' + (.5 + q * .45) + 's"><small>' + m.lab + '</small><b class="mono">' + m.val + '</b></span>'; }).join('') + '</div></div><div class="s4-note">' + (rm.some(function (m) { return m.lv === 'r'; }) ? '⚠ Flagged — still tradable. Your call.' : '✓ Nothing suspicious found') + '</div></div>'; }
+    if (k === 4) return '<div class="sc sc5"><div class="s5-curve"><i><u></u></i><b class="mono">100%</b></div><div class="s5-burst">' + Array(18).join('<i></i>') + '</div><div class="s5-ray">🎓 Graduated <span>→ Raydium</span></div><div class="s5-axis"><i></i>' + [['GRAD', '🎓'], ['100K', '🔥'], ['1M', '🚀'], ['10M', '🌕']].map(function (m, q) { return '<span class="s5-m" style="left:' + (8 + q * 28) + '%;--d:' + (1.6 + q * .6) + 's"><em>' + m[1] + '</em><small>' + m[0] + '</small></span>'; }).join('') + '</div></div>';
+    return '<div class="sc sc6"><div class="s6-src">' + avatarHTML(t, 54) + '<small>every trade</small></div>' + [0, 1, 2, 3, 4, 5, 6, 7, 8].map(function (q) { return '<span class="s6-dot j' + (q % 3) + '" style="--d:' + (q * .42) + 's"></span>'; }).join('') +
+      '<div class="s6-jars">' + [['c', '50%', 'Creator', '👤'], ['h', '30%', 'Holders', '💎'], ['v', '20%', 'Burn', '🔥']].map(function (j) { return '<div class="s6-jar ' + j[0] + '"><span class="s6-fill"></span><em>' + j[3] + '</em><b class="mono">' + j[1] + '</b><small>' + j[2] + '</small></div>'; }).join('') + '</div></div>';
   }
   function fwCenter(k) {
-    var c = document.getElementById('fw-center'); if (!c) return; var st = FWS[k];
-    c.innerHTML = '<div class="fc-in"><span class="fc-k mono">STEP ' + (k + 1) + ' / ' + FWS.length + '</span><b class="fc-t">' + st[1] + ' ' + st[2] + '</b>' + fwVisual(k, FW.coin) + '</div>';
-    document.querySelectorAll('[data-fw]').forEach(function (e) { var n = +e.getAttribute('data-fw'); e.classList.toggle('on', n === k); e.classList.toggle('done', n < k); });
-    document.querySelectorAll('[data-fws]').forEach(function (e) { var n = +e.getAttribute('data-fws'); e.classList.toggle('on', n === k); e.classList.toggle('done', n < k); });
-    var r = document.getElementById('fw-rider');
-    if (k === 3 && r) { var bad = riskMetrics(FW.coin).some(function (m) { return m.lv === 'r'; }); r.setAttribute('data-flag', bad ? '⚠' : '✓'); r.classList.toggle('bad', bad); r.classList.add('flagged'); }
-    if (k === 4 && r) r.classList.add('grad');
-    if (k === 5) { FW.sol += 0.2 + Math.random() * 1.6; var e2 = document.getElementById('fw-sol'); if (e2) e2.textContent = FW.sol.toFixed(2) + ' SOL'; }
-    if (k === 1) { var n0 = 90, tm = Math.max(FW.coin.buy, FW.coin.sell); (function dec() { var e3 = document.getElementById('fv-trapn'); if (!e3 || FW.i !== 1) return; n0 = Math.max(tm, n0 - 3); e3.textContent = n0 + '%'; if (n0 > tm) setTimeout(dec, 60); })(); }
-  }
-  function fwNewCoin() {
-    FW.coin = pick(all()); var r = document.getElementById('fw-rider'); if (r) { r.innerHTML = avatarHTML(FW.coin, 44); r.className = 'fw-rider'; r.removeAttribute('data-flag'); }
+    var c = document.getElementById('st2-copy'), v = document.getElementById('st2-vis'); if (!c || !v) return;
+    c.innerHTML = '<span class="st2-n mono">0' + (k + 1) + ' / 06</span><h3>' + STS[k][0] + '</h3><p>' + STS[k][1] + '</p>';
+    v.innerHTML = storyScene(k, FW.coin);
+    document.querySelectorAll('[data-stb]').forEach(function (e) { var n = +e.getAttribute('data-stb'); e.classList.toggle('on', n === k); e.classList.toggle('done', n < k); });
+    if (k === 2) { var p0 = 0; (function up() { var e = v.querySelector('.s3-p'); if (!e || FW.i !== 2) return; p0 = Math.min(85, p0 + 2); e.textContent = p0 + '%'; if (p0 < 85) setTimeout(up, 70); })(); }
   }
   function fwLoop(now) {
     var w = document.getElementById('fw-wheel'); if (!w) { FW.raf = 0; FW.el = null; return; }
-    if (FW.el !== w) { FW.el = w; FW.t0 = now; FW.i = 0; FW.lastI = -1; fwNewCoin(); }
-    var p = (now - FW.t0) / FW.ms; if (p >= 1) { FW.i = (FW.i + 1) % FWS.length; FW.t0 = now; p = 0; if (FW.i === 0) { FW.laps++; var l = document.getElementById('fw-laps'); if (l) l.textContent = FW.laps; fwNewCoin(); } }
-    var mv = Math.min(1, p / .3), e = mv < .5 ? 2 * mv * mv : 1 - Math.pow(-2 * mv + 2, 2) / 2, from = FW.i === 0 ? -0.0001 : FW.i - 1, pos = FW.i === 0 ? 0 : from + (FW.i - from) * e;
-    if (mv >= 1 && FW.lastI !== FW.i) { FW.lastI = FW.i; fwCenter(FW.i); }
-    var ang = -Math.PI / 2 + pos / FWS.length * Math.PI * 2, rr = document.getElementById('fw-rider');
-    if (rr) { rr.style.left = ((200 + Math.cos(ang) * 116) / 4) + '%'; rr.style.top = ((200 + Math.sin(ang) * 116) / 4) + '%'; }
-    var arc = document.getElementById('fw-arc'); if (arc) arc.setAttribute('stroke-dasharray', (728.9 * pos / FWS.length).toFixed(1) + ' 728.9');
-    document.querySelectorAll('[data-fws].on .fw-bar u').forEach(function (u) { u.style.width = (p * 100).toFixed(1) + '%'; });
+    if (FW.el !== w) { FW.el = w; FW.t0 = now; FW.i = 0; FW.coin = pick(all().filter(function (x) { return x.prog < 100; }).concat(all())); fwCenter(0); w.onmouseenter = function () { FW.paused = true; FW.pt = performance.now(); w.parentNode.classList.add('paused'); }; w.onmouseleave = function () { FW.paused = false; FW.t0 += performance.now() - FW.pt; w.parentNode.classList.remove('paused'); }; }
+    if (!FW.paused) { var p = (now - FW.t0) / FW.ms; if (p >= 1) { FW.i = (FW.i + 1) % STS.length; FW.t0 = now; p = 0; if (FW.i === 0) FW.coin = pick(all()); fwCenter(FW.i); }
+      document.querySelectorAll('[data-stb] u').forEach(function (u, k) { u.style.width = (k < FW.i ? 100 : k === FW.i ? p * 100 : 0) + '%'; }); }
     FW.raf = requestAnimationFrame(fwLoop);
   }
   function fwKick() { if (!FW.raf && document.getElementById('fw-wheel')) FW.raf = requestAnimationFrame(fwLoop); }
