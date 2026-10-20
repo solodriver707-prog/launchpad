@@ -67,7 +67,9 @@
   var LOGO = '<span class="logo" aria-hidden="true"><svg viewBox="0 0 40 40"><defs><linearGradient id="trG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FBF3E2"/><stop offset=".55" stop-color="#D8C3A0"/><stop offset="1" stop-color="#A88D5F"/></linearGradient></defs><polygon class="tr-bar" points="5,13 34,4.5 34,13.5 5,22" fill="url(#trG)" stroke="url(#trG)" stroke-width="3" stroke-linejoin="round"/><polygon class="tr-stem" points="14.5,24.5 24,21.7 24,36 14.5,36" fill="#EDE9E1" stroke="#EDE9E1" stroke-width="3" stroke-linejoin="round"/></svg></span>';
 
   // ================= DATA =================
+  function curveMc(prog) { return 5 + Math.max(0, Math.min(100, prog)) / 100 * 64; }
   function mk(name, tick, kind, skinI, bgI, eyes, mouth, acc, buy, sell, pair, mcN, c24, prog, ageM, holders, soc, rewards, burn) {
+    if (prog < 100) mcN = curveMc(prog) * (0.97 + (hash(tick) % 7) / 100);
     var t = {
       name: name, tick: tick, spec: { kind: kind, skin: A.SKINS[skinI], bg: A.BGS[bgI], eyes: eyes, mouth: mouth, acc: acc },
       buy: buy, sell: sell, pair: pair, mcN: mcN, mc0: mcN / (1 + c24 / 100), prog: prog, born: Date.now() - ageM * 60000,
@@ -81,6 +83,7 @@
     var step = Math.pow(t.mcN / t.mc0, 1 / n);
     for (var i = 0; i < n; i++) { v = v * step * (1 + rnd(-0.035, 0.035)); h.push(v); }
     var fix = t.mcN / h[n - 1]; t.hist = h.map(function (x, i) { return x * Math.pow(fix, i / (n - 1)); });
+    if (t.prog < 100) t.hist = t.hist.map(function (x) { return Math.min(x, 68.5); });
   }
   var BASE = [
     mk('Neon Frog', 'NFROG', 'frog', 0, 3, 'normal', 'smile', 'crown', 0, 0, 'SOL', 1240, 34.2, 100, 4320, 4120, true, 1, 1),
@@ -1623,13 +1626,14 @@
   // ---- ATH + milestone badges (ever reached) ----
   function athOf(t) {
     if (t.ath == null) { var hmax = Math.max.apply(null, t.hist.concat([t.mcN])); t.ath = t.devPct != null ? hmax : hmax * (1 + (hash(t.tick + 'ath') % 45) / 100); }
+    if (t.prog < 100 && t.ath > 69) t.ath = Math.max(t.mcN, 69 * .98);
     if (t.mcN > t.ath) t.ath = t.mcN; return t.ath;
   }
   var MSB = [[1e5, '100K', '🔥', 'Hit $100K'], [1e6, '1M', '🚀', 'Hit $1M'], [1e7, '10M', '🌕', 'Hit $10M'], [1e8, '100M', '👑', 'Hit $100M']];
   function msBadges(t, cls) {
     var a = athOf(t) * 1000, out = '';
     if (t.prog >= 100) out += '<span class="msb grad" title="Graduated from the bonding curve">🎓<b>GRAD</b></span>';
-    MSB.forEach(function (m) { if (a >= m[0]) out += '<span class="msb m' + m[1] + '" title="' + m[3] + ' (all-time high ' + fmtK(a / 1000) + ')">' + m[2] + '<b>' + m[1] + '</b></span>'; });
+    MSB.forEach(function (m) { if (t.prog >= 100 && a >= m[0]) out += '<span class="msb m' + m[1] + '" title="' + m[3] + ' (all-time high ' + fmtK(a / 1000) + ')">' + m[2] + '<b>' + m[1] + '</b></span>'; });
     return out ? '<span class="msbs ' + (cls || '') + '">' + out + '</span>' : '';
   }
   function mcJourney(t) {
@@ -1638,7 +1642,7 @@
     var mc = t.mcN * 1000, ath = athOf(t) * 1000, x = f(mc), ax = f(ath);
     return '<span class="jr jr2" title="' + fmtK(t.mcN) + ' now · ATH ' + fmtK(ath / 1000) + '"><span class="jr-track"><i class="jr-fill" style="width:' + x.toFixed(1) + '%"></i>' +
       (ax - x > 1.5 ? '<i class="jr-ath" style="left:' + x.toFixed(1) + '%;width:' + (ax - x).toFixed(1) + '%"></i>' : '') +
-      M.map(function (m, k) { var p = k / (M.length - 1) * 100, hit = m[3] === 'start' ? false : m[3] === 'grad' ? t.prog >= 100 : ath >= m[0];
+      M.map(function (m, k) { var p = k / (M.length - 1) * 100, hit = m[3] === 'start' ? false : m[3] === 'grad' ? t.prog >= 100 : t.prog >= 100 && ath >= m[0];
         return '<i class="jn ' + m[3] + (hit ? ' hit' : '') + '" style="left:' + p + '%" title="' + (m[3] === 'start' ? 'Launch' : m[3] === 'grad' ? (hit ? 'Graduated' : 'Not graduated yet') : (hit ? 'Reached ' : 'Not yet ') + '$' + m[1]) + '">' + (hit && m[2] ? '<span>' + m[2] + '</span>' : '') + '<u>' + m[1] + '</u></i>'; }).join('') +
       '<span class="jr-dot" style="left:' + x.toFixed(1) + '%"></span></span></span>';
   }
@@ -1710,9 +1714,9 @@
     var mcrow = '<section class="card-s mcrow2"><div class="mc2-top"><div class="mc2-main"><small>Market cap</small><div class="mc2-v"><span data-mc="' + id + '" data-v="' + fmtK(t.mcN) + '">' + fmtK(t.mcN) + '</span><span class="chgpill ' + (c >= 0 ? 'up' : 'down') + '" data-chg="' + id + '">' + chgTxt(c) + '</span></div>' +
         '<div class="mc2-ath"><span>ATH <b class="mono">' + fmtK(ath) + '</b></span><span class="' + (offAth < 2 ? 'up' : 'down') + '">' + (offAth < 2 ? 'at all-time high' : '−' + offAth.toFixed(0) + '% from ATH') + '</span></div></div>' +
         '<div class="mc2-j">' + mcJourney(t) + '</div></div>' +
-      '<div class="mc2-tiles">' + [['Price', '<span data-price="' + id + '" data-v="' + fmtPrice(price(t)) + '">' + fmtPrice(price(t)) + '</span>'], ['24h volume', fmtK(t.vol)], ['Liquidity', curveSol + ' <em>SOL</em>'], ['Holders', fmtNum(t.holders)]].map(function (r) { return '<div><small>' + r[0] + '</small><b class="mono">' + r[1] + '</b></div>'; }).join('') + '</div>' +
+      '<div class="mc2-tiles">' + [['Price', '<span data-price="' + id + '" data-v="' + fmtPrice(price(t)) + '">' + fmtPrice(price(t)) + '</span>'], ['24h volume', fmtK(t.vol)], ['Liquidity', fmtK(curveSol * SOL_USD / 1000)], ['Holders', fmtNum(t.holders)]].map(function (r) { return '<div><small>' + r[0] + '</small><b class="mono">' + r[1] + '</b></div>'; }).join('') + '</div>' +
       '<div class="mc2-bs"><div class="bs-row"><span class="up"><b class="mono">' + nb + '</b> buys</span><small>Transactions</small><span class="down"><b class="mono">' + ns + '</b> sells</span></div><div class="bs-bar"><i style="width:' + bp.toFixed(1) + '%"></i></div>' +
-        '<div class="bs-row"><span class="up"><b class="mono">' + vb.toFixed(1) + '</b> SOL</span><small>Volume</small><span class="down"><b class="mono">' + vs.toFixed(1) + '</b> SOL</span></div><div class="bs-bar"><i style="width:' + vp.toFixed(1) + '%"></i></div></div></section>';
+        '<div class="bs-row"><span class="up"><b class="mono">' + fmtK(vb * SOL_USD / 1000) + '</b> bought</span><small>Volume</small><span class="down"><b class="mono">' + fmtK(vs * SOL_USD / 1000) + '</b> sold</span></div><div class="bs-bar"><i style="width:' + vp.toFixed(1) + '%"></i></div></div></section>';
     var chart = '<section class="card-s panel cpanel' + (S.cfull ? ' chart-fs' : '') + '">' + chartToolbar(t) +
       '<div class="chartbox" id="chart">' + chartSVG(t) + '</div><div class="c-help muted">scroll or pinch to zoom · drag to pan · + / − keys</div></section>';
     // tabs
@@ -2024,7 +2028,7 @@
     t.mcN = Math.max(2, t.mcN * (1 + dir * impact / 100));
     t.vol += sol * SOL_USD / 1000;
     var wasGrad = t.prog >= 100;
-    if (t.prog < 100) t.prog = Math.max(0, Math.min(100, t.prog + dir * sol * 0.25));
+    if (t.prog < 100) { t.prog = Math.max(0, Math.min(100, t.prog + dir * sol * 0.25)); t.mcN = Math.max(t.mcN * .985, Math.min(t.mcN * 1.015, curveMc(t.prog))); if (t.prog >= 100) t.mcN = Math.max(t.mcN, 69); }
     if (side === 'buy' && Math.random() < 0.4) t.holders += 1;
     t.hist.push(t.mcN); if (t.hist.length > 160) t.hist.shift(); athOf(t);
     if (t.tk) { t.tk.push([Date.now(), t.mcN, sol]); if (t.tk.length > 5000) t.tk.splice(0, 500); }

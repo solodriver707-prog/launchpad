@@ -2908,3 +2908,19 @@ header::before{background:linear-gradient(90deg,transparent,rgba(216,195,160,.6)
 .czoom button:hover{background:rgba(255,255,255,.07);color:#fff}
 .czoom .mono{min-width:30px;text-align:center;font-size:11px;color:var(--muted)}
 .cpanel .c-pair{margin-left:8px}
+/* calmer, smaller milestone badges */
+.jn{width:8px;height:8px;margin:-4px 0 0 -4px;box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.14)}
+.jn.hit{width:16px;height:16px;margin:-8px 0 0 -8px;background:#141416;animation:none}
+.jn.hit span{font-size:9px}
+.jn.hit u{top:15px}
+.jn u{top:11px;font-size:8px}
+.jn.grad.hit{box-shadow:0 0 0 1.5px rgba(61,220,151,.8)}
+.jn.m100K.hit{box-shadow:0 0 0 1.5px rgba(255,154,77,.8)}
+.jn.m1M.hit{box-shadow:0 0 0 1.5px rgba(125,184,255,.8)}
+.jn.m10M.hit{box-shadow:0 0 0 1.5px rgba(243,229,200,.85)}
+.jn.m100M.hit{box-shadow:0 0 0 1.5px #FFD15C,0 0 10px -2px rgba(255,209,92,.6)}
+.jn u{color:rgba(255,255,255,.22)}
+.jn.hit u{opacity:.85}
+.jr2 .jr-track{height:4px;margin-top:-12px}
+.jr2 .jr-dot{width:10px;height:10px;margin:-5px 0 0 -5px;animation:none;box-shadow:0 0 0 3px rgba(216,195,160,.22),0 0 10px rgba(251,243,226,.6)}
+.jr2{height:46px}
