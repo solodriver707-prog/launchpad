@@ -1930,8 +1930,15 @@
       '<text x="' + x0 + '" y="' + (H - 6) + '" fill="#7A766F" font-size="9" font-family="JetBrains Mono,monospace">launch</text><text x="' + x1 + '" y="' + (H - 6) + '" fill="#7A766F" font-size="9" text-anchor="end" font-family="JetBrains Mono,monospace">+' + (sn.dur < 60 ? sn.dur + 's' : sn.dur / 60 + 'm') + '</text></svg>';
     return '<div class="field taxf"><div class="lbl"><b>Tax <span class="muted" style="font-weight:500;font-size:12px">· same for buys and sells</span></b><span class="mono" style="color:' + taxBg(base) + '">' + base + '%</span></div><div class="txrow">' + steps.join('') + '</div></div>' +
       '<div class="trap' + (sn.on ? ' on' : '') + '"><button class="trap-t" data-act="snipeToggle"><span class="trap-ic">🪤</span><span><b>Sniper trap</b><small>Bots that buy in the first moments pay a much higher tax, which fades to your normal ' + base + '% tax.</small></span><i class="sw2"><i></i></i></button>' +
-      (sn.on ? '<div class="trap-cfg"><div><small class="muted">Start tax</small><div class="txrow sm">' + [25, 50, 75, 90].map(function (v) { return '<button class="txs' + (sn.start === v ? ' on' : '') + '" style="--tc:#F2708A" data-act="snipeStart" data-arg="' + v + '">' + v + '%</button>'; }).join('') + '</div>' +
-        '<small class="muted">Fades over</small><div class="txrow sm">' + [[30, '30s'], [60, '1m'], [180, '3m'], [300, '5m']].map(function (d) { return '<button class="txs' + (sn.dur === d[0] ? ' on' : '') + '" style="--tc:#D8C3A0" data-act="snipeDur" data-arg="' + d[0] + '">' + d[1] + '</button>'; }).join('') + '</div></div>' + graph + '</div>' : '') + '</div>';
+      (sn.on ? (function () {
+        var durTxt = function (sec) { return sec < 60 ? sec + 's' : (sec % 60 ? Math.floor(sec / 60) + 'm ' + (sec % 60) + 's' : sec / 60 + 'm'); };
+        var at = function (f) { return Math.round(sn.start - (sn.start - base) * f); };
+        var ticks = [0, .25, .5, .75, 1].map(function (f) { return '<span class="tl-t" style="left:' + (f * 100) + '%"><b class="mono" style="color:' + (f < 1 ? '#F2708A' : 'var(--ivory)') + '">' + at(f) + '%</b><small>' + (f === 0 ? 'launch' : '+' + durTxt(Math.round(sn.dur * f))) + '</small></span>'; }).join('');
+        return '<div class="trap-cfg2"><div class="tc-row"><span class="tc-l">Starts at</span><div class="tc-seg">' + [25, 50, 75, 90].map(function (v) { return '<button class="' + (sn.start === v ? 'on' : '') + '" data-act="snipeStart" data-arg="' + v + '">' + v + '%</button>'; }).join('') + '</div></div>' +
+          '<div class="tc-row"><span class="tc-l">Back to ' + base + '% after</span><div class="tc-seg g">' + [[30, '30s'], [60, '1 min'], [180, '3 min'], [300, '5 min']].map(function (d) { return '<button class="' + (sn.dur === d[0] ? 'on' : '') + '" data-act="snipeDur" data-arg="' + d[0] + '">' + d[1] + '</button>'; }).join('') + '</div></div>' +
+          '<div class="tl"><div class="tl-bar"></div>' + ticks + '</div>' +
+          '<div class="tc-ex">💡 A bot buying <b>1 SOL</b> at launch pays <b class="dn">' + (sn.start / 100).toFixed(2) + ' SOL</b> tax. A normal buyer after ' + durTxt(sn.dur) + ' pays just <b>' + (base / 100).toFixed(2) + ' SOL</b>.</div></div>';
+      })() : '') + '</div>';
   }
   setInterval(function () {
     document.querySelectorAll('[data-trap]').forEach(function (e) { var t = find(e.getAttribute('data-trap')); var v = t ? snipeNow(t) : 0; if (v > 0) e.textContent = '🪤 ' + v + '%'; else e.remove(); });
