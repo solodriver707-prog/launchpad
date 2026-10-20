@@ -379,9 +379,9 @@
     var flags = fl.length ? '<div class="tc-flags bad" data-tip="' + esc(fl.join(' · ')) + '"><span class="fl-ic">!</span><span>' + esc(fl.slice(0, 2).join(' · ')) + (fl.length > 2 ? ' +' + (fl.length - 2) : '') + '</span></div>' :
       '<div class="tc-flags ok"><span class="fl-ic">✓</span><span>No red flags</span></div>';
     return '<article class="tcard' + (S.newTick === t.tick ? ' is-new' : '') + ' ' + fr.cls + '" data-card="' + esc(t.tick) + '" data-act="open" data-arg="' + esc(t.tick) + '">' +
-      '<div class="tc-hero"><div class="tch-bg" aria-hidden="true">' + avatarHTML(t, 240) + '</div>' +
+      '<div class="tc-hero' + (t.banner ? ' has-ban' : '') + '"><div class="tch-bg' + (t.banner ? ' ban' : '') + '" aria-hidden="true">' + (t.banner ? '<img src="' + t.banner + '" alt="">' : avatarHTML(t, 240)) + '</div>' +
         '<div class="tc-age tch-age ' + fr.cls + '"><span class="ag-dot"></span><span class="ag-lab">' + fr.lab + '</span><b class="mono" data-t="' + t.born + '">' + ago(t.born) + '</b>' + (done ? '<span class="ag-grad">GRADUATED</span>' : '') + '</div>' +
-        '<div class="tch-av">' + avatarHTML(t, 150) + '</div>' + (opts.preview ? '' : '<button class="tch-star' + (on ? ' on' : '') + '" data-act="star" data-arg="' + esc(t.tick) + '" aria-label="Add to watchlist" aria-pressed="' + on + '">' + I.star(on) + '</button>') +
+        '<div class="tch-av">' + avatarHTML(t, 150) + '</div>' + (snipeNow(t) > 0 ? '<span class="trap-b" data-trap="' + esc(t.tick) + '">🪤 ' + snipeNow(t) + '%</span>' : '') + (opts.preview ? '' : '<button class="tch-star' + (on ? ' on' : '') + '" data-act="star" data-arg="' + esc(t.tick) + '" aria-label="Add to watchlist" aria-pressed="' + on + '">' + I.star(on) + '</button>') +
         '<div class="tch-side"><div class="tax" style="background:' + taxBg(tmax) + '" data-tip="Buy ' + t.buy + '% · Sell ' + t.sell + '%"><small>TAX</small><b>' + tmax + '%</b></div>' +
         '<div class="pairmini" data-tip="Paired with ' + esc(pairInfo(t.pair).name) + '">' + coinHTML(t.pair, 28) + '<small>PAIR</small><b>' + esc(pairLabel(t.pair)) + '</b></div></div></div>' +
       '<div class="tc-name2"><b>' + esc(t.name) + '</b><span class="mono">$' + esc(t.tick) + '</span></div>' +
@@ -1683,12 +1683,12 @@
     tt.forEach(function (x) { if (x.side === 'buy') { nb++; vb += x.sol; } else { ns++; vs += x.sol; } });
     var q = quoteFor(t), pos = position(t), tmax = Math.max(t.buy, t.sell);
     var curveSol = (t.prog / 100 * 85).toFixed(2);
-    var head = '<section class="card-s tp-head2 tp-banner"><div class="tb-bg" aria-hidden="true">' + avatarHTML(t, 420) + '</div><div class="tb-av">' + avatarHTML(t, 104) + '</div>' +
+    var head = '<section class="card-s tp-head2 tp-banner"><div class="tb-bg' + (t.banner ? ' ban' : '') + '" aria-hidden="true">' + (t.banner ? '<img src="' + t.banner + '" alt="">' : avatarHTML(t, 420)) + '</div><div class="tb-av">' + avatarHTML(t, 104) + '</div>' +
       '<div class="tp-id"><div class="title-xl" style="margin:0;font-size:30px">' + esc(t.name) + ' <span class="tk">$' + id + '</span></div>' +
         '<div class="hs-pills" style="margin-top:8px"><button class="pill copy2" data-act="ca" data-arg="' + id + '">CA ' + esc(short(t.ca)) + ' ' + I.copy + '</button><span class="pill" style="padding-left:11px">created <span data-t="' + t.born + '">&nbsp;' + ago(t.born) + '</span>&nbsp;ago by&nbsp;' + makerHTML(devOf(t), t) + '</span>' +
         socialsHTML(t, true) +
         '<button class="iconbtn" data-act="star" data-arg="' + id + '" aria-label="Watchlist" aria-pressed="' + on + '">' + I.star(on) + '</button><button class="iconbtn" data-act="share" aria-label="Copy link"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8h16v-8M12 3v13M7 8l5-5 5 5"/></svg></button></div></div>' +
-      '<div class="tp-key"><div class="tax" style="background:' + taxBg(tmax) + ';padding:9px 14px"><small>TAX</small><b style="font-size:24px">' + t.buy + '/' + t.sell + '</b><small style="letter-spacing:.04em;font-size:9px">BUY/SELL %</small></div>' +
+      '<div class="tp-key">' + (t.snipe && t.snipe.on ? '<div class="trap-live' + (snipeNow(t) > 0 ? '' : ' done') + '" data-trapl="' + id + '"><span>🪤</span><span><b>Sniper trap</b><small>' + (snipeNow(t) > 0 ? 'tax now <i>' + snipeNow(t) + '%</i>, fading to ' + tmax + '%' : 'ended — tax is ' + tmax + '%') + '</small></span></div>' : '') + '<div class="tax" style="background:' + taxBg(tmax) + ';padding:9px 14px"><small>TAX</small><b style="font-size:24px">' + tmax + '%</b><small style="letter-spacing:.04em;font-size:9px">BUY & SELL</small></div>' +
         '<button class="pairbig" data-act="pairOpen" data-arg="' + esc(t.pair) + '">' + coinHTML(t.pair, 42) + '<div><small>PAIRED WITH</small><b>' + esc(pairLabel(t.pair)) + '</b><span>' + esc(pairInfo(t.pair).name) + '</span></div></button></div></section>';
     var mcrow = '<section class="card-s mcrow"><div class="mc-main"><div class="l muted">Market cap</div><div class="mc-big"><span data-mc="' + id + '" data-v="' + fmtK(t.mcN) + '">' + fmtK(t.mcN) + '</span><span class="chgpill ' + (c >= 0 ? 'up' : 'down') + '" data-chg="' + id + '">' + chgTxt(c) + '</span></div>' +
         '<div class="ath"><div class="ath-l"><span class="muted">ATH</span><span class="mono">' + fmtK(ath) + '</span></div><div class="ath-bar"><i data-athbar="' + id + '" style="width:' + athPct.toFixed(1) + '%"></i></div></div></div>' +
@@ -1794,9 +1794,47 @@
     cm.push(c); var box = document.getElementById('cmts'); if (box) box.insertAdjacentHTML('afterbegin', commentHTML(c, t, true));
   }, 6000);
 
+  // ---- compact pair picker with search by name / ticker / contract address ----
+  S.cpq = ''; S.cpTab = 'crypto';
+  try { var CP = JSON.parse(localStorage.getItem('dl.cpairs') || '{}'); Object.keys(CP).forEach(function (k) { PAIR_INFO[k] = CP[k]; }); } catch (e) {}
+  function isCA(q) { return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(q); }
+  function pairSearch(q) {
+    q = q.trim(); var ql = q.toLowerCase().replace(/^\$/, ''), out = [];
+    Object.keys(PAIR_INFO).forEach(function (id) { var pi = PAIR_INFO[id]; if (id.toLowerCase().indexOf(ql) > -1 || pi.name.toLowerCase().indexOf(ql) > -1 || (pi.ca && pi.ca === q)) out.push(id); });
+    all().forEach(function (t) { if (out.indexOf(t.tick) > -1) return; if (t.tick.toLowerCase().indexOf(ql) > -1 || t.name.toLowerCase().indexOf(ql) > -1 || t.ca === q) out.push(t.tick); });
+    return out.slice(0, 8);
+  }
+  // ---- one tax for buy & sell + optional anti-sniper trap ----
+  function snipeNow(t, at) { var sn = t.snipe; if (!sn || !sn.on) return 0; var age = ((at || Date.now()) - t.born) / 1000; if (age >= sn.dur) return 0; return Math.round(sn.start - (sn.start - Math.max(t.buy, t.sell)) * (age / sn.dur)); }
+  function effTax(t, at) { return Math.max(Math.max(t.buy, t.sell), snipeNow(t, at)); }
+  function taxPicker(c) {
+    var sn = c.snipe || { on: false, start: 50, dur: 120 }, base = c.buy;
+    var steps = []; for (var v = 0; v <= 10; v++) steps.push('<button class="txs' + (base === v ? ' on' : '') + '" style="--tc:' + taxBg(v) + '" data-act="ctax" data-arg="' + v + '">' + v + '%</button>');
+    var W = 240, H = 64, pts = []; for (var k = 0; k <= 30; k++) { var f = k / 30, tx = sn.start - (sn.start - base) * f; pts.push((f * (W - 40) + 20).toFixed(1) + ',' + (H - 8 - tx / 100 * (H - 16)).toFixed(1)); }
+    var graph = '<svg class="trap-g" viewBox="0 0 ' + W + ' ' + H + '"><polyline points="4,' + (H - 8 - sn.start / 100 * (H - 16)).toFixed(1) + ' ' + pts.join(' ') + ' ' + (W - 4) + ',' + (H - 8 - base / 100 * (H - 16)).toFixed(1) + '" fill="none" stroke="#F2708A" stroke-width="2" stroke-linejoin="round"/><text x="6" y="12" fill="#F2708A" font-size="10" font-family="monospace">' + sn.start + '%</text><text x="' + (W - 6) + '" y="' + (H - 12) + '" fill="#D6D1C9" font-size="10" text-anchor="end" font-family="monospace">' + base + '%</text><text x="' + (W / 2) + '" y="' + (H - 1) + '" fill="#7A766F" font-size="9" text-anchor="middle" font-family="monospace">' + (sn.dur < 60 ? sn.dur + 's' : sn.dur / 60 + ' min') + ' after launch</text></svg>';
+    return '<div class="field taxf"><div class="lbl"><b>Tax <span class="muted" style="font-weight:500;font-size:12px">· same for buys and sells</span></b><span class="mono" style="color:' + taxBg(base) + '">' + base + '%</span></div><div class="txrow">' + steps.join('') + '</div></div>' +
+      '<div class="trap' + (sn.on ? ' on' : '') + '"><button class="trap-t" data-act="snipeToggle"><span class="trap-ic">🪤</span><span><b>Sniper trap</b><small>Bots that buy in the first moments pay a much higher tax, which fades to your normal ' + base + '% tax.</small></span><i class="sw2"><i></i></i></button>' +
+      (sn.on ? '<div class="trap-cfg"><div><small class="muted">Start tax</small><div class="txrow sm">' + [25, 50, 75, 90].map(function (v) { return '<button class="txs' + (sn.start === v ? ' on' : '') + '" style="--tc:#F2708A" data-act="snipeStart" data-arg="' + v + '">' + v + '%</button>'; }).join('') + '</div>' +
+        '<small class="muted">Fades over</small><div class="txrow sm">' + [[30, '30s'], [60, '1m'], [180, '3m'], [300, '5m']].map(function (d) { return '<button class="txs' + (sn.dur === d[0] ? ' on' : '') + '" style="--tc:#D8C3A0" data-act="snipeDur" data-arg="' + d[0] + '">' + d[1] + '</button>'; }).join('') + '</div></div>' + graph + '</div>' : '') + '</div>';
+  }
+  setInterval(function () {
+    document.querySelectorAll('[data-trap]').forEach(function (e) { var t = find(e.getAttribute('data-trap')); var v = t ? snipeNow(t) : 0; if (v > 0) e.textContent = '🪤 ' + v + '%'; else e.remove(); });
+    document.querySelectorAll('[data-trapl]').forEach(function (e) { var t = find(e.getAttribute('data-trapl')); if (!t) return; var v = snipeNow(t), m = Math.max(t.buy, t.sell), sm = e.querySelector('small'); if (v > 0) { var left = Math.ceil(t.snipe.dur - (Date.now() - t.born) / 1000); sm.innerHTML = 'tax now <i>' + v + '%</i> → ' + m + '% · ' + (left >= 60 ? Math.floor(left / 60) + 'm ' : '') + (left % 60) + 's left'; } else { e.classList.add('done'); sm.textContent = 'ended — tax is ' + m + '%'; } });
+  }, 1000);
+  function pairPicker(c) {
+    var pi = pairInfo(c.pair), q = S.cpq.trim(), res = q ? pairSearch(q) : [];
+    var quick = S.cpTab === 'memes' ? all().slice().sort(function (a, b) { return b.mcN - a.mcN; }).slice(0, 12).map(function (t) { return t.tick; }) : Object.keys(PAIR_INFO).filter(function (id) { return PAIR_INFO[id].cat === S.cpTab; });
+    var drop = q ? '<div class="cpp-drop">' + res.map(function (id) { var p2 = pairInfo(id), t = find(id); return '<button class="cpp-it' + (c.pair === id ? ' on' : '') + '" data-act="cpairPick" data-arg="' + esc(id) + '">' + coinHTML(id, 26) + '<span><b>' + esc(pairLabel(id)) + '</b><small>' + esc(p2.name) + (t ? ' · ' + short(t.ca) + ' · ' + fmtK(t.mcN) : p2.ca ? ' · ' + short(p2.ca) : '') + '</small></span></button>'; }).join('') +
+      (isCA(q) && !res.length ? '<button class="cpp-it ca" data-act="cpairCA" data-arg="' + esc(q) + '"><span class="coin" style="width:26px;height:26px;background:#3A3A3D;font-size:12px">?</span><span><b>Use this contract</b><small class="mono">' + esc(short(q)) + ' · not listed on treid yet</small></span></button>' : '') +
+      (!res.length && !isCA(q) ? '<div class="muted cpp-none">No match — paste a contract address to pair with any Solana token.</div>' : '') + '</div>' : '';
+    return '<div class="field cpp"><b>Pair with</b><div class="cpp-row"><div class="cpp-sel">' + coinHTML(c.pair, 30) + '<span><b>' + esc(pairLabel(c.pair)) + '</b><small>' + esc(pi.name) + '</small></span></div>' +
+      '<div class="cpp-s">' + I.search + '<input id="c-pq" data-bind="cpq" value="' + esc(S.cpq) + '" placeholder="Search name, ticker or paste contract address" autocomplete="off">' + drop + '</div></div>' +
+      '<div class="cpp-tabs">' + CATS.slice(1).map(function (cg) { return '<button class="' + (S.cpTab === cg[0] ? 'on' : '') + '" data-act="cpTab" data-arg="' + cg[0] + '">' + cg[1] + '</button>'; }).join('') + '</div>' +
+      '<div class="cpp-quick drag-scroll">' + quick.map(function (id) { return '<button class="cpp-q' + (c.pair === id ? ' on' : '') + '" data-act="cpair" data-arg="' + esc(id) + '">' + coinHTML(id, 20) + esc(pairLabel(id)) + '</button>'; }).join('') + '</div></div>';
+  }
   function createPage() {
     var c = S.c, sp = c.spec, tmax = Math.max(c.buy, c.sell);
-    var preview = { name: c.name || 'Your token', tick: c.tick || 'TICKER', spec: sp, img: c.img, buy: c.buy, sell: c.sell, pair: c.pair, mcN: 5, mc0: 5, prog: 1, born: Date.now(), holders: 1, vol: 0, ca: 'preview', hist: [5, 5.1, 5, 5.2, 5.4], rewards: false, burn: false };
+    var preview = { name: c.name || 'Your token', tick: c.tick || 'TICKER', spec: sp, img: c.img, banner: c.banner, buy: c.buy, sell: c.sell, pair: c.pair, mcN: 5, mc0: 5, prog: 1, born: Date.now(), holders: 1, vol: 0, ca: 'preview', hist: [5, 5.1, 5, 5.2, 5.4], rewards: false, burn: false };
     function opts(key, list) { return '<div class="optrow">' + list.map(function (v) { return '<button class="opt' + (sp[key] === v ? ' on' : '') + '" data-act="spec" data-k="' + key + '" data-arg="' + v + '">' + v + '</button>'; }).join('') + '</div>'; }
     function sws(key, list) { return '<div class="optrow">' + list.map(function (v) { return '<button class="sw' + (sp[key] === v ? ' on' : '') + '" style="background:' + v + '" data-act="spec" data-k="' + key + '" data-arg="' + v + '" aria-label="Colour ' + v + '"></button>'; }).join('') + '</div>'; }
     return '<main class="wrap" style="padding-top:22px;max-width:1240px">' +
@@ -1807,16 +1845,16 @@
           '<div class="row"><div class="field" style="flex:2 1 220px"><label for="c-name" style="font-weight:700">Name</label><input id="c-name" class="inp" maxlength="32" data-bind="c.name" value="' + esc(c.name) + '" placeholder="e.g. Giga Pug"></div>' +
             '<div class="field" style="flex:1 1 140px"><label for="c-tick" style="font-weight:700">Ticker</label><input id="c-tick" class="inp mono" data-bind="c.tick" value="' + esc(c.tick) + '" placeholder="DFROG"></div></div>' +
           '<div class="field"><label for="c-desc" style="font-weight:700">Description</label><textarea id="c-desc" class="inp" data-bind="c.desc" placeholder="What is this token about?">' + esc(c.desc) + '</textarea></div>' +
-          '<div class="field"><div style="display:flex;justify-content:space-between;align-items:center"><b>Logo</b><button class="link" style="font-size:13.5px" data-act="randomLogo">' + I.dice + ' Randomise</button></div>' +
-            '<label class="upload" for="c-img">' + I.up + '<span>' + (c.img ? 'Custom image uploaded — <u>change</u>' : 'Upload your own image (PNG, JPG, GIF — max 2 MB) or build a mascot below') + '</span></label><input id="c-img" type="file" accept="image/png,image/jpeg,image/gif,image/webp" class="sr">' +
-            (c.img ? '<button class="link" style="font-size:13px" data-act="clearImg">Remove image, use mascot</button>' : '') +
-            '<div class="builder"' + (c.img ? ' style="opacity:.45"' : '') + '><span class="muted" style="font-size:12.5px">Character</span>' + opts('kind', A.KINDS) +
-              '<span class="muted" style="font-size:12.5px">Colour</span>' + sws('skin', A.SKINS) + '<span class="muted" style="font-size:12.5px">Background</span>' + sws('bg', A.BGS) +
-              '<span class="muted" style="font-size:12.5px">Eyes</span>' + opts('eyes', A.EYES) + '<span class="muted" style="font-size:12.5px">Mouth</span>' + opts('mouth', A.MOUTHS) +
-              '<span class="muted" style="font-size:12.5px">Accessory</span>' + opts('acc', A.ACCS) + '</div></div>' +
-          '<div class="field"><b>Pair with — anything</b>' + CATS.slice(1).map(function (cg) { var ids = cg[0] === 'memes' ? BASE.slice().sort(function (a, b) { return b.mcN - a.mcN; }).slice(0, 6).map(function (t) { return t.tick; }) : PAIRS.filter(function (id) { return PAIR_INFO[id].cat === cg[0]; }); return '<div class="pairgroup"><span class="muted" style="font-size:12px">' + cg[1] + '</span><div class="optrow">' + ids.map(function (id) { return '<button class="opt popt' + (c.pair === id ? ' on' : '') + '" data-act="cpair" data-arg="' + esc(id) + '">' + coinHTML(id, 22) + esc(pairLabel(id)) + '</button>'; }).join('') + '</div></div>'; }).join('') + '</div>' +
-          '<div class="row" style="gap:20px"><div class="field" style="flex:1 1 200px"><div class="lbl"><label for="c-buy">Buy tax</label><span>' + c.buy + '%</span></div><input id="c-buy" type="range" min="0" max="10" step="1" value="' + c.buy + '" data-bind="c.buy" data-num="1"></div>' +
-            '<div class="field" style="flex:1 1 200px"><div class="lbl"><label for="c-sell">Sell tax</label><span>' + c.sell + '%</span></div><input id="c-sell" type="range" min="0" max="10" step="1" value="' + c.sell + '" data-bind="c.sell" data-num="1"></div></div>' +
+          '<div class="media-row">' +
+            '<div class="field mfield"><b>Logo <span class="req">required</span></b>' +
+              '<label class="drop logo-drop' + (c.img ? ' has' : '') + '" for="c-img" data-drop="img">' + (c.img ? '<img src="' + c.img + '" alt="Logo preview">' : '<span class="drop-ic">' + I.up + '</span><span class="drop-t">Upload logo</span><small>Square · PNG, JPG, GIF, WEBP · max 4 MB</small>') + '</label>' +
+              '<input id="c-img" type="file" accept="image/png,image/jpeg,image/gif,image/webp" class="sr">' + (c.img ? '<button class="link drop-x" data-act="clearImg">Remove</button>' : '') + '</div>' +
+            '<div class="field mfield grow"><b>Banner <span class="opt-l">recommended</span></b>' +
+              '<label class="drop banner-drop' + (c.banner ? ' has' : '') + '" for="c-banner" data-drop="banner">' + (c.banner ? '<img src="' + c.banner + '" alt="Banner preview">' : '<span class="drop-ic">' + I.up + '</span><span class="drop-t">Upload banner</span><small>Wide 3:1 · e.g. 1500×500 · shown on your coin page and card</small>') + '</label>' +
+              '<input id="c-banner" type="file" accept="image/png,image/jpeg,image/gif,image/webp" class="sr">' + (c.banner ? '<button class="link drop-x" data-act="clearBanner">Remove</button>' : '') + '</div>' +
+          '</div>' +
+          pairPicker(c) +
+          taxPicker(c) +
           '<div class="row"><div class="field" style="flex:1 1 180px"><label for="c-x" style="font-weight:700">X (optional)</label><input id="c-x" class="inp" data-bind="c.x" value="' + esc(c.x) + '" placeholder="x.com/…"></div>' +
             '<div class="field" style="flex:1 1 180px"><label for="c-tg" style="font-weight:700">Telegram (optional)</label><input id="c-tg" class="inp" data-bind="c.tg" value="' + esc(c.tg) + '" placeholder="t.me/…"></div>' +
             '<div class="field" style="flex:1 1 180px"><label for="c-web" style="font-weight:700">Website (optional)</label><input id="c-web" class="inp" data-bind="c.web" value="' + esc(c.web) + '" placeholder="https://"></div></div>' +
@@ -1919,7 +1957,7 @@
     if (side === 'buy' && Math.random() < 0.4) t.holders += 1;
     t.hist.push(t.mcN); if (t.hist.length > 160) t.hist.shift();
     if (t.tk) { t.tk.push([Date.now(), t.mcN, sol]); if (t.tk.length > 5000) t.tk.splice(0, 500); }
-    var tr = { tick: t.tick, side: side, sol: sol, wallet: wallet || pickWallet(), t: Date.now(), tax: sol * (side === 'buy' ? t.buy : t.sell) / 100, mine: !!mine, price: price(t), sig: b58(64) }; tr.tokens = sol * SOL_USD / tr.price;
+    var tr = { tick: t.tick, side: side, sol: sol, wallet: wallet || pickWallet(), t: Date.now(), tax: sol * effTax(t) / 100, mine: !!mine, price: price(t), sig: b58(64) }; tr.tokens = sol * SOL_USD / tr.price;
     S.trades.unshift(tr); if (S.trades.length > 400) S.trades.pop();
     S.tradeCount++;
     paint(t, dir, tr);
@@ -2056,7 +2094,17 @@
       case 'spec': var k = el.getAttribute('data-k'), spc = {}; for (var x in S.c.spec) spc[x] = S.c.spec[x]; spc[k] = arg; setC({ spec: spc }); break;
       case 'randomLogo': setC({ img: null, spec: { kind: pick(A.KINDS), skin: pick(A.SKINS), bg: pick(A.BGS), eyes: pick(A.EYES), mouth: pick(A.MOUTHS), acc: pick(A.ACCS) } }); break;
       case 'clearImg': setC({ img: null }); break;
+      case 'clearBanner': setC({ banner: null }); break;
       case 'cpair': setC({ pair: arg }); break;
+      case 'ctax': setC({ buy: +arg, sell: +arg }); break;
+      case 'snipeToggle': var sn0 = S.c.snipe || { on: false, start: 50, dur: 120 }; sn0.on = !sn0.on; if (sn0.dur === 120) sn0.dur = 180; setC({ snipe: sn0 }); break;
+      case 'snipeStart': var sn1 = S.c.snipe; sn1.start = +arg; setC({ snipe: sn1 }); break;
+      case 'snipeDur': var sn2 = S.c.snipe; sn2.dur = +arg; setC({ snipe: sn2 }); break;
+      case 'cpairPick': S.cpq = ''; setC({ pair: arg }); break;
+      case 'cpTab': S.cpTab = arg; render(); break;
+      case 'cpairCA': var cid = arg.slice(0, 4) + '…' + arg.slice(-4); PAIR_INFO[cid] = { name: 'Custom token', cat: 'crypto', g: '?', c: '#4A4A4F', ca: arg };
+        try { var cpS = JSON.parse(localStorage.getItem('dl.cpairs') || '{}'); cpS[cid] = PAIR_INFO[cid]; localStorage.setItem('dl.cpairs', JSON.stringify(cpS)); } catch (er) {}
+        S.cpq = ''; setC({ pair: cid }); toast('Paired with contract ' + cid); break;
       case 'cat': set({ cat: arg, pair: 'All' }); break;
       case 'fpop': set({ fpop: S.fpop === arg ? null : arg }); break;
       case 'ptab': S.pairTab = arg; render(); break;
@@ -2135,11 +2183,12 @@
         if (!S.account) { set({ walletOpen: true }); toast('Connect a wallet to launch'); break; }
         var c = S.c;
         if (!c.name.trim() || c.tick.length < 2) { toast('Add a name and a ticker (2+ characters)'); break; }
+        if (!c.img) { toast('Upload a logo image for your coin'); break; }
         if (find(c.tick)) { toast('$' + c.tick + ' is already taken'); break; }
-        var nt = { name: c.name.trim(), tick: c.tick, spec: c.spec, img: c.img, buy: c.buy, sell: c.sell, pair: c.pair, mcN: 5, mc0: 5, prog: 1, born: Date.now(), holders: 1,
+        var nt = { name: c.name.trim(), tick: c.tick, spec: c.spec, img: c.img, banner: c.banner || null, snipe: c.snipe && c.snipe.on ? { on: true, start: c.snipe.start, dur: c.snipe.dur } : null, buy: c.buy, sell: c.sell, pair: c.pair, mcN: 5, mc0: 5, prog: 1, born: Date.now(), holders: 1,
           soc: !!(c.x || c.tg || c.web), links: { web: linkOf(c.web), x: linkOf(c.x), tg: linkOf(c.tg), demo: false }, rewards: false, burn: false, ca: fakeCA(), vol: 0, hist: [5, 5], desc: c.desc.trim(), creator: S.account };
         S.created.unshift(nt); saveCreated();
-        S.c = { name: '', tick: '', desc: '', x: '', tg: '', web: '', pair: 'SOL', buy: 0, sell: 0, img: null, spec: { kind: pick(A.KINDS), skin: pick(A.SKINS), bg: pick(A.BGS), eyes: 'normal', mouth: 'smile', acc: 'none' } };
+        S.c = { name: '', tick: '', desc: '', x: '', tg: '', web: '', pair: 'SOL', buy: 0, sell: 0, img: null, banner: null, spec: { kind: pick(A.KINDS), skin: pick(A.SKINS), bg: pick(A.BGS), eyes: 'normal', mouth: 'smile', acc: 'none' } };
         openToken(nt.tick); confetti(); toast('$' + nt.tick + ' is live on treid', nt); break;
     }
   });
@@ -2163,13 +2212,31 @@
     var o = {}; o[key] = v; if (key === 'palQ') o.palIdx = 0; set(o);
   });
 
-  document.addEventListener('change', function (e) {
-    if (e.target.id !== 'c-img') return;
-    var f = e.target.files && e.target.files[0]; if (!f) return;
-    if (f.size > 2 * 1024 * 1024) { toast('Image is over 2 MB'); return; }
+  function loadMedia(f, kind) {
+    if (!f) return;
     if (!/^image\/(png|jpeg|gif|webp)$/.test(f.type)) { toast('Use PNG, JPG, GIF or WEBP'); return; }
-    var r = new FileReader(); r.onload = function () { setC({ img: r.result }); }; r.readAsDataURL(f);
+    if (f.size > 4 * 1024 * 1024) { toast('Image is over 4 MB'); return; }
+    var r = new FileReader();
+    r.onload = function () {
+      var im = new Image();
+      im.onload = function () {
+        var W = kind === 'img' ? 400 : 1500, H = kind === 'img' ? 400 : 500, cv = document.createElement('canvas'), x = cv.getContext('2d');
+        cv.width = W; cv.height = H;
+        var sc = Math.max(W / im.width, H / im.height), dw = im.width * sc, dh = im.height * sc;
+        x.drawImage(im, (W - dw) / 2, (H - dh) / 2, dw, dh);
+        var o = {}; o[kind] = cv.toDataURL('image/webp', .85); setC(o);
+      };
+      im.src = r.result;
+    };
+    r.readAsDataURL(f);
+  }
+  document.addEventListener('change', function (e) {
+    if (e.target.id === 'c-img') loadMedia(e.target.files && e.target.files[0], 'img');
+    if (e.target.id === 'c-banner') loadMedia(e.target.files && e.target.files[0], 'banner');
   });
+  document.addEventListener('dragover', function (e) { var d = e.target.closest && e.target.closest('[data-drop]'); if (!d) return; e.preventDefault(); d.classList.add('over'); });
+  document.addEventListener('dragleave', function (e) { var d = e.target.closest && e.target.closest('[data-drop]'); if (d) d.classList.remove('over'); });
+  document.addEventListener('drop', function (e) { var d = e.target.closest && e.target.closest('[data-drop]'); if (!d) return; e.preventDefault(); d.classList.remove('over'); loadMedia(e.dataTransfer.files && e.dataTransfer.files[0], d.getAttribute('data-drop')); });
 
   document.addEventListener('keydown', function (e) {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); set({ palOpen: !S.palOpen, palQ: '', palIdx: 0 }); return; }
