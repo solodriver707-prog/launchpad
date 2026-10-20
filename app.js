@@ -1903,7 +1903,7 @@
   function holderMap() {
     if (!S.hmap) return ''; var t = find(S.hmap); if (!t) return '';
     var hs = holdersOf(t).filter(function (h) { return h.kind !== 'curve'; }).slice(0, 32), W = 760, H = 480;
-    if (!hs.length) return '<div class="hm-ov" data-act="hmapClose"><div class="hm card-s" data-stop><div class="hm-h"><b>Holder map · $' + esc(t.tick) + '</b><button class="iconbtn" data-act="hmapClose">✕</button></div><div class="muted" style="padding:60px;text-align:center">No holders yet — everything is still on the bonding curve.</div></div></div>';
+    if (!hs.length) return '<div class="hm-ov" data-act="hmapClose"><div class="hm card-s" data-stop><div class="hm-h"><b>Bubble map · $' + esc(t.tick) + '</b><button class="iconbtn" data-act="hmapClose">✕</button></div><div class="muted" style="padding:60px;text-align:center">No holders yet — everything is still on the bonding curve.</div></div></div>';
     var mxp = hs[0].pct, R = function (p) { return Math.max(12, Math.sqrt(p / mxp) * 112); };
     var tag = function (h) { return h.tags.indexOf('dev') >= 0 ? 'dev' : h.tags.indexOf('you') >= 0 ? 'you' : h.tags.indexOf('sniper') >= 0 ? 'sn' : h.tags.indexOf('bundle') >= 0 ? 'bu' : 'w'; };
     // bundles first so they sit together, then the rest by size
