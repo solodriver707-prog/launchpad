@@ -3452,3 +3452,49 @@ button.dh2-row{cursor:pointer;border-radius:10px}button.dh2-row:hover{background
 @media (max-width:760px){.chartbox .cmark{width:18px!important;height:18px!important;margin:-9px 0 0 -9px!important}}
 
 @media (max-width:760px){.create-grid>section{flex:1 1 100%!important;width:100%;min-width:0!important}.create-grid>aside{flex:1 1 100%!important;position:static!important}.tc-row{flex-direction:column;align-items:stretch;gap:6px}.tc-seg{flex-wrap:wrap}.tc-seg button{flex:1 0 22%}.trap-t small{display:block}.lb-tabs{overflow-x:auto}}
+/* ===== mobile coin header, clean ===== */
+@media (max-width:760px){
+  #toasts{top:84px!important;bottom:auto!important;left:12px;right:12px;align-items:center}
+  #toasts .toast{max-width:100%;font-size:13px;padding:8px 12px}
+  .tp-banner{display:grid!important;grid-template-columns:64px minmax(0,1fr);grid-template-areas:"av id" "key key";gap:12px 14px!important;padding:14px!important;align-items:center!important;min-height:0!important}
+  .tp-banner .tb-av{grid-area:av;animation:none}
+  .tp-banner .tb-av .av{width:64px!important;height:64px!important}
+  .tp-banner .tp-id{grid-area:id;min-width:0}
+  .tp-banner .title-xl{font-size:22px!important;line-height:1.1;display:flex;flex-wrap:wrap;align-items:baseline;gap:0 6px}
+  .tp-banner .title-xl .tk{font-size:14px}
+  .tp-banner .msbs.lg{margin-top:4px}.tp-banner .msbs.lg .msb{padding:2px 7px 2px 4px;font-size:10px}.tp-banner .msbs.lg .msb b{font-size:8.5px}
+  .tp-banner .hs-pills{grid-column:1/-1;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;gap:6px;margin:8px -14px 0 -92px!important;padding:0 14px 0 14px;width:calc(100% + 106px)}
+  .tp-banner .hs-pills::-webkit-scrollbar{display:none}
+  .tp-banner .hs-pills>*{flex:none}
+  .tp-banner .pill{min-height:30px;font-size:11.5px;padding:0 10px;white-space:nowrap}
+  .tp-banner .pill .maker .av{width:18px!important;height:18px!important}
+  .tp-banner .soc.big{display:flex;flex-wrap:nowrap;gap:6px;flex:none}
+  .tp-banner .soc.big .sbtn2{min-height:30px;width:34px;padding:0;justify-content:center}
+  .tp-banner .soc.big .sbtn2 span{display:none}
+  .tp-banner .soc.big .sbtn2.off{display:none}
+  .tp-banner .iconbtn{width:30px;height:30px;flex:none}
+  .tp-banner .tp-key{grid-area:key;display:grid!important;grid-template-columns:auto 1fr;gap:8px;width:100%}
+  .tp-banner .tp-key>.liq{grid-column:1/-1}
+  .tp-banner .tp-key .tax{padding:6px 12px!important;border-radius:12px;display:flex;flex-direction:row;align-items:center;gap:8px}
+  .tp-banner .tp-key .tax b{font-size:20px!important}
+  .tp-banner .tp-key .tax small:last-child{display:none}
+  .tp-banner .pairbig{padding:5px 10px 5px 5px;border-radius:12px;gap:8px;min-width:0}
+  .tp-banner .pairbig .coin,.tp-banner .pairbig .av{width:30px!important;height:30px!important;font-size:12px!important}
+  .tp-banner .pairbig small{font-size:8.5px}.tp-banner .pairbig b{font-size:15px}.tp-banner .pairbig span{display:none}
+  .tp-env>.link{min-height:36px;font-size:13px}
+  .m-buy{left:auto;right:12px;width:auto;padding:0 18px;min-height:44px;font-size:14px;border-radius:99px}
+}
+@media (max-width:760px){
+  .tp-banner{align-items:start!important}
+  .tp-banner .hs-pills{margin:8px 0 0!important;padding:0!important;width:100%!important}
+  .tp-banner .pairbig span{display:inline-flex!important}
+  .tp-banner .pairbig>div>span{display:none!important}
+  .tp-banner .pairbig>div{display:flex;flex-direction:column}
+  .cpanel .chart-tb{flex-wrap:nowrap!important;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
+  .cpanel .chart-tb::-webkit-scrollbar{display:none}
+  .cpanel .chart-tb>*{flex:none}
+  .cpanel .chart-tb .seg button{min-height:32px;padding:0 10px;font-size:12px}
+  .cpanel .ctog button{min-height:32px}
+  .cpanel .c-pair{display:none}
+}
+@media (max-width:760px){.tp-grid3 .cpanel{min-width:0;max-width:100%;width:100%;overflow:hidden}.cpanel .chart-tb{max-width:100%}.tp-grid3>*,.tp-grid3 .panel{max-width:100%;min-width:0}}
