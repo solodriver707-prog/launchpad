@@ -1,0 +1,1 @@
+Meme coin logos in this folder come from github.com/trustwallet/assets (MIT License). Used only in the opt-in demo preview; all market data shown with them is simulated.

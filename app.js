@@ -109,7 +109,15 @@
     mk('Turbo Shark', 'TSHK', 'shark', 5, 5, 'laser', 'grin', 'chain', 1, 2, 'LINK', 4300, 27.5, 100, 8640, 7900, true, 0, 1),
     mk('Sir Quack', 'SIRQ', 'duck', 8, 4, 'normal', 'smile', 'halo', 0, 0, 'DOGE', 2100, 6.6, 100, 5760, 5100, true, 1, 0),
     mk('Laser Frog', 'ZAP', 'frog', 9, 0, 'laser', 'grin', 'none', 3, 6, 'SILVER', 156, -18.5, 44, 260, 590, false, 0, 1)
-  ];
+  ];  // opt-in preview: real Solana meme logos (logos from trustwallet/assets, MIT) on demo coins
+  var REALM = [['BONK', 'Bonk', 'bonk'], ['WIF', 'dogwifhat', 'wif'], ['POPCAT', 'POPCAT', 'popcat'], ['MEW', 'cat in a dogs world', 'mew'], ['BOME', 'BOOK OF MEME', 'bome'], ['PNUT', 'Peanut the Squirrel', 'pnut'], ['GOAT', 'Goatseus Maximus', 'goat'], ['FART', 'Fartcoin', 'fartcoin'], ['MOODENG', 'Moo Deng', 'moodeng'], ['CHILL', 'Just a chill guy', 'chillguy'], ['SLERF', 'SLERF', 'slerf'], ['MYRO', 'Myro', 'myro'], ['PONKE', 'PONKE', 'ponke'], ['MICHI', 'michi', 'michi'], ['GIGA', 'GIGACHAD', 'giga'], ['RTRD', 'RETARDIO', 'retardio'], ['DOGE', 'Dogecoin', 'doge']];
+  var REAL_ON = false; try { REAL_ON = localStorage.getItem('dl.realmemes') === '1'; } catch (e) {}
+  if (REAL_ON) {
+    var remap = {}, sorted = BASE.slice().sort(function (a, b) { return b.mcN - a.mcN; });
+    REALM.forEach(function (r, k) { var t = sorted[k]; if (!t) return; remap[t.tick] = r[0]; t.tick = r[0]; t.name = r[1]; t.img = 'memes/' + r[2] + '.webp'; });
+    BASE.forEach(function (t) { if (remap[t.pair]) t.pair = remap[t.pair]; });
+  }
+
   var PAIR_INFO = {
     SOL: { img: 'icons/sol.svg', name: 'Solana', cat: 'crypto', g: '◎', c: '#A3B1C2' }, USDC: { img: 'icons/usdc.svg', name: 'USD Coin', cat: 'crypto', g: '$', c: '#5B9BFF' },
     ETH: { img: 'icons/eth.svg', name: 'Ether', cat: 'crypto', g: 'Ξ', c: '#A5B4FC' }, BTC: { img: 'icons/btc.svg', name: 'Bitcoin', cat: 'crypto', g: '₿', c: '#FFA94D' },
@@ -1902,6 +1910,7 @@
     return '<div class="overlay" data-act="demoImgsClose"><div class="dimg card-s"><div class="dimg-h"><b>Preview with real images</b><button class="iconbtn" data-act="demoImgsClose">✕</button></div>' +
       '<p class="muted">Drop up to ' + BASE.length + ' images (memes, coin logos, anything). They replace the demo coin pictures <b>only in your browser</b> so you can see how real art looks on treid. Nothing is uploaded or shown to anyone else.</p>' +
       '<label class="drop dimg-drop" for="dimg-in" data-drop="demo"><span class="drop-ic">' + I.up + '</span><span class="drop-t">Drop images here or click to choose</span><small>Select many at once · PNG, JPG, GIF, WEBP</small></label><input id="dimg-in" type="file" multiple accept="image/png,image/jpeg,image/gif,image/webp" class="sr">' +
+      '<div class="dimg-real"><div><b>Popular Solana memes</b><small>BONK, WIF, POPCAT, MEW, PNUT, GOAT, Moo Deng, chill guy, GIGACHAD, DOGE + more — real logos on the demo coins (numbers stay fake).</small></div><button class="btn ' + (REAL_ON ? 'sec' : 'pri') + '" data-act="realMemes">' + (REAL_ON ? 'Turn off' : 'Use real meme logos') + '</button></div>' +
       '<div class="dimg-grid">' + BASE.map(function (t) { return '<span class="dimg-c' + (DIMG[t.tick] ? ' on' : '') + '" title="$' + esc(t.tick) + '">' + avatarHTML(t, 40) + '</span>'; }).join('') + '</div>' +
       '<div class="dimg-f"><span class="muted mono">' + n + ' / ' + BASE.length + ' replaced</span>' + (n ? '<button class="btn sec" data-act="demoImgsReset">Reset to originals</button>' : '') + '<button class="btn pri" data-act="demoImgsClose">Done</button></div></div></div>';
   }
@@ -2232,6 +2241,7 @@
       case 'stf': S.stf = arg; render(); break;
       case 'fwGo': FW.i = +arg; FW.t0 = performance.now() - FW.ms * .31; FW.lastI = -1; if (FW.i < 3) { var rr2 = document.getElementById('fw-rider'); if (rr2) { rr2.classList.remove('flagged', 'grad', 'bad'); } } break;
       case 'demoImgs': set({ demoImgOpen: true }); break;
+      case 'realMemes': try { localStorage.setItem('dl.realmemes', REAL_ON ? '0' : '1'); } catch (er) {} location.reload(); break;
       case 'demoImgsClose': if (e.target === el || el.tagName === 'BUTTON') set({ demoImgOpen: false }); break;
       case 'demoImgsReset': BASE.forEach(function (t) { if (DIMG[t.tick]) delete t.img; }); DIMG = {}; try { localStorage.removeItem('dl.demoimgs'); } catch (er) {} render(); break;
       case 'devbuy': setC({ devBuy: arg === '0' ? '' : arg }); break;
