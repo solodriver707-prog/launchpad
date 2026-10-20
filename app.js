@@ -2040,7 +2040,7 @@
     var q = quoteFor(t), pos = position(t), tmax = Math.max(t.buy, t.sell);
     var curveSol = (t.prog / 100 * 85).toFixed(2);
     var head = '<section class="card-s tp-head2 tp-banner"><div class="tb-bg' + (t.banner ? ' ban' : '') + '" aria-hidden="true">' + (t.banner ? '<img src="' + t.banner + '" alt="">' : avatarHTML(t, 420)) + '</div><div class="tb-av">' + avatarHTML(t, 104) + '</div>' +
-      '<div class="tp-id"><div class="title-xl" style="margin:0;font-size:30px">' + esc(t.name) + ' <span class="tk">$' + id + '</span></div>' + msBadges(t, 'lg') + (t.desc ? '<p class="tp-desc' + (S.descOpen ? ' open' : '') + '" data-act="descToggle" title="' + (S.descOpen ? 'Show less' : 'Show full description') + '">' + esc(t.desc) + '</p>' : '') + (t.archived ? '<div class="arch-note ' + t.archived + '">' + (t.archived === 'rug' ? '⚠ Past coin · dev sold after ' + durH(t.devSoldAfter) : t.archived === 'dead' ? '💤 Past coin · inactive, faded on the curve' : '🎓 Past coin · graduated') + '</div>' : '') +
+      '<div class="tp-id"><div class="title-xl" style="margin:0;font-size:30px">' + esc(t.name) + ' <span class="tk">$' + id + '</span></div>' + msBadges(t, 'lg') + (t.archived ? '<div class="arch-note ' + t.archived + '">' + (t.archived === 'rug' ? '⚠ Past coin · dev sold after ' + durH(t.devSoldAfter) : t.archived === 'dead' ? '💤 Past coin · inactive, faded on the curve' : '🎓 Past coin · graduated') + '</div>' : '') +
         '<div class="hs-pills" style="margin-top:8px"><button class="pill copy2" data-act="ca" data-arg="' + id + '">CA ' + esc(short(t.ca)) + ' ' + I.copy + '</button><span class="pill" style="padding-left:11px">created <span data-t="' + t.born + '">&nbsp;' + ago(t.born) + '</span>&nbsp;ago by&nbsp;' + makerHTML(devOf(t), t) + '</span>' +
         socialsHTML(t, true) +
         '<button class="iconbtn" data-act="star" data-arg="' + id + '" aria-label="Watchlist" aria-pressed="' + on + '">' + I.star(on) + '</button><button class="iconbtn" data-act="share" aria-label="Copy link"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8h16v-8M12 3v13M7 8l5-5 5 5"/></svg></button></div></div>' +
@@ -2063,7 +2063,7 @@
           '<div class="st-foot"><div><small>Pool</small><b class="mono">' + fmtK(curveSol * SOL_USD / 1000) + ' <em>(' + curveSol + ' SOL)</em></b><span class="muted">paired with ' + coinHTML(t.pair, 14) + ' ' + esc(pairLabel(t.pair)) + '</span></div>' +
           '<div><small>Creator</small><b>' + makerHTML(devOf(t), t) + '</b><span class="muted">' + (splitOf(t) ? 'earns ' + splitOf(t).d + '% of tax' : 'no tax on this coin') + '</span></div>' +
           '<button class="st-bub" data-act="hmap" data-arg="' + id + '">◎ Bubble map</button></div>' +
-          (t.desc ? '<div class="st-desc"><small>About</small><p>' + esc(t.desc) + '</p></div>' : '') + '</section>';
+          '</section>';
       })();
     var chart = '<section class="card-s panel cpanel' + (S.cfull ? ' chart-fs' : '') + '">' + chartToolbar(t) +
       '<div class="chartbox" id="chart">' + chartSVG(t) + '</div><div class="c-help muted">scroll to zoom where you point · pinch · drag to pan · + / − keys</div></section>';
@@ -2151,7 +2151,7 @@
       '<span class="muted" style="font-size:12.5px;line-height:1.55">' + (t.prog >= 100 ? 'Liquidity is live on Raydium.' : curveSol + ' SOL in the curve. Graduates to Raydium at 100%.') + '</span></section>';
     var mbuy = '<button class="m-buy" data-act="mBuy">Buy / Sell $' + id + (trapLeft(t) > 0 ? ' · 🪤 ' + snipeNow(t) + '%' : ' · tax ' + tmax + '%') + '</button>';
     return mbuy + '<main class="wrap tp-env" style="padding-top:14px;--coin:' + ((t.spec && t.spec.bg) || '#2A2418') + '"><div class="tp-glow" aria-hidden="true">' + avatarHTML(t, 300) + '</div><button class="link" data-act="home">' + I.back + 'Back to board</button>' + head +
-      '<div class="tp-grid3">' + thread + '<div class="tp-main">' + mcrow + chart + tabsHTML + '</div><aside class="tp-side">' + panel + posCard + taxSplitPanel(t) + safety + curve + '</aside></div></main>';
+      '<div class="tp-grid3">' + thread + '<div class="tp-main">' + mcrow + chart + tabsHTML + '</div><aside class="tp-side">' + panel + (t.desc ? '<section class="card-s panel about-b"><div class="ab-h">' + avatarHTML(t, 26) + '<b>About $' + id + '</b></div><p class="ab-t' + (t.desc.length > 220 && !S.descOpen ? ' clamp' : '') + '">' + esc(t.desc) + '</p>' + (t.desc.length > 220 ? '<button class="ab-more" data-act="descToggle">' + (S.descOpen ? 'Show less' : 'Show more') + '</button>' : '') + '</section>' : '') + posCard + taxSplitPanel(t) + safety + curve + '</aside></div></main>';
   }
   // give seeded trades real makers / prices
   S.trades.forEach(function (tr) { var t = find(tr.tick); tr.wallet = pickWallet(); tr.price = t ? price(t) * (1 + (Math.random() - 0.5) * 0.12) : 0; tr.tokens = tr.sol * SOL_USD / (tr.price || 1); tr.sig = b58(64); });
@@ -2615,7 +2615,7 @@
       case 'cnow': S.cpan = 0; S.cys = 1; S.cyo = 0; chartRedraw(); break;
       case 'czoom': S.czoom = arg === 'reset' ? 70 : Math.max(12, Math.min(240, Math.round(S.czoom * (arg === 'in' ? .7 : 1.4)))); if (arg === 'reset') { S.cpan = 0; S.cys = 1; S.cyo = 0; } chartRedraw(); var zl = document.querySelector('.czoom .mono'); if (zl) zl.textContent = S.czoom; break;
       case 'tpTab': set({ tpTab: arg }); break;
-      case 'descToggle': S.descOpen = !S.descOpen; var dsc = document.querySelector('.tp-desc'); if (dsc) dsc.classList.toggle('open', S.descOpen); break;
+      case 'descToggle': S.descOpen = !S.descOpen; render(); break;
       case 'hmap': set({ hmap: arg }); break;
       case 'hmapClose': if (el.classList.contains('hm-ov') && e.target.closest('[data-stop]')) break; set({ hmap: null }); break;
       case 'side': set({ side: arg }); break;
