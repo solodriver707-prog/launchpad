@@ -1050,9 +1050,9 @@
   function burnLog() {
     if (S._burns && S._burnsN === all().length) return S._burns;
     var out = [];
-    all().forEach(function (t) { var r = rng(hash(t.tick + 'burn2')); if (r() < .35) return;
+    all().forEach(function (t) { var r = rng(hash(t.tick + 'burn2')); if (r() < .35) return; if (Date.now() - t.born < 3 * 36e5 && r() < .75) return;
       var heavy = r() < .25, n = 1 + Math.floor(r() * (heavy ? 7 : 3));
-      for (var i = 0; i < n; i++) { var pct = +((heavy ? 1.2 : .08) + r() * r() * (heavy ? 9 : 2.4)).toFixed(3), tok = pct / 100 * 1e9, mc = t.mcN * (.35 + r() * .7), usd = tok * mc * 1000 / 1e9, at = Math.min(Date.now() - 60000, t.born + (Date.now() - t.born) * (.2 + r() * .8));
+      for (var i = 0; i < n; i++) { var pct = +((heavy ? 1.2 : .08) + r() * r() * (heavy ? 9 : 2.4)).toFixed(3), tok = pct / 100 * 1e9, mc = t.mcN * (.35 + r() * .7), usd = tok * mc * 1000 / 1e9, at = Date.now() - 60000 - Math.min(Date.now() - t.born, 36 * 36e5) * r() * .98;
         var x = r(), src = (Math.max(t.buy, t.sell) > 0 && x < .4) ? 'tax' : x < .72 ? 'dev' : 'holder';
         out.push({ t: t, tok: tok, pct: pct, usd: usd, at: at, src: src, who: src === 'tax' ? 'auto' : b58(4) + '…' + b58(4), sig: b58(64) }); } });
     out.sort(function (a, b) { return b.at - a.at; }); S._burns = out; S._burnsN = all().length; return out;
@@ -1065,22 +1065,27 @@
       return '<div class="bh-tube" data-tube="' + k + '" style="--c:' + BSRC[k][1] + '"><span class="bh-pct mono" data-tpct="' + k + '">' + sh.toFixed(0) + '%</span><div class="bh-glass"><div class="bh-liq" data-tliq="' + k + '" style="height:' + Math.max(8, sh).toFixed(1) + '%"><i class="bh-wv"></i><u></u><u></u><u></u></div><span class="bh-shine"></span></div><em>' + BSI[k] + '</em><b>' + BSRC[k][0].replace(' burn', 's').replace('Tax buyback', 'Buybacks') + '</b><small class="mono" data-ttok="' + k + '">' + fmtBig(st[k]) + '</small><small class="bh-cn">' + Object.keys(cn[k]).length + ' coins</small></div>'; }).join('') + '</div></div>';
   }
   function bhGauge(log, usd, ncoins) {
-    var day = Date.now() - 864e5, r24 = 0, n24 = 0; log.forEach(function (b) { if (b.at > day) { r24 += b.tok; n24++; } }); var rate = r24 / 24; BN.rate = rate; BN.lvl = .62;
+    var now = Date.now(), day = now - 864e5, hr = now - 36e5, r24 = 0, r1 = 0, u1 = 0, n1 = 0, c1 = {};
+    var h2 = now - 72e5, rp = 0; log.forEach(function (b) { if (b.at > day) r24 += b.tok; if (b.at > h2 && b.at <= hr) rp += b.tok; if (b.at > hr) { r1 += b.tok; u1 += b.usd; n1++; c1[b.t.tick] = 1; } });
+    var avg = Math.max(1, rp || r24 / 24); BN.h1 = { tok: r1, usd: u1, n: n1, coins: c1, avg: avg }; var rate = r1; BN.rate = rate; BN.lvl = Math.max(.08, Math.min(.95, .5 * rate / avg));
     var ticks = ''; for (var i = 0; i <= 10; i++) { var a = Math.PI * (1 - i / 10), x1 = 100 + Math.cos(a) * 66, y1 = 100 - Math.sin(a) * 66, x2 = 100 + Math.cos(a) * (i % 5 ? 72 : 76), y2 = 100 - Math.sin(a) * (i % 5 ? 72 : 76); ticks += '<line x1="' + x1.toFixed(1) + '" y1="' + y1.toFixed(1) + '" x2="' + x2.toFixed(1) + '" y2="' + y2.toFixed(1) + '"/>'; }
-    return '<div class="bh-side bh-gauge"><div class="bh-sh"><b>Burn rate</b><small>tokens destroyed per hour</small></div>' +
+    return '<div class="bh-side bh-gauge"><div class="bh-sh"><b>Burn rate</b><small>tokens destroyed in the last hour</small></div>' +
       '<div class="bh-dial"><svg viewBox="0 0 200 116"><defs><linearGradient id="bhg" x1="0" x2="1"><stop offset="0" stop-color="#3DDC97"/><stop offset=".5" stop-color="#FFD15C"/><stop offset="1" stop-color="#FF4D2E"/></linearGradient></defs><path d="M20 100 A80 80 0 0 1 180 100" fill="none" stroke="rgba(255,255,255,.06)" stroke-width="14" stroke-linecap="round"/><path d="M20 100 A80 80 0 0 1 180 100" fill="none" stroke="url(#bhg)" stroke-width="14" stroke-linecap="round" opacity=".9"/><g class="bh-ticks">' + ticks + '</g>' +
       '<g class="bh-needle" id="bh-needle" style="transform:rotate(' + (-90 + BN.lvl * 180) + 'deg)"><path d="M97 100 L100 28 L103 100Z" fill="#FFF1D6"/></g><circle cx="100" cy="100" r="8" fill="#1b130e" stroke="#FFD15C" stroke-width="2.5"/></svg>' +
-      '<div class="bh-dv"><b class="mono" id="bh-rate">' + fmtBig(rate) + '</b><span class="bh-hot" id="bh-hot">🔥 HOT</span></div></div>' +
-      '<div class="bh-mini"><div><small>Value burned</small><b class="mono">$' + fmtNum(Math.round(usd)) + '</b></div><div><small>Burns · 24h</small><b class="mono">' + n24 + '</b></div><div><small>Coins burning</small><b class="mono">' + ncoins + '</b></div></div></div>';
+      '<div class="bh-dv"><b class="mono"><span id="bh-rate">' + fmtBig(rate) + '</span><em>/ hr</em></b><span class="bh-hot" id="bh-hot">' + (BN.lvl > .8 ? '🔥 ON FIRE' : BN.lvl > .5 ? '🔥 HOT' : '♨ WARM') + '</span><small class="bh-avg">' + (rate >= avg ? '▲ +' : '▼ −') + Math.abs(Math.round((rate / avg - 1) * 100)) + '% vs previous hour</small></div></div>' +
+      '<div class="bh-mini"><div><small>Value · 1h</small><b class="mono" id="bh-u1">$' + fmtNum(Math.round(u1)) + '</b></div><div><small>Burns · 1h</small><b class="mono" id="bh-n1">' + n1 + '</b></div><div><small>Coins · 1h</small><b class="mono" id="bh-c1">' + Object.keys(c1).length + '</b></div></div></div>';
   }
   function bhKick(b) {
     var k = b.src, st = BN.src || {}; st[k] = (st[k] || 0) + b.tok; var tot = (st.dev || 0) + (st.holder || 0) + (st.tax || 0);
     ['dev', 'holder', 'tax'].forEach(function (q) { var sh = tot ? st[q] / tot * 100 : 0, l = document.querySelector('[data-tliq="' + q + '"]'), pc = document.querySelector('[data-tpct="' + q + '"]'); if (l) l.style.height = Math.max(8, sh).toFixed(1) + '%'; if (pc) pc.textContent = sh.toFixed(0) + '%'; });
     var tt = document.querySelector('[data-ttok="' + k + '"]'); if (tt) tt.textContent = fmtBig(st[k]);
     var tb = document.querySelector('[data-tube="' + k + '"]'); if (tb) { tb.classList.remove('kick'); void tb.offsetWidth; tb.classList.add('kick'); var pp = document.createElement('span'); pp.className = 'bh-tpop mono'; pp.textContent = '+' + fmtBig(b.tok); tb.appendChild(pp); setTimeout(function () { pp.remove(); }, 1400); }
-    BN.rate = (BN.rate || 0) + b.tok * .02; var rt = document.getElementById('bh-rate'); if (rt) rt.textContent = fmtBig(BN.rate);
-    var nd = document.getElementById('bh-needle'), lv = Math.min(.97, .55 + Math.random() * .12 + Math.min(.3, b.pct / 8)); if (nd) { nd.style.transform = 'rotate(' + (-90 + Math.min(.99, lv + .14) * 180) + 'deg)'; setTimeout(function () { nd.style.transform = 'rotate(' + (-90 + lv * 180) + 'deg)'; }, 380); }
-    var hot = document.getElementById('bh-hot'); if (hot) { hot.textContent = lv > .8 ? '🔥 ON FIRE' : lv > .6 ? '🔥 HOT' : '♨ WARM'; hot.classList.remove('pulse'); void hot.offsetWidth; hot.classList.add('pulse'); }
+    var H1 = BN.h1 || { tok: 0, usd: 0, n: 0, coins: {}, avg: 1 }; H1.tok += b.tok; H1.usd += b.usd; H1.n++; H1.coins[b.t.tick] = 1; BN.h1 = H1; BN.rate = H1.tok;
+    var rt = document.getElementById('bh-rate'); if (rt) rt.textContent = fmtBig(H1.tok);
+    var u1 = document.getElementById('bh-u1'), n1 = document.getElementById('bh-n1'), c1 = document.getElementById('bh-c1'); if (u1) u1.textContent = '$' + fmtNum(Math.round(H1.usd)); if (n1) n1.textContent = H1.n; if (c1) c1.textContent = Object.keys(H1.coins).length;
+    var av = document.querySelector('.bh-avg'); if (av) av.textContent = (H1.tok >= H1.avg ? '▲ +' : '▼ −') + Math.abs(Math.round((H1.tok / H1.avg - 1) * 100)) + '% vs previous hour';
+    var nd = document.getElementById('bh-needle'), lv = Math.max(.08, Math.min(.95, .5 * H1.tok / H1.avg)); if (nd) { nd.style.transform = 'rotate(' + (-90 + Math.min(.99, lv + .14) * 180) + 'deg)'; setTimeout(function () { nd.style.transform = 'rotate(' + (-90 + lv * 180) + 'deg)'; }, 380); }
+    var hot = document.getElementById('bh-hot'); if (hot) { hot.textContent = lv > .8 ? '🔥 ON FIRE' : lv > .5 ? '🔥 HOT' : '♨ WARM'; hot.classList.remove('pulse'); void hot.offsetWidth; hot.classList.add('pulse'); }
   }
   function burnPage() {
     var log = burnLog(), by = {}, totUsd = 0, totTok = 0;
@@ -2222,14 +2227,8 @@
   function vanEta(n) { return n <= 4 ? 'instant' : n === 5 ? '~10 sec' : '~5 min · queued'; }
   function vanPrev(c) { var v = c.van || {}, suf = v.mode === 'custom' && v.suf ? v.suf : 'treid', pre = (c.vanPre || (c.vanPre = b58(44))).slice(0, 44 - suf.length); return '<span class="mono">' + pre.slice(0, 6) + '<i>' + pre.slice(6, 14) + '…</i></span><b class="mono">' + esc(suf) + '</b>'; }
   function vanityPicker(c) {
-    var v = c.van || (c.van = { mode: 'treid', suf: '' }), n = (v.suf || '').length, cus = v.mode === 'custom';
-    return '<div class="van"><div class="van-h"><b>Contract address</b><small>how your coin’s address ends</small></div>' +
-      '<div class="van-opts"><button class="van-o' + (cus ? '' : ' on') + '" data-act="vanMode" data-arg="treid"><span class="van-t">…<b>treid</b></span><span><b>treid ending</b><small>Instantly recognised as launched on treid</small></span><em class="van-free">FREE</em></button>' +
-      '<button class="van-o' + (cus ? ' on' : '') + '" data-act="vanMode" data-arg="custom"><span class="van-t">…<b>' + (cus && v.suf ? esc(v.suf) : 'GOAT') + '</b></span><span><b>Custom ending</b><small>Your own letters, 3–6 characters</small></span><em class="van-paid">from 0.1 SOL</em></button></div>' +
-      (cus ? '<div class="van-cfg"><label class="van-in"><span>…</span><input id="van-suf" data-van maxlength="6" value="' + esc(v.suf || '') + '" placeholder="GOAT" autocomplete="off" spellcheck="false"></label>' +
-        '<div class="van-tiers">' + [[3, '3–4 chars', 0.1, 'instant'], [5, '5 chars', 0.5, '~10 sec'], [6, '6 chars', 2, '~5 min']].map(function (x) { var on = n && (x[0] === 3 ? n <= 4 : n === x[0]); return '<span class="' + (on ? 'on' : '') + '"><b>' + x[1] + '</b><small class="mono">' + x[2] + ' SOL · ' + x[3] + '</small></span>'; }).join('') + '</div>' +
-        '<small class="van-err" id="van-err"></small></div>' : '') +
-      '<div class="van-prev"><small>Preview</small><div id="van-prev">' + vanPrev(c) + '</div>' + (cus && n >= 3 ? '<span class="van-fee mono" id="van-fee">+' + vanFee(n) + ' SOL · ' + vanEta(n) + '</span>' : cus ? '<span class="van-fee mono" id="van-fee">type at least 3 characters</span>' : '<span class="van-fee ok mono">free · instant</span>') + '</div></div>';
+    return '<div class="van fixed"><div class="van-h"><b>Contract address</b><small>every coin launched here ends in treid</small></div>' +
+      '<div class="van-prev"><small>Your address</small><div id="van-prev">' + vanPrev({ vanPre: c.vanPre || (c.vanPre = b58(44)) }) + '</div><span class="van-fee ok mono">free · instant</span></div></div>';
   }
   function devBuyPicker(c) {
     var q = devQuote(String(c.devBuy || '').replace(',', '.')), lv = q.pct === 0 ? 'z' : q.pct < 3 ? 'g' : q.pct < 8 ? 'y' : 'r';
@@ -2753,8 +2752,7 @@
         var dq2 = devQuote(String(c.devBuy || '').replace(',', '.'));
         if (dq2.sol > 0 && typeof S.balance === 'number' && dq2.sol > S.balance) { toast('Not enough devnet SOL for a ' + dq2.sol + ' SOL buy — balance ' + S.balance.toFixed(3)); break; }
         if (find(c.tick)) { toast('$' + c.tick + ' is already taken'); break; }
-        var vc = c.van && c.van.mode === 'custom', vs = vc ? (c.van.suf || '') : 'treid', vf = vc ? vanFee(vs.length) : 0;
-        if (vc && vs.length < 3) { toast('Custom address ending needs at least 3 characters'); break; }
+        var vc = false, vs = 'treid', vf = 0;
         if (vf && typeof S.balance === 'number' && dq2.sol + vf > S.balance) { toast('Not enough devnet SOL — need ' + (dq2.sol + vf).toFixed(2) + ' SOL incl. ' + vf + ' SOL address fee'); break; }
         var nt = { name: c.name.trim(), tick: c.tick, spec: c.spec, img: c.img, banner: c.banner || null, snipe: c.snipe && c.snipe.on ? { on: true, start: c.snipe.start, dur: c.snipe.dur } : null, buy: c.buy, sell: c.sell, split: c.buy > 0 && c.split ? { p: c.split.p, h: c.split.h, b: c.split.b, d: c.split.d } : null, pair: c.pair, mcN: 5, mc0: 5, prog: 1, born: Date.now(), holders: 1,
           soc: !!(c.x || c.tg || c.web), links: { web: linkOf(c.web), x: c.x ? linkOf(/[\/.]/.test(c.x) ? c.x : 'x.com/' + c.x.replace(/^@/, '')) : null, tg: c.tg ? linkOf(/[\/.]/.test(c.tg) ? c.tg : 't.me/' + c.tg.replace(/^@/, '')) : null, demo: false }, rewards: false, burn: false, ca: fakeCA(vs), vanity: vc ? vs : null, vol: 0, hist: [5, 5], desc: c.desc.trim(), creator: S.account };

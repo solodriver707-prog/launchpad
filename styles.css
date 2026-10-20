@@ -4017,3 +4017,5 @@ button.dh2-row{cursor:pointer;border-radius:10px}button.dh2-row:hover{background
 .hm-leg em{width:16px;border-top:2px dashed rgba(255,154,77,.8)}
 .hm-n{font-size:11px;line-height:1.5}
 @media (max-width:760px){.hm-body{grid-template-columns:1fr}.hm{padding:14px}.hm-side{display:grid;grid-template-columns:1fr 1fr}.hm-leg,.hm-n{grid-column:1/-1}}
+.bh-dv b em{font-style:normal;font-size:13px;font-weight:700;color:var(--muted);margin-left:5px}
+.bh-avg{margin-top:5px;font-size:10.5px;color:var(--muted)}
