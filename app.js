@@ -1894,6 +1894,39 @@
       '<div class="dh2-head"><span>Coin</span><span class="r">ATH MC</span><span class="r">Dev sold after</span></div>' + rows +
       '<div class="dh2-foot"><span>Avg time until dev sold: <b class="mono">' + (avg != null ? durH(avg) : '—') + '</b></span><span>Best ATH <b class="mono">' + (h.best ? fmtK(h.best) : '—') + '</b></span></div></div>';
   }
+  // ===== HOLDER MAP: bubble map of top wallets =====
+  function holderMap() {
+    if (!S.hmap) return ''; var t = find(S.hmap); if (!t) return '';
+    var hs = holdersOf(t).filter(function (h) { return h.kind !== 'curve'; }).slice(0, 32), W = 760, H = 480;
+    if (!hs.length) return '<div class="hm-ov" data-act="hmapClose"><div class="hm card-s" data-stop><div class="hm-h"><b>Holder map · $' + esc(t.tick) + '</b><button class="iconbtn" data-act="hmapClose">✕</button></div><div class="muted" style="padding:60px;text-align:center">No holders yet — everything is still on the bonding curve.</div></div></div>';
+    var mxp = hs[0].pct, R = function (p) { return Math.max(12, Math.sqrt(p / mxp) * 112); };
+    var tag = function (h) { return h.tags.indexOf('dev') >= 0 ? 'dev' : h.tags.indexOf('you') >= 0 ? 'you' : h.tags.indexOf('sniper') >= 0 ? 'sn' : h.tags.indexOf('bundle') >= 0 ? 'bu' : 'w'; };
+    // bundles first so they sit together, then the rest by size
+    var order = hs.filter(function (h) { return tag(h) === 'bu'; }).concat(hs.filter(function (h) { return tag(h) !== 'bu'; }));
+    var placed = [], r0 = rng(hash(t.tick + 'hm'));
+    order.forEach(function (h, i) {
+      var r = R(h.pct), best = null;
+      if (!placed.length) best = { x: W / 2, y: H / 2 };
+      var anchor = tag(h) === 'bu' && placed.length && tag(placed[placed.length - 1].h) === 'bu' ? placed[placed.length - 1] : { x: W / 2, y: H / 2 };
+      for (var d = 0; !best && d < 900; d += 3) { for (var a = 0; a < 24; a++) { var ang = a / 24 * 6.283 + r0() * .3, x = anchor.x + Math.cos(ang) * d * 1.25, y = anchor.y + Math.sin(ang) * d * .8;
+        if (x - r < 6 || x + r > W - 6 || y - r < 6 || y + r > H - 6) continue;
+        if (placed.every(function (q) { return Math.hypot(q.x - x, q.y - y) > q.r + r + 4; })) { best = { x: x, y: y }; break; } } }
+      if (best) placed.push({ x: best.x, y: best.y, r: r, h: h, k: tag(h) });
+    });
+    var bu = placed.filter(function (q) { return q.k === 'bu'; }), links = '';
+    for (var i = 1; i < bu.length; i++) links += '<line x1="' + bu[i - 1].x.toFixed(1) + '" y1="' + bu[i - 1].y.toFixed(1) + '" x2="' + bu[i].x.toFixed(1) + '" y2="' + bu[i].y.toFixed(1) + '"/>';
+    var sn = placed.filter(function (q) { return q.k === 'sn'; }); for (var j = 1; j < sn.length; j++) links += '<line class="sn" x1="' + sn[j - 1].x.toFixed(1) + '" y1="' + sn[j - 1].y.toFixed(1) + '" x2="' + sn[j].x.toFixed(1) + '" y2="' + sn[j].y.toFixed(1) + '"/>';
+    var lab = { dev: 'Dev', you: 'You', sn: 'Sniper', bu: 'Bundle', w: 'Wallet' };
+    var bubbles = placed.map(function (q, i) { return '<g class="hm-b k-' + q.k + '" style="--d:' + (i * 35) + 'ms" data-act="walletAny" data-arg="' + esc(q.h.a) + '" data-tip="' + esc(lab[q.k] + ' · ' + short(q.h.a) + ' · ' + q.h.pct.toFixed(2) + '%') + '"><title>' + esc(lab[q.k] + ' · ' + short(q.h.a) + ' · ' + q.h.pct.toFixed(2) + '% of supply') + '</title><circle cx="' + q.x.toFixed(1) + '" cy="' + q.y.toFixed(1) + '" r="' + q.r.toFixed(1) + '"/>' + (q.r > 20 ? '<text x="' + q.x.toFixed(1) + '" y="' + (q.y + 4).toFixed(1) + '">' + q.h.pct.toFixed(q.h.pct >= 10 ? 0 : 1) + '%</text>' : '') + '</g>'; }).join('');
+    var sum = function (k) { return placed.filter(function (q) { return q.k === k; }).reduce(function (a, q) { return a + q.h.pct; }, 0); };
+    var top10 = hs.slice(0, 10).reduce(function (a, h) { return a + h.pct; }, 0);
+    var stats = [['Top 10', top10.toFixed(1) + '%', top10 > 45 ? 'r' : top10 > 30 ? 'y' : 'g'], ['Connected (bundle)', bu.length ? bu.length + (bu.length > 1 ? ' wallets · ' : ' wallet · ') + sum('bu').toFixed(1) + '%' : 'none', bu.length ? (sum('bu') > 9 ? 'r' : 'y') : 'g'], ['Snipers', sn.length ? sn.length + (sn.length > 1 ? ' wallets · ' : ' wallet · ') + sum('sn').toFixed(1) + '%' : 'none', sn.length ? (sum('sn') > 12 ? 'r' : 'y') : 'g'], ['Dev', sum('dev') ? sum('dev').toFixed(1) + '%' : 'holds 0%', sum('dev') > 8 ? 'r' : 'g']];
+    return '<div class="hm-ov" data-act="hmapClose"><div class="hm card-s" data-stop><div class="hm-h"><div><b>Holder map</b><small>$' + esc(t.tick) + ' · top ' + placed.length + ' wallets · bubble size = share of supply · bonding curve hidden</small></div><button class="iconbtn" data-act="hmapClose" aria-label="Close">✕</button></div>' +
+      '<div class="hm-body"><svg class="hm-svg" viewBox="0 0 ' + W + ' ' + H + '"><g class="hm-links">' + links + '</g>' + bubbles + '</svg>' +
+      '<div class="hm-side">' + stats.map(function (x) { return '<div class="hm-st lv-' + x[2] + '"><small>' + x[0] + '</small><b class="mono">' + x[1] + '</b></div>'; }).join('') +
+      '<div class="hm-leg">' + [['dev', 'Dev'], ['sn', 'Sniper'], ['bu', 'Bundle'], ['you', 'You'], ['w', 'Other wallet']].map(function (x) { return '<span><i class="k-' + x[0] + '"></i>' + x[1] + '</span>'; }).join('') + '<span><em></em>linked wallets</span></div>' +
+      '<small class="muted hm-n">Click a bubble to see that wallet. Linked lines show wallets that bought together in the same block.</small></div></div></div></div>';
+  }
   function walletDrawer() {
     if (!S.walletView) return '';
     var addr = S.walletView, t = find(S.tick) || featured(), st = walletStats(addr, t), other = walletOther(addr), dev = addr === devOf(t), tracked = S.trackWallets.indexOf(addr) !== -1;
@@ -2023,8 +2056,8 @@
         return '<div class="st-box"><div class="st-h"><b>Activity</b><span class="st-pc ' + (pc >= 0 ? 'up' : 'down') + '">' + (pc >= 0 ? '↑ +' : '↓ ') + pc.toFixed(1) + '%</span><span class="st-vol muted">Vol <b class="mono">' + fmtK((bv + sv) / 1000) + '</b></span><div class="seg sm st-tf">' + ['5m', '1h', '24h'].map(function (x) { return '<button class="' + ((S.stf || '24h') === x ? 'on' : '') + '" data-act="stf" data-arg="' + x + '">' + x + '</button>'; }).join('') + '</div></div>' +
           row(['buys', 'sells'], b, se, fmtNum(b), fmtNum(se)) + row(['bought', 'sold'], bv, sv, fmtK(bv / 1000), fmtK(sv / 1000)) + row(['buyers', 'sellers'], nbw, nsw, fmtNum(nbw), fmtNum(nsw)) + '</div>' +
           '<div class="st-foot"><div><small>Pool</small><b class="mono">' + fmtK(curveSol * SOL_USD / 1000) + ' <em>(' + curveSol + ' SOL)</em></b><span class="muted">paired with ' + coinHTML(t.pair, 14) + ' ' + esc(pairLabel(t.pair)) + '</span></div>' +
-          '<div><small>Creator</small><b>' + makerHTML(devOf(t), t) + '</b><span class="muted">earns 50% of tax</span></div>' +
-          '<button class="st-bub" data-act="tpTab" data-arg="holders">◎ Holder map</button></div>' +
+          '<div><small>Creator</small><b>' + makerHTML(devOf(t), t) + '</b><span class="muted">' + (splitOf(t) ? 'earns ' + splitOf(t).d + '% of tax' : 'no tax on this coin') + '</span></div>' +
+          '<button class="st-bub" data-act="hmap" data-arg="' + id + '">◎ Holder map</button></div>' +
           (t.desc ? '<div class="st-desc"><small>About</small><p>' + esc(t.desc) + '</p></div>' : '') + '</section>';
       })();
     var chart = '<section class="card-s panel cpanel' + (S.cfull ? ' chart-fs' : '') + '">' + chartToolbar(t) +
@@ -2404,7 +2437,7 @@
     var ae = document.activeElement, fid = ae && ae.id, ss = null, se = null;
     try { if (fid && ae.selectionStart != null) { ss = ae.selectionStart; se = ae.selectionEnd; } } catch (e) {}
     var body = S.screen === 'token' ? tokenPage() : S.screen === 'create' ? createPage() : S.screen === 'leaders' ? leadersPage() : S.screen === 'watch' ? watchPage() : S.screen === 'burn' ? burnPage() : S.screen === 'trend' ? trendPage() : home();
-    document.getElementById('app').innerHTML = '<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="ccUp" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3DDC97" stop-opacity=".28"/><stop offset="1" stop-color="#3DDC97" stop-opacity="0"/></linearGradient><linearGradient id="ccDn" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F2708A" stop-opacity=".26"/><stop offset="1" stop-color="#F2708A" stop-opacity="0"/></linearGradient></defs></svg>' + tape() + header() + body + footer() + walletModal() + demoImgModal() + calloutDrawer() + palette() + walletDrawer();
+    document.getElementById('app').innerHTML = '<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="ccUp" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3DDC97" stop-opacity=".28"/><stop offset="1" stop-color="#3DDC97" stop-opacity="0"/></linearGradient><linearGradient id="ccDn" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F2708A" stop-opacity=".26"/><stop offset="1" stop-color="#F2708A" stop-opacity="0"/></linearGradient></defs></svg>' + tape() + header() + body + footer() + walletModal() + demoImgModal() + calloutDrawer() + palette() + walletDrawer() + holderMap();
     if (fid) { var el = document.getElementById(fid); if (el) { el.focus({ preventScroll: true }); try { if (ss != null) el.setSelectionRange(ss, se); } catch (e) {} } }
     if (S.palOpen && !fid) { var p = document.getElementById('pal'); if (p) p.focus(); }
     if (S.screen === 'home' && !S.loading && firstCount) { firstCount = false; countUp(); }
@@ -2582,6 +2615,8 @@
       case 'cnow': S.cpan = 0; S.cys = 1; S.cyo = 0; chartRedraw(); break;
       case 'czoom': S.czoom = arg === 'reset' ? 70 : Math.max(12, Math.min(240, Math.round(S.czoom * (arg === 'in' ? .7 : 1.4)))); if (arg === 'reset') { S.cpan = 0; S.cys = 1; S.cyo = 0; } chartRedraw(); var zl = document.querySelector('.czoom .mono'); if (zl) zl.textContent = S.czoom; break;
       case 'tpTab': set({ tpTab: arg }); break;
+      case 'hmap': set({ hmap: arg }); break;
+      case 'hmapClose': if (el.classList.contains('hm-ov') && e.target.closest('[data-stop]')) break; set({ hmap: null }); break;
       case 'side': set({ side: arg }); break;
       case 'preset': if (arg === 'reset') { set({ amount: '' }); break; } set({ pctAmt: 0, amount: arg === 'max' ? Math.max(0, S.balance - 0.01).toFixed(3) : arg }); break;
       case 'openWallet': set({ walletOpen: true }); break;
@@ -2651,7 +2686,8 @@
       case 'wlClear': if (!S.wlConfirm) { set({ wlConfirm: true }); setTimeout(function () { if (S.wlConfirm) set({ wlConfirm: false }); }, 3000); break; }
         S.watch = []; S.wlConfirm = false; try { localStorage.setItem(LS.watch, '[]'); } catch (er) {} render(); toast('Watchlist cleared'); break;
       case 'lbtab': set({ lbTab: arg }); break;
-      case 'walletAny': S.tick = (S.trades.filter(function (x) { return x.wallet === arg; })[0] || {}).tick || S.tick; set({ walletView: arg }); break;
+      case 'walletAny': S.hmap = null;
+      case 'walletAnyX': S.tick = (S.trades.filter(function (x) { return x.wallet === arg; })[0] || {}).tick || S.tick; set({ walletView: arg }); break;
       case 'wallet': set({ walletView: arg }); break;
       case 'closeW': set({ walletView: null }); break;
       case 'copyW': copy(arg, 'Wallet address copied'); break;
