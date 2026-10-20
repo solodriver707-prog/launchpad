@@ -1066,12 +1066,11 @@
     var pod = '<div class="bn-pod">' + order.filter(function (i) { return podium[i]; }).map(function (i) { var e = podium[i]; return '<button class="bn-p bn-p' + (i + 1) + '" data-act="open" data-arg="' + esc(e.t.tick) + '"><span class="bn-pr">' + ['🥇', '🥈', '🥉'][i] + '</span>' + avatarHTML(e.t, i ? 48 : 62) + '<b>$' + esc(e.t.tick) + '</b><strong class="mono">' + e.pct.toFixed(2) + '%</strong><small>supply burned</small></button>'; }).join('') + '</div>';
     var stats = [['Supply destroyed', totTok >= 1e9 ? (totTok / 1e9).toFixed(2) + 'B' : fmtNum(Math.round(totTok)), 'tokens, all coins'], ['Value burned', '$' + fmtNum(Math.round(totUsd)), 'at time of burn'], ['Coins burning', coins.length, 'of ' + all().length + ' launched'], ['Last burn', log.length ? ago(log[0].at) + ' ago' : '—', log.length ? '$' + esc(log[0].t.tick) + ' · ' + BSRC[log[0].src][0] : '']];
     var sorts = [['pct', '% supply'], ['usd', 'Value'], ['n', 'Burns'], ['last', 'Recent']];
-    S._bnAgg = by; BN.tot = totTok;
-    var feed = function (sd) { return '<div class="bh-feed ' + sd + '" id="bh-f' + sd + '"><div class="bh-ring"><span class="bh-av"></span></div><b class="bh-tk"></b><span class="bh-sup"><i></i></span><small class="mono bh-left"></small></div>'; };
+    S._bnAgg = by; BN.tot = totTok; S._bnRank = {}; byPct.forEach(function (e, i) { S._bnRank[e.t.tick] = i + 1; });
     var stat = function (x) { return '<div class="bh-st"><small>' + x[0] + '</small><b class="mono">' + x[1] + '</b><span>' + x[2] + '</span></div>'; };
     return '<main class="wrap burn"><section class="bh"><div class="bh-top"><span class="kicker">BURN LEADERBOARD</span><h1 class="bn-h">The Burnery</h1><p>Every coin on treid can <b>burn its own supply</b> — dev, holders or automatic <b>tax buyback</b>. Gone forever. Less supply, higher rank.</p></div>' +
       '<div class="bh-stage"><div class="bh-side">' + stat(stats[1]) + stat(stats[2]) + '</div>' +
-      '<div class="bn-fire" id="bn-fire"><canvas id="bn-cv"></canvas><div class="bn-pit"></div><div class="bh-count"><small>SUPPLY DESTROYED</small><b class="mono" id="bh-count">' + (totTok >= 1e9 ? (totTok / 1e9).toFixed(3) + 'B' : fmtNum(Math.round(totTok))) + '</b></div>' + feed('l') + feed('r') + '<div class="bn-fly" id="bn-fly"></div><div class="bn-now" id="bn-now"></div></div>' +
+      '<div class="bn-fire" id="bn-fire"><canvas id="bn-cv"></canvas><div class="bn-pit"></div><div class="bh-count"><small>SUPPLY DESTROYED</small><b class="mono" id="bh-count">' + (totTok >= 1e9 ? (totTok / 1e9).toFixed(3) + 'B' : fmtNum(Math.round(totTok))) + '</b></div><div class="bn-fly" id="bn-fly"></div><div class="bn-now" id="bn-now"></div></div>' +
       '<div class="bh-side">' + stat(['Burns', log.length, 'all time']) + stat(stats[3]) + '</div></div></section>' + pod +
       '<section class="bn-list card-s"><div class="bn-lh"><b>Burn leaderboard</b><div class="bn-leg">' + Object.keys(BSRC).map(function (k) { return '<span><i style="background:' + BSRC[k][1] + '"></i>' + BSRC[k][0] + '</span>'; }).join('') + '</div><div class="seg">' + sorts.map(function (x) { return '<button class="' + (S.bsort === x[0] ? 'on' : '') + '" data-act="bsort" data-arg="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div></div>' +
       '<div class="bn-row bn-head"><span>#</span><span>Coin</span><span>Supply burned</span><span class="r">Tokens</span><span class="r">Value</span><span class="r">Burns</span><span class="r">Last</span></div>' +
@@ -1083,7 +1082,7 @@
   function bnLoop(now) {
     var box = document.getElementById('bn-fire'); if (!box) { BN.raf = 0; BN.el = null; return; }
     var cv = box.querySelector('#bn-cv');
-    if (BN.el !== box) { BN.el = box; var r = box.getBoundingClientRect(), d = Math.min(2, devicePixelRatio || 1); cv.width = r.width * d; cv.height = r.height * d; BN.w = r.width; BN.h = r.height; BN.ctx = cv.getContext('2d'); BN.ctx.setTransform(d, 0, 0, d, 0, 0); BN.last = now; BN.next = now + 700; var lg = burnLog(); if (lg.length) { BN.side = 'r'; var p1 = pick(lg.slice(0, 24)); bnFeed('l', p1); bnFeed('r', pick(lg.slice(0, 24).filter(function (x) { return x.t !== p1.t; })) || p1); } }
+    if (BN.el !== box) { BN.el = box; var r = box.getBoundingClientRect(), d = Math.min(2, devicePixelRatio || 1); cv.width = r.width * d; cv.height = r.height * d; BN.w = r.width; BN.h = r.height; BN.ctx = cv.getContext('2d'); BN.ctx.setTransform(d, 0, 0, d, 0, 0); BN.last = now; BN.next = now + 700; BN.side = 'r'; if (burnLog().length) bqInit(); }
     var c = BN.ctx, W = BN.w, H = BN.h, base = H * .78, boost = Math.max(0, 1 - (now - (BN.boost || 0)) / 900) + Math.max(0, 1 - (now - (BN.big || 0)) / 700) * .45; boost = Math.min(1.1, boost);
     for (var i = 0; i < 5 + boost * 14; i++) { var off = (Math.random() - .5) * 2, sp = Math.max(0, 1 - Math.abs(off)); BN.parts.push({ x: W / 2 + off * W * (.16 + boost * .08), y: base + Math.random() * 8, vx: -off * .25, vy: -(1.2 + sp * 2.6 + Math.random() * 1.2 + boost * 2.5), life: .55 + sp * .45, s: 12 + sp * 20 + Math.random() * 8 + boost * 10 }); }
     if (Math.random() < .5) BN.parts.push({ x: W / 2 + (Math.random() - .5) * W * .25, y: base - 20, vx: (Math.random() - .5) * .8, vy: -(2 + Math.random() * 2), life: 1, s: 1.6, spark: 1 });
@@ -1094,17 +1093,25 @@
       var rr = p.s * (.25 + l * .9), g = c.createRadialGradient(p.x, p.y, 0, p.x, p.y, rr), col = l > .8 ? '255,214,150' : l > .55 ? '255,150,50' : l > .3 ? '232,72,40' : '110,30,30';
       g.addColorStop(0, 'rgba(' + col + ',' + (l * .22).toFixed(3) + ')'); g.addColorStop(1, 'rgba(' + col + ',0)'); c.fillStyle = g; c.beginPath(); c.arc(p.x, p.y, rr, 0, 6.283); c.fill(); });
     if (BN.parts.length > 900) BN.parts.splice(0, BN.parts.length - 900);
-    if (now > BN.next) { BN.next = now + 2600 + Math.random() * 700; bnThrow(); }
+    if (now > BN.next) { BN.next = now + 2900; bnThrow(); }
     if (BN.big && now - BN.big < 120) for (var e2 = 0; e2 < 26; e2++) { var an2 = Math.random() * Math.PI; BN.parts.push({ x: W / 2, y: base - 10, vx: Math.cos(an2) * (2 + Math.random() * 4), vy: -Math.sin(an2) * (3 + Math.random() * 5), life: 1, s: 1.8, spark: 1 }); }
     BN.raf = requestAnimationFrame(bnLoop);
   }
-  function bnFeed(sd, b) {
-    var f = document.getElementById('bh-f' + sd); if (!f) return null;
-    var agg = (S._bnAgg || {})[b.t.tick], burned = agg ? agg.pct : b.pct, left = Math.max(0, 100 - burned);
-    f.querySelector('.bh-av').innerHTML = avatarHTML(b.t, 60); f.querySelector('.bh-tk').textContent = '$' + b.t.tick;
-    var bar = f.querySelector('.bh-sup i'); bar.style.transition = 'none'; bar.style.width = Math.min(100, left + b.pct) + '%';
-    f.querySelector('.bh-left').textContent = Math.min(100, left + b.pct).toFixed(2) + '% supply';
-    f._left = left; return f;
+  var BQPOS = ['act', 'w1', 'w2', 'w3'], BQSAY = ['bye bye supply 👋', 'deflation szn 📉', 'send it 🔥', 'burn baby burn', 'less supply = more pump', 'WAGMI 💎', 'diamond hands only', 'number go up 📈', 'into the fire 🫡', 'say goodbye, tokens'];
+  function bqPick() { var log = burnLog(), on = {}; ['l', 'r'].forEach(function (sd) { (BN.q && BN.q[sd] || []).forEach(function (x) { on[x.b.t.tick] = 1; }); }); var pool = log.slice(0, 40).filter(function (x) { return !on[x.t.tick]; }); return pick(pool.length ? pool : log); }
+  function bqMake(sd, b, pos) {
+    var box = document.getElementById('bn-fire'); if (!box) return null;
+    var agg = (S._bnAgg || {})[b.t.tick], left = Math.max(0, 100 - (agg ? agg.pct : b.pct)), before = Math.min(100, left + b.pct);
+    var el = document.createElement('div'); el.className = 'bq ' + sd + ' ' + pos;
+    el.innerHTML = '<span class="bq-say"></span><div class="bh-ring"><span class="bh-av">' + avatarHTML(b.t, 60) + '</span></div><b class="bh-tk">$' + esc(b.t.tick) + '</b><span class="bh-sup"><i style="width:' + before + '%"></i></span><small class="mono bh-left">' + before.toFixed(2) + '% supply</small>';
+    box.appendChild(el); return { el: el, b: b, left: left, before: before };
+  }
+  function bqPos(sd) { BN.q[sd].forEach(function (x, i) { BQPOS.forEach(function (c) { x.el.classList.remove(c); }); x.el.classList.add(BQPOS[Math.min(i, 3)]); }); }
+  function bqInit() { BN.q = { l: [], r: [] }; ['l', 'r'].forEach(function (sd) { for (var i = 0; i < 3; i++) { var x = bqMake(sd, bqPick(), BQPOS[i]); if (x) BN.q[sd].push(x); } }); }
+  function bqAdvance(sd) {
+    var q = BN.q[sd], out = q.shift(); if (out) { BQPOS.forEach(function (c) { out.el.classList.remove(c); }); out.el.classList.add('out'); var rk = document.createElement('span'); rk.className = 'bq-rocket'; rk.textContent = '🚀'; out.el.appendChild(rk); setTimeout(function () { out.el.remove(); }, 1100); }
+    var nx = bqMake(sd, bqPick(), 'w3'); if (nx) q.push(nx);
+    requestAnimationFrame(function () { requestAnimationFrame(function () { bqPos(sd); }); });
   }
   function fmtBig(v) { return v >= 1e9 ? (v / 1e9).toFixed(3) + 'B' : fmtNum(Math.round(v)); }
   function bnCount(add) {
@@ -1113,23 +1120,32 @@
     el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump');
   }
   function bnThrow() {
-    var fly = document.getElementById('bn-fly'), log = burnLog(); if (!fly || !log.length) return;
-    BN.side = BN.side === 'l' ? 'r' : 'l'; var sd = BN.side, ot = document.querySelector('#bh-f' + (sd === 'l' ? 'r' : 'l') + ' .bh-tk'), pool = log.slice(0, 24).filter(function (x) { return !ot || '$' + x.t.tick !== ot.textContent; }), b = pick(pool.length ? pool : log), f = bnFeed(sd, b); if (!f) return;
-    var fr = fly.getBoundingClientRect(), ar = f.querySelector('.bh-ring').getBoundingClientRect();
-    var x0 = ar.left + ar.width / 2 - fr.left, y0 = ar.top + ar.height / 2 - fr.top, x1 = fr.width / 2, y1 = fr.height * .74;
-    f.classList.remove('grab'); void f.offsetWidth; f.classList.add('grab');
-    var n = Math.max(6, Math.min(16, Math.round(5 + b.pct * 3))), H = fr.height * (.36 + Math.random() * .1);
+    var fly = document.getElementById('bn-fly'); if (!fly || !BN.q) return;
+    BN.side = BN.side === 'l' ? 'r' : 'l'; var sd = BN.side, cur = BN.q[sd][0]; if (!cur) return; var f = cur.el, b = cur.b;
+    var say = f.querySelector('.bq-say'); say.textContent = pick(BQSAY); f.classList.add('talk');
     setTimeout(function () {
-      var bar = f.querySelector('.bh-sup i'); bar.style.transition = 'width 1.1s cubic-bezier(.3,0,.2,1)'; bar.style.width = f._left + '%';
-      var lf = f.querySelector('.bh-left'), s0 = f._left + b.pct, t0 = performance.now(); (function st(nw) { var k = Math.min(1, (nw - t0) / 1100); lf.textContent = (s0 - b.pct * k).toFixed(2) + '% supply'; if (k < 1) requestAnimationFrame(st); })(t0);
-      for (var i = 0; i < n; i++) (function (i) {
-        var c = document.createElement('span'); c.className = 'bh-chip'; c.innerHTML = avatarHTML(b.t, 22); fly.appendChild(c);
-        var jx = (Math.random() - .5) * 40, jh = H * (.8 + Math.random() * .4), spin = (Math.random() < .5 ? -1 : 1) * (360 + Math.random() * 540), kf = [];
-        for (var q = 0; q <= 14; q++) { var t = q / 14, x = x0 + (x1 + jx * t - x0) * t, y = y0 + (y1 - y0) * t - jh * 4 * t * (1 - t); kf.push({ transform: 'translate(' + x.toFixed(1) + 'px,' + y.toFixed(1) + 'px) rotate(' + (spin * t).toFixed(0) + 'deg) scale(' + (t < .1 ? .4 + t * 6 : 1 - Math.max(0, t - .75) * 2).toFixed(2) + ')', opacity: t > .92 ? 0 : 1 }); }
-        var an = c.animate(kf, { duration: 820 + Math.random() * 160, delay: i * 55, easing: 'cubic-bezier(.35,.1,.6,1)', fill: 'both' });
-        an.onfinish = function () { c.remove(); BN.boost = performance.now() - (i === n - 1 ? 0 : 500); if (i === n - 1) bnImpact(b, x1, y1); };
-      })(i);
-    }, 260);
+      if (!f.isConnected) return; var fr = fly.getBoundingClientRect(), ar = f.querySelector('.bh-ring').getBoundingClientRect();
+      var x0 = ar.left + ar.width / 2 - fr.left, y0 = ar.top + ar.height / 2 - fr.top, x1 = fr.width / 2, y1 = fr.height * .74;
+      f.classList.remove('talk'); f.classList.add('grab');
+      var n = Math.max(7, Math.min(16, Math.round(6 + b.pct * 3))), H = fr.height * (.36 + Math.random() * .1);
+      setTimeout(function () {
+        var bar = f.querySelector('.bh-sup i'); bar.style.transition = 'width 1.1s cubic-bezier(.3,0,.2,1)'; bar.style.width = cur.left + '%';
+        var lf = f.querySelector('.bh-left'), t0 = performance.now(); (function st(nw) { var k = Math.min(1, (nw - t0) / 1100); lf.textContent = (cur.before - b.pct * k).toFixed(2) + '% supply'; if (k < 1) requestAnimationFrame(st); })(t0);
+        for (var i = 0; i < n; i++) (function (i) {
+          var c = document.createElement('span'); c.className = 'bh-chip'; c.innerHTML = avatarHTML(b.t, 22); fly.appendChild(c);
+          var jx = (Math.random() - .5) * 40, jh = H * (.8 + Math.random() * .4), spin = (Math.random() < .5 ? -1 : 1) * (360 + Math.random() * 540), kf = [];
+          for (var q = 0; q <= 14; q++) { var t = q / 14, x = x0 + (x1 + jx * t - x0) * t, y = y0 + (y1 - y0) * t - jh * 4 * t * (1 - t); kf.push({ transform: 'translate(' + x.toFixed(1) + 'px,' + y.toFixed(1) + 'px) rotate(' + (spin * t).toFixed(0) + 'deg) scale(' + (t < .1 ? .4 + t * 6 : 1 - Math.max(0, t - .75) * 2).toFixed(2) + ')', opacity: t > .92 ? 0 : 1 }); }
+          var an = c.animate(kf, { duration: 820 + Math.random() * 160, delay: i * 55, easing: 'cubic-bezier(.35,.1,.6,1)', fill: 'both' });
+          an.onfinish = function () { c.remove(); BN.boost = performance.now() - (i === n - 1 ? 0 : 500); if (i === n - 1) { bnImpact(b, x1, y1); bqCheer(sd, cur); } };
+        })(i);
+      }, 260);
+    }, 650);
+  }
+  function bqCheer(sd, cur) {
+    var f = cur.el; if (!f.isConnected) return; f.classList.remove('grab'); f.classList.add('cheer');
+    var rk = (S._bnRank || {})[cur.b.t.tick] || 9, up = 1 + Math.floor(Math.random() * 3), pop = document.createElement('span'); pop.className = 'bq-rank';
+    pop.innerHTML = rk === 1 ? '🏆 <b>#1</b> burner' : '▲ <s>#' + (rk + up) + '</s> <b>#' + rk + '</b>'; f.appendChild(pop);
+    setTimeout(function () { bqAdvance(sd); }, 1150);
   }
   function bnImpact(b, x, y) {
     var fly = document.getElementById('bn-fly'); if (!fly) return; BN.boost = performance.now(); BN.big = performance.now();
