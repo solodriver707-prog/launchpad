@@ -2790,7 +2790,16 @@
     ['Tax flywheel', 'Every trade’s tax splits three ways: creator, holders and burn. More trading, more rewards.']
   ];
   var FW = { raf: 0, el: null, coins: [], last: 0, lt: 0, paused: false, hi: -1, jars: [0, 0, 0], spawn: 0, cnt: [1240, 386, 0, [52, 171], 214, 0] };
-  var FST = [['Launch', 'mint + set tax', '#F5D9A8'], ['Sniper trap', 'bots pay 80%', '#FF5E6C'], ['Bonding curve', 'buys push price up', '#3DDC97'], ['Risk scan', 'flags, never deletes', '#FFB15C'], ['Graduate', '$69K → Raydium', '#F5D9A8'], ['Tax split', 'creator · holders · burn', '#7FB6FF']];
+  var FST = [['Launch', 'Make a coin, pick a tax', '#F5D9A8'], ['Sniper trap', 'Early bots pay huge tax', '#FF5E6C'], ['Bonding curve', 'Every buy lifts the price', '#3DDC97'], ['Risk scan', 'We flag risks, never hide', '#FFB15C'], ['Graduate', 'At $69K it moves to Raydium', '#F5D9A8'], ['Tax split', 'Tax goes to 3 places', '#7FB6FF']];
+  function fxMini(k) {
+    var t = all()[3] || all()[0];
+    if (k === 0) return '<div class="fm fm0"><span class="fm-blank">?</span><span class="fm-arr">→</span><span class="fm-coin">' + avatarHTML(t, 26) + '<i class="mono">2%</i></span></div>';
+    if (k === 1) return '<div class="fm fm1"><b class="mono" data-snv>80%</b><span class="fm-bar"><i data-snb></i></span><small data-snl>bots pay</small></div>';
+    if (k === 2) return '<div class="fm fm2"><svg viewBox="0 0 120 34"><path class="fm-ln" d="M2 32 C40 30 60 24 80 14 S110 3 118 2" fill="none" stroke="#3DDC97" stroke-width="2.5" stroke-linecap="round"/></svg><span class="fm-up mono">▲ price</span></div>';
+    if (k === 3) return '<div class="fm fm3"><span class="g">Dev ✓</span><span class="r">Top10 ⚠</span><span class="g">Bundle ✓</span></div>';
+    if (k === 4) return '<div class="fm fm4"><span class="fm-bar"><i></i></span><span class="fm-cap">🎓</span><small class="mono">$69K</small></div>';
+    return '<div class="fm fm5"><span class="fm-split"><i style="flex:5;background:#F5D9A8"></i><i style="flex:3;background:#7FB6FF"></i><i style="flex:2;background:#FF8A5B"></i></span><span class="fm-lab"><em>👤 dev</em><em>💎 holders</em><em>🔥 burn</em></span></div>';
+  }
   function fxRead(k) {
     var c = FW.cnt, v = k === 0 ? '<b>' + fmtNum(c[0]) + '</b> coins minted' : k === 1 ? '<b>' + fmtNum(c[1]) + '</b> bots taxed' : k === 2 ? '<b>+' + c[2].toFixed(1) + ' SOL</b> bought' : k === 3 ? '<b class="r">⚠ ' + c[3][0] + '</b> · <b class="g">✓ ' + c[3][1] + '</b>' : k === 4 ? '<b>🎓 ' + c[4] + '</b> graduated' : '<b>$' + fmtNum(Math.round(c[5])) + '</b> paid out';
     var e = document.querySelector('[data-fread="' + k + '"]'); if (e) e.innerHTML = v; return v;
@@ -2807,13 +2816,13 @@
   function machineSection() {
     FW.cnt[2] = FW.cnt[2] || 1840.5; FW.cnt[5] = FW.cnt[5] || 58210;
     var st = FST.map(function (x, k) { return '<div class="fx-st fx-s' + k + '" data-fst="' + k + '" style="--sc:' + x[2] + ';left:calc(2% + ' + (FSX[k] * .96).toFixed(2) + '%)"><div class="fx-house"><div class="fx-hd"><span class="fx-ico">' + FICO[k] + '</span><span class="fx-n mono">0' + (k + 1) + '</span></div><b class="fx-t">' + x[0] + '</b><small class="fx-sub">' + x[1] + '</small>' +
-      (k === 1 ? '<span class="fx-gauge"><i></i><em class="mono">80% → 2%</em></span>' : '<span class="fx-read mono" data-fread="' + k + '">' + fxRead(k) + '</span>') +
+      fxMini(k) +
       (k === 0 ? '<span class="fx-press"></span>' : k === 3 ? '<span class="fx-laser"></span>' : k === 4 ? '<span class="fx-portal"></span>' : '') + '</div><span class="fx-leg"></span></div>'; }).join('');
     var cap = STS.map(function (x, k) { return '<button class="fx-cap" data-act="fwGo" data-arg="' + k + '" data-fcap="' + k + '"><span class="mono">0' + (k + 1) + '</span><b>' + x[0] + '</b><small>' + x[1] + '</small>' +
       (k === 5 ? '<span class="fx-jars">' + [['Creator', '#F5D9A8'], ['Holders', '#7FB6FF'], ['Burn', '#FF8A5B']].map(function (j, q) { return '<span class="fx-jar" style="--c:' + j[1] + '"><i data-jar="' + q + '"></i><em>' + j[0] + '</em></span>'; }).join('') + '</span>' : '') + '</button>'; }).join('');
     return '<section class="story card-s fx" id="machine"><div class="st2-head"><div><span class="kicker">HOW IT WORKS</span><h2 class="title-xl lab-title">The treid factory</h2></div><span class="muted st2-hint">watch a coin go from launch to tax payouts</span></div>' +
       '<div class="fx-scroll"><div class="fx-floor" id="fw-wheel"><div class="fx-belt"><span class="fx-tread"></span><span class="fx-roll l"></span><span class="fx-roll r"></span></div><div class="fx-coins" id="fx-coins"></div>' + st + '</div>' +
-      '<div class="fx-caps">' + cap + '</div></div></section>';
+      '</div></section>';
   }
   function fxSpawn() {
     var box = document.getElementById('fx-coins'); if (!box) return;
@@ -2838,6 +2847,8 @@
     if (FW.el !== w) { FW.el = w; FW.coins = []; FW.lt = now; FW.spawn = 0; 
       for (var i = 0; i < 5; i++) { fxSpawn(); var c0 = FW.coins[FW.coins.length - 1]; c0.x = 88 - i * 21; for (var k = 0; k < 6; k++) if (c0.x > FSX[k]) { c0.st = k; c0.el.classList.add('s' + k); if (k === 3) { var f0 = c0.el.querySelector('.fxc-flag'); f0.textContent = c0.risky ? '⚠' : '✓'; f0.className = 'fxc-flag ' + (c0.risky ? 'r' : 'g'); } } } }
     var dt = Math.min(64, now - FW.lt); FW.lt = now;
+    var cyc = (now % 4600) / 4600, sv = document.querySelector('[data-snv]');
+    if (sv) { var k2 = Math.min(1, cyc / .7), tx = Math.round(80 - 78 * (1 - Math.pow(1 - k2, 2))), done = k2 >= 1; sv.textContent = tx + '%'; sv.style.color = done ? '#5BE6A8' : 'hsl(' + (355 + (1 - tx / 80) * 0) + ',90%,' + (62 + (1 - tx / 80) * 10) + '%)'; var sb = document.querySelector('[data-snb]'); sb.style.width = (tx / 80 * 100) + '%'; sb.style.background = done ? '#3DDC97' : ''; document.querySelector('[data-snl]').textContent = done ? 'normal tax ✓' : 'bots pay'; }
     if (!FW.paused) {
       FW.spawn -= dt; if (FW.spawn <= 0) { fxSpawn(); FW.spawn = 2900 + Math.random() * 900; }
       FW.coins.forEach(function (c) {
