@@ -1758,8 +1758,20 @@
         '<div class="mc2-ath"><span>ATH <b class="mono">' + fmtK(ath) + '</b></span><span class="' + (offAth < 2 ? 'up' : 'down') + '">' + (offAth < 2 ? 'at all-time high' : '−' + offAth.toFixed(0) + '% from ATH') + '</span></div></div>' +
         '<div class="mc2-j">' + mcJourney(t) + '</div></div>' +
       '<div class="mc2-tiles">' + [['Price', '<span data-price="' + id + '" data-v="' + fmtPrice(price(t)) + '">' + fmtPrice(price(t)) + '</span>'], ['24h volume', fmtK(t.vol)], ['Liquidity', fmtK(curveSol * SOL_USD / 1000)], ['Holders', fmtNum(t.holders)]].map(function (r) { return '<div><small>' + r[0] + '</small><b class="mono">' + r[1] + '</b></div>'; }).join('') + '</div>' +
-      '<div class="mc2-bs"><div class="bs-row"><span class="up"><b class="mono">' + nb + '</b> buys</span><small>Transactions</small><span class="down"><b class="mono">' + ns + '</b> sells</span></div><div class="bs-bar"><i style="width:' + bp.toFixed(1) + '%"></i></div>' +
-        '<div class="bs-row"><span class="up"><b class="mono">' + fmtK(vb * SOL_USD / 1000) + '</b> bought</span><small>Volume</small><span class="down"><b class="mono">' + fmtK(vs * SOL_USD / 1000) + '</b> sold</span></div><div class="bs-bar"><i style="width:' + vp.toFixed(1) + '%"></i></div></div></section>';
+      (function () {
+        var spanM = { '5m': 5, '1h': 60, '24h': 1440 }[S.stf || '24h'], since = Date.now() - spanM * 60000, list = tt.filter(function (x) { return x.t >= since; });
+        var rb = 0, rs = 0, rbv = 0, rsv = 0; list.forEach(function (x) { if (x.side === 'buy') { rb++; rbv += x.sol; } else { rs++; rsv += x.sol; } });
+        var tot = t.vol * 1000 * { '5m': .012, '1h': .09, '24h': 1 }[S.stf || '24h'], vr = rbv + rsv ? rbv / (rbv + rsv) : .55, cr = rb + rs ? rb / (rb + rs) : .55, n = Math.max(1, Math.round(tot / 180));
+        var bv = tot * vr, sv = tot - bv, b = Math.round(n * cr), se = n - b, nbw = Math.round(b * .62), nsw = Math.round(se * .71);
+        var h = t.hist, ref = h[Math.max(0, h.length - 1 - Math.round(h.length * spanM / 1440))], pc = (t.mcN / ref - 1) * 100;
+        var row = function (l, a, bb, fa, fb) { var tot = a + bb, w = tot ? a / tot * 100 : 50; return '<div class="st-row"><div class="st-v"><span class="up"><b class="mono">' + fa + '</b> ' + l[0] + '</span><span class="down"><b class="mono">' + fb + '</b> ' + l[1] + '</span></div><div class="bs-bar"><i style="width:' + w.toFixed(1) + '%"></i></div></div>'; };
+        return '<div class="st-box"><div class="st-h"><b>Activity</b><span class="st-pc ' + (pc >= 0 ? 'up' : 'down') + '">' + (pc >= 0 ? '↑ +' : '↓ ') + pc.toFixed(1) + '%</span><span class="st-vol muted">Vol <b class="mono">' + fmtK((bv + sv) / 1000) + '</b></span><div class="seg sm st-tf">' + ['5m', '1h', '24h'].map(function (x) { return '<button class="' + ((S.stf || '24h') === x ? 'on' : '') + '" data-act="stf" data-arg="' + x + '">' + x + '</button>'; }).join('') + '</div></div>' +
+          row(['buys', 'sells'], b, se, fmtNum(b), fmtNum(se)) + row(['bought', 'sold'], bv, sv, fmtK(bv / 1000), fmtK(sv / 1000)) + row(['buyers', 'sellers'], nbw, nsw, fmtNum(nbw), fmtNum(nsw)) + '</div>' +
+          '<div class="st-foot"><div><small>Pool</small><b class="mono">' + fmtK(curveSol * SOL_USD / 1000) + ' <em>(' + curveSol + ' SOL)</em></b><span class="muted">paired with ' + coinHTML(t.pair, 14) + ' ' + esc(pairLabel(t.pair)) + '</span></div>' +
+          '<div><small>Creator</small><b>' + makerHTML(devOf(t), t) + '</b><span class="muted">earns 50% of tax</span></div>' +
+          '<button class="st-bub" data-act="tpTab" data-arg="holders">◎ Holder map</button></div>' +
+          (t.desc ? '<div class="st-desc"><small>About</small><p>' + esc(t.desc) + '</p></div>' : '') + '</section>';
+      })();
     var chart = '<section class="card-s panel cpanel' + (S.cfull ? ' chart-fs' : '') + '">' + chartToolbar(t) +
       '<div class="chartbox" id="chart">' + chartSVG(t) + '</div><div class="c-help muted">scroll or pinch to zoom · drag to pan · + / − keys</div></section>';
     // tabs
@@ -2029,7 +2041,7 @@
     if (S.palOpen && !fid) { var p = document.getElementById('pal'); if (p) p.focus(); }
     if (S.screen === 'home' && !S.loading && firstCount) { firstCount = false; countUp(); }
     if (typeof reveal === 'function') reveal();
-    setTimeout(function () { navInd(); labKick(); }, 0);
+    setTimeout(function () { navInd(); labKick(); fwKick(); }, 0);
     mFit(); if (S.screen === 'home') mSetStep(M.step);
   }
   function countUp() {
@@ -2210,6 +2222,8 @@
       case 'clearImg': setC({ img: null }); break;
       case 'clearBanner': setC({ banner: null }); break;
       case 'cpair': setC({ pair: arg }); break;
+      case 'stf': S.stf = arg; render(); break;
+      case 'fwGo': FW.i = +arg; FW.t0 = performance.now() - FW.ms * .31; FW.lastI = -1; if (FW.i < 3) { var rr2 = document.getElementById('fw-rider'); if (rr2) { rr2.classList.remove('flagged', 'grad', 'bad'); } } break;
       case 'demoImgs': set({ demoImgOpen: true }); break;
       case 'demoImgsClose': if (e.target === el || el.tagName === 'BUTTON') set({ demoImgOpen: false }); break;
       case 'demoImgsReset': BASE.forEach(function (t) { if (DIMG[t.tick]) delete t.img; }); DIMG = {}; try { localStorage.removeItem('dl.demoimgs'); } catch (er) {} render(); break;
@@ -2447,38 +2461,64 @@
   function jarH(v) { return Math.min(92, 8 + Math.sqrt(v) * 38); }
   var RUGS = 0, CLEAN = 0;
   var POS = { press: 18, tax: 34, scan: 46, pick: 55, bin: 64, pump: 78, launch: 92 };
+  // ===== THE FLYWHEEL: how treid works, as one animated loop =====
+  var FWS = [
+    ['launch', '🚀', 'Launch', 'Upload a logo and banner, pick any pair and set one tax (0–10%). Optionally buy in first.'],
+    ['trap', '🪤', 'Sniper trap', 'Bots that buy in the first seconds pay up to 90% tax, fading to the normal tax.'],
+    ['trade', '📈', 'Trade the curve', 'Every buy pushes the price up the bonding curve. Every trade pays the tax shown on the coin.'],
+    ['risk', '🛡', 'Risk flags', 'We never hide or delete coins. We flag them — dev, top 10, snipers, bundles — so you decide.'],
+    ['grad', '🎓', 'Graduate', 'At ~$69K the curve is full and liquidity moves to Raydium. Milestone badges start here.'],
+    ['fly', '♻', 'Tax flywheel', 'Tax flows back: 50% creator, 30% holders, 20% burned. Rewards holders and fuels more trading.']
+  ];
+  var FW = { i: 0, t0: 0, coin: null, ms: 3600, raf: 0, el: null, lastI: -1, laps: 0, sol: 0 };
+  function fwPos(k) { var a = -Math.PI / 2 + k / FWS.length * Math.PI * 2; return { x: 200 + Math.cos(a) * 162, y: 200 + Math.sin(a) * 162, a: a }; }
   function machineSection() {
-    var mach = [
-      ['press', POS.press, 'MASCOT PRESS', '#A3B1C2', '1', 'Give it a face', 'Name, ticker &amp; mascot'],
-      ['tax', POS.tax, 'TAX STAMP', '#FFD15C', '2', 'Set the tax', '0–10%, shown to everyone'],
-      ['scan', POS.scan, 'RUG SCANNER', '#F2708A', '3', 'Rug check', 'Bad coins get thrown out'],
-      ['pump', POS.pump, 'PUMP', '#3DDC97', '4', 'Traders pump it', 'Every buy pushes the price up'],
-      ['launch', POS.launch, 'LAUNCHER', '#F3F0EA', '5', 'Graduate', 'Hits 100% → Raydium']
-    ];
-    var html = mach.map(function (m) {
-      return '<div class="mach m-' + m[0] + '" id="mach-' + m[0] + '" style="left:' + m[1] + '%;--mc:' + m[3] + '">' +
-        '<div class="mach-body"><span class="mach-name">' + m[2] + '</span><span class="mach-lights"><i></i><i></i><i></i></span>' +
-        (m[0] === 'pump' ? '<span class="gauge"><i id="pump-g"></i></span>' : '') + (m[0] === 'launch' ? '<span class="ramp"></span>' : '') + '</div>' +
-        '<div class="piston"><i></i></div>' + (m[0] === 'scan' ? '<span class="beam"></span>' : '') + '</div>' +
-        '<div class="mlab" style="left:' + m[1] + '%"><span class="mstepn">' + m[4] + '</span><b>' + m[5] + '</b><span>' + m[6] + '</span></div>';
-    }).join('');
-    var crane = '<div class="crane"><span class="rail" style="left:' + (POS.pick - 3) + '%;width:' + (POS.bin - POS.pick + 6) + '%"></span>' +
-      '<div class="trolley" id="trolley" style="left:' + POS.pick + '%"><span class="tr-body"></span><span class="cable" id="cable"></span>' +
-      '<span class="claw" id="claw"><span class="claw-hub"></span><span class="finger l"></span><span class="finger r"></span><span class="claw-hold" id="claw-hold"></span></span></div>' +
-      '<span class="crane-tag" style="left:' + ((POS.pick + POS.bin) / 2) + '%">RUG CATCHER</span></div>';
-    var bin = '<div class="rugbin" id="rugbin" style="left:' + POS.bin + '%"><span class="bin-pole"></span><span class="bin-back"></span><span class="bin-slot" id="bin-slot"></span>' +
-      '<span class="bin-front"><b id="rug-n">' + RUGS + '</b><small>RUGS</small></span><span class="bin-lid"><i></i></span><span class="bin-plus" id="bin-plus">+1</span></div>';
-    var split = '<div class="split"><div class="split-h"><b>Where does the tax go?</b><span class="muted">Every trade pays the tax shown on the coin. It gets shared like this:</span><span class="mono split-tot" id="fs-jar">' + M.tax.toFixed(2) + ' SOL shared so far</span></div>' +
-      '<div class="split-bar"><span class="sp c" style="flex:50"><b>50%</b> Creator</span><span class="sp h" style="flex:30"><b>30%</b> Holders</span><span class="sp v" style="flex:20"><b>20%</b> Burn</span></div></div>';
-    return '<section class="factory card-s" id="machine">' +
-      '<div class="m-head"><div><span class="kicker">HOW IT WORKS</span><h2 class="title-xl" style="font-size:32px;margin:8px 0 4px">From raw coin to legend</h2>' +
-        '<p class="muted" style="margin:0">Every coin rides the same line. Rugs get caught and binned. Only the strong reach Raydium.</p></div>' +
-        '<div class="line-stats"><div><span class="muted">Rugs binned</span><b class="mono down" id="ls-rug">' + RUGS + '</b></div><div><span class="muted">Passed</span><b class="mono up" id="ls-ok">' + CLEAN + '</b></div><button class="btn pri" data-act="mlaunch">Drop a coin in</button></div></div>' +
-      '<div class="line-wrap drag-scroll"><div class="line" id="line">' +
-        '<div class="hopper"><span>RAW<br>COINS</span></div>' + html + crane +
-        '<div class="belt2"><span class="belt2-track"></span><span class="roller r1"></span><span class="roller r2"></span><span class="roller r3"></span><span class="roller r4"></span><span class="roller r5"></span></div>' +
-        bin + '<div id="coins"></div><div class="exit"><span>RAYDIUM</span></div></div></div>' + split + '</section>';
+    var nodes = FWS.map(function (st, k) { var p = fwPos(k); return '<button class="fw-node" data-act="fwGo" data-arg="' + k + '" data-fw="' + k + '" style="left:' + (p.x / 4) + '%;top:' + (p.y / 4) + '%"><span class="fw-ic">' + st[1] + '</span><span class="fw-lab">' + st[2] + '</span></button>'; }).join('');
+    var steps = FWS.map(function (st, k) { return '<button class="fw-step" data-act="fwGo" data-arg="' + k + '" data-fws="' + k + '"><span class="fw-n mono">' + (k + 1) + '</span><span class="fw-sb"><b>' + st[1] + ' ' + st[2] + '</b><small>' + st[3] + '</small></span><i class="fw-bar"><u></u></i></button>'; }).join('');
+    return '<section class="flyw card-s" id="machine"><div class="fw-head"><div><span class="kicker">HOW IT WORKS</span><h2 class="title-xl lab-title">The Flywheel</h2><p class="muted lab-sub">One loop, six moves. Watch a coin go around — or tap any step.</p></div>' +
+      '<div class="fw-stats"><div><small>Laps</small><b class="mono" id="fw-laps">0</b></div><div><small>Tax shared</small><b class="mono" id="fw-sol">0.00 SOL</b></div></div></div>' +
+      '<div class="fw-body"><div class="fw-wheel" id="fw-wheel"><svg viewBox="0 0 400 400" class="fw-svg"><defs><linearGradient id="fwg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FBF3E2"/><stop offset="1" stop-color="#A88D5F"/></linearGradient></defs>' +
+        '<circle cx="200" cy="200" r="116" fill="none" stroke="rgba(255,255,255,.06)" stroke-width="10"/><circle cx="200" cy="200" r="162" fill="none" stroke="rgba(255,255,255,.05)" stroke-width="1"/><circle id="fw-arc" cx="200" cy="200" r="116" fill="none" stroke="url(#fwg)" stroke-width="3" stroke-linecap="round" transform="rotate(-90 200 200)" stroke-dasharray="0 728.9"/>' +
+        '<circle cx="200" cy="200" r="116" fill="none" stroke="rgba(255,255,255,.12)" stroke-width="1" stroke-dasharray="2 10" class="fw-spin"/></svg>' + nodes +
+        '<div class="fw-rider" id="fw-rider"></div><div class="fw-center" id="fw-center"></div></div>' +
+        '<div class="fw-steps">' + steps + '</div></div></section>';
   }
+  function fwVisual(k, t) {
+    var tm = Math.max(t.buy, t.sell), rm = riskMetrics(t);
+    if (k === 0) return '<div class="fv-launch">' + avatarHTML(t, 64) + '<span><b>' + esc(t.name) + '</b><small class="mono">$' + esc(t.tick) + ' · ' + coinHTML(t.pair, 14) + ' ' + esc(pairLabel(t.pair)) + ' · tax ' + tm + '%</small></span></div>';
+    if (k === 1) return '<div class="fv-trap"><b class="mono" id="fv-trapn">90%</b><small>→ ' + tm + '% as the trap fades</small></div>';
+    if (k === 2) { var b = ''; for (var q = 0; q < 12; q++) b += '<i style="--h:' + (18 + q * 6 + (hash(t.tick + q) % 14)) + '%;--d:' + (q * 70) + 'ms"></i>'; return '<div class="fv-bars">' + b + '</div><small class="muted">price climbs with every buy</small>'; }
+    if (k === 3) return '<div class="fv-flags">' + rm.map(function (m, q) { return '<span class="ff ' + m.lv + '" style="--d:' + (q * 180) + 'ms"><small>' + m.lab + '</small><b class="mono">' + m.val + '</b></span>'; }).join('') + '</div><small class="muted">' + (rm.some(function (m) { return m.lv === 'r'; }) ? '⚠ flagged — still tradable, your call' : '✓ no red flags') + '</small>';
+    if (k === 4) return '<div class="fv-grad"><i><u></u></i><b>Raydium ✓</b></div><small class="muted">curve full · liquidity locked</small>';
+    return '<div class="fv-split"><span class="c"><b>50%</b><small>Creator</small></span><span class="h"><b>30%</b><small>Holders</small></span><span class="v"><b>20%</b><small>Burn 🔥</small></span></div>';
+  }
+  function fwCenter(k) {
+    var c = document.getElementById('fw-center'); if (!c) return; var st = FWS[k];
+    c.innerHTML = '<div class="fc-in"><span class="fc-k mono">STEP ' + (k + 1) + ' / ' + FWS.length + '</span><b class="fc-t">' + st[1] + ' ' + st[2] + '</b>' + fwVisual(k, FW.coin) + '</div>';
+    document.querySelectorAll('[data-fw]').forEach(function (e) { var n = +e.getAttribute('data-fw'); e.classList.toggle('on', n === k); e.classList.toggle('done', n < k); });
+    document.querySelectorAll('[data-fws]').forEach(function (e) { var n = +e.getAttribute('data-fws'); e.classList.toggle('on', n === k); e.classList.toggle('done', n < k); });
+    var r = document.getElementById('fw-rider');
+    if (k === 3 && r) { var bad = riskMetrics(FW.coin).some(function (m) { return m.lv === 'r'; }); r.setAttribute('data-flag', bad ? '⚠' : '✓'); r.classList.toggle('bad', bad); r.classList.add('flagged'); }
+    if (k === 4 && r) r.classList.add('grad');
+    if (k === 5) { FW.sol += 0.2 + Math.random() * 1.6; var e2 = document.getElementById('fw-sol'); if (e2) e2.textContent = FW.sol.toFixed(2) + ' SOL'; }
+    if (k === 1) { var n0 = 90, tm = Math.max(FW.coin.buy, FW.coin.sell); (function dec() { var e3 = document.getElementById('fv-trapn'); if (!e3 || FW.i !== 1) return; n0 = Math.max(tm, n0 - 3); e3.textContent = n0 + '%'; if (n0 > tm) setTimeout(dec, 60); })(); }
+  }
+  function fwNewCoin() {
+    FW.coin = pick(all()); var r = document.getElementById('fw-rider'); if (r) { r.innerHTML = avatarHTML(FW.coin, 44); r.className = 'fw-rider'; r.removeAttribute('data-flag'); }
+  }
+  function fwLoop(now) {
+    var w = document.getElementById('fw-wheel'); if (!w) { FW.raf = 0; FW.el = null; return; }
+    if (FW.el !== w) { FW.el = w; FW.t0 = now; FW.i = 0; FW.lastI = -1; fwNewCoin(); }
+    var p = (now - FW.t0) / FW.ms; if (p >= 1) { FW.i = (FW.i + 1) % FWS.length; FW.t0 = now; p = 0; if (FW.i === 0) { FW.laps++; var l = document.getElementById('fw-laps'); if (l) l.textContent = FW.laps; fwNewCoin(); } }
+    var mv = Math.min(1, p / .3), e = mv < .5 ? 2 * mv * mv : 1 - Math.pow(-2 * mv + 2, 2) / 2, from = FW.i === 0 ? -0.0001 : FW.i - 1, pos = FW.i === 0 ? 0 : from + (FW.i - from) * e;
+    if (mv >= 1 && FW.lastI !== FW.i) { FW.lastI = FW.i; fwCenter(FW.i); }
+    var ang = -Math.PI / 2 + pos / FWS.length * Math.PI * 2, rr = document.getElementById('fw-rider');
+    if (rr) { rr.style.left = ((200 + Math.cos(ang) * 116) / 4) + '%'; rr.style.top = ((200 + Math.sin(ang) * 116) / 4) + '%'; }
+    var arc = document.getElementById('fw-arc'); if (arc) arc.setAttribute('stroke-dasharray', (728.9 * pos / FWS.length).toFixed(1) + ' 728.9');
+    document.querySelectorAll('[data-fws].on .fw-bar u').forEach(function (u) { u.style.width = (p * 100).toFixed(1) + '%'; });
+    FW.raf = requestAnimationFrame(fwLoop);
+  }
+  function fwKick() { if (!FW.raf && document.getElementById('fw-wheel')) FW.raf = requestAnimationFrame(fwLoop); }
   // ---------- conveyor + crane engine ----------
   var LC = [], lastSpawn = 0, LT = performance.now(), ARM = { busy: false };
   function spawnCoin(tok, forceRug) {
