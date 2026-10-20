@@ -4163,3 +4163,22 @@ button.dh2-row{cursor:pointer;border-radius:10px}button.dh2-row:hover{background
 .cto-f{display:flex;flex-direction:column;gap:4px;margin-bottom:10px}.cto-f small{font-size:11.5px;color:var(--muted)}
 .bt .bt-go[disabled]{opacity:.5;cursor:not-allowed}
 .cr-ticks{position:relative;height:14px}.cr-ticks small{position:absolute;top:0;font-size:10px;color:var(--muted);white-space:nowrap}
+/* ===== mobile polish pass ===== */
+@media (max-width:760px){
+  .lb2-t{overflow:visible}
+  .lb2-r{min-width:0;grid-template-columns:30px minmax(0,1fr) auto!important;gap:10px;padding:10px 12px}
+  .lb2-r>*:nth-child(n+4){display:none}
+  .lb2-r .lb2-w b{font-size:13px}
+  .van-o{padding-top:30px}
+  .van-o em{top:8px;right:10px}
+  .van-h{flex-wrap:wrap}
+  #chart .xlab:nth-of-type(even){display:none}
+  .bn-row{grid-template-columns:24px minmax(0,1fr) minmax(90px,1.2fr) 60px!important}
+  .bn-row>*:nth-child(3){display:flex!important;min-width:0}
+  .bn-row>*:nth-child(4){display:none!important}.bn-row>*:nth-child(5){display:block!important}
+  .bn-row>*:nth-child(6),.bn-row>*:nth-child(7){display:none!important}
+  .bn-bar{gap:6px}.bn-bar>b{width:auto;font-size:11px}
+  .bn-stk{min-width:30px}
+  .bn-head>*:nth-child(4){display:none!important}
+}
+@media (max-width:760px){.bn-row .bn-c{min-width:0;overflow:hidden}.bn-row .bn-c>span{min-width:0}.bn-row .bn-c b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.bn-row{gap:8px}}
