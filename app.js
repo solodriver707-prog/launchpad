@@ -1810,8 +1810,15 @@
   function taxPicker(c) {
     var sn = c.snipe || { on: false, start: 50, dur: 120 }, base = c.buy;
     var steps = []; for (var v = 0; v <= 10; v++) steps.push('<button class="txs' + (base === v ? ' on' : '') + '" style="--tc:' + taxBg(v) + '" data-act="ctax" data-arg="' + v + '">' + v + '%</button>');
-    var W = 240, H = 64, pts = []; for (var k = 0; k <= 30; k++) { var f = k / 30, tx = sn.start - (sn.start - base) * f; pts.push((f * (W - 40) + 20).toFixed(1) + ',' + (H - 8 - tx / 100 * (H - 16)).toFixed(1)); }
-    var graph = '<svg class="trap-g" viewBox="0 0 ' + W + ' ' + H + '"><polyline points="4,' + (H - 8 - sn.start / 100 * (H - 16)).toFixed(1) + ' ' + pts.join(' ') + ' ' + (W - 4) + ',' + (H - 8 - base / 100 * (H - 16)).toFixed(1) + '" fill="none" stroke="#F2708A" stroke-width="2" stroke-linejoin="round"/><text x="6" y="12" fill="#F2708A" font-size="10" font-family="monospace">' + sn.start + '%</text><text x="' + (W - 6) + '" y="' + (H - 12) + '" fill="#D6D1C9" font-size="10" text-anchor="end" font-family="monospace">' + base + '%</text><text x="' + (W / 2) + '" y="' + (H - 1) + '" fill="#7A766F" font-size="9" text-anchor="middle" font-family="monospace">' + (sn.dur < 60 ? sn.dur + 's' : sn.dur / 60 + ' min') + ' after launch</text></svg>';
+    var W = 280, H = 80, x0 = 34, x1 = W - 10, y = function (v) { return 10 + (1 - v / 100) * (H - 30); }, pts = [];
+    for (var k = 0; k <= 30; k++) { var f = k / 30, tx = sn.start - (sn.start - base) * f; pts.push((x0 + f * (x1 - x0)).toFixed(1) + ',' + y(tx).toFixed(1)); }
+    var graph = '<svg class="trap-g" viewBox="0 0 ' + W + ' ' + H + '"><defs><linearGradient id="trapf" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F2708A" stop-opacity=".35"/><stop offset="1" stop-color="#F2708A" stop-opacity="0"/></linearGradient></defs>' +
+      '<line x1="' + x0 + '" x2="' + x1 + '" y1="' + (H - 20) + '" y2="' + (H - 20) + '" stroke="#2A2A2E"/>' +
+      '<polygon points="' + x0 + ',' + (H - 20) + ' ' + pts.join(' ') + ' ' + x1 + ',' + (H - 20) + '" fill="url(#trapf)"/><polyline points="' + pts.join(' ') + '" fill="none" stroke="#F2708A" stroke-width="2" stroke-linejoin="round"/>' +
+      '<circle cx="' + x0 + '" cy="' + y(sn.start).toFixed(1) + '" r="3" fill="#F2708A"/><circle cx="' + x1 + '" cy="' + y(base).toFixed(1) + '" r="3" fill="#D6D1C9"/>' +
+      '<text x="' + (x0 - 6) + '" y="' + (y(sn.start) + 3).toFixed(1) + '" fill="#F2708A" font-size="10" text-anchor="end" font-family="JetBrains Mono,monospace">' + sn.start + '%</text>' +
+      '<text x="' + x1 + '" y="' + (y(base) - 7).toFixed(1) + '" fill="#D6D1C9" font-size="10" text-anchor="end" font-family="JetBrains Mono,monospace">' + base + '%</text>' +
+      '<text x="' + x0 + '" y="' + (H - 6) + '" fill="#7A766F" font-size="9" font-family="JetBrains Mono,monospace">launch</text><text x="' + x1 + '" y="' + (H - 6) + '" fill="#7A766F" font-size="9" text-anchor="end" font-family="JetBrains Mono,monospace">+' + (sn.dur < 60 ? sn.dur + 's' : sn.dur / 60 + 'm') + '</text></svg>';
     return '<div class="field taxf"><div class="lbl"><b>Tax <span class="muted" style="font-weight:500;font-size:12px">· same for buys and sells</span></b><span class="mono" style="color:' + taxBg(base) + '">' + base + '%</span></div><div class="txrow">' + steps.join('') + '</div></div>' +
       '<div class="trap' + (sn.on ? ' on' : '') + '"><button class="trap-t" data-act="snipeToggle"><span class="trap-ic">🪤</span><span><b>Sniper trap</b><small>Bots that buy in the first moments pay a much higher tax, which fades to your normal ' + base + '% tax.</small></span><i class="sw2"><i></i></i></button>' +
       (sn.on ? '<div class="trap-cfg"><div><small class="muted">Start tax</small><div class="txrow sm">' + [25, 50, 75, 90].map(function (v) { return '<button class="txs' + (sn.start === v ? ' on' : '') + '" style="--tc:#F2708A" data-act="snipeStart" data-arg="' + v + '">' + v + '%</button>'; }).join('') + '</div>' +
@@ -1849,19 +1856,19 @@
       '<h1 class="title-xl" style="font-size:38px;margin:8px 0 22px">Launch a token</h1>' +
       '<div class="create-grid">' +
         '<section class="card-s panel" style="flex:999 1 520px;min-width:0;display:flex;flex-direction:column;gap:20px;padding:24px">' +
+          '<div class="fsec"><i>1</i>Identity</div>' +
+          '<div class="ident"><label class="ident-ban' + (c.banner ? ' has' : '') + '" for="c-banner" data-drop="banner">' + (c.banner ? '<img src="' + c.banner + '" alt="">' : '<span class="ib-ph">' + I.up + '<b>Add a banner</b><small>3:1 · e.g. 1500×500 · recommended</small></span>') + '</label>' +
+            '<label class="ident-logo' + (c.img ? ' has' : '') + '" for="c-img" data-drop="img">' + (c.img ? '<img src="' + c.img + '" alt="">' : '<span class="il-ph">' + I.up + '<b>Logo</b></span>') + '</label>' +
+            '<div class="ident-meta"><b>' + esc(c.name || 'Your coin') + '</b><span class="mono">$' + esc(c.tick || 'TICKER') + '</span></div>' +
+            '<div class="ident-acts">' + (c.img ? '<button class="link" data-act="clearImg">Remove logo</button>' : '<span class="req">logo required</span>') + (c.banner ? '<button class="link" data-act="clearBanner">Remove banner</button>' : '') + '</div></div>' +
+          '<input id="c-img" type="file" accept="image/png,image/jpeg,image/gif,image/webp" class="sr"><input id="c-banner" type="file" accept="image/png,image/jpeg,image/gif,image/webp" class="sr">' +
           '<div class="row"><div class="field" style="flex:2 1 220px"><label for="c-name" style="font-weight:700">Name</label><input id="c-name" class="inp" maxlength="32" data-bind="c.name" value="' + esc(c.name) + '" placeholder="e.g. Giga Pug"></div>' +
-            '<div class="field" style="flex:1 1 140px"><label for="c-tick" style="font-weight:700">Ticker</label><input id="c-tick" class="inp mono" data-bind="c.tick" value="' + esc(c.tick) + '" placeholder="DFROG"></div></div>' +
+            '<div class="field" style="flex:1 1 140px"><label for="c-tick" style="font-weight:700">Ticker</label><span class="tick-in"><em>$</em><input id="c-tick" class="inp mono" data-bind="c.tick" value="' + esc(c.tick) + '" placeholder="DFROG"></span></div></div>' +
           '<div class="field"><label for="c-desc" style="font-weight:700">Description</label><textarea id="c-desc" class="inp" data-bind="c.desc" placeholder="What is this token about?">' + esc(c.desc) + '</textarea></div>' +
-          '<div class="media-row">' +
-            '<div class="field mfield"><b>Logo <span class="req">required</span></b>' +
-              '<label class="drop logo-drop' + (c.img ? ' has' : '') + '" for="c-img" data-drop="img">' + (c.img ? '<img src="' + c.img + '" alt="Logo preview">' : '<span class="drop-ic">' + I.up + '</span><span class="drop-t">Upload logo</span><small>Square · PNG, JPG, GIF, WEBP · max 4 MB</small>') + '</label>' +
-              '<input id="c-img" type="file" accept="image/png,image/jpeg,image/gif,image/webp" class="sr">' + (c.img ? '<button class="link drop-x" data-act="clearImg">Remove</button>' : '') + '</div>' +
-            '<div class="field mfield grow"><b>Banner <span class="opt-l">recommended</span></b>' +
-              '<label class="drop banner-drop' + (c.banner ? ' has' : '') + '" for="c-banner" data-drop="banner">' + (c.banner ? '<img src="' + c.banner + '" alt="Banner preview">' : '<span class="drop-ic">' + I.up + '</span><span class="drop-t">Upload banner</span><small>Wide 3:1 · e.g. 1500×500 · shown on your coin page and card</small>') + '</label>' +
-              '<input id="c-banner" type="file" accept="image/png,image/jpeg,image/gif,image/webp" class="sr">' + (c.banner ? '<button class="link drop-x" data-act="clearBanner">Remove</button>' : '') + '</div>' +
-          '</div>' +
+          '<div class="fsec"><i>2</i>Market</div>' +
           pairPicker(c) +
           taxPicker(c) +
+          '<div class="fsec"><i>3</i>Community</div>' +
           '<div class="socrow"><span class="soc-l">Socials <small>optional · shown as buttons on your coin</small></span><div class="socgrid">' + socField(c, 'x', 'X', 'x.com/', 'yourcoin') + socField(c, 'tg', 'Telegram', 't.me/', 'yourcoin') + socField(c, 'web', 'Website', 'https://', 'yourcoin.fun') + '</div></div>' +
           '<button class="big-btn btn pri" data-act="launch">' + (S.account ? 'Launch token' : 'Connect wallet to launch') + '</button>' +
           '<span class="note">Beta: launching adds your token to this board (saved in your browser). On-chain launch via Raydium LaunchLab is coming next.</span>' +
