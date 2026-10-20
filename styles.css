@@ -2634,3 +2634,20 @@ header::before{background:linear-gradient(90deg,transparent,rgba(216,195,160,.6)
 .hr-p{font-weight:700;color:var(--ivory);font-size:13px}
 .hr-v{font-size:12px}
 @media (max-width:760px){.htiles{grid-template-columns:repeat(3,1fr)}.hhead,.hrow2{grid-template-columns:24px minmax(0,1fr) 60px 64px}.hbar2,.hhead span:nth-child(3){display:none}}
+/* ===== leaderboard: MC journey track ===== */
+.jr{display:flex;align-items:center;height:40px;padding:0 10px}
+.jr-track{position:relative;flex:1;height:6px;border-radius:99px;background:rgba(255,255,255,.06);margin-top:-10px}
+.jr-fill{position:absolute;left:0;top:0;bottom:0;border-radius:inherit;background:linear-gradient(90deg,rgba(216,195,160,.25),#D8C3A0 70%,#FBF3E2);box-shadow:0 0 14px -2px rgba(216,195,160,.5);transform-origin:left;animation:jrGrow .9s cubic-bezier(.2,.9,.3,1) both;animation-delay:var(--d,0s)}
+@keyframes jrGrow{from{transform:scaleX(0)}}
+.jr-ath{position:absolute;top:0;bottom:0;border-radius:0 99px 99px 0;background:repeating-linear-gradient(90deg,rgba(242,112,138,.35) 0 3px,transparent 3px 6px)}
+.jr-ms{position:absolute;top:50%;width:2px;height:12px;margin:-6px 0 0 -1px;background:rgba(255,255,255,.18);border-radius:2px}
+.jr-ms.hit{background:#F3E5C8}
+.jr-ms.grad{width:8px;height:8px;margin:-4px 0 0 -4px;border-radius:50%;background:#111;box-shadow:0 0 0 1.5px rgba(255,255,255,.3)}
+.jr-ms.grad.hit{background:#3DDC97;box-shadow:0 0 0 2px #0B0B0D,0 0 10px #3DDC97}
+.jr-ms u{position:absolute;top:13px;left:50%;transform:translateX(-50%);text-decoration:none;font:600 8.5px var(--mono);letter-spacing:.04em;color:rgba(255,255,255,.25);white-space:nowrap}
+.jr-ms.hit u{color:var(--soft)}
+.jr-ms.grad u{top:11px}
+.jr-ms:first-of-type u{transform:none;left:0}
+.jr-ms:last-of-type u{transform:none;left:auto;right:0}
+.jr-dot{position:absolute;top:50%;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;background:#FBF3E2;box-shadow:0 0 0 3px rgba(216,195,160,.3),0 0 16px rgba(251,243,226,.8);animation:jrDot 2.4s ease-in-out infinite}
+@keyframes jrDot{50%{box-shadow:0 0 0 6px rgba(216,195,160,.12),0 0 22px rgba(251,243,226,.9)}}

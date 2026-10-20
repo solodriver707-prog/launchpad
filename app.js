@@ -1617,6 +1617,15 @@
   }
 
   S.lbTab = 'mcap';
+  function mcJourney(t) {
+    var L0 = Math.log10(5e3), L1 = Math.log10(1e8), f = function (usd) { return Math.max(0, Math.min(1, (Math.log10(Math.max(5e3, usd)) - L0) / (L1 - L0))) * 100; };
+    var mc = t.mcN * 1000, ath = Math.max.apply(null, t.hist.concat([t.mcN])) * 1000, x = f(mc), ax = f(ath);
+    var ms = [[5e3, '5K'], [69e3, 'GRAD'], [1e6, '1M'], [1e7, '10M'], [1e8, '100M']];
+    return '<span class="jr" title="' + fmtK(t.mcN) + ' now · ATH ' + fmtK(ath / 1000) + '"><span class="jr-track"><i class="jr-fill" style="width:' + x.toFixed(1) + '%"></i>' +
+      (ax - x > 1.5 ? '<i class="jr-ath" style="left:' + x.toFixed(1) + '%;width:' + (ax - x).toFixed(1) + '%"></i>' : '') +
+      ms.map(function (m) { var p = f(m[0]), hit = m[1] === 'GRAD' ? t.prog >= 100 : mc >= m[0]; return '<i class="jr-ms' + (hit ? ' hit' : '') + (m[1] === 'GRAD' ? ' grad' : '') + '" style="left:' + p.toFixed(1) + '%"><u>' + m[1] + '</u></i>'; }).join('') +
+      '<span class="jr-dot" style="left:' + x.toFixed(1) + '%"></span></span></span>';
+  }
   function lbSpark(t, w, h, id) {
     var d = t.hist.slice(-40), mx = Math.max.apply(null, d), mn = Math.min.apply(null, d), sp = (mx - mn) || 1, up = d[d.length - 1] >= d[0];
     var line = 'M' + d.map(function (v, i) { return (i * w / (d.length - 1)).toFixed(1) + ' ' + (h - 3 - (v - mn) / sp * (h - 6)).toFixed(1); }).join(' L');
@@ -1657,7 +1666,7 @@
         var v = Math.max(2, Math.abs(key(t)) / mx * 100), c = chg(t), mv = ((hash(t.tick + S.lbTab) % 7) - 3);
         return '<button class="lrow" style="--d:' + (i * 45) + 'ms" data-act="open" data-arg="' + esc(t.tick) + '"><span class="lr-rank">' + (i + 4) + '</span><span class="lr-mv ' + (mv > 0 ? 'up' : mv < 0 ? 'down' : '') + '">' + (mv > 0 ? '▲' + mv : mv < 0 ? '▼' + (-mv) : '–') + '</span>' + avatarHTML(t, 42) +
           '<span class="lr-name"><b>' + esc(t.name) + '</b><small class="mono">$' + esc(t.tick) + ' · ' + coinHTML(t.pair, 13) + ' ' + esc(pairLabel(t.pair)) + '</small></span>' +
-          '<span class="lr-bar"><i style="--w:' + v.toFixed(1) + '%"></i>' + lbSpark(t, 160, 28) + '</span><span class="lr-chg mono ' + (c >= 0 ? 'up' : 'down') + '" data-chg2="' + esc(t.tick) + '">' + chgTxt(c) + '</span>' +
+          mcJourney(t) + '<span class="lr-chg mono ' + (c >= 0 ? 'up' : 'down') + '" data-chg2="' + esc(t.tick) + '">' + chgTxt(c) + '</span>' +
           '<span class="lr-big mono"' + (S.lbTab === 'mcap' ? ' data-mc="' + esc(t.tick) + '" data-v="' + fmtK(t.mcN) + '"' : '') + '>' + fmt(t) + '</span></button>';
       }).join('');
     }
