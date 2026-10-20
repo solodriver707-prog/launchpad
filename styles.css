@@ -3944,3 +3944,4 @@ button.dh2-row{cursor:pointer;border-radius:10px}button.dh2-row:hover{background
 .c-auto.on{color:#F1DDB0;border-color:rgba(241,221,176,.45);background:rgba(241,221,176,.1)}
 .c-auto:hover{color:#fff}
 .c-auto{bottom:0;right:6px}
+.coin.meme{overflow:hidden;border-radius:50%;background:none;flex:none;display:inline-grid;place-items:center}.coin.meme>.av,.coin.meme>img,.coin.meme>svg{width:100%!important;height:100%!important;max-width:none}

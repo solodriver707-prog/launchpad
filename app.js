@@ -138,7 +138,7 @@
   function pairLabel(id) { return PAIR_INFO[id] ? id : '$' + id; }
   function coinHTML(id, size) {
     var p = pairInfo(id);
-    if (p.meme) return avatarHTML(p.meme, size);
+    if (p.meme) return '<span class="coin meme" style="width:' + size + 'px;height:' + size + 'px">' + avatarHTML(p.meme, size) + '</span>';
     if (p.img) return '<span class="coin img" style="width:' + size + 'px;height:' + size + 'px"><img src="' + p.img + '" alt="' + esc(p.name) + '"></span>';
     var fs = Math.round(size * (p.g.length > 2 ? 0.3 : p.g.length > 1 ? 0.38 : 0.52));
     return '<span class="coin" style="width:' + size + 'px;height:' + size + 'px;background:' + p.c + ';font-size:' + fs + 'px">' + esc(p.g) + '</span>';
