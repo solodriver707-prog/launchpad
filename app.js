@@ -1647,6 +1647,34 @@
     var avgLine = st.avgMc ? '<span class="wavg" style="top:' + (Math.max(0.04, Math.min(0.96, 1 - (st.avgMc - mn) / sp)) * 100).toFixed(1) + '%"><em>avg entry ' + fmtK(st.avgMc) + '</em></span>' : '';
     return '<div class="wchart"><svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none"><path d="' + line + ' L' + W + ' ' + H + ' L0 ' + H + ' Z" fill="url(#ccUp)" opacity=".7"/><path d="' + line + '" fill="none" stroke="#9696A0" stroke-width="1.8" vector-effect="non-scaling-stroke"/></svg>' + avgLine + marks + '</div>';
   }
+  // ---- dev history: previous deploys and how they went ----
+  var DADJ = ['Moon', 'Turbo', 'Based', 'Tiny', 'Giga', 'Lazy', 'Rich', 'Sad', 'Angry', 'Golden', 'Pixel', 'Space', 'Baby', 'Mega', 'Wet', 'Hyper'];
+  var DNOUN = ['Frog', 'Cat', 'Pug', 'Duck', 'Ape', 'Owl', 'Shark', 'Goat', 'Bear', 'Doge', 'Hamster', 'Penguin', 'Otter', 'Crab'];
+  function devHistory(addr) {
+    var live = all().filter(function (t) { return devOf(t) === addr; }), r = rng(hash(addr + 'deploys')), isDev = live.length > 0;
+    var n = isDev ? Math.floor(r() * 7) : (r() < .25 ? 1 + Math.floor(r() * 2) : 0), profile = r(), past = [];
+    for (var i = 0; i < n; i++) {
+      var adj = DADJ[Math.floor(r() * DADJ.length)], nn = DNOUN[Math.floor(r() * DNOUN.length)], roll = r(), out, ath, life;
+      if (profile < .3) { out = roll < .65 ? 'rug' : roll < .9 ? 'dead' : 'grad'; } else if (profile < .7) { out = roll < .25 ? 'rug' : roll < .65 ? 'dead' : 'grad'; } else { out = roll < .08 ? 'rug' : roll < .45 ? 'dead' : 'grad'; }
+      ath = out === 'grad' ? 69 + r() * r() * 4000 : out === 'rug' ? 6 + r() * 40 : 5 + r() * 25; life = out === 'rug' ? 2 + r() * 40 : out === 'dead' ? 30 + r() * 600 : 1440 + r() * 20000;
+      var pts = [], v = 5, peakAt = .2 + r() * .5; for (var k = 0; k < 24; k++) { var f = k / 23; v = f < peakAt ? 5 + (ath - 5) * Math.pow(f / peakAt, 1.4) : out === 'rug' ? (f < peakAt + .06 ? ath * .2 : ath * .05) : out === 'dead' ? ath * Math.max(.15, 1 - (f - peakAt) * 1.6) : ath * (.55 + r() * .35); pts.push(v * (.94 + r() * .12)); }
+      past.push({ name: adj + ' ' + nn, tick: (adj.slice(0, 2) + nn.slice(0, 3)).toUpperCase(), spec: { kind: A.KINDS[Math.floor(r() * A.KINDS.length)], skin: A.SKINS[Math.floor(r() * A.SKINS.length)], bg: A.BGS[Math.floor(r() * A.BGS.length)], eyes: 'normal', mouth: pick(['smile', 'grin', 'o']), acc: 'none' }, out: out, ath: ath, now: pts[23], life: life, ago: (i + 1) * (2 + r() * 9) * 1440, pts: pts, devSoldAfter: out === 'rug' ? life : null });
+    }
+    past.sort(function (a, b) { return a.ago - b.ago; });
+    var g = past.filter(function (x) { return x.out === 'grad'; }).length, rg = past.filter(function (x) { return x.out === 'rug'; }).length;
+    var score = !past.length ? null : rg / past.length > .4 ? ['bad', 'Serial rugger'] : g / past.length >= .4 && rg <= 1 ? ['good', 'Trusted builder'] : ['mid', 'Mixed record'];
+    return { live: live, past: past, grad: g, rugs: rg, score: score, best: past.reduce(function (m, x) { return Math.max(m, x.ath); }, 0) };
+  }
+  function devHistoryHTML(addr) {
+    var h = devHistory(addr); if (!h.live.length && !h.past.length) return '';
+    var spark = function (pts, out) { var mx = Math.max.apply(null, pts), mn = Math.min.apply(null, pts), d = pts.map(function (v, k) { return (k * 60 / 23).toFixed(1) + ',' + (22 - (v - mn) / ((mx - mn) || 1) * 20).toFixed(1); }).join(' '); return '<svg class="dh-sp" viewBox="0 0 60 24"><polyline points="' + d + '" fill="none" stroke="' + (out === 'grad' ? '#3DDC97' : out === 'rug' ? '#F2708A' : '#8C877F') + '" stroke-width="1.6" stroke-linejoin="round"/></svg>'; };
+    var OUT = { grad: ['🎓 Graduated', 'g'], dead: ['💤 Died on curve', 'd'], rug: ['⚠ Dev dumped', 'r'] };
+    var tot = h.live.length + h.past.length;
+    return '<div class="dw-sec dh"><div class="dw-title">Coins this wallet deployed <span class="mono muted">' + tot + '</span>' + (h.score ? '<span class="dh-score ' + h.score[0] + '">' + h.score[1] + '</span>' : '<span class="dh-score new">First launch</span>') + '</div>' +
+      '<div class="dh-sum"><div><small>Deploys</small><b class="mono">' + tot + '</b></div><div><small>Graduated</small><b class="mono up">' + h.grad + '</b></div><div><small>Dev dumped</small><b class="mono ' + (h.rugs ? 'down' : '') + '">' + h.rugs + '</b></div><div><small>Best ATH</small><b class="mono">' + (h.best ? fmtK(h.best) : '—') + '</b></div></div>' +
+      h.live.map(function (t) { return '<button class="dh-row live" data-act="open" data-arg="' + esc(t.tick) + '">' + avatarHTML(t, 32) + '<span class="dh-n"><b>' + esc(t.name) + ' <small class="mono">$' + esc(t.tick) + '</small></b><small>live now · launched ' + ago(t.born) + ' ago</small></span>' + spark(t.hist.slice(-24), t.mcN >= t.mc0 ? 'grad' : 'rug') + '<span class="dh-r"><b class="mono">' + fmtK(t.mcN) + '</b><span class="dh-tag l">● Live</span></span></button>'; }).join('') +
+      h.past.map(function (x) { var o = OUT[x.out]; return '<div class="dh-row"><span class="av" style="width:32px;height:32px">' + A.svg(x.spec) + '</span><span class="dh-n"><b>' + esc(x.name) + ' <small class="mono">$' + x.tick + '</small></b><small>' + ago(Date.now() - x.ago * 60000) + ' ago · ' + (x.out === 'rug' ? 'dev sold after ' + (x.life < 60 ? Math.round(x.life) + 'm' : (x.life / 60).toFixed(1) + 'h') : x.out === 'grad' ? 'graduated' : 'faded after ' + (x.life < 60 ? Math.round(x.life) + 'm' : Math.round(x.life / 60) + 'h')) + '</small></span>' + spark(x.pts, x.out) + '<span class="dh-r"><small>ATH</small><b class="mono">' + fmtK(x.ath) + '</b><span class="dh-tag ' + o[1] + '">' + o[0] + '</span></span></div>'; }).join('') + '</div>';
+  }
   function walletDrawer() {
     if (!S.walletView) return '';
     var addr = S.walletView, t = find(S.tick) || featured(), st = walletStats(addr, t), other = walletOther(addr), dev = addr === devOf(t), tracked = S.trackWallets.indexOf(addr) !== -1;
@@ -1655,7 +1683,7 @@
       '<div class="dw-head"><span class="av" style="width:56px;height:56px">' + A.svg(walletSpec(addr)) + '</span><div style="flex:1;min-width:0"><b style="font-size:18px">' + esc(walletName(addr)) + '</b>' + (dev ? ' <span class="bdg dev">DEV</span>' : '') +
         '<button class="copy" style="display:flex;margin-top:4px" data-act="copyW" data-arg="' + esc(addr) + '">' + esc(addr.slice(0, 6) + '…' + addr.slice(-6)) + ' ' + I.copy + '</button></div><button class="iconbtn" data-act="closeW" aria-label="Close">✕</button></div>' +
       '<div class="dw-actions"><button class="btn ' + (tracked ? 'sec' : 'pri') + '" data-act="trackW" data-arg="' + esc(addr) + '">' + (tracked ? 'Tracking ✓' : 'Track wallet') + '</button><button class="btn sec" data-act="maker" data-arg="' + esc(addr) + '">Show its trades</button></div>' +
-      '<div class="dw-sec"><div class="dw-title">' + avatarHTML(t, 22) + 'on $' + esc(t.tick) + '</div>' +
+      devHistoryHTML(addr) + '<div class="dw-sec"><div class="dw-title">' + avatarHTML(t, 22) + 'on $' + esc(t.tick) + '</div>' +
         '<div class="dw-pnl"><span class="muted">Total PnL</span><b class="mono ' + pnlCls + '">' + sign(st.pnl) + ' SOL</b><span class="chgpill ' + pnlCls + '">' + (st.roi >= 0 ? '+' : '') + st.roi.toFixed(1) + '%</span></div>' +
         '<div class="dw-grid">' +
           [['Bought', '<span class="up">' + st.b.toFixed(3) + ' SOL</span>', st.nb + ' buys'], ['Sold', '<span class="down">' + st.s.toFixed(3) + ' SOL</span>', st.ns + ' sells'],
