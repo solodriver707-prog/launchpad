@@ -1821,6 +1821,13 @@
     document.querySelectorAll('[data-trap]').forEach(function (e) { var t = find(e.getAttribute('data-trap')); var v = t ? snipeNow(t) : 0; if (v > 0) e.textContent = '🪤 ' + v + '%'; else e.remove(); });
     document.querySelectorAll('[data-trapl]').forEach(function (e) { var t = find(e.getAttribute('data-trapl')); if (!t) return; var v = snipeNow(t), m = Math.max(t.buy, t.sell), sm = e.querySelector('small'); if (v > 0) { var left = Math.ceil(t.snipe.dur - (Date.now() - t.born) / 1000); sm.innerHTML = 'tax now <i>' + v + '%</i> → ' + m + '% · ' + (left >= 60 ? Math.floor(left / 60) + 'm ' : '') + (left % 60) + 's left'; } else { e.classList.add('done'); sm.textContent = 'ended — tax is ' + m + '%'; } });
   }, 1000);
+  function socField(c, k, name, pre, ph) {
+    var v = c[k] || '', ok = v.trim().length > 2;
+    var ic = k === 'x' ? '<svg viewBox="0 0 24 24"><path fill="#fff" d="M17.75 3h3.07l-6.71 7.67L22 21h-6.18l-4.84-6.33L5.44 21H2.37l7.18-8.2L2 3h6.34l4.37 5.78L17.75 3zm-1.08 16.17h1.7L7.42 4.74H5.6l11.07 14.43z"/></svg>'
+      : k === 'tg' ? '<svg viewBox="0 0 24 24"><path fill="#fff" d="M9.04 15.47l-.37 5.2c.53 0 .76-.23 1.04-.5l2.5-2.39 5.18 3.8c.95.52 1.62.25 1.88-.88l3.4-15.96c.31-1.41-.5-1.96-1.43-1.62L1.28 10.9c-1.37.53-1.35 1.3-.23 1.65l5.1 1.6L17.98 6.7c.56-.37 1.06-.17.64.2"/></svg>'
+      : '<svg viewBox="0 0 24 24" fill="none" stroke="#0A0A0B" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.8 3 2.8 15 0 18M12 3c-2.8 3-2.8 15 0 18"/></svg>';
+    return '<label class="socf s-' + k + (ok ? ' ok' : '') + '" for="c-' + k + '"><span class="socf-ic">' + ic + '</span><span class="socf-b"><small>' + name + '</small><span class="socf-in"><em>' + pre + '</em><input id="c-' + k + '" data-bind="c.' + k + '" value="' + esc(v.replace(/^https?:\/\/(www\.)?(x\.com|twitter\.com|t\.me)\/?/i, '').replace(/^https?:\/\//i, '')) + '" placeholder="' + ph + '" autocomplete="off"></span></span><span class="socf-ck">✓</span></label>';
+  }
   function pairPicker(c) {
     var pi = pairInfo(c.pair), q = S.cpq.trim(), res = q ? pairSearch(q) : [];
     var quick = S.cpTab === 'memes' ? all().slice().sort(function (a, b) { return b.mcN - a.mcN; }).slice(0, 12).map(function (t) { return t.tick; }) : Object.keys(PAIR_INFO).filter(function (id) { return PAIR_INFO[id].cat === S.cpTab; });
@@ -1855,9 +1862,7 @@
           '</div>' +
           pairPicker(c) +
           taxPicker(c) +
-          '<div class="row"><div class="field" style="flex:1 1 180px"><label for="c-x" style="font-weight:700">X (optional)</label><input id="c-x" class="inp" data-bind="c.x" value="' + esc(c.x) + '" placeholder="x.com/…"></div>' +
-            '<div class="field" style="flex:1 1 180px"><label for="c-tg" style="font-weight:700">Telegram (optional)</label><input id="c-tg" class="inp" data-bind="c.tg" value="' + esc(c.tg) + '" placeholder="t.me/…"></div>' +
-            '<div class="field" style="flex:1 1 180px"><label for="c-web" style="font-weight:700">Website (optional)</label><input id="c-web" class="inp" data-bind="c.web" value="' + esc(c.web) + '" placeholder="https://"></div></div>' +
+          '<div class="socrow"><span class="soc-l">Socials <small>optional · shown as buttons on your coin</small></span><div class="socgrid">' + socField(c, 'x', 'X', 'x.com/', 'yourcoin') + socField(c, 'tg', 'Telegram', 't.me/', 'yourcoin') + socField(c, 'web', 'Website', 'https://', 'yourcoin.fun') + '</div></div>' +
           '<button class="big-btn btn pri" data-act="launch">' + (S.account ? 'Launch token' : 'Connect wallet to launch') + '</button>' +
           '<span class="note">Beta: launching adds your token to this board (saved in your browser). On-chain launch via Raydium LaunchLab is coming next.</span>' +
         '</section>' +
@@ -2186,7 +2191,7 @@
         if (!c.img) { toast('Upload a logo image for your coin'); break; }
         if (find(c.tick)) { toast('$' + c.tick + ' is already taken'); break; }
         var nt = { name: c.name.trim(), tick: c.tick, spec: c.spec, img: c.img, banner: c.banner || null, snipe: c.snipe && c.snipe.on ? { on: true, start: c.snipe.start, dur: c.snipe.dur } : null, buy: c.buy, sell: c.sell, pair: c.pair, mcN: 5, mc0: 5, prog: 1, born: Date.now(), holders: 1,
-          soc: !!(c.x || c.tg || c.web), links: { web: linkOf(c.web), x: linkOf(c.x), tg: linkOf(c.tg), demo: false }, rewards: false, burn: false, ca: fakeCA(), vol: 0, hist: [5, 5], desc: c.desc.trim(), creator: S.account };
+          soc: !!(c.x || c.tg || c.web), links: { web: linkOf(c.web), x: c.x ? linkOf(/[\/.]/.test(c.x) ? c.x : 'x.com/' + c.x.replace(/^@/, '')) : null, tg: c.tg ? linkOf(/[\/.]/.test(c.tg) ? c.tg : 't.me/' + c.tg.replace(/^@/, '')) : null, demo: false }, rewards: false, burn: false, ca: fakeCA(), vol: 0, hist: [5, 5], desc: c.desc.trim(), creator: S.account };
         S.created.unshift(nt); saveCreated();
         S.c = { name: '', tick: '', desc: '', x: '', tg: '', web: '', pair: 'SOL', buy: 0, sell: 0, img: null, banner: null, spec: { kind: pick(A.KINDS), skin: pick(A.SKINS), bg: pick(A.BGS), eyes: 'normal', mouth: 'smile', acc: 'none' } };
         openToken(nt.tick); confetti(); toast('$' + nt.tick + ' is live on treid', nt); break;
