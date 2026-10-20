@@ -1066,9 +1066,13 @@
     var pod = '<div class="bn-pod">' + order.filter(function (i) { return podium[i]; }).map(function (i) { var e = podium[i]; return '<button class="bn-p bn-p' + (i + 1) + '" data-act="open" data-arg="' + esc(e.t.tick) + '"><span class="bn-pr">' + ['🥇', '🥈', '🥉'][i] + '</span>' + avatarHTML(e.t, i ? 48 : 62) + '<b>$' + esc(e.t.tick) + '</b><strong class="mono">' + e.pct.toFixed(2) + '%</strong><small>supply burned</small></button>'; }).join('') + '</div>';
     var stats = [['Supply destroyed', totTok >= 1e9 ? (totTok / 1e9).toFixed(2) + 'B' : fmtNum(Math.round(totTok)), 'tokens, all coins'], ['Value burned', '$' + fmtNum(Math.round(totUsd)), 'at time of burn'], ['Coins burning', coins.length, 'of ' + all().length + ' launched'], ['Last burn', log.length ? ago(log[0].at) + ' ago' : '—', log.length ? '$' + esc(log[0].t.tick) + ' · ' + BSRC[log[0].src][0] : '']];
     var sorts = [['pct', '% supply'], ['usd', 'Value'], ['n', 'Burns'], ['last', 'Recent']];
-    return '<main class="wrap burn"><section class="bn-hero"><div class="bn-copy"><span class="kicker">BURN LEADERBOARD</span><h1 class="bn-h">The Burnery</h1><p>Every coin launched on treid can <b>burn its own supply</b> — the dev, any holder, or an automatic <b>tax buyback</b>. Burned tokens are gone forever. The more a coin destroys, the higher it climbs.</p>' +
-      '<div class="bn-stats">' + stats.map(function (x) { return '<div><small>' + x[0] + '</small><b class="mono">' + x[1] + '</b><span>' + x[2] + '</span></div>'; }).join('') + '</div></div>' +
-      '<div class="bn-fire" id="bn-fire"><canvas id="bn-cv"></canvas><div class="bn-pit"></div><div class="bn-fly" id="bn-fly"></div><div class="bn-now" id="bn-now"></div></div></section>' + pod +
+    S._bnAgg = by; BN.tot = totTok;
+    var feed = function (sd) { return '<div class="bh-feed ' + sd + '" id="bh-f' + sd + '"><div class="bh-ring"><span class="bh-av"></span></div><b class="bh-tk"></b><span class="bh-sup"><i></i></span><small class="mono bh-left"></small></div>'; };
+    var stat = function (x) { return '<div class="bh-st"><small>' + x[0] + '</small><b class="mono">' + x[1] + '</b><span>' + x[2] + '</span></div>'; };
+    return '<main class="wrap burn"><section class="bh"><div class="bh-top"><span class="kicker">BURN LEADERBOARD</span><h1 class="bn-h">The Burnery</h1><p>Every coin on treid can <b>burn its own supply</b> — dev, holders or automatic <b>tax buyback</b>. Gone forever. Less supply, higher rank.</p></div>' +
+      '<div class="bh-stage"><div class="bh-side">' + stat(stats[1]) + stat(stats[2]) + '</div>' +
+      '<div class="bn-fire" id="bn-fire"><canvas id="bn-cv"></canvas><div class="bn-pit"></div><div class="bh-count"><small>SUPPLY DESTROYED</small><b class="mono" id="bh-count">' + (totTok >= 1e9 ? (totTok / 1e9).toFixed(3) + 'B' : fmtNum(Math.round(totTok))) + '</b></div>' + feed('l') + feed('r') + '<div class="bn-fly" id="bn-fly"></div><div class="bn-now" id="bn-now"></div></div>' +
+      '<div class="bh-side">' + stat(['Burns', log.length, 'all time']) + stat(stats[3]) + '</div></div></section>' + pod +
       '<section class="bn-list card-s"><div class="bn-lh"><b>Burn leaderboard</b><div class="bn-leg">' + Object.keys(BSRC).map(function (k) { return '<span><i style="background:' + BSRC[k][1] + '"></i>' + BSRC[k][0] + '</span>'; }).join('') + '</div><div class="seg">' + sorts.map(function (x) { return '<button class="' + (S.bsort === x[0] ? 'on' : '') + '" data-act="bsort" data-arg="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div></div>' +
       '<div class="bn-row bn-head"><span>#</span><span>Coin</span><span>Supply burned</span><span class="r">Tokens</span><span class="r">Value</span><span class="r">Burns</span><span class="r">Last</span></div>' +
       coins.map(function (e, i) { return '<div class="bn-row" data-act="open" data-arg="' + esc(e.t.tick) + '"><span class="mono bn-rk' + (i < 3 ? ' top' : '') + '">' + (i + 1) + '</span><span class="bn-c">' + avatarHTML(e.t, 30) + '<span><b>$' + esc(e.t.tick) + '</b><small>' + esc(e.t.name) + '</small></span></span><span class="bn-bar"><span class="bn-stk">' + srcBar(e) + '</span><b class="mono">' + e.pct.toFixed(2) + '%</b></span><span class="r mono">' + fmtNum(Math.round(e.tok)) + '</span><span class="r mono bn-usd">$' + fmtNum(Math.round(e.usd)) + '</span><span class="r mono">' + e.n + '</span><span class="r mono muted">' + ago(e.last) + '</span></div>'; }).join('') + '</section>' +
@@ -1079,8 +1083,8 @@
   function bnLoop(now) {
     var box = document.getElementById('bn-fire'); if (!box) { BN.raf = 0; BN.el = null; return; }
     var cv = box.querySelector('#bn-cv');
-    if (BN.el !== box) { BN.el = box; var r = box.getBoundingClientRect(), d = Math.min(2, devicePixelRatio || 1); cv.width = r.width * d; cv.height = r.height * d; BN.w = r.width; BN.h = r.height; BN.ctx = cv.getContext('2d'); BN.ctx.setTransform(d, 0, 0, d, 0, 0); BN.last = now; BN.next = now + 900; }
-    var c = BN.ctx, W = BN.w, H = BN.h, base = H * .78, boost = Math.max(0, 1 - (now - (BN.boost || 0)) / 900);
+    if (BN.el !== box) { BN.el = box; var r = box.getBoundingClientRect(), d = Math.min(2, devicePixelRatio || 1); cv.width = r.width * d; cv.height = r.height * d; BN.w = r.width; BN.h = r.height; BN.ctx = cv.getContext('2d'); BN.ctx.setTransform(d, 0, 0, d, 0, 0); BN.last = now; BN.next = now + 700; var lg = burnLog(); if (lg.length) { BN.side = 'r'; var p1 = pick(lg.slice(0, 24)); bnFeed('l', p1); bnFeed('r', pick(lg.slice(0, 24).filter(function (x) { return x.t !== p1.t; })) || p1); } }
+    var c = BN.ctx, W = BN.w, H = BN.h, base = H * .78, boost = Math.max(0, 1 - (now - (BN.boost || 0)) / 900) + Math.max(0, 1 - (now - (BN.big || 0)) / 700) * .45; boost = Math.min(1.1, boost);
     for (var i = 0; i < 5 + boost * 14; i++) { var off = (Math.random() - .5) * 2, sp = Math.max(0, 1 - Math.abs(off)); BN.parts.push({ x: W / 2 + off * W * (.16 + boost * .08), y: base + Math.random() * 8, vx: -off * .25, vy: -(1.2 + sp * 2.6 + Math.random() * 1.2 + boost * 2.5), life: .55 + sp * .45, s: 12 + sp * 20 + Math.random() * 8 + boost * 10 }); }
     if (Math.random() < .5) BN.parts.push({ x: W / 2 + (Math.random() - .5) * W * .25, y: base - 20, vx: (Math.random() - .5) * .8, vy: -(2 + Math.random() * 2), life: 1, s: 1.6, spark: 1 });
     c.globalCompositeOperation = 'source-over'; c.clearRect(0, 0, W, H); c.globalCompositeOperation = 'lighter';
@@ -1090,14 +1094,50 @@
       var rr = p.s * (.25 + l * .9), g = c.createRadialGradient(p.x, p.y, 0, p.x, p.y, rr), col = l > .8 ? '255,214,150' : l > .55 ? '255,150,50' : l > .3 ? '232,72,40' : '110,30,30';
       g.addColorStop(0, 'rgba(' + col + ',' + (l * .22).toFixed(3) + ')'); g.addColorStop(1, 'rgba(' + col + ',0)'); c.fillStyle = g; c.beginPath(); c.arc(p.x, p.y, rr, 0, 6.283); c.fill(); });
     if (BN.parts.length > 900) BN.parts.splice(0, BN.parts.length - 900);
-    if (now > BN.next) { BN.next = now + 2200 + Math.random() * 1200; bnThrow(); }
+    if (now > BN.next) { BN.next = now + 2600 + Math.random() * 700; bnThrow(); }
+    if (BN.big && now - BN.big < 120) for (var e2 = 0; e2 < 26; e2++) { var an2 = Math.random() * Math.PI; BN.parts.push({ x: W / 2, y: base - 10, vx: Math.cos(an2) * (2 + Math.random() * 4), vy: -Math.sin(an2) * (3 + Math.random() * 5), life: 1, s: 1.8, spark: 1 }); }
     BN.raf = requestAnimationFrame(bnLoop);
   }
+  function bnFeed(sd, b) {
+    var f = document.getElementById('bh-f' + sd); if (!f) return null;
+    var agg = (S._bnAgg || {})[b.t.tick], burned = agg ? agg.pct : b.pct, left = Math.max(0, 100 - burned);
+    f.querySelector('.bh-av').innerHTML = avatarHTML(b.t, 60); f.querySelector('.bh-tk').textContent = '$' + b.t.tick;
+    var bar = f.querySelector('.bh-sup i'); bar.style.transition = 'none'; bar.style.width = Math.min(100, left + b.pct) + '%';
+    f.querySelector('.bh-left').textContent = Math.min(100, left + b.pct).toFixed(2) + '% supply';
+    f._left = left; return f;
+  }
+  function fmtBig(v) { return v >= 1e9 ? (v / 1e9).toFixed(3) + 'B' : fmtNum(Math.round(v)); }
+  function bnCount(add) {
+    var el = document.getElementById('bh-count'); if (!el) return; var from = BN.tot || 0, to = from + add, t0 = performance.now(); BN.tot = to;
+    (function step(n) { var k = Math.min(1, (n - t0) / 700), v = from + (to - from) * (1 - Math.pow(1 - k, 3)); el.textContent = fmtBig(v); if (k < 1) requestAnimationFrame(step); })(t0);
+    el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump');
+  }
   function bnThrow() {
-    var fly = document.getElementById('bn-fly'), log = burnLog(); if (!fly || !log.length) return; var b = pick(log.slice(0, 20)), left = Math.random() < .5;
-    var e = document.createElement('div'); e.className = 'bn-coin ' + (left ? 'l' : 'r'); e.innerHTML = avatarHTML(b.t, 46) + '<span class="mono">' + fmtNum(Math.round(b.tok)) + '</span>'; fly.appendChild(e);
-    setTimeout(function () { BN.boost = performance.now(); var nw = document.getElementById('bn-now'); if (nw) { nw.innerHTML = '🔥 <b>$' + esc(b.t.tick) + '</b> ' + fmtNum(Math.round(b.tok)) + ' tokens · <span style="color:' + BSRC[b.src][1] + '">' + BSRC[b.src][0] + '</span> · <span class="bn-usd">$' + fmtNum(Math.round(b.usd)) + '</span>'; nw.classList.remove('go'); void nw.offsetWidth; nw.classList.add('go'); } }, 1150);
-    setTimeout(function () { e.remove(); }, 1400);
+    var fly = document.getElementById('bn-fly'), log = burnLog(); if (!fly || !log.length) return;
+    BN.side = BN.side === 'l' ? 'r' : 'l'; var sd = BN.side, ot = document.querySelector('#bh-f' + (sd === 'l' ? 'r' : 'l') + ' .bh-tk'), pool = log.slice(0, 24).filter(function (x) { return !ot || '$' + x.t.tick !== ot.textContent; }), b = pick(pool.length ? pool : log), f = bnFeed(sd, b); if (!f) return;
+    var fr = fly.getBoundingClientRect(), ar = f.querySelector('.bh-ring').getBoundingClientRect();
+    var x0 = ar.left + ar.width / 2 - fr.left, y0 = ar.top + ar.height / 2 - fr.top, x1 = fr.width / 2, y1 = fr.height * .74;
+    f.classList.remove('grab'); void f.offsetWidth; f.classList.add('grab');
+    var n = Math.max(6, Math.min(16, Math.round(5 + b.pct * 3))), H = fr.height * (.36 + Math.random() * .1);
+    setTimeout(function () {
+      var bar = f.querySelector('.bh-sup i'); bar.style.transition = 'width 1.1s cubic-bezier(.3,0,.2,1)'; bar.style.width = f._left + '%';
+      var lf = f.querySelector('.bh-left'), s0 = f._left + b.pct, t0 = performance.now(); (function st(nw) { var k = Math.min(1, (nw - t0) / 1100); lf.textContent = (s0 - b.pct * k).toFixed(2) + '% supply'; if (k < 1) requestAnimationFrame(st); })(t0);
+      for (var i = 0; i < n; i++) (function (i) {
+        var c = document.createElement('span'); c.className = 'bh-chip'; c.innerHTML = avatarHTML(b.t, 22); fly.appendChild(c);
+        var jx = (Math.random() - .5) * 40, jh = H * (.8 + Math.random() * .4), spin = (Math.random() < .5 ? -1 : 1) * (360 + Math.random() * 540), kf = [];
+        for (var q = 0; q <= 14; q++) { var t = q / 14, x = x0 + (x1 + jx * t - x0) * t, y = y0 + (y1 - y0) * t - jh * 4 * t * (1 - t); kf.push({ transform: 'translate(' + x.toFixed(1) + 'px,' + y.toFixed(1) + 'px) rotate(' + (spin * t).toFixed(0) + 'deg) scale(' + (t < .1 ? .4 + t * 6 : 1 - Math.max(0, t - .75) * 2).toFixed(2) + ')', opacity: t > .92 ? 0 : 1 }); }
+        var an = c.animate(kf, { duration: 820 + Math.random() * 160, delay: i * 55, easing: 'cubic-bezier(.35,.1,.6,1)', fill: 'both' });
+        an.onfinish = function () { c.remove(); BN.boost = performance.now() - (i === n - 1 ? 0 : 500); if (i === n - 1) bnImpact(b, x1, y1); };
+      })(i);
+    }, 260);
+  }
+  function bnImpact(b, x, y) {
+    var fly = document.getElementById('bn-fly'); if (!fly) return; BN.boost = performance.now(); BN.big = performance.now();
+    var w = document.createElement('span'); w.className = 'bh-wave'; w.style.left = x + 'px'; w.style.top = y + 'px'; fly.appendChild(w); setTimeout(function () { w.remove(); }, 900);
+    var p = document.createElement('span'); p.className = 'bh-pop'; p.style.left = x + 'px'; p.style.top = (y - 150) + 'px'; p.innerHTML = '🔥 −' + fmtNum(Math.round(b.tok)) + ' <em>$' + esc(b.t.tick) + '</em>'; fly.appendChild(p); setTimeout(function () { p.remove(); }, 1800);
+    bnCount(b.tok);
+    var nw = document.getElementById('bn-now'); if (nw) { nw.innerHTML = '<b>$' + esc(b.t.tick) + '</b> burned ' + b.pct.toFixed(2) + '% supply · <span style="color:' + BSRC[b.src][1] + '">' + BSRC[b.src][0] + '</span> · <span class="bn-usd">$' + fmtNum(Math.round(b.usd)) + '</span>'; nw.classList.remove('go'); void nw.offsetWidth; nw.classList.add('go'); }
+    var fire = document.getElementById('bn-fire'); if (fire) { fire.classList.remove('shake'); void fire.offsetWidth; fire.classList.add('shake'); }
   }
   function bnKick() { if (!BN.raf && document.getElementById('bn-fire')) BN.raf = requestAnimationFrame(bnLoop); }
   S.tcat = 'all';
@@ -2709,7 +2749,12 @@
     ['Graduate', 'At ~$69K the curve fills, liquidity moves to Raydium and milestone badges start.'],
     ['Tax flywheel', 'Every trade’s tax splits three ways: creator, holders and burn. More trading, more rewards.']
   ];
-  var FW = { raf: 0, el: null, coins: [], last: 0, lt: 0, paused: false, hi: -1, jars: [0, 0, 0], spawn: 0 };
+  var FW = { raf: 0, el: null, coins: [], last: 0, lt: 0, paused: false, hi: -1, jars: [0, 0, 0], spawn: 0, cnt: [1240, 386, 0, [52, 171], 214, 0] };
+  var FST = [['Launch', 'mint + set tax', '#F5D9A8'], ['Sniper trap', 'bots pay 80%', '#FF5E6C'], ['Bonding curve', 'buys push price up', '#3DDC97'], ['Risk scan', 'flags, never deletes', '#FFB15C'], ['Graduate', '$69K → Raydium', '#F5D9A8'], ['Tax split', 'creator · holders · burn', '#7FB6FF']];
+  function fxRead(k) {
+    var c = FW.cnt, v = k === 0 ? '<b>' + fmtNum(c[0]) + '</b> coins minted' : k === 1 ? '<b>' + fmtNum(c[1]) + '</b> bots taxed' : k === 2 ? '<b>+' + c[2].toFixed(1) + ' SOL</b> bought' : k === 3 ? '<b class="r">⚠ ' + c[3][0] + '</b> · <b class="g">✓ ' + c[3][1] + '</b>' : k === 4 ? '<b>🎓 ' + c[4] + '</b> graduated' : '<b>$' + fmtNum(Math.round(c[5])) + '</b> paid out';
+    var e = document.querySelector('[data-fread="' + k + '"]'); if (e) e.innerHTML = v; return v;
+  }
   var FSX = [8.3, 25, 41.7, 58.3, 75, 91.7]; // station centres, % of belt
   var FICO = [
     '<svg viewBox="0 0 24 24"><path d="M12 3v10M7 8l5 5 5-5M4 21h16"/></svg>',
@@ -2720,11 +2765,13 @@
     '<svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9"/><path d="M21 3l-9 9M15 3h6v6"/></svg>'
   ];
   function machineSection() {
-    var st = STS.map(function (x, k) { return '<div class="fx-st fx-s' + k + '" data-fst="' + k + '" style="left:calc(2% + ' + (FSX[k] * .96).toFixed(2) + '%)"><div class="fx-house"><span class="fx-ico">' + FICO[k] + '</span><b class="mono">0' + (k + 1) + '</b>' +
-      (k === 0 ? '<span class="fx-press"></span>' : k === 1 ? '<span class="fx-gauge"><i></i></span>' : k === 3 ? '<span class="fx-laser"></span>' : k === 4 ? '<span class="fx-portal"></span>' : '') + '</div><span class="fx-leg"></span></div>'; }).join('');
+    FW.cnt[2] = FW.cnt[2] || 1840.5; FW.cnt[5] = FW.cnt[5] || 58210;
+    var st = FST.map(function (x, k) { return '<div class="fx-st fx-s' + k + '" data-fst="' + k + '" style="--sc:' + x[2] + ';left:calc(2% + ' + (FSX[k] * .96).toFixed(2) + '%)"><div class="fx-house"><div class="fx-hd"><span class="fx-ico">' + FICO[k] + '</span><span class="fx-n mono">0' + (k + 1) + '</span></div><b class="fx-t">' + x[0] + '</b><small class="fx-sub">' + x[1] + '</small>' +
+      (k === 1 ? '<span class="fx-gauge"><i></i><em class="mono">80% → 2%</em></span>' : '<span class="fx-read mono" data-fread="' + k + '">' + fxRead(k) + '</span>') +
+      (k === 0 ? '<span class="fx-press"></span>' : k === 3 ? '<span class="fx-laser"></span>' : k === 4 ? '<span class="fx-portal"></span>' : '') + '</div><span class="fx-leg"></span></div>'; }).join('');
     var cap = STS.map(function (x, k) { return '<button class="fx-cap" data-act="fwGo" data-arg="' + k + '" data-fcap="' + k + '"><span class="mono">0' + (k + 1) + '</span><b>' + x[0] + '</b><small>' + x[1] + '</small>' +
       (k === 5 ? '<span class="fx-jars">' + [['Creator', '#F5D9A8'], ['Holders', '#7FB6FF'], ['Burn', '#FF8A5B']].map(function (j, q) { return '<span class="fx-jar" style="--c:' + j[1] + '"><i data-jar="' + q + '"></i><em>' + j[0] + '</em></span>'; }).join('') + '</span>' : '') + '</button>'; }).join('');
-    return '<section class="story card-s fx" id="machine"><div class="st2-head"><div><span class="kicker">HOW IT WORKS</span><h2 class="title-xl lab-title">The treid factory</h2></div><span class="muted st2-hint">every coin rides the same line · hover to pause</span></div>' +
+    return '<section class="story card-s fx" id="machine"><div class="st2-head"><div><span class="kicker">HOW IT WORKS</span><h2 class="title-xl lab-title">The treid factory</h2></div><span class="muted st2-hint">watch a coin go from launch to tax payouts</span></div>' +
       '<div class="fx-scroll"><div class="fx-floor" id="fw-wheel"><div class="fx-belt"><span class="fx-tread"></span><span class="fx-roll l"></span><span class="fx-roll r"></span></div><div class="fx-coins" id="fx-coins"></div>' + st + '</div>' +
       '<div class="fx-caps">' + cap + '</div></div></section>';
   }
@@ -2738,6 +2785,7 @@
   function fxHit(k) { var e = document.querySelector('[data-fst="' + k + '"]'); if (!e) return; e.classList.remove('hit'); void e.offsetWidth; e.classList.add('hit'); var cp = document.querySelector('[data-fcap="' + k + '"]'); if (cp) { cp.classList.remove('hit'); void cp.offsetWidth; cp.classList.add('hit'); } }
   function fxStage(c, k) {
     c.st = k; var el = c.el; el.classList.add('s' + k); fxHit(k);
+    var C = FW.cnt; if (k === 0) C[0]++; if (k === 1) C[1] += 1 + Math.floor(Math.random() * 3); if (k === 2) C[2] += 2 + Math.random() * 9; if (k === 3) C[3][c.risky ? 0 : 1]++; if (k === 4) C[4]++; if (k === 5) C[5] += 40 + Math.random() * 400; if (k !== 1) fxRead(k);
     if (k === 0) fxPop(c, 'minted', 'g');
     if (k === 1) { fxPop(c, '🤖 sniper −80%', 'r'); setTimeout(function () { if (el.isConnected) fxPop(c, '🙂 you −' + (Math.max(c.t.buy, c.t.sell) || 2) + '%', 'g'); }, 380); }
     if (k === 3) { var f = el.querySelector('.fxc-flag'); f.textContent = c.risky ? '⚠' : '✓'; f.className = 'fxc-flag ' + (c.risky ? 'r' : 'g'); fxPop(c, c.risky ? 'flagged · still tradable' : 'clean', c.risky ? 'r' : 'g'); }
@@ -2747,7 +2795,7 @@
   function fwCenter(k) { FW.hi = k; document.querySelectorAll('[data-fcap]').forEach(function (e) { e.classList.toggle('on', +e.getAttribute('data-fcap') === k); }); document.querySelectorAll('[data-fst]').forEach(function (e) { e.classList.toggle('on', +e.getAttribute('data-fst') === k); }); }
   function fwLoop(now) {
     var w = document.getElementById('fw-wheel'); if (!w) { FW.raf = 0; FW.el = null; FW.coins = []; return; }
-    if (FW.el !== w) { FW.el = w; FW.coins = []; FW.lt = now; FW.spawn = 0; var sec = w.closest('.fx'); sec.onmouseenter = function () { FW.paused = true; sec.classList.add('paused'); }; sec.onmouseleave = function () { FW.paused = false; sec.classList.remove('paused'); fwCenter(-1); };
+    if (FW.el !== w) { FW.el = w; FW.coins = []; FW.lt = now; FW.spawn = 0; 
       for (var i = 0; i < 5; i++) { fxSpawn(); var c0 = FW.coins[FW.coins.length - 1]; c0.x = 88 - i * 21; for (var k = 0; k < 6; k++) if (c0.x > FSX[k]) { c0.st = k; c0.el.classList.add('s' + k); if (k === 3) { var f0 = c0.el.querySelector('.fxc-flag'); f0.textContent = c0.risky ? '⚠' : '✓'; f0.className = 'fxc-flag ' + (c0.risky ? 'r' : 'g'); } } } }
     var dt = Math.min(64, now - FW.lt); FW.lt = now;
     if (!FW.paused) {
