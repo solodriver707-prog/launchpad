@@ -3238,3 +3238,8 @@ button.dh2-row{cursor:pointer;border-radius:10px}button.dh2-row:hover{background
 .cmark.dev.b{box-shadow:0 0 0 2px #3DDC97,0 0 0 4px rgba(255,209,92,.6),0 3px 8px rgba(0,0,0,.6)}
 .cmark.dev.s{box-shadow:0 0 0 2px #F2708A,0 0 0 4px rgba(255,209,92,.6),0 0 14px rgba(242,112,138,.6)}
 .cmark.dev.s .cm-d{background:#F2708A;color:#fff}.cmark.dev.b .cm-d{background:#3DDC97}
+.bubble .bm{display:flex;align-items:center;gap:4px;font:700 10.5px var(--mono);color:#fff;padding:1px 6px;border-radius:99px;background:rgba(0,0,0,.45);white-space:nowrap;margin-top:1px;line-height:1.4}
+.bubble .bm i{font-style:normal;opacity:.5}
+.bubble .bm span{color:var(--soft);font-weight:600}
+.bubble .bm.sm{font-size:8.5px;padding:0 4px;gap:2px}
+.bubble .bm.sm i,.bubble .bm.sm span{display:none}.bubble .bm.sm{font-size:9px}
