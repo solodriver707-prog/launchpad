@@ -3945,3 +3945,17 @@ button.dh2-row{cursor:pointer;border-radius:10px}button.dh2-row:hover{background
 .c-auto:hover{color:#fff}
 .c-auto{bottom:0;right:6px}
 .coin.meme{overflow:hidden;border-radius:50%;background:none;flex:none;display:inline-grid;place-items:center}.coin.meme>.av,.coin.meme>img,.coin.meme>svg{width:100%!important;height:100%!important;max-width:none}
+/* callouts: coin / all live tabs */
+.tt-h{align-items:center;justify-content:space-between}
+.tt-tabs{display:flex;gap:2px;padding:3px;border-radius:10px;background:rgba(255,255,255,.04);border:1px solid var(--line)}
+.tt-tabs button{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:7px;border:0;background:none;color:var(--muted);font:700 12px Manrope,sans-serif;cursor:pointer;white-space:nowrap}
+.tt-tabs button .mono{font-size:10.5px;opacity:.7}
+.tt-tabs button.on{background:var(--ivory,#F2EDE4);color:#0b0b0c}
+.tt-dot{width:6px;height:6px;border-radius:50%;background:#3DDC97;box-shadow:0 0 0 3px rgba(61,220,151,.18);animation:ttDot 1.6s ease-in-out infinite}
+@keyframes ttDot{50%{box-shadow:0 0 0 6px rgba(61,220,151,0)}}
+.tt-wrap{position:relative;flex:1;min-height:0;display:flex;flex-direction:column}
+.tt-new{position:absolute;left:50%;top:10px;transform:translateX(-50%);z-index:5;padding:6px 14px;border-radius:99px;border:0;background:#3DDC97;color:#04140c;font:800 12px Manrope,sans-serif;box-shadow:0 8px 20px -6px rgba(61,220,151,.7);cursor:pointer;animation:ttIn .3s cubic-bezier(.2,1.6,.4,1)}
+@keyframes ttIn{from{transform:translate(-50%,-8px) scale(.8);opacity:0}}
+.co-coin{display:inline-flex;align-items:center;gap:6px;margin:2px 0 6px;padding:3px 9px 3px 3px;border-radius:99px;border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--text);font:700 12px Manrope,sans-serif;cursor:pointer}
+.co-coin .av{border-radius:50%}.co-coin span{font-size:10.5px;color:var(--muted)}
+.co-coin:hover{border-color:rgba(241,221,176,.35)}

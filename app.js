@@ -1743,7 +1743,7 @@
     S.comments[t.tick] = out; return out;
   }
   // ===== CALLOUTS (pump.fun-style, upgraded) =====
-  S.follow = {}; S.muted = {}; S.coMenu = null; S.coExp = {}; S.coPaused = false; S.coF = 'all'; S.coOpen = false; S.coQueue = 0;
+  S.follow = {}; S.muted = {}; S.coMenu = null; S.coExp = {}; S.coPaused = false; S.coF = 'all'; S.coOpen = false; S.coQueue = 0; S.ttab = 'coin'; try { S.ttab = localStorage.getItem('dl.ttab') || 'coin'; } catch (e) {}
   try { S.follow = JSON.parse(localStorage.getItem('dl.follow') || '{}'); } catch (e) {}
   var CO_LONG = ['Been watching this since launch — dev is active, chart keeps making higher lows and the tax is clearly shown. Holding a small bag and adding on dips, not financial advice.', 'Paired with gold is such a clean narrative. If this keeps holding the curve it is going to graduate today, then it is a different game on Raydium.', 'Not gonna lie I aped on the mascot alone. Then checked holders: no snipers, no bundles, dev under 3%. That is rare these days.'];
   function coMeta(c, t) { if (c.pos == null) { var r = rng(hash(t.tick + c.id + 'co')), me = S.account && c.w === S.account; c.pos = me ? Math.round((position(t) || { val: 0 }).val * SOL_USD) : Math.round(8 + r() * r() * 900); c.mc0 = t.mcN * (0.55 + r() * 0.8); c.views = Math.floor(20 + r() * 900); c.rt = Math.floor(r() * 6); if (r() < .18) c.text = CO_LONG[Math.floor(r() * CO_LONG.length)]; } }
@@ -1755,6 +1755,7 @@
     return '<article class="co' + (enter ? ' enter' : '') + (opts.child ? ' child' : '') + '" data-co="' + esc(key) + '"><div class="co-h"><button class="co-u" data-act="walletAny" data-arg="' + esc(c.w) + '"><span class="av" style="width:30px;height:30px">' + A.svg(walletSpec(c.w)) + '</span><b>' + esc(coName(c.w)) + '</b></button>' + (dev ? '<span class="bdg dev">DEV</span>' : '') + (c.pos > 0 && !opts.child && pnl > c.pos * .5 ? '<span class="bdg win">🔥 +' + Math.round(pnl / c.pos * 100) + '%</span>' : '') + '<span class="muted mono co-time" data-t="' + c.t + '">' + ago(c.t) + '</span>' +
       (me ? '' : '<button class="co-ic co-fol' + (fol ? ' on' : '') + '" data-act="coFollow" data-arg="' + esc(c.w) + '" title="' + (fol ? 'Following' : 'Follow') + '">' + (fol ? '✓' : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="4"/><path d="M2 21c0-4 3-6 7-6s7 2 7 6M19 8v6M16 11h6"/></svg>') + '</button>') +
       '<span class="co-mw"><button class="co-ic" data-act="coMenu" data-arg="' + esc(key) + '" title="More">⋯</button>' + (S.coMenu === key ? '<span class="co-menu"><button data-act="coCopy" data-arg="' + esc(key) + '">Copy text</button><button data-act="coShare" data-arg="' + esc(key) + '">Copy link</button>' + (me ? '' : '<button data-act="coMute" data-arg="' + esc(c.w) + '">Mute ' + esc(coName(c.w)) + '</button><button data-act="coReport" data-arg="' + esc(key) + '">Report</button>') + '</span>' : '') + '</span></div>' +
+      (opts.coinTag && !(c.pos > 0) ? '<button class="co-coin" data-act="open" data-arg="' + esc(t.tick) + '">' + avatarHTML(t, 18) + '<b>$' + esc(t.tick) + '</b><span class="mono">' + fmtK(t.mcN) + '</span></button>' : '') +
       '<div class="co-t' + (long ? ' clamp' : '') + '">' + esc(c.text) + '</div>' + (long ? '<button class="co-more" data-act="coExpand" data-arg="' + esc(key) + '">Show more</button>' : '') +
       (c.pos > 0 && !opts.child ? '<button class="co-pos" data-act="open" data-arg="' + esc(t.tick) + '" title="Open $' + esc(t.tick) + '">' + avatarHTML(t, 26) + '<span class="co-pn"><b>' + esc(t.tick) + '</b><small>' + esc(t.name) + '</small></span><span class="co-pv"><small>Position</small><b class="mono">$' + fmtNum(c.pos) + '</b></span><span class="co-pv"><small>PnL</small><b class="mono ' + (up ? 'up' : 'down') + '">' + (up ? '+' : '−') + '$' + Math.abs(pnl).toFixed(2) + '</b></span><span class="co-go">›</span></button>' : '') +
       '<div class="co-a"><button data-act="coShare" data-arg="' + esc(key) + '" title="Share"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8h16v-8M12 3v13M7 8l5-5 5 5"/></svg></button>' +
@@ -1778,6 +1779,10 @@
     if (S.coF === 'hold') out = out.filter(function (x) { return position(x.t); });
     return out.sort(function (a, b) { return b.c.t - a.c.t; }).slice(0, 40);
   }
+  function allLiveHTML() {
+    var out = []; all().forEach(function (t) { seedComments(t).forEach(function (c) { if (c.reply == null && !S.muted[c.w]) out.push({ c: c, t: t }); }); });
+    return out.sort(function (a, b) { return b.c.t - a.c.t; }).slice(0, 40).map(function (x) { return commentHTML(x.c, x.t, false, { coinTag: true }); }).join('');
+  }
   function calloutDrawer() {
     if (!S.coOpen) return '';
     var list = globalCallouts();
@@ -1790,7 +1795,10 @@
     var cm = seedComments(t), w = WALLETS[Math.floor(Math.random() * WALLETS.length)];
     var c = { id: cm.length, w: w.a, text: pick(CMT), t: Date.now(), likes: 0, liked: false, reply: Math.random() < 0.25 && cm.length ? cm[Math.floor(Math.random() * cm.length)].id : null };
     cm.push(c); coMeta(c, t);
-    var tb2 = document.getElementById('cmts'); if (tb2 && S.screen === 'token' && S.tick === t.tick && c.reply == null) tb2.insertAdjacentHTML('afterbegin', commentHTML(c, t, true));
+    var tb2 = document.getElementById('cmts'); if (tb2 && S.screen === 'token' && c.reply == null && (S.ttab === 'all' || S.tick === t.tick)) {
+      var h0 = tb2.scrollHeight, away = tb2.scrollTop > 60; tb2.insertAdjacentHTML('afterbegin', commentHTML(c, t, !away, { coinTag: S.ttab === 'all' }));
+      if (away) { tb2.scrollTop += tb2.scrollHeight - h0; var np = document.getElementById('tt-new'); if (np) { np._n = (np._n || 0) + 1; np.textContent = '↑ ' + np._n + ' new'; np.style.display = ''; } }
+      while (tb2.children.length > 60) tb2.removeChild(tb2.lastChild); }
     var dl = document.getElementById('cd-list');
     if (dl && c.pos > 0 && c.reply == null && S.coF === 'all') { if (S.coPaused || dl.matches(':hover')) { S.coQueue++; var pb = document.querySelector('.cd-pause'); if (pb && S.coPaused) pb.textContent = '▶ Resume · ' + S.coQueue + ' new'; } else { dl.insertAdjacentHTML('afterbegin', commentHTML(c, t, true)); while (dl.children.length > 40) dl.removeChild(dl.lastChild); } }
     var nb = document.getElementById('co-new'); if (nb && !S.coOpen) { nb.textContent = (+nb.textContent || 0) + 1; nb.style.display = ''; }
@@ -2025,10 +2033,11 @@
     if (S.tpTab === 'thread') S.tpTab = 'trades';
     var tabs = [['trades', 'Trades'], ['holders', 'Holders'], ['top', 'Top traders']];
     var cmAll = seedComments(t);
-    var thread = '<aside class="tp-thread card-s"><div class="tt-h"><b>Callouts</b><span class="mono">' + cmAll.length + '</span><small class="muted">what holders are saying</small></div>' +
+    var ttAll = S.ttab === 'all';
+    var thread = '<aside class="tp-thread card-s"><div class="tt-h"><b>Callouts</b><div class="tt-tabs"><button class="' + (ttAll ? '' : 'on') + '" data-act="ttab" data-arg="coin">$' + id + ' <span class="mono">' + cmAll.length + '</span></button><button class="' + (ttAll ? 'on' : '') + '" data-act="ttab" data-arg="all"><i class="tt-dot"></i>All live</button></div></div>' +
       '<div class="composer">' + (S.account ? '<textarea id="cmt-in" class="inp" data-bind="cmtDraft" placeholder="' + (S.replyTo != null ? 'Replying to #' + (1000 + S.replyTo) + '…' : 'Call it: what\'s your take on $' + id + '?') + '" maxlength="280">' + esc(S.cmtDraft || '') + '</textarea><button class="btn pri" data-act="post">Post</button>' :
         '<span class="muted">Connect a wallet to post a callout.</span><button class="btn sec" data-act="openWallet">Connect</button>') + '</div>' +
-      '<div id="cmts" class="tt-list">' + threadHTML(t, cmAll) + '</div></aside>';
+      '<div class="tt-wrap"><button class="tt-new" id="tt-new" data-act="ttNew" style="display:none"></button><div id="cmts" class="tt-list' + (ttAll ? ' all' : '') + '">' + (ttAll ? allLiveHTML() : threadHTML(t, cmAll)) + '</div></div></aside>';
     var body = '';
     if (S.tpTab === 'trades') {
       var rows = tt.filter(tradeMatches).slice(0, 40);
@@ -2552,6 +2561,8 @@
       case 'ctype': set({ ctype: arg }); break;
       case 'ctog': S[arg] = !S[arg]; render(); break;
       case 'cfull': set({ cfull: !S.cfull }); break;
+      case 'ttab': S.ttab = arg; try { localStorage.setItem('dl.ttab', arg); } catch (e) {} render(); break;
+      case 'ttNew': var tl = document.getElementById('cmts'); if (tl) tl.scrollTo({ top: 0, behavior: 'smooth' }); var npb = document.getElementById('tt-new'); if (npb) { npb._n = 0; npb.style.display = 'none'; } break;
       case 'cauto': S.cys = 1; S.cyo = 0; chartRedraw(); break;
       case 'cnow': S.cpan = 0; S.cys = 1; S.cyo = 0; chartRedraw(); break;
       case 'czoom': S.czoom = arg === 'reset' ? 70 : Math.max(12, Math.min(240, Math.round(S.czoom * (arg === 'in' ? .7 : 1.4)))); if (arg === 'reset') { S.cpan = 0; S.cys = 1; S.cyo = 0; } chartRedraw(); var zl = document.querySelector('.czoom .mono'); if (zl) zl.textContent = S.czoom; break;
@@ -2702,6 +2713,7 @@
   });
 
   document.addEventListener('click', function (e) { var b = e.target.closest && e.target.closest('.tc-ca'); if (!b) return; b.classList.add('ok'); var h = b.innerHTML; b.innerHTML = 'Copied ✓'; setTimeout(function () { if (b.isConnected) { b.innerHTML = h; b.classList.remove('ok'); } }, 1200); }, true);
+  document.addEventListener('scroll', function (e) { if (e.target && e.target.id === 'cmts' && e.target.scrollTop < 20) { var np = document.getElementById('tt-new'); if (np && np._n) { np._n = 0; np.style.display = 'none'; } } }, true);
   document.addEventListener('input', function (e) {
     var spk = e.target.getAttribute && e.target.getAttribute('data-split');
     if (spk && S.c.split) { var sp = S.c.split, v = Math.min(spk === 'd' ? 50 : 100, +e.target.value); if (+e.target.value !== v) e.target.value = v; var others = ['h', 'b', 'd'].filter(function (k) { return k !== spk; }), rest = 100 - v;
