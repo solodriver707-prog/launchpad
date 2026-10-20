@@ -1028,11 +1028,11 @@
   function chgOver(t, mins) { var h = t.hist, n = h.length; var life = Math.max(1, (Date.now() - t.born) / 60000), span = Math.min(life, 1440); var k = Math.max(1, Math.round(n * Math.min(1, mins / span))); var ref = h[Math.max(0, n - 1 - k)]; return (t.mcN / ref - 1) * 100; }
   function lstats(t) { if (!t._ls || Date.now() - t._lsT > 4000) { var r = rng(hash(t.tick + 'ls')), v = t.vol * 1000; t._ls = { tx: Math.max(3, Math.round(v / (60 + r() * 140))), tr: 0 }; t._ls.tr = Math.max(1, Math.round(t._ls.tx * (.18 + r() * .25))); t._lsT = Date.now(); } return t._ls; }
   var LCOLS = [['rank', '#', ''], ['tok', 'Token', ''], ['tax', 'Tax', 'r'], ['mc', 'MCap', 'r'], ['price', 'Price', 'r'], ['age', 'Age', 'r'], ['tx', 'Txns', 'r hd1'], ['vol', 'Volume', 'r'], ['tr', 'Traders', 'r hd1'], ['c5', '5m', 'r hd2'], ['c1', '1h', 'r hd2'], ['c6', '6h', 'r hd1'], ['c24', '24h', 'r'], ['liq', 'Liquidity', 'r hd1'], ['curve', 'Curve', 'hd2']];
-  function listHTML(list) {
+  function listHTML(list, keep) {
     var key = { rank: function (t) { return chgOver(t, 360) * Math.log10(t.vol * 1000 + 10); }, tax: function (t) { return Math.max(t.buy, t.sell); }, mc: function (t) { return t.mcN; }, price: function (t) { return t.mcN; }, age: function (t) { return t.born; }, near: function (t) { return t.prog < 100 ? t.prog : -1; }, tx: function (t) { return lstats(t).tx; }, vol: function (t) { return t.vol; }, tr: function (t) { return lstats(t).tr; }, c5: function (t) { return chgOver(t, 5); }, c1: function (t) { return chgOver(t, 60); }, c6: function (t) { return chgOver(t, 360); }, c24: function (t) { return chg(t); }, liq: function (t) { return t.prog; }, curve: function (t) { return t.prog; } };
-    var k = key[S.lsort] || key.rank, rows = list.slice().sort(function (a, b) { return (k(b) - k(a)) * (S.ldir === -1 ? 1 : -1); }).slice(0, 100);
+    var k = key[S.lsort] || key.rank, rows = keep ? list.slice(0, 100) : list.slice().sort(function (a, b) { return (k(b) - k(a)) * (S.ldir === -1 ? 1 : -1); }).slice(0, 100);
     var pc = function (v) { return '<span class="' + (v >= 0 ? 'up' : 'down') + '">' + (Math.abs(v) >= 1000 ? (v >= 0 ? '+' : '') + Math.round(v).toLocaleString('en') + '%' : chgTxt(v)) + '</span>'; };
-    var head = '<div class="lrow2 lhead">' + LCOLS.map(function (c) { return '<button class="' + c[2] + (S.lsort === c[0] ? ' on' : '') + '" data-act="lsort" data-arg="' + c[0] + '">' + c[1] + (S.lsort === c[0] ? (S.ldir === -1 ? ' ↓' : ' ↑') : '') + '</button>'; }).join('') + '</div>';
+    var head = '<div class="lrow2 lhead">' + LCOLS.map(function (c) { return keep ? '<span class="' + c[2] + '">' + c[1] + '</span>' : '<button class="' + c[2] + (S.lsort === c[0] ? ' on' : '') + '" data-act="lsort" data-arg="' + c[0] + '">' + c[1] + (S.lsort === c[0] ? (S.ldir === -1 ? ' ↓' : ' ↑') : '') + '</button>'; }).join('') + '</div>';
     var body = rows.map(function (t, i) { var ls = lstats(t), tm = Math.max(t.buy, t.sell), rk = riskMetrics(t).some(function (m) { return m.lv === 'r'; }), liq = (t.prog / 100 * 85 * SOL_USD / 1000);
       return '<div class="lrow2" data-act="open" data-arg="' + esc(t.tick) + '"><span class="lr-n mono">#' + (i + 1) + '</span>' +
         '<span class="lr-tok">' + avatarHTML(t, 28) + '<span class="lt-n"><b>' + esc(t.tick) + '</b><small>/ ' + esc(pairLabel(t.pair).replace('$', '')) + '</small><em>' + esc(t.name) + '</em>' + (rk ? '<i class="lt-flag" title="Risk flag">⚠</i>' : '') + (trapLeft(t) > 0 ? '<i class="lt-trap">🪤</i>' : '') + '</span></span>' +
@@ -1471,6 +1471,7 @@
   }
   function refreshGrid() {
     var list = filtered(), g = document.getElementById('grid'), cnt = document.getElementById('count');
+    if (S.view === 'list' && S.screen === 'home') { var lt = document.querySelector('.ltable'); if (lt) lt.outerHTML = listHTML(list, true); }
     if (cnt) cnt.textContent = list.length + ' of ' + all().length + ' tokens';
     var ca = document.getElementById('rpc-all'); if (ca) ca.textContent = list.length + ' coins match';
     ['mc', 'age', 'prog', 'tax'].forEach(function (k) {
@@ -1481,7 +1482,7 @@
       var ir = e && e.closest('.irange'); if (ir) ir.classList.toggle('on', l !== 'Any');
     });
     if (S.view === 'orbit') raceRefresh();
-    if (g && S.view !== 'bubbles') g.innerHTML = list.length ? list.map(function (t) { return card(t); }).join('') : '<div class="empty"><b style="font-size:19px">No coins in this range</b><span class="muted">Widen a slider or hit Reset.</span><button class="btn pri" data-act="reset">Reset filters</button></div>';
+    if (g && S.view !== 'bubbles' && S.view !== 'list') g.innerHTML = list.length ? list.map(function (t) { return card(t); }).join('') : '<div class="empty"><b style="font-size:19px">No coins in this range</b><span class="muted">Widen a slider or hit Reset.</span><button class="btn pri" data-act="reset">Reset filters</button></div>';
   }
   var SLOGANS = ['The market', 'is yours.'];
   var KIN = [['GOLD', 'gold'], ['$NFROG', 'frogs'], ['TSLAx', 'tesla'], ['SOL', 'solana'], ['$CHAD', 'chads'], ['EUR', 'euros'], ['BTC', 'bitcoin'], ['', 'anything.']];
@@ -1533,13 +1534,12 @@
     var list = filtered();
     var toolbar = '<div class="toolbar"><h2 class="h2">Tokens</h2><span class="demo" data-tip="Market data is simulated until on-chain launch goes live.">DEMO DATA</span><button class="demo-img-btn" data-act="demoImgs">🖼 Try real images</button><div class="seg">' + SORTS.map(function (s) {
       return '<button class="' + (S.sort === s[0] ? 'on' : '') + '" aria-pressed="' + (S.sort === s[0]) + '" data-act="sort" data-arg="' + s[0] + '">' + s[1] + '</button>';
-    }).join('') + '</div><div class="seg" role="group" aria-label="View"><button class="' + (S.view === 'grid' ? 'on' : '') + '" data-act="view" data-arg="grid">Grid</button><button class="' + (S.view === 'bubbles' ? 'on' : '') + '" data-act="view" data-arg="bubbles">Bubbles</button><button class="' + (S.view === 'orbit' ? 'on' : '') + '" data-act="view" data-arg="orbit">Orbit</button></div><span class="mono muted" style="margin-left:auto;font-size:12.5px" id="count">' + list.length + ' of ' + all().length + ' tokens</span></div>' +
+    }).join('') + '</div><div class="seg" role="group" aria-label="View"><button class="' + (S.view === 'grid' ? 'on' : '') + '" data-act="view" data-arg="grid">Grid</button><button class="' + (S.view === 'bubbles' ? 'on' : '') + '" data-act="view" data-arg="bubbles">Bubbles</button><button class="' + (S.view === 'orbit' ? 'on' : '') + '" data-act="view" data-arg="orbit">Orbit</button><button class="' + (S.view === 'list' ? 'on' : '') + '" data-act="view" data-arg="list">List</button></div><span class="mono muted" style="margin-left:auto;font-size:12.5px" id="count">' + list.length + ' of ' + all().length + ' tokens</span></div>' +
       '';
 
     var filters = filterBar();
 
-    if (S.view === 'list') S.view = 'grid';
-    var grid = (!S.loading && S.view === 'orbit') ? (function () { var a = list; return '<div class="orb-inline">' + orbitStage(a, a.filter(function (t) { return t.prog < 100; }), a.filter(function (t) { return t.prog >= 100; })) + '</div>'; })() : (!S.loading && S.view === 'bubbles') ? bubblesHTML(list) : '<section class="grid" id="grid">' + (S.loading ? [0, 1, 2, 3, 4, 5].map(skeletonCard).join('') : list.length ? list.map(function (t) { return card(t); }).join('') :
+    var grid = (!S.loading && S.view === 'list') ? listHTML(list, true) : (!S.loading && S.view === 'orbit') ? (function () { var a = list; return '<div class="orb-inline">' + orbitStage(a, a.filter(function (t) { return t.prog < 100; }), a.filter(function (t) { return t.prog >= 100; })) + '</div>'; })() : (!S.loading && S.view === 'bubbles') ? bubblesHTML(list) : '<section class="grid" id="grid">' + (S.loading ? [0, 1, 2, 3, 4, 5].map(skeletonCard).join('') : list.length ? list.map(function (t) { return card(t); }).join('') :
       '<div class="empty"><b style="font-size:19px">No tokens match these filters</b><span class="muted">Loosen the tax or market cap filters.</span><button class="btn pri" data-act="reset">Reset filters</button></div>') + '</section>';
 
     var how = '<section id="how" style="margin-top:56px"><h2 class="h2" style="margin-bottom:16px">How treid works</h2><div class="row">' +

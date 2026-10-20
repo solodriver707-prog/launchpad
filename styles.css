@@ -4033,3 +4033,4 @@ button.dh2-row{cursor:pointer;border-radius:10px}button.dh2-row:hover{background
 .st-row .st-v .down{order:3;text-align:right;white-space:nowrap}
 .st-row .st-v span{font-size:11px}.st-row .st-v b{font-size:12px}
 @media (max-width:760px){.st-row{grid-template-columns:auto 1fr auto;gap:8px}.st-h .st-tf{margin-left:auto}}
+.lhead>span{font:800 10.5px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);white-space:nowrap}.lhead>span.r{text-align:right}
