@@ -19,8 +19,8 @@
   function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
   var B58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
   function b58(n) { var s = ''; for (var i = 0; i < n; i++) s += B58[Math.floor(Math.random() * 58)]; return s; }
-  function fakeCA() { return b58(40) + 'dmnd'; }
-  function short(a) { return a ? a.slice(0, 4) + '…' + a.slice(-4) : ''; }
+  function fakeCA(suf) { suf = suf || 'treid'; return b58(44 - suf.length) + suf; }
+  function short(a) { return a ? a.slice(0, 4) + '…' + a.slice(/treid$/.test(a) ? -5 : -4) : ''; }
   function taxBg(t) { return t === 0 ? 'var(--up)' : t <= 3 ? 'var(--yellow)' : t <= 6 ? 'var(--orange)' : 'var(--pink)'; }
   function fmtK(k) { return k >= 1000 ? '$' + (k / 1000).toFixed(2) + 'M' : k >= 100 ? '$' + k.toFixed(0) + 'K' : '$' + k.toFixed(1) + 'K'; }
   var SUB = '₀₁₂₃₄₅₆₇₈₉';
@@ -160,7 +160,7 @@
   try { S.watch = JSON.parse(localStorage.getItem(LS.watch) || '[]'); } catch (e) {}
   try {
     var saved = JSON.parse(localStorage.getItem(LS.created) || '[]');
-    saved.forEach(function (t) { if (t && t.tick && t.spec) { t.hist = [t.mcN, t.mcN]; S.created.push(t); } });
+    saved.forEach(function (t) { if (t && t.tick && t.spec) { t.hist = [t.mcN, t.mcN]; if (t.ca && /dmnd$/.test(t.ca)) t.ca = t.ca.slice(0, 39) + 'treid'; S.created.push(t); } });
   } catch (e) {}
 
   function all() { return S.created.concat(S.launched, BASE); }
@@ -2183,6 +2183,21 @@
     var tok = sol * SOL_USD / (px0 * (1 + impact / 200)); tok = Math.min(tok, 8e8);
     return { sol: sol, tok: tok, pct: tok / 1e9 * 100 };
   }
+  // ===== CONTRACT ADDRESS ENDING: free ...treid or paid custom =====
+  var B58C = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+  function vanFee(n) { return n <= 0 ? 0 : n <= 4 ? 0.1 : n === 5 ? 0.5 : 2; }
+  function vanEta(n) { return n <= 4 ? 'instant' : n === 5 ? '~10 sec' : '~5 min · queued'; }
+  function vanPrev(c) { var v = c.van || {}, suf = v.mode === 'custom' && v.suf ? v.suf : 'treid', pre = (c.vanPre || (c.vanPre = b58(44))).slice(0, 44 - suf.length); return '<span class="mono">' + pre.slice(0, 6) + '<i>' + pre.slice(6, 14) + '…</i></span><b class="mono">' + esc(suf) + '</b>'; }
+  function vanityPicker(c) {
+    var v = c.van || (c.van = { mode: 'treid', suf: '' }), n = (v.suf || '').length, cus = v.mode === 'custom';
+    return '<div class="van"><div class="van-h"><b>Contract address</b><small>how your coin’s address ends</small></div>' +
+      '<div class="van-opts"><button class="van-o' + (cus ? '' : ' on') + '" data-act="vanMode" data-arg="treid"><span class="van-t">…<b>treid</b></span><span><b>treid ending</b><small>Instantly recognised as launched on treid</small></span><em class="van-free">FREE</em></button>' +
+      '<button class="van-o' + (cus ? ' on' : '') + '" data-act="vanMode" data-arg="custom"><span class="van-t">…<b>' + (cus && v.suf ? esc(v.suf) : 'GOAT') + '</b></span><span><b>Custom ending</b><small>Your own letters, 3–6 characters</small></span><em class="van-paid">from 0.1 SOL</em></button></div>' +
+      (cus ? '<div class="van-cfg"><label class="van-in"><span>…</span><input id="van-suf" data-van maxlength="6" value="' + esc(v.suf || '') + '" placeholder="GOAT" autocomplete="off" spellcheck="false"></label>' +
+        '<div class="van-tiers">' + [[3, '3–4 chars', 0.1, 'instant'], [5, '5 chars', 0.5, '~10 sec'], [6, '6 chars', 2, '~5 min']].map(function (x) { var on = n && (x[0] === 3 ? n <= 4 : n === x[0]); return '<span class="' + (on ? 'on' : '') + '"><b>' + x[1] + '</b><small class="mono">' + x[2] + ' SOL · ' + x[3] + '</small></span>'; }).join('') + '</div>' +
+        '<small class="van-err" id="van-err"></small></div>' : '') +
+      '<div class="van-prev"><small>Preview</small><div id="van-prev">' + vanPrev(c) + '</div>' + (cus && n >= 3 ? '<span class="van-fee mono" id="van-fee">+' + vanFee(n) + ' SOL · ' + vanEta(n) + '</span>' : cus ? '<span class="van-fee mono" id="van-fee">type at least 3 characters</span>' : '<span class="van-fee ok mono">free · instant</span>') + '</div></div>';
+  }
   function devBuyPicker(c) {
     var q = devQuote(String(c.devBuy || '').replace(',', '.')), lv = q.pct === 0 ? 'z' : q.pct < 3 ? 'g' : q.pct < 8 ? 'y' : 'r';
     var note = { z: 'No initial buy — you start with 0%. Fair launch.', g: 'Looks fair to buyers.', y: 'Buyers will notice your holding.', r: 'Big dev bag — buyers will see this as a risk.' }[lv];
@@ -2330,7 +2345,7 @@
           '<div class="field"><label for="c-desc" style="font-weight:700">Description</label><textarea id="c-desc" class="inp" data-bind="c.desc" placeholder="What is this token about?">' + esc(c.desc) + '</textarea></div>' +
           '<div class="fsec"><i>2</i>Market</div>' +
           pairPicker(c) +
-          taxPicker(c) + splitPicker(c) + devBuyPicker(c) +
+          taxPicker(c) + splitPicker(c) + devBuyPicker(c) + vanityPicker(c) +
           '<div class="fsec"><i>3</i>Community</div>' +
           '<div class="socrow"><span class="soc-l">Socials <small>optional · shown as buttons on your coin</small></span><div class="socgrid">' + socField(c, 'x', 'X', '', 'Paste X link') + socField(c, 'tg', 'Telegram', '', 'Paste Telegram link') + socField(c, 'web', 'Website', '', 'Paste website link') + '</div></div>' +
           '<button class="big-btn btn pri" data-act="launch">' + (S.account ? 'Launch token' : 'Connect wallet to launch') + '</button>' +
@@ -2596,6 +2611,7 @@
       case 'demoImgsReset': BASE.forEach(function (t) { if (DIMG[t.tick]) delete t.img; }); DIMG = {}; try { localStorage.removeItem('dl.demoimgs'); } catch (er) {} render(); break;
       case 'devbuy': setC({ devBuy: arg === '0' ? '' : arg }); break;
       case 'ctax': setC({ buy: +arg, sell: +arg }); break;
+      case 'vanMode': S.c.van = S.c.van || { mode: 'treid', suf: '' }; S.c.van.mode = arg; render(); setTimeout(function () { var vi = document.getElementById('van-suf'); if (vi) vi.focus(); }, 30); break;
       case 'spPre': var sp1 = S.c.split || {}; if (arg === 'custom') setC({ split: { p: 'custom', h: sp1.h || 70, b: sp1.b || 20, d: sp1.d || 10 } }); else { var pp = SPRE[arg]; setC({ split: { p: arg, h: pp[2], b: pp[3], d: pp[4] } }); } break;
       case 'snipeToggle': var sn0 = S.c.snipe || { on: false, start: 80, dur: 60 }; sn0.on = !sn0.on; setC({ snipe: sn0 }); break;
       case 'snipeStart': var sn1 = S.c.snipe; sn1.start = +arg; setC({ snipe: sn1 }); break;
@@ -2701,8 +2717,12 @@
         var dq2 = devQuote(String(c.devBuy || '').replace(',', '.'));
         if (dq2.sol > 0 && typeof S.balance === 'number' && dq2.sol > S.balance) { toast('Not enough devnet SOL for a ' + dq2.sol + ' SOL buy — balance ' + S.balance.toFixed(3)); break; }
         if (find(c.tick)) { toast('$' + c.tick + ' is already taken'); break; }
+        var vc = c.van && c.van.mode === 'custom', vs = vc ? (c.van.suf || '') : 'treid', vf = vc ? vanFee(vs.length) : 0;
+        if (vc && vs.length < 3) { toast('Custom address ending needs at least 3 characters'); break; }
+        if (vf && typeof S.balance === 'number' && dq2.sol + vf > S.balance) { toast('Not enough devnet SOL — need ' + (dq2.sol + vf).toFixed(2) + ' SOL incl. ' + vf + ' SOL address fee'); break; }
         var nt = { name: c.name.trim(), tick: c.tick, spec: c.spec, img: c.img, banner: c.banner || null, snipe: c.snipe && c.snipe.on ? { on: true, start: c.snipe.start, dur: c.snipe.dur } : null, buy: c.buy, sell: c.sell, split: c.buy > 0 && c.split ? { p: c.split.p, h: c.split.h, b: c.split.b, d: c.split.d } : null, pair: c.pair, mcN: 5, mc0: 5, prog: 1, born: Date.now(), holders: 1,
-          soc: !!(c.x || c.tg || c.web), links: { web: linkOf(c.web), x: c.x ? linkOf(/[\/.]/.test(c.x) ? c.x : 'x.com/' + c.x.replace(/^@/, '')) : null, tg: c.tg ? linkOf(/[\/.]/.test(c.tg) ? c.tg : 't.me/' + c.tg.replace(/^@/, '')) : null, demo: false }, rewards: false, burn: false, ca: fakeCA(), vol: 0, hist: [5, 5], desc: c.desc.trim(), creator: S.account };
+          soc: !!(c.x || c.tg || c.web), links: { web: linkOf(c.web), x: c.x ? linkOf(/[\/.]/.test(c.x) ? c.x : 'x.com/' + c.x.replace(/^@/, '')) : null, tg: c.tg ? linkOf(/[\/.]/.test(c.tg) ? c.tg : 't.me/' + c.tg.replace(/^@/, '')) : null, demo: false }, rewards: false, burn: false, ca: fakeCA(vs), vanity: vc ? vs : null, vol: 0, hist: [5, 5], desc: c.desc.trim(), creator: S.account };
+        if (vf && typeof S.balance === 'number') S.balance = Math.max(0, S.balance - vf);
         nt.devPct = +dq2.pct.toFixed(2);
         S.created.unshift(nt);
         if (dq2.sol > 0) { var dtr = applyTrade(nt, 'buy', dq2.sol, S.account, true); dtr.tokens = dq2.tok; dtr.tax = 0; S.pos[nt.tick] = { tok: dq2.tok, cost: dq2.sol }; }
@@ -2715,6 +2735,16 @@
   document.addEventListener('click', function (e) { var b = e.target.closest && e.target.closest('.tc-ca'); if (!b) return; b.classList.add('ok'); var h = b.innerHTML; b.innerHTML = 'Copied ✓'; setTimeout(function () { if (b.isConnected) { b.innerHTML = h; b.classList.remove('ok'); } }, 1200); }, true);
   document.addEventListener('scroll', function (e) { if (e.target && e.target.id === 'cmts' && e.target.scrollTop < 20) { var np = document.getElementById('tt-new'); if (np && np._n) { np._n = 0; np.style.display = 'none'; } } }, true);
   document.addEventListener('input', function (e) {
+    if (e.target.hasAttribute && e.target.hasAttribute('data-van')) {
+      var raw = e.target.value, clean = raw.split('').filter(function (ch) { return B58C.indexOf(ch) >= 0; }).join('').slice(0, 6), bad = raw.replace(/./g, function (ch) { return B58C.indexOf(ch) >= 0 ? '' : ch; });
+      if (clean !== raw) e.target.value = clean; S.c.van.suf = clean; var n = clean.length;
+      var er = document.getElementById('van-err'); if (er) er.textContent = bad ? 'Addresses can’t use 0, O, I, l or symbols' : '';
+      var pv = document.getElementById('van-prev'); if (pv) pv.innerHTML = vanPrev(S.c);
+      var fe = document.getElementById('van-fee'); if (fe) fe.textContent = n >= 3 ? '+' + vanFee(n) + ' SOL · ' + vanEta(n) : 'type at least 3 characters';
+      document.querySelectorAll('.van-tiers span').forEach(function (sp, i) { sp.classList.toggle('on', !!n && (i === 0 ? n >= 3 && n <= 4 : i === 1 ? n === 5 : n === 6)); });
+      var vt = document.querySelector('.van-o.on .van-t b'); if (vt) vt.textContent = clean || 'GOAT';
+      return;
+    }
     var spk = e.target.getAttribute && e.target.getAttribute('data-split');
     if (spk && S.c.split) { var sp = S.c.split, v = Math.min(spk === 'd' ? 50 : 100, +e.target.value); if (+e.target.value !== v) e.target.value = v; var others = ['h', 'b', 'd'].filter(function (k) { return k !== spk; }), rest = 100 - v;
       var a = others[0], b2 = others[1], sumO = sp[a] + sp[b2];

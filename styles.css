@@ -3959,3 +3959,29 @@ button.dh2-row{cursor:pointer;border-radius:10px}button.dh2-row:hover{background
 .co-coin{display:inline-flex;align-items:center;gap:6px;margin:2px 0 6px;padding:3px 9px 3px 3px;border-radius:99px;border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--text);font:700 12px Manrope,sans-serif;cursor:pointer}
 .co-coin .av{border-radius:50%}.co-coin span{font-size:10.5px;color:var(--muted)}
 .co-coin:hover{border-color:rgba(241,221,176,.35)}
+/* ===== contract address ending ===== */
+.van{display:flex;flex-direction:column;gap:12px;padding:16px;border-radius:16px;background:rgba(255,255,255,.02);border:1px solid var(--line)}
+.van-h{display:flex;align-items:baseline;gap:8px}.van-h b{font-size:14px}.van-h small{font-size:12px;color:var(--muted)}
+.van-opts{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.van-o{position:relative;display:flex;align-items:center;gap:12px;padding:12px;border-radius:12px;border:1px solid var(--line);background:rgba(255,255,255,.02);color:var(--text);cursor:pointer;font-family:Manrope,sans-serif;text-align:left;transition:border-color .2s,background .2s}
+.van-o:hover{border-color:rgba(255,255,255,.18)}
+.van-o.on{border-color:rgba(241,221,176,.6);background:rgba(241,221,176,.06);box-shadow:0 0 0 3px rgba(241,221,176,.07)}
+.van-t{flex:none;min-width:74px;padding:8px 10px;border-radius:9px;background:#0d0d0f;border:1px solid rgba(255,255,255,.08);font:600 13px var(--mono);color:var(--faint);text-align:center}
+.van-t b{color:#F1DDB0;font-weight:800}
+.van-o>span:nth-child(2){display:flex;flex-direction:column;gap:2px;min-width:0}.van-o>span b{font-size:13px}.van-o>span small{font-size:11px;color:var(--muted)}
+.van-o em{position:absolute;top:8px;right:10px;font:800 9.5px var(--mono);font-style:normal;letter-spacing:.06em;padding:2px 6px;border-radius:5px}
+.van-free{color:#04140c;background:#3DDC97}.van-paid{color:#F1DDB0;background:rgba(241,221,176,.12)}
+.van-cfg{display:flex;flex-direction:column;gap:8px}
+.van-in{display:flex;align-items:center;gap:4px;padding:0 12px;height:44px;border-radius:12px;background:#0d0d0f;border:1px solid rgba(241,221,176,.3)}
+.van-in span{font:600 16px var(--mono);color:var(--faint)}
+.van-in input{flex:1;min-width:0;background:none;border:0;outline:0;color:#F1DDB0;font:800 18px var(--mono);letter-spacing:.04em}
+.van-tiers{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.van-tiers span{display:flex;flex-direction:column;gap:1px;padding:8px 10px;border-radius:10px;border:1px solid var(--line);opacity:.6;transition:.2s}
+.van-tiers span.on{opacity:1;border-color:rgba(241,221,176,.5);background:rgba(241,221,176,.06)}
+.van-tiers b{font-size:12px}.van-tiers small{font-size:10.5px;color:var(--muted)}
+.van-err{font-size:11px;color:#FF8C96;min-height:0}.van-err:empty{display:none}
+.van-prev{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 12px;border-radius:12px;background:#0d0d0f;border:1px dashed rgba(255,255,255,.1)}
+.van-prev>small{font-size:10.5px;color:var(--faint);text-transform:uppercase;letter-spacing:.12em}
+#van-prev{font-size:13px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#van-prev span{color:var(--muted)}#van-prev i{font-style:normal;color:var(--faint)}#van-prev b{color:#F1DDB0;font-weight:800;text-shadow:0 0 12px rgba(241,221,176,.4)}
+.van-fee{font-size:11px;color:#F1DDB0}.van-fee.ok{color:#3DDC97}
+@media (max-width:760px){.van-opts{grid-template-columns:1fr}.van-tiers{grid-template-columns:1fr}}
