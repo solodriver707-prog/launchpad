@@ -1380,9 +1380,10 @@
   function ensureTicks(t) {
     if (t.tk) return t.tk;
     var now = Date.now(), start = Math.max(t.born, now - 7 * 864e5), span = Math.max(60000, now - start), n = Math.min(2200, Math.max(30, Math.floor(span / 9000)));
+    if (t.archived && t.span) { start = t.born; span = t.span; n = Math.min(1500, Math.max(60, Math.floor(span / 6000))); }
     var h = t.hist && t.hist.length ? t.hist : [t.mcN], r = rng(hash(t.tick + 'tk')), out = [];
     for (var i = 0; i < n - 1; i++) {
-      var f = i / (n - 1), tf = 1 - Math.pow(1 - f, 2.2), idx = f * (h.length - 1), lo = Math.floor(idx), hi = Math.min(h.length - 1, lo + 1), base = h[lo] + (h[hi] - h[lo]) * (idx - lo);
+      var f = i / (n - 1), tf = t.archived ? f : 1 - Math.pow(1 - f, 2.2), idx = f * (h.length - 1), lo = Math.floor(idx), hi = Math.min(h.length - 1, lo + 1), base = h[lo] + (h[hi] - h[lo]) * (idx - lo);
       out.push([start + tf * span, Math.max(1, base * (1 + (r() - .5) * .035)), r() * r() * 2.4]);
     }
     out.push([now, t.mcN, .2]);
@@ -1430,11 +1431,15 @@
       ma = '<path d="' + d + '" fill="none" stroke="#D8C3A0" stroke-width="1.4" stroke-opacity=".85" vector-effect="non-scaling-stroke"/>'; }
     var marks = '';
     if (S.cmarks) { var b = tfMs(), t0 = cs[0].t, tEnd = cs[cs.length - 1].t + b;
-      var stack = {};
-      S.trades.filter(function (tr) { return tr.tick === t.tick && (tr.mine || tr.sol >= 1) && tr.t >= t0 && tr.t < tEnd; }).slice(0, 70).forEach(function (tr) {
-        var idx = Math.floor((tr.t - t0) / b), c = cs[idx]; if (!c) return; var n = stack[idx] = (stack[idx] || 0) + 1; if (n > 6) return;
-        var x = off0 + idx * cw + cw / 2, buy = tr.side === 'buy', y = Y(c.h) - 16 - (n - 1) * 22;
-        marks += '<span class="cmark ' + (buy ? 'b' : 's') + (tr.mine ? ' me' : '') + '" style="left:' + (x / W * 100).toFixed(2) + '%;top:' + (Math.max(2, y) / H * 100).toFixed(2) + '%" title="' + (tr.mine ? 'You' : short(tr.wallet)) + ' ' + (buy ? 'bought ' : 'sold ') + tr.sol.toFixed(2) + ' SOL">' + A.svg(walletSpec(tr.wallet)) + '</span>';
+      seedDevTrades(t); var stack = {}; S.cmarkData = [];
+      var place = function (ts, side) { var idx = Math.floor((ts - t0) / b), c = cs[idx]; if (!c) return null; var n = stack[idx] = (stack[idx] || 0) + 1; if (n > 6) return null; var yy = Y(c.h) - 16 - (n - 1) * 22; if (yy < 40) yy = Y(c.l) + 16 + (n - 1) * 22; return { x: off0 + idx * cw + cw / 2, y: yy }; };
+      S.trades.filter(function (tr) { return tr.tick === t.tick && (tr.mine || tr.sol >= 1 || tr.wallet === devOf(t)) && tr.t >= t0 && tr.t < tEnd; }).slice(0, 70).forEach(function (tr) {
+        var p0 = place(tr.t); if (!p0) return; var buy = tr.side === 'buy', k = S.cmarkData.push({ k: 'tr', d: tr }) - 1, dev = tr.wallet === devOf(t);
+        marks += '<span class="cmark ' + (buy ? 'b' : 's') + (tr.mine ? ' me' : '') + (dev ? ' dev' : '') + '" data-cmi="' + k + '" data-act="walletAny" data-arg="' + esc(tr.wallet) + '" style="left:' + (p0.x / W * 100).toFixed(2) + '%;top:' + (Math.max(2, p0.y) / H * 100).toFixed(2) + '%">' + A.svg(walletSpec(tr.wallet)) + (dev ? '<i class="cm-d">' + (buy ? 'DEV B' : 'DEV S') + '</i>' : '') + '</span>';
+      });
+      seedComments(t).filter(function (c) { return c.t >= t0 && c.t < tEnd && c.reply == null; }).slice(0, 12).forEach(function (c) {
+        var p0 = place(c.t); if (!p0) return; var k = S.cmarkData.push({ k: 'co', d: c }) - 1;
+        marks += '<span class="cmark co' + (c.w === devOf(t) ? ' dev' : '') + '" data-cmi="' + k + '" data-act="walletAny" data-arg="' + esc(c.w) + '" style="left:' + (p0.x / W * 100).toFixed(2) + '%;top:' + (Math.max(2, p0.y) / H * 100).toFixed(2) + '%">' + A.svg(walletSpec(c.w)) + '<i class="cm-c">💬</i></span>';
       }); }
     S.chartPts = pts; S.chartW = W; S.chartH = H; S.chartOff = off0; S.chartCw = cw;
     var last = cs[cs.length - 1], ly = Y(last.c), lcol = last.c >= last.o ? '#3DDC97' : '#F2708A';
@@ -1443,7 +1448,7 @@
       '<line x1="0" x2="' + W + '" y1="' + ly.toFixed(1) + '" y2="' + ly.toFixed(1) + '" stroke="' + lcol + '" stroke-opacity=".55" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"/></svg>' + labels + xl + marks +
       (S.cpan ? '' : '<span class="lastlab" style="top:' + (ly / H * 100).toFixed(2) + '%;background:' + lcol + '">' + yLabel(last.c) + '</span>') +
       (S.cpan ? '<button class="c-live" data-act="cnow">Back to now →</button>' : '') +
-      '<div class="xh" id="xh"></div><div class="yh" id="yh"></div><div class="xh-dot" id="xhd" style="background:#fff"></div><div class="xh-tip" id="xht"></div>' +
+      '<div class="cm-tip" id="cmtip"></div><div class="xh" id="xh"></div><div class="yh" id="yh"></div><div class="xh-dot" id="xhd" style="background:#fff"></div><div class="xh-tip" id="xht"></div>' +
       '<span class="wm">treid.fun</span>';
   }
   function chartRedraw() { var t = find(S.tick), box = document.getElementById('chart'); if (t && box) box.innerHTML = chartSVG(t); }
@@ -1619,11 +1624,11 @@
   try { S.trackWallets = JSON.parse(localStorage.getItem('gp.track') || '[]'); } catch (e) {}
   function seedDevTrades(t) {
     if (t._devSeeded || (S.account && t.creator === S.account)) return; t._devSeeded = true;
-    var dev = devOf(t), r = rng(hash(t.tick + 'devtr')), rm = riskMetrics(t), sold = rm[0].val === 'SOLD', nowPct = sold ? 0 : parseFloat(rm[0].val);
+    var dev = devOf(t), r = rng(hash(t.tick + 'devtr')), rm = riskMetrics(t), sold = t.archived ? t.devSoldAfter != null : rm[0].val === 'SOLD', nowPct = sold ? 0 : t.archived ? 2 + r() * 3 : parseFloat(rm[0].val);
     var initPct = sold ? 1.5 + r() * 5 : nowPct * (1 + r() * .6) + .2, tok = initPct / 100 * 1e9, px0 = (t.hist && t.hist[0] ? Math.min(t.hist[0], 6) : 5) * 1000 / 1e9;
     S.trades.push({ tick: t.tick, side: 'buy', sol: +(tok * px0 / SOL_USD).toFixed(3), wallet: dev, t: t.born + 800, tax: 0, mine: false, price: px0, tokens: tok, sig: b58(64) });
     var sellTok = sold ? tok : tok - nowPct / 100 * 1e9;
-    if (sellTok > tok * .02) { var h = t.hist || [t.mcN], k = Math.floor(h.length * (sold ? .15 + r() * .4 : .4 + r() * .5)), pxS = h[Math.min(h.length - 1, k)] * 1000 / 1e9, at = t.born + (Date.now() - t.born) * (k / h.length);
+    if (sellTok > tok * .02) { var h = t.hist || [t.mcN], k = t.archived && sold ? Math.min(h.length - 1, Math.floor((h.length - 1) * t.devSoldAfter * 60000 / t.span)) : Math.floor(h.length * (sold ? .15 + r() * .4 : .4 + r() * .5)), pxS = h[Math.min(h.length - 1, k)] * 1000 / 1e9, at = t.archived && sold ? t.born + t.devSoldAfter * 60000 : t.born + (Date.now() - t.born) * (k / h.length);
       S.trades.push({ tick: t.tick, side: 'sell', sol: +(sellTok * pxS / SOL_USD).toFixed(3), wallet: dev, t: at, tax: 0, mine: false, price: pxS, tokens: sellTok, sig: b58(64) }); }
     S.trades.sort(function (a, b) { return b.t - a.t; });
   }
@@ -1671,9 +1676,10 @@
       ath = out === 'grad' ? 69 + r() * r() * 4000 : out === 'rug' ? 6 + r() * 40 : 5 + r() * 25; life = out === 'rug' ? 2 + r() * 40 : out === 'dead' ? 30 + r() * 600 : 1440 + r() * 20000;
       var pts = [], v = 5, peakAt = .2 + r() * .5; for (var k = 0; k < 24; k++) { var f = k / 23; v = f < peakAt ? 5 + (ath - 5) * Math.pow(f / peakAt, 1.4) : out === 'rug' ? (f < peakAt + .06 ? ath * .2 : ath * .05) : out === 'dead' ? ath * Math.max(.15, 1 - (f - peakAt) * 1.6) : ath * (.55 + r() * .35); pts.push(v * (.94 + r() * .12)); }
       var pastO = { name: adj + ' ' + nn, tick: (adj.slice(0, 2) + nn.slice(0, 3)).toUpperCase(), spec: { kind: A.KINDS[Math.floor(r() * A.KINDS.length)], skin: A.SKINS[Math.floor(r() * A.SKINS.length)], bg: A.BGS[Math.floor(r() * A.BGS.length)], eyes: 'normal', mouth: pick(['smile', 'grin', 'o']), acc: 'none' }, out: out, ath: ath, now: pts[23], life: life, ago: (i + 1) * (2 + r() * 9) * 1440, pts: pts, devSoldAfter: out === 'rug' ? life : out === 'dead' ? life * (.2 + r() * .6) : (r() < .3 ? null : life * (.3 + r() * .7)) };
+      var span0 = life * 60000 * 1.25; if (out === 'rug') { var pi = 0; pastO.pts.forEach(function (v, q) { if (v > pastO.pts[pi]) pi = q; }); pastO.devSoldAfter = (pi + 1.2) / 23 * span0 / 60000; } if (pastO.devSoldAfter != null) pastO.devSoldAfter = Math.min(pastO.devSoldAfter, span0 / 60000 * .98);
       var atk = pastO.tick; while (find(atk) && !(S.archive[atk] && S.archive[atk].creator === addr)) atk = atk.slice(0, 5) + 'XYZQW'[Math.floor(r() * 5)];
       pastO.tick = atk;
-      if (!S.archive[atk]) { var bornA = Date.now() - pastO.ago * 60000; S.archive[atk] = { name: pastO.name, tick: atk, spec: pastO.spec, buy: Math.floor(r() * 4), sell: 0, pair: 'SOL', mcN: pastO.now, mc0: 5, prog: out === 'grad' ? 100 : Math.min(97, (Math.max.apply(null, pastO.pts) - 5) / 64 * 100), born: bornA, holders: Math.round(20 + pastO.ath * 3), soc: false, ca: fakeCA(), vol: pastO.ath * .4, hist: pastO.pts.slice(), creator: addr, ath: pastO.ath, archived: out, devPct: null, devSoldAfter: pastO.devSoldAfter }; S.archive[atk].sell = S.archive[atk].buy; }
+      if (!S.archive[atk]) { var bornA = Date.now() - pastO.ago * 60000; S.archive[atk] = { name: pastO.name, tick: atk, spec: pastO.spec, buy: Math.floor(r() * 4), sell: 0, pair: 'SOL', mcN: pastO.now, mc0: 5, prog: out === 'grad' ? 100 : Math.min(97, (Math.max.apply(null, pastO.pts) - 5) / 64 * 100), born: bornA, holders: Math.round(20 + pastO.ath * 3), soc: false, ca: fakeCA(), vol: pastO.ath * .4, hist: pastO.pts.slice(), creator: addr, ath: pastO.ath, archived: out, devPct: null, devSoldAfter: pastO.devSoldAfter, span: span0 }; S.archive[atk].sell = S.archive[atk].buy; }
       past.push(pastO);
     }
     past.sort(function (a, b) { return a.ago - b.ago; });
@@ -2276,7 +2282,9 @@
   setInterval(function () { q('[data-t]').forEach(function (el) { el.textContent = ago(+el.getAttribute('data-t')); }); }, 5000);
 
   // ================= EVENTS =================
-  function openToken(tick) { S.cpan = 0; set({ walletView: null, screen: 'token', tick: tick, side: 'buy', amount: '', tf: S.tf || '1M', tpTab: 'trades', palOpen: false, walletMenu: false }); window.scrollTo(0, 0); }
+  function openToken(tick) { S.cpan = 0; var tA = S.archive[tick] && !all().some(function (x) { return x.tick === tick; }) ? S.archive[tick] : null, tfA = null;
+    if (tA && tA.span) { var best = TFS[0]; TFS.forEach(function (x) { if (tA.span / x[2] >= 40) best = x; }); tfA = best[0]; var bA = best[2]; S.czoom = Math.max(20, Math.min(120, Math.ceil(tA.span / bA) + 6)); S.cpan = Math.max(0, Math.floor(Date.now() / bA) - Math.floor((tA.born + tA.span) / bA) - 3); }
+    set({ walletView: null, screen: 'token', tick: tick, side: 'buy', amount: '', tf: tfA || S.tf || '1M', tpTab: 'trades', palOpen: false, walletMenu: false }); window.scrollTo(0, 0); }
 
   document.addEventListener('click', function (e) {
     var el = e.target.closest('[data-act]');
@@ -2308,7 +2316,7 @@
       case 'pair': set({ pair: arg }); break;
       case 'toggle': var o = {}; o[arg] = !S[arg]; set(o); break;
       case 'reset': S.r = JSON.parse(JSON.stringify(RDEF)); S.pairQ = ''; S.pairTab = 'all'; set({ fpop: null, cleanOnly: false, maxTax: 10, minProg: 0, minMc: 0, pair: 'All', cat: 'all', zeroOnly: false, gradOnly: false, rewardsOnly: false, watchOnly: false }); break;
-      case 'tf': S.cpan = 0; set({ tf: arg }); break;
+      case 'tf': S.cpan = 0; var tA2 = find(S.tick); if (tA2 && tA2.archived && tA2.span) { var bA2 = TFS.filter(function (x) { return x[0] === arg; })[0][2]; S.cpan = Math.max(0, Math.floor(Date.now() / bA2) - Math.floor((tA2.born + tA2.span) / bA2) - 3); } set({ tf: arg }); break;
       case 'ctype': set({ ctype: arg }); break;
       case 'ctog': S[arg] = !S[arg]; render(); break;
       case 'cfull': set({ cfull: !S.cfull }); break;
@@ -2520,6 +2528,7 @@
     var c = e.target.closest && e.target.closest('.tcard');
     if (c) { var r = c.getBoundingClientRect(); c.style.setProperty('--mx', (e.clientX - r.left) + 'px'); c.style.setProperty('--my', (e.clientY - r.top) + 'px'); }
     var box = e.target.closest && e.target.closest('#chart');
+    if (box && e.target.closest('.cmark')) { var xt = document.getElementById('xht'); if (xt) xt.style.display = 'none'; return; }
     if (box && S.chartPts && !CDRAG) {
       var rb = box.getBoundingClientRect(), fx = (e.clientX - rb.left) / rb.width * S.chartW;
       var i = Math.max(0, Math.min(S.chartPts.length - 1, Math.round((fx - S.chartOff - S.chartCw / 2) / S.chartCw))), p = S.chartPts[i];
@@ -2535,6 +2544,23 @@
   });
   // chart: wheel zoom + drag pan + Esc to leave fullscreen + candle rollover
   var CDRAG = null, PINCH = null;
+  document.addEventListener('mouseover', function (e) {
+    var m = e.target.closest && e.target.closest('.cmark'), tip = document.getElementById('cmtip'); if (!tip) return;
+    if (!m) { tip.classList.remove('on'); return; }
+    var it = S.cmarkData && S.cmarkData[+m.getAttribute('data-cmi')], t = find(S.tick); if (!it || !t) return;
+    var w = it.k === 'tr' ? it.d.wallet : it.d.w, dev = w === devOf(t), me = S.account && w === S.account, h = '';
+    var head = '<div class="ct-h"><span class="av" style="width:30px;height:30px">' + A.svg(walletSpec(w)) + '</span><span class="ct-n"><b>' + esc(walletName(w)) + '</b><small class="mono">' + short(w) + '</small></span>' + (dev ? '<span class="bdg dev">DEV</span>' : '') + (me ? '<span class="bdg win">YOU</span>' : '') + '</div>';
+    if (it.k === 'tr') { var x = it.d, buy = x.side === 'buy', tok = x.tokens || x.sol * SOL_USD / (x.price || price(t)), mc = (x.price || price(t)) * 1e9 / 1000;
+      h = head + '<div class="ct-side ' + (buy ? 'b' : 's') + '">' + (buy ? 'Bought' : 'Sold') + ' <b class="mono">' + x.sol.toFixed(3) + ' SOL</b><span class="mono">≈ $' + fmtNum(Math.round(x.sol * SOL_USD)) + '</span></div>' +
+        '<div class="ct-g"><span><small>Tokens</small><b class="mono">' + fmtNum(Math.round(tok)) + '</b></span><span><small>At MC</small><b class="mono">' + fmtK(mc) + '</b></span><span><small>When</small><b class="mono">' + ago(x.t) + ' ago</b></span><span><small>Tax paid</small><b class="mono">' + (x.tax || 0).toFixed(3) + '</b></span></div>';
+      var co = seedComments(t).filter(function (c) { return c.w === w; })[0]; if (co) h += '<div class="ct-co">💬 “' + esc(co.text.length > 90 ? co.text.slice(0, 90) + '…' : co.text) + '”</div>';
+    } else { var c = it.d; coMeta(c, t); var pnl = c.pos * (t.mcN / c.mc0 - 1);
+      h = head + '<div class="ct-co big">“' + esc(c.text.length > 140 ? c.text.slice(0, 140) + '…' : c.text) + '”</div><div class="ct-g"><span><small>Called at</small><b class="mono">' + fmtK(c.mc0) + '</b></span><span><small>Position</small><b class="mono">$' + fmtNum(c.pos) + '</b></span><span><small>PnL</small><b class="mono ' + (pnl >= 0 ? 'up' : 'down') + '">' + (pnl >= 0 ? '+' : '−') + '$' + Math.abs(pnl).toFixed(0) + '</b></span><span><small>When</small><b class="mono">' + ago(c.t) + ' ago</b></span></div>'; }
+    h += '<div class="ct-f">click to open wallet</div>';
+    tip.innerHTML = h; tip.classList.add('on');
+    var box = document.getElementById('chart').getBoundingClientRect(), mr = m.getBoundingClientRect(), tw = 250, x0 = mr.left - box.left + mr.width / 2 - tw / 2, y0 = mr.bottom - box.top + 8;
+    tip.style.left = Math.max(4, Math.min(box.width - tw - 4, x0)) + 'px'; tip.style.top = (y0 + 170 > box.height ? Math.max(4, mr.top - box.top - tip.offsetHeight - 8) : y0) + 'px';
+  });
   document.addEventListener('touchstart', function (e) { var box = e.target.closest && e.target.closest('#chart'); if (!box || e.touches.length !== 2) return; PINCH = { d: Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY), z: S.czoom }; }, { passive: true });
   document.addEventListener('touchmove', function (e) { if (!PINCH || e.touches.length !== 2) return; e.preventDefault(); var d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY); S.czoom = Math.max(12, Math.min(240, Math.round(PINCH.z * PINCH.d / Math.max(20, d)))); chartRedraw(); }, { passive: false });
   document.addEventListener('touchend', function () { PINCH = null; });

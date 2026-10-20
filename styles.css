@@ -3216,3 +3216,25 @@ button.dh2-row{cursor:pointer;border-radius:10px}button.dh2-row:hover{background
 .liq-prev{padding:10px 14px}.liq-prev .lq-big{font-size:24px}.tl3{display:flex}.tl3 .liq{flex:1}.tc-seg button{font-size:11.5px}
 .arch-note{display:inline-flex;margin-top:8px;padding:5px 12px;border-radius:99px;font-size:12px;font-weight:700;background:rgba(255,255,255,.06);color:var(--soft)}
 .arch-note.rug{background:rgba(242,112,138,.14);color:#F2708A}.arch-note.grad{background:rgba(61,220,151,.12);color:#3DDC97}
+/* chart marker preview */
+.cmark{cursor:pointer;overflow:visible!important}
+.cmark svg{border-radius:50%}
+.cmark.dev{box-shadow:0 0 0 2px #FFD15C,0 3px 8px rgba(0,0,0,.6)}
+.cmark.co{box-shadow:0 0 0 1.5px #EDE9E1,0 3px 8px rgba(0,0,0,.6)}
+.cm-d,.cm-c{position:absolute;right:-6px;bottom:-5px;font-style:normal;font-size:8px;font-weight:900;line-height:1;padding:2px 3px;border-radius:5px;background:#FFD15C;color:#0A0A0B}
+.cm-c{background:none;font-size:10px;padding:0}
+.cm-tip{position:absolute;z-index:20;width:250px;padding:10px 12px;border-radius:14px;background:#141416;border:1px solid #2E2E33;box-shadow:0 20px 40px -10px rgba(0,0,0,.9);display:none;flex-direction:column;gap:8px;pointer-events:none;font-size:12px}
+.cm-tip.on{display:flex;animation:fcIn .18s ease-out}
+.ct-h{display:flex;align-items:center;gap:8px}.ct-h .av{border-radius:50%;overflow:hidden;flex:none}
+.ct-n{display:flex;flex-direction:column;flex:1;min-width:0}.ct-n b{font-size:13px}.ct-n small{font-size:10.5px;color:var(--muted)}
+.ct-side{display:flex;align-items:baseline;gap:6px;padding:7px 10px;border-radius:10px;font-weight:700}
+.ct-side.b{background:rgba(61,220,151,.1);color:#3DDC97}.ct-side.s{background:rgba(242,112,138,.1);color:#F2708A}
+.ct-side b{font-size:15px}.ct-side span{margin-left:auto;font-size:11.5px;color:var(--soft);font-weight:600}
+.ct-g{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.ct-g span{display:flex;flex-direction:column}.ct-g small{font-size:10px;color:var(--muted)}.ct-g b{font-size:12.5px;color:var(--ivory)}
+.ct-co{padding:7px 10px;border-radius:10px;background:rgba(255,255,255,.04);color:var(--soft);line-height:1.4}
+.ct-co.big{font-size:13px;color:var(--ivory)}
+.ct-f{font-size:10px;color:var(--muted);text-align:right}
+.cmark.dev.b{box-shadow:0 0 0 2px #3DDC97,0 0 0 4px rgba(255,209,92,.6),0 3px 8px rgba(0,0,0,.6)}
+.cmark.dev.s{box-shadow:0 0 0 2px #F2708A,0 0 0 4px rgba(255,209,92,.6),0 0 14px rgba(242,112,138,.6)}
+.cmark.dev.s .cm-d{background:#F2708A;color:#fff}.cmark.dev.b .cm-d{background:#3DDC97}
