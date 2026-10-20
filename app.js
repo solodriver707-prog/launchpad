@@ -319,7 +319,8 @@
       '<nav class="navlinks"><span class="nav-ind" id="nav-ind"></span><button class="' + (S.screen === 'home' ? 'on' : '') + '" data-act="home">Board</button><button class="' + (S.screen === 'create' ? 'on' : '') + '" data-act="create">Create</button><button class="' + (S.screen === 'leaders' ? 'on' : '') + '" data-act="leaders">Leaderboard</button><button data-act="how">How it works</button></nav>' +
       '<button class="searchbtn" data-act="palette">' + I.search + '<span>Search tokens or paste CA</span><span class="kbd">Ctrl K</span></button>' +
       '<div class="hdr-right"><button class="wl-btn co-btn' + (S.coOpen ? ' on' : '') + '" data-act="coToggle" title="Hot callouts">🔥<span>Callouts</span><b class="mono" id="co-new" style="display:none">0</b></button><button class="wl-btn' + (S.screen === 'watch' ? ' on' : '') + '" data-act="watchPage" aria-label="Watchlist" data-tip="Your watchlist">' + I.star(S.watch.length > 0) + (S.watch.length ? '<b class="mono" id="wl-n">' + S.watch.length + '</b>' : '') + '</button><button class="btn pri" data-act="create">+ Launch token</button>' + right + '</div>' +
-      '</div></header>';
+      '</div></header>' +
+      '<nav class="mnav" aria-label="Main">' + [['home', 'Board', '<path d="M3 11l9-7 9 7v9a1 1 0 01-1 1h-5v-6H9v6H4a1 1 0 01-1-1z"/>', S.screen === 'home'], ['leaders', 'Ranks', '<path d="M8 21V11M16 21V7M12 21V3M4 21h16"/>', S.screen === 'leaders'], ['create', 'Launch', '<path d="M12 5v14M5 12h14"/>', S.screen === 'create', 'pri'], ['coToggle', 'Callouts', '<path d="M21 12a8 8 0 01-11.6 7.1L4 21l1.9-5.4A8 8 0 1121 12z"/>', S.coOpen], ['watchPage', 'Watchlist', '<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/>', S.screen === 'watch']].map(function (x) { return '<button class="' + (x[3] ? 'on ' : '') + (x[4] || '') + '" data-act="' + x[0] + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round">' + x[2] + '</svg><span>' + x[1] + '</span></button>'; }).join('') + '</nav>';
   }
 
   function cardPts(t) {
@@ -1439,7 +1440,7 @@
       });
       seedComments(t).filter(function (c) { return c.t >= t0 && c.t < tEnd && c.reply == null; }).slice(0, 12).forEach(function (c) {
         var p0 = place(c.t); if (!p0) return; var k = S.cmarkData.push({ k: 'co', d: c }) - 1;
-        marks += '<span class="cmark co' + (c.w === devOf(t) ? ' dev' : '') + '" data-cmi="' + k + '" data-act="walletAny" data-arg="' + esc(c.w) + '" style="left:' + (p0.x / W * 100).toFixed(2) + '%;top:' + (Math.max(2, p0.y) / H * 100).toFixed(2) + '%">' + A.svg(walletSpec(c.w)) + '<i class="cm-c">💬</i></span>';
+        marks += '<span class="cmark cmco' + (c.w === devOf(t) ? ' dev' : '') + '" data-cmi="' + k + '" data-act="walletAny" data-arg="' + esc(c.w) + '" style="left:' + (p0.x / W * 100).toFixed(2) + '%;top:' + (Math.max(2, p0.y) / H * 100).toFixed(2) + '%">' + A.svg(walletSpec(c.w)) + '<i class="cm-c">💬</i></span>';
       }); }
     S.chartPts = pts; S.chartW = W; S.chartH = H; S.chartOff = off0; S.chartCw = cw;
     var last = cs[cs.length - 1], ly = Y(last.c), lcol = last.c >= last.o ? '#3DDC97' : '#F2708A';
@@ -1917,7 +1918,8 @@
     var curve = '<section class="card-s panel" style="display:flex;flex-direction:column;gap:10px"><div style="display:flex;justify-content:space-between"><b>' + (t.prog >= 100 ? 'Graduated to Raydium' : 'Bonding curve') + '</b><span class="mono" style="color:var(--ice)" data-prog="' + id + '">' + Math.min(100, t.prog).toFixed(0) + '%</span></div>' +
       '<div class="bar" style="height:12px"><i class="' + (t.prog >= 100 ? 'done' : '') + '" data-bar="' + id + '" style="width:' + Math.max(1, Math.min(100, t.prog)) + '%"></i></div>' +
       '<span class="muted" style="font-size:12.5px;line-height:1.55">' + (t.prog >= 100 ? 'Liquidity is live on Raydium.' : curveSol + ' SOL in the curve. Graduates to Raydium at 100%.') + '</span></section>';
-    return '<main class="wrap tp-env" style="padding-top:14px;--coin:' + ((t.spec && t.spec.bg) || '#2A2418') + '"><div class="tp-glow" aria-hidden="true">' + avatarHTML(t, 300) + '</div><button class="link" data-act="home">' + I.back + 'Back to board</button>' + head +
+    var mbuy = '<button class="m-buy" data-act="mBuy">Buy / Sell $' + id + (trapLeft(t) > 0 ? ' · 🪤 ' + snipeNow(t) + '%' : ' · tax ' + tmax + '%') + '</button>';
+    return mbuy + '<main class="wrap tp-env" style="padding-top:14px;--coin:' + ((t.spec && t.spec.bg) || '#2A2418') + '"><div class="tp-glow" aria-hidden="true">' + avatarHTML(t, 300) + '</div><button class="link" data-act="home">' + I.back + 'Back to board</button>' + head +
       '<div class="tp-grid3">' + thread + '<div class="tp-main">' + mcrow + chart + tabsHTML + '</div><aside class="tp-side">' + panel + posCard + safety + curve + '</aside></div></main>';
   }
   // give seeded trades real makers / prices
@@ -2153,7 +2155,7 @@
     if (S.palOpen && !fid) { var p = document.getElementById('pal'); if (p) p.focus(); }
     if (S.screen === 'home' && !S.loading && firstCount) { firstCount = false; countUp(); }
     if (typeof reveal === 'function') reveal();
-    setTimeout(function () { navInd(); labKick(); fwKick(); }, 0);
+    setTimeout(function () { navInd(); labKick(); fwKick(); mbuyWatch(); }, 0);
     mFit(); if (S.screen === 'home') mSetStep(M.step);
   }
   function countUp() {
@@ -2337,6 +2339,7 @@
       case 'clearImg': setC({ img: null }); break;
       case 'clearBanner': setC({ banner: null }); break;
       case 'cpair': setC({ pair: arg }); break;
+      case 'mBuy': var tbx = document.querySelector('.tradebox'); if (tbx) tbx.scrollIntoView({ behavior: 'smooth', block: 'center' }); break;
       case 'stf': S.stf = arg; render(); break;
       case 'fwGo': FW.i = +arg; FW.t0 = performance.now(); FW.paused = false; fwCenter(FW.i); break;
       case 'demoImgs': set({ demoImgOpen: true }); break;
@@ -2638,6 +2641,7 @@
       document.querySelectorAll('[data-stb] u').forEach(function (u, k) { u.style.width = (k < FW.i ? 100 : k === FW.i ? p * 100 : 0) + '%'; }); }
     FW.raf = requestAnimationFrame(fwLoop);
   }
+  function mbuyWatch() { var tb = document.querySelector('.tradebox'), mb = document.querySelector('.m-buy'); if (!tb || !mb || !window.IntersectionObserver) return; if (mbuyWatch.o) mbuyWatch.o.disconnect(); mbuyWatch.o = new IntersectionObserver(function (en) { mb.classList.toggle('hide', en[0].isIntersecting); }, { threshold: .15 }); mbuyWatch.o.observe(tb); }
   function fwKick() { if (!FW.raf && document.getElementById('fw-wheel')) FW.raf = requestAnimationFrame(fwLoop); }
   // ---------- conveyor + crane engine ----------
   var LC = [], lastSpawn = 0, LT = performance.now(), ARM = { busy: false };
