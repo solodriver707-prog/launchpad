@@ -1548,7 +1548,7 @@
   // ===== time-based chart engine (1m … 1d candles, zoom, pan, line/candles, MA, trade markers) =====
   var TFS = [['1M', '1m', 6e4], ['5M', '5m', 3e5], ['15M', '15m', 9e5], ['1H', '1h', 36e5], ['4H', '4h', 144e5], ['1D', '1d', 864e5]];
   function tfMs() { for (var i = 0; i < TFS.length; i++) if (TFS[i][0] === S.tf) return TFS[i][2]; return 6e4; }
-  S.ctype = 'candle'; S.cma = true; S.cvol = true; S.cmarks = true; S.czoom = 70; S.cpan = 0; S.cfull = false;
+  S.ctype = 'candle'; S.cma = true; S.cvol = true; S.cmarks = true; S.czoom = 70; S.cpan = 0; S.cys = 1; S.cyo = 0; S.cfull = false;
   function ensureTicks(t) {
     if (t.tk) return t.tk;
     var now = Date.now(), start = Math.max(t.born, now - 7 * 864e5), span = Math.max(60000, now - start), n = Math.min(2200, Math.max(30, Math.floor(span / 9000)));
@@ -1581,6 +1581,7 @@
     var cs = candles(t), W = 1000, H = 400, top = 16, vh = S.cvol ? 64 : 0, bot = 22, ph = H - vh - top - bot - 8;
     var mx = Math.max.apply(null, cs.map(function (c) { return c.h; })), mn = Math.min.apply(null, cs.map(function (c) { return c.l; }));
     var minSp = mx * 0.06; if (mx - mn < minSp) { var mid = (mx + mn) / 2; mx = mid + minSp / 2; mn = mid - minSp / 2; } var pad = (mx - mn) * .06; mx += pad; mn -= pad; var sp = mx - mn;
+    if (S.cys !== 1 || S.cyo) { var md0 = (mx + mn) / 2 + S.cyo * sp, h0 = sp / 2 * S.cys; mx = md0 + h0; mn = md0 - h0; sp = mx - mn; }
     var vmx = Math.max(.0001, Math.max.apply(null, cs.map(function (c) { return c.v; })));
     var fut = cs.fut || 0, slots = Math.max(cs.length + fut, S.czoom), cw = (W - 70) / slots, off0 = (slots - cs.length - fut) * cw, Y = function (v) { return top + (mx - v) / sp * ph; }, bw = Math.max(1.5, cw * 0.64);
     var g = '', pts = [], xl = '';
@@ -1617,11 +1618,12 @@
     S.chartPts = pts; S.chartW = W; S.chartH = H; S.chartOff = off0; S.chartCw = cw;
     var last = cs[cs.length - 1], ly = Y(last.c), lcol = last.c >= last.o ? '#3DDC97' : '#F2708A';
     if (fut) { var bms = tfMs(), lastT = cs[cs.length - 1].t; for (var fi = 1; fi <= fut; fi++) { var ii = cs.length - 1 + fi; if ((slots - cs.length + ii) % every === 0) { var fx = off0 + ii * cw + cw / 2; if (fx < W - 70) xl += '<span class="xlab fut" style="left:' + (fx / W * 100).toFixed(2) + '%">' + tLabel(lastT + fi * bms) + '</span>'; } } }
-    var labels = ''; for (var j = 0; j <= 4; j++) { var v = mx - j * sp / 4; labels += '<span class="ylab" style="top:' + ((top + j * ph / 4) / H * 100).toFixed(2) + '%">' + yLabel(v) + '</span>'; }
-    return '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" role="img" aria-label="Price chart">' + g + area + vol + body + ma +
+    var labels = ''; for (var j = 0; j <= 4; j++) { var v = mx - j * sp / 4; if (v < 0) continue; labels += '<span class="ylab" style="top:' + ((top + j * ph / 4) / H * 100).toFixed(2) + '%">' + yLabel(v) + '</span>'; }
+    return '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" role="img" aria-label="Price chart"><defs><clipPath id="pclip"><rect x="0" y="0" width="' + W + '" height="' + (top + ph + 4) + '"/></clipPath></defs>' + g + vol + '<g clip-path="url(#pclip)">' + area + body + ma + '</g>' +
       '<line x1="0" x2="' + W + '" y1="' + ly.toFixed(1) + '" y2="' + ly.toFixed(1) + '" stroke="' + lcol + '" stroke-opacity=".55" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"/></svg>' + labels + xl + marks +
       (S.cpan > 0 ? '' : '<span class="lastlab" style="top:' + (ly / H * 100).toFixed(2) + '%;background:' + lcol + '">' + yLabel(last.c) + '</span>') +
       (S.cpan > 0 ? '<button class="c-live" data-act="cnow">Back to now →</button>' : '') +
+      '<div class="yhit" title="Drag to scale · double-click to auto-fit"></div>' + (S.cys !== 1 || S.cyo ? '<button class="c-auto" data-act="cauto">Auto ↕</button>' : '') +
       '<div class="cm-tip" id="cmtip"></div><div class="xh" id="xh"></div><div class="yh" id="yh"></div><div class="xh-dot" id="xhd" style="background:#fff"></div><div class="xh-tip" id="xht"></div>' +
       '<span class="wm">treid.fun</span>';
   }
@@ -2503,7 +2505,7 @@
   setInterval(function () { q('[data-t]').forEach(function (el) { el.textContent = ago(+el.getAttribute('data-t')); }); }, 5000);
 
   // ================= EVENTS =================
-  function openToken(tick) { S.cpan = 0; var tA = S.archive[tick] && !all().some(function (x) { return x.tick === tick; }) ? S.archive[tick] : null, tfA = null;
+  function openToken(tick) { S.cpan = 0; S.cys = 1; S.cyo = 0; var tA = S.archive[tick] && !all().some(function (x) { return x.tick === tick; }) ? S.archive[tick] : null, tfA = null;
     if (tA && tA.span) { var best = TFS[0]; TFS.forEach(function (x) { if (tA.span / x[2] >= 40) best = x; }); tfA = best[0]; var bA = best[2]; S.czoom = Math.max(20, Math.min(120, Math.ceil(tA.span / bA) + 6)); S.cpan = Math.max(0, Math.floor(Date.now() / bA) - Math.floor((tA.born + tA.span) / bA) - 3); }
     set({ walletView: null, screen: 'token', tick: tick, side: 'buy', amount: '', tf: tfA || S.tf || '1M', tpTab: 'trades', palOpen: false, walletMenu: false }); window.scrollTo(0, 0); }
 
@@ -2537,12 +2539,13 @@
       case 'pair': set({ pair: arg }); break;
       case 'toggle': var o = {}; o[arg] = !S[arg]; set(o); break;
       case 'reset': S.r = JSON.parse(JSON.stringify(RDEF)); S.pairQ = ''; S.pairTab = 'all'; set({ fpop: null, cleanOnly: false, maxTax: 10, minProg: 0, minMc: 0, pair: 'All', cat: 'all', zeroOnly: false, gradOnly: false, rewardsOnly: false, watchOnly: false }); break;
-      case 'tf': S.cpan = 0; var tA2 = find(S.tick); if (tA2 && tA2.archived && tA2.span) { var bA2 = TFS.filter(function (x) { return x[0] === arg; })[0][2]; S.cpan = Math.max(0, Math.floor(Date.now() / bA2) - Math.floor((tA2.born + tA2.span) / bA2) - 3); } set({ tf: arg }); break;
+      case 'tf': S.cpan = 0; S.cys = 1; S.cyo = 0; var tA2 = find(S.tick); if (tA2 && tA2.archived && tA2.span) { var bA2 = TFS.filter(function (x) { return x[0] === arg; })[0][2]; S.cpan = Math.max(0, Math.floor(Date.now() / bA2) - Math.floor((tA2.born + tA2.span) / bA2) - 3); } set({ tf: arg }); break;
       case 'ctype': set({ ctype: arg }); break;
       case 'ctog': S[arg] = !S[arg]; render(); break;
       case 'cfull': set({ cfull: !S.cfull }); break;
-      case 'cnow': S.cpan = 0; chartRedraw(); break;
-      case 'czoom': S.czoom = arg === 'reset' ? 70 : Math.max(12, Math.min(240, Math.round(S.czoom * (arg === 'in' ? .7 : 1.4)))); if (arg === 'reset') S.cpan = 0; chartRedraw(); var zl = document.querySelector('.czoom .mono'); if (zl) zl.textContent = S.czoom; break;
+      case 'cauto': S.cys = 1; S.cyo = 0; chartRedraw(); break;
+      case 'cnow': S.cpan = 0; S.cys = 1; S.cyo = 0; chartRedraw(); break;
+      case 'czoom': S.czoom = arg === 'reset' ? 70 : Math.max(12, Math.min(240, Math.round(S.czoom * (arg === 'in' ? .7 : 1.4)))); if (arg === 'reset') { S.cpan = 0; S.cys = 1; S.cyo = 0; } chartRedraw(); var zl = document.querySelector('.czoom .mono'); if (zl) zl.textContent = S.czoom; break;
       case 'tpTab': set({ tpTab: arg }); break;
       case 'side': set({ side: arg }); break;
       case 'preset': if (arg === 'reset') { set({ amount: '' }); break; } set({ pctAmt: 0, amount: arg === 'max' ? Math.max(0, S.balance - 0.01).toFixed(3) : arg }); break;
@@ -2812,13 +2815,16 @@
   }, { passive: false });
   document.addEventListener('pointerdown', function (e) {
     var box = e.target.closest && e.target.closest('#chart'); if (!box || e.button > 0 || e.target.closest('button')) return;
-    CDRAG = { x: e.clientX, pan: S.cpan, w: box.getBoundingClientRect().width }; box.classList.add('panning');
+    var br = box.getBoundingClientRect(); CDRAG = { x: e.clientX, y: e.clientY, pan: S.cpan, w: br.width, h: br.height, ys: S.cys, yo: S.cyo, axis: !!e.target.closest('.yhit') }; box.classList.add(CDRAG.axis ? 'yscaling' : 'panning');
   });
   document.addEventListener('pointermove', function (e) {
-    if (!CDRAG) return; var dx = e.clientX - CDRAG.x, np = Math.max(-Math.floor(S.czoom * .8), Math.round(CDRAG.pan + dx / CDRAG.w * S.czoom));
-    if (np !== S.cpan) { S.cpan = np; if (!CDRAG.raf) CDRAG.raf = requestAnimationFrame(function () { if (CDRAG) CDRAG.raf = 0; chartRedraw(); }); }
+    if (!CDRAG) return; var dx = e.clientX - CDRAG.x, dy = e.clientY - CDRAG.y;
+    if (CDRAG.axis) { S.cys = Math.max(.08, Math.min(40, CDRAG.ys * Math.exp(dy / 160))); if (!CDRAG.raf) CDRAG.raf = requestAnimationFrame(function () { if (CDRAG) CDRAG.raf = 0; chartRedraw(); }); return; }
+    var np = Math.max(-Math.floor(S.czoom * .8), Math.round(CDRAG.pan + dx / CDRAG.w * S.czoom)), ny = (S.cys !== 1 || CDRAG.yo) ? CDRAG.yo + dy / (CDRAG.h * .78) * S.cys : 0;
+    if (np !== S.cpan || ny !== S.cyo) { S.cpan = np; S.cyo = ny; if (!CDRAG.raf) CDRAG.raf = requestAnimationFrame(function () { if (CDRAG) CDRAG.raf = 0; chartRedraw(); }); }
   });
-  document.addEventListener('pointerup', function () { if (!CDRAG) return; CDRAG = null; var b = document.getElementById('chart'); if (b) b.classList.remove('panning'); });
+  document.addEventListener('pointerup', function () { if (!CDRAG) return; CDRAG = null; var b = document.getElementById('chart'); if (b) b.classList.remove('panning', 'yscaling'); });
+  document.addEventListener('dblclick', function (e) { if (e.target.closest && e.target.closest('#chart .yhit')) { S.cys = 1; S.cyo = 0; chartRedraw(); } });
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && S.cfull) set({ cfull: false }); });
   setInterval(function () { if (S.screen !== 'token' || document.hidden || CDRAG) return; var b = document.getElementById('chart'); if (b && !b.matches(':hover')) chartRedraw(); }, 3000);
   document.addEventListener('mouseout', function (e) {

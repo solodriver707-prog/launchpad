@@ -3933,3 +3933,9 @@ button.dh2-row{cursor:pointer;border-radius:10px}button.dh2-row:hover{background
 .tc-ca:hover{color:#fff;border-color:rgba(241,221,176,.4);background:rgba(241,221,176,.06)}
 .tc-ca.ok{color:#3DDC97;border-color:rgba(61,220,151,.45)}
 .tc-name2{align-items:center}.tc-name2 .tc-ca{font-size:10.5px;color:var(--muted)}.tc-name2 .tc-ca.ok{color:#3DDC97}
+/* price-axis drag scaling */
+.yhit{position:absolute;right:0;top:0;bottom:22px;width:7%;cursor:ns-resize;z-index:3}
+#chart.yscaling,#chart.yscaling *{cursor:ns-resize!important;user-select:none}
+.yhit:hover{background:linear-gradient(90deg,transparent,rgba(241,221,176,.04))}
+.c-auto{position:absolute;right:76px;top:8px;z-index:4;padding:4px 10px;border-radius:99px;border:1px solid rgba(241,221,176,.3);background:rgba(10,10,12,.85);color:#F1DDB0;font:700 11px Manrope,sans-serif;cursor:pointer}
+.c-auto:hover{background:rgba(241,221,176,.12)}
