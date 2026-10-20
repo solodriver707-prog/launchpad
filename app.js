@@ -2226,7 +2226,7 @@
     var chips = Object.keys(SPRE).map(function (k) { var p = SPRE[k]; return '<button class="spc' + (sp.p === k ? ' on' : '') + '" data-act="spPre" data-arg="' + k + '"><span class="spc-ic">' + ICO[p[0]] + '</span><b>' + p[1] + '</b><small class="mono">' + p[2] + ' / ' + p[3] + ' / ' + p[4] + '</small>' + splitBar({ h: p[2], b: p[3], d: p[4] }) + '</button>'; }).join('') +
       '<button class="spc' + (sp.p === 'custom' ? ' on' : '') + '" data-act="spPre" data-arg="custom"><span class="spc-ic">' + ICO.custom + '</span><b>Custom</b><small>set it yourself</small><span class="spbar"><i style="flex:1;background:repeating-linear-gradient(90deg,#3a3a40 0 4px,#26262a 4px 8px)"></i></span></button>';
     var ex = function (k) { return (base * sp[k] / 100).toFixed(2).replace(/\.?0+$/, '') + '%'; };
-    var rows = ['h', 'b', 'd'].map(function (k) { var c0 = SPC[k]; return '<div class="spr" style="--c:' + c0[0] + '"><span class="spr-l"><span class="sp-ic">' + ICO[c0[1]] + '</span>' + c0[2] + '</span>' + (sp.p === 'custom' ? '<input type="range" min="0" max="' + (k === 'd' ? 50 : 100) + '" step="5" value="' + sp[k] + '" data-split="' + k + '">' : '<span class="spr-fill"><i style="width:' + sp[k] + '%;background:' + c0[3] + '"></i></span>') + '<b class="mono" data-spv="' + k + '">' + sp[k] + '%</b><small class="mono" data-spx="' + k + '">' + ex(k) + ' of each trade</small></div>'; }).join('');
+    var rows = ['h', 'b', 'd'].map(function (k) { var c0 = SPC[k]; return '<div class="spr" style="--c:' + c0[0] + '"><span class="spr-l"><span class="sp-ic">' + ICO[c0[1]] + '</span>' + c0[2] + '</span>' + (sp.p === 'custom' ? '<span class="spr-rg' + (k === 'd' ? ' cap' : '') + '"><input type="range" min="0" max="100" step="5" value="' + sp[k] + '" data-split="' + k + '">' + (k === 'd' ? '<em>cap 50%</em>' : '') + '</span>' : '<span class="spr-fill"><i style="width:' + sp[k] + '%;background:' + c0[3] + '"></i></span>') + '<b class="mono" data-spv="' + k + '">' + sp[k] + '%</b><small class="mono" data-spx="' + k + '">' + ex(k) + ' of each trade</small></div>'; }).join('');
     return '<div class="spk"><div class="spk-h"><b>Where the tax goes</b><span class="spk-lock">' + ICO.lock + 'Locked forever at launch</span></div><div class="spk-chips">' + chips + '</div>' +
       '<div class="spk-viz"><div class="spk-big" data-spbig>' + splitBar(sp, 'big') + '</div>' + rows + '</div>' +
       '<small class="spk-note">Dev share is capped at 50%. The treid platform fee is separate and never comes out of this split.</small></div>';
@@ -2691,7 +2691,7 @@
 
   document.addEventListener('input', function (e) {
     var spk = e.target.getAttribute && e.target.getAttribute('data-split');
-    if (spk && S.c.split) { var sp = S.c.split, v = Math.min(spk === 'd' ? 50 : 100, +e.target.value), others = ['h', 'b', 'd'].filter(function (k) { return k !== spk; }), rest = 100 - v;
+    if (spk && S.c.split) { var sp = S.c.split, v = Math.min(spk === 'd' ? 50 : 100, +e.target.value); if (+e.target.value !== v) e.target.value = v; var others = ['h', 'b', 'd'].filter(function (k) { return k !== spk; }), rest = 100 - v;
       var a = others[0], b2 = others[1], sumO = sp[a] + sp[b2];
       var na = sumO ? Math.round(rest * sp[a] / sumO / 5) * 5 : Math.round(rest / 10) * 5, nb = rest - na;
       if (b2 === 'd' && nb > 50) { nb = 50; na = rest - 50; } if (a === 'd' && na > 50) { na = 50; nb = rest - 50; }
