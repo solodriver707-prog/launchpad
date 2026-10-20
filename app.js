@@ -164,7 +164,8 @@
   } catch (e) {}
 
   function all() { return S.created.concat(S.launched, BASE); }
-  function find(tick) { var a = all(); for (var i = 0; i < a.length; i++) if (a[i].tick === tick) return a[i]; return null; }
+  S.archive = {};
+  function find(tick) { var a = all(); for (var i = 0; i < a.length; i++) if (a[i].tick === tick) return a[i]; return S.archive[tick] || null; }
   function featured() { return BASE.slice().sort(function (a, b) { return b.mcN - a.mcN; })[0]; }
   function saveCreated() { try { localStorage.setItem(LS.created, JSON.stringify(S.created.map(function (t) { var o = {}; for (var k in t) if (k !== 'hist') o[k] = t[k]; return o; }))); } catch (e) {} }
 
@@ -1616,7 +1617,18 @@
   // ================= WALLET PANEL (GMGN / Axiom style) =================
   S.walletView = null; S.trackWallets = [];
   try { S.trackWallets = JSON.parse(localStorage.getItem('gp.track') || '[]'); } catch (e) {}
+  function seedDevTrades(t) {
+    if (t._devSeeded || (S.account && t.creator === S.account)) return; t._devSeeded = true;
+    var dev = devOf(t), r = rng(hash(t.tick + 'devtr')), rm = riskMetrics(t), sold = rm[0].val === 'SOLD', nowPct = sold ? 0 : parseFloat(rm[0].val);
+    var initPct = sold ? 1.5 + r() * 5 : nowPct * (1 + r() * .6) + .2, tok = initPct / 100 * 1e9, px0 = (t.hist && t.hist[0] ? Math.min(t.hist[0], 6) : 5) * 1000 / 1e9;
+    S.trades.push({ tick: t.tick, side: 'buy', sol: +(tok * px0 / SOL_USD).toFixed(3), wallet: dev, t: t.born + 800, tax: 0, mine: false, price: px0, tokens: tok, sig: b58(64) });
+    var sellTok = sold ? tok : tok - nowPct / 100 * 1e9;
+    if (sellTok > tok * .02) { var h = t.hist || [t.mcN], k = Math.floor(h.length * (sold ? .15 + r() * .4 : .4 + r() * .5)), pxS = h[Math.min(h.length - 1, k)] * 1000 / 1e9, at = t.born + (Date.now() - t.born) * (k / h.length);
+      S.trades.push({ tick: t.tick, side: 'sell', sol: +(sellTok * pxS / SOL_USD).toFixed(3), wallet: dev, t: at, tax: 0, mine: false, price: pxS, tokens: sellTok, sig: b58(64) }); }
+    S.trades.sort(function (a, b) { return b.t - a.t; });
+  }
   function walletStats(addr, t) {
+    if (addr === devOf(t)) seedDevTrades(t);
     var px = price(t), tr = S.trades.filter(function (x) { return x.wallet === addr && x.tick === t.tick; }).sort(function (a, b) { return a.t - b.t; });
     var st = { trades: tr, nb: 0, ns: 0, b: 0, s: 0, tb: 0, ts: 0, first: tr.length ? tr[0].t : null, last: tr.length ? tr[tr.length - 1].t : null };
     tr.forEach(function (x) { var tok = x.tokens || x.sol * SOL_USD / (x.price || px); if (x.side === 'buy') { st.nb++; st.b += x.sol; st.tb += tok; } else { st.ns++; st.s += x.sol; st.ts += tok; } });
@@ -1658,7 +1670,11 @@
       if (profile < .3) { out = roll < .65 ? 'rug' : roll < .9 ? 'dead' : 'grad'; } else if (profile < .7) { out = roll < .25 ? 'rug' : roll < .65 ? 'dead' : 'grad'; } else { out = roll < .08 ? 'rug' : roll < .45 ? 'dead' : 'grad'; }
       ath = out === 'grad' ? 69 + r() * r() * 4000 : out === 'rug' ? 6 + r() * 40 : 5 + r() * 25; life = out === 'rug' ? 2 + r() * 40 : out === 'dead' ? 30 + r() * 600 : 1440 + r() * 20000;
       var pts = [], v = 5, peakAt = .2 + r() * .5; for (var k = 0; k < 24; k++) { var f = k / 23; v = f < peakAt ? 5 + (ath - 5) * Math.pow(f / peakAt, 1.4) : out === 'rug' ? (f < peakAt + .06 ? ath * .2 : ath * .05) : out === 'dead' ? ath * Math.max(.15, 1 - (f - peakAt) * 1.6) : ath * (.55 + r() * .35); pts.push(v * (.94 + r() * .12)); }
-      past.push({ name: adj + ' ' + nn, tick: (adj.slice(0, 2) + nn.slice(0, 3)).toUpperCase(), spec: { kind: A.KINDS[Math.floor(r() * A.KINDS.length)], skin: A.SKINS[Math.floor(r() * A.SKINS.length)], bg: A.BGS[Math.floor(r() * A.BGS.length)], eyes: 'normal', mouth: pick(['smile', 'grin', 'o']), acc: 'none' }, out: out, ath: ath, now: pts[23], life: life, ago: (i + 1) * (2 + r() * 9) * 1440, pts: pts, devSoldAfter: out === 'rug' ? life : out === 'dead' ? life * (.2 + r() * .6) : (r() < .3 ? null : life * (.3 + r() * .7)) });
+      var pastO = { name: adj + ' ' + nn, tick: (adj.slice(0, 2) + nn.slice(0, 3)).toUpperCase(), spec: { kind: A.KINDS[Math.floor(r() * A.KINDS.length)], skin: A.SKINS[Math.floor(r() * A.SKINS.length)], bg: A.BGS[Math.floor(r() * A.BGS.length)], eyes: 'normal', mouth: pick(['smile', 'grin', 'o']), acc: 'none' }, out: out, ath: ath, now: pts[23], life: life, ago: (i + 1) * (2 + r() * 9) * 1440, pts: pts, devSoldAfter: out === 'rug' ? life : out === 'dead' ? life * (.2 + r() * .6) : (r() < .3 ? null : life * (.3 + r() * .7)) };
+      var atk = pastO.tick; while (find(atk) && !(S.archive[atk] && S.archive[atk].creator === addr)) atk = atk.slice(0, 5) + 'XYZQW'[Math.floor(r() * 5)];
+      pastO.tick = atk;
+      if (!S.archive[atk]) { var bornA = Date.now() - pastO.ago * 60000; S.archive[atk] = { name: pastO.name, tick: atk, spec: pastO.spec, buy: Math.floor(r() * 4), sell: 0, pair: 'SOL', mcN: pastO.now, mc0: 5, prog: out === 'grad' ? 100 : Math.min(97, (Math.max.apply(null, pastO.pts) - 5) / 64 * 100), born: bornA, holders: Math.round(20 + pastO.ath * 3), soc: false, ca: fakeCA(), vol: pastO.ath * .4, hist: pastO.pts.slice(), creator: addr, ath: pastO.ath, archived: out, devPct: null, devSoldAfter: pastO.devSoldAfter }; S.archive[atk].sell = S.archive[atk].buy; }
+      past.push(pastO);
     }
     past.sort(function (a, b) { return a.ago - b.ago; });
     var g = past.filter(function (x) { return x.out === 'grad'; }).length, rg = past.filter(function (x) { return x.out === 'rug'; }).length;
@@ -1673,7 +1689,7 @@
     var rows = h.live.map(function (t) { var dh = (Date.now() - t.born) / 60000, ds = riskMetrics(t)[0].val === 'SOLD';
         return '<button class="dh2-row" data-act="open" data-arg="' + esc(t.tick) + '">' + avatarHTML(t, 30) + '<span class="dh2-n"><b>' + esc(t.name) + '</b><small>$' + esc(t.tick) + ' · ' + ago(t.born) + ' ago · <i class="lv">live</i></small></span><span class="dh2-mc mono">' + fmtK(athOf(t)) + '</span><span class="dh2-s ' + (ds ? 'r' : 'g') + '">' + (ds ? 'sold' : 'holding') + '</span></button>'; }).join('') +
       h.past.map(function (x) { var c = holdCls(x.devSoldAfter);
-        return '<div class="dh2-row"><span class="av" style="width:30px;height:30px">' + A.svg(x.spec) + '</span><span class="dh2-n"><b>' + esc(x.name) + '</b><small>$' + x.tick + ' · ' + ago(Date.now() - x.ago * 60000) + ' ago' + (x.out === 'grad' ? ' · 🎓' : '') + '</small></span><span class="dh2-mc mono">' + fmtK(x.ath) + '</span><span class="dh2-s ' + c + '">' + (x.devSoldAfter == null ? 'still holding' : durH(x.devSoldAfter)) + '</span></div>'; }).join('');
+        return '<button class="dh2-row" data-act="open" data-arg="' + esc(x.tick) + '"><span class="av" style="width:30px;height:30px">' + A.svg(x.spec) + '</span><span class="dh2-n"><b>' + esc(x.name) + '</b><small>$' + x.tick + ' · ' + ago(Date.now() - x.ago * 60000) + ' ago' + (x.out === 'grad' ? ' · 🎓' : '') + '</small></span><span class="dh2-mc mono">' + fmtK(x.ath) + '</span><span class="dh2-s ' + c + '">' + (x.devSoldAfter == null ? 'still holding' : durH(x.devSoldAfter)) + '</span></button>'; }).join('');
     return '<div class="dw-sec dh2"><div class="dw-title">Last deploys <span class="mono muted">' + (h.live.length + h.past.length) + '</span></div>' +
       (fast ? '<div class="dh2-alert">⚠ Sold within 1 hour on <b>' + fast + ' of ' + h.past.length + '</b> previous coins</div>' : '') +
       '<div class="dh2-head"><span>Coin</span><span class="r">ATH MC</span><span class="r">Dev sold after</span></div>' + rows +
@@ -1787,7 +1803,7 @@
     var q = quoteFor(t), pos = position(t), tmax = Math.max(t.buy, t.sell);
     var curveSol = (t.prog / 100 * 85).toFixed(2);
     var head = '<section class="card-s tp-head2 tp-banner"><div class="tb-bg' + (t.banner ? ' ban' : '') + '" aria-hidden="true">' + (t.banner ? '<img src="' + t.banner + '" alt="">' : avatarHTML(t, 420)) + '</div><div class="tb-av">' + avatarHTML(t, 104) + '</div>' +
-      '<div class="tp-id"><div class="title-xl" style="margin:0;font-size:30px">' + esc(t.name) + ' <span class="tk">$' + id + '</span></div>' + msBadges(t, 'lg') +
+      '<div class="tp-id"><div class="title-xl" style="margin:0;font-size:30px">' + esc(t.name) + ' <span class="tk">$' + id + '</span></div>' + msBadges(t, 'lg') + (t.archived ? '<div class="arch-note ' + t.archived + '">' + (t.archived === 'rug' ? '⚠ Past coin · dev sold after ' + durH(t.devSoldAfter) : t.archived === 'dead' ? '💤 Past coin · inactive, faded on the curve' : '🎓 Past coin · graduated') + '</div>' : '') +
         '<div class="hs-pills" style="margin-top:8px"><button class="pill copy2" data-act="ca" data-arg="' + id + '">CA ' + esc(short(t.ca)) + ' ' + I.copy + '</button><span class="pill" style="padding-left:11px">created <span data-t="' + t.born + '">&nbsp;' + ago(t.born) + '</span>&nbsp;ago by&nbsp;' + makerHTML(devOf(t), t) + '</span>' +
         socialsHTML(t, true) +
         '<button class="iconbtn" data-act="star" data-arg="' + id + '" aria-label="Watchlist" aria-pressed="' + on + '">' + I.star(on) + '</button><button class="iconbtn" data-act="share" aria-label="Copy link"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8h16v-8M12 3v13M7 8l5-5 5 5"/></svg></button></div></div>' +

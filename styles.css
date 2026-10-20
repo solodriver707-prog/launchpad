@@ -3214,3 +3214,5 @@ button.dh2-row{cursor:pointer;border-radius:10px}button.dh2-row:hover{background
 .liq-buy.rel .liq-c{flex-direction:column;align-items:flex-start;gap:2px}
 .hgtax,.trap-live2,.trap-warn{display:none!important}
 .liq-prev{padding:10px 14px}.liq-prev .lq-big{font-size:24px}.tl3{display:flex}.tl3 .liq{flex:1}.tc-seg button{font-size:11.5px}
+.arch-note{display:inline-flex;margin-top:8px;padding:5px 12px;border-radius:99px;font-size:12px;font-weight:700;background:rgba(255,255,255,.06);color:var(--soft)}
+.arch-note.rug{background:rgba(242,112,138,.14);color:#F2708A}.arch-note.grad{background:rgba(61,220,151,.12);color:#3DDC97}
