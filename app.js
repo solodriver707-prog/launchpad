@@ -396,7 +396,7 @@
       '<div class="tc-hero' + (t.banner ? ' has-ban' : '') + '"><div class="tch-bg' + (t.banner ? ' ban' : '') + '" aria-hidden="true">' + (t.banner ? '<img src="' + t.banner + '" alt="">' : avatarHTML(t, 240)) + '</div>' +
         '<div class="tc-age tch-age ' + fr.cls + '"><span class="ag-dot"></span><span class="ag-lab">' + fr.lab + '</span><b class="mono" data-t="' + t.born + '">' + ago(t.born) + '</b>' + (done ? '<span class="ag-grad">GRADUATED</span>' : '') + '</div>' +
         '<div class="tch-av">' + avatarHTML(t, 150) + '</div>' + '' + (opts.preview ? '' : '<button class="tch-star' + (on ? ' on' : '') + '" data-act="star" data-arg="' + esc(t.tick) + '" aria-label="Add to watchlist" aria-pressed="' + on + '">' + I.star(on) + '</button>') +
-        '<div class="tch-side">' + (trapLeft(t) > 0 ? trapBox(t, 'card') : '<div class="tax" style="background:' + taxBg(tmax) + '" data-tip="Tax ' + tmax + '% on buys and sells"><small>TAX</small><b>' + tmax + '%</b></div>') +
+        '<div class="tch-side">' + (trapLeft(t) > 0 ? trapBox(t, 'card') : '<div class="tax" style="background:' + taxBg(tmax) + '" data-tip="' + esc(splitTip(t)) + '"><small>TAX</small><b>' + tmax + '%</b>' + (splitOf(t) ? splitBar(splitOf(t), 'mini') : '') + '</div>') +
         '<div class="pairmini" data-tip="Paired with ' + esc(pairInfo(t.pair).name) + '">' + coinHTML(t.pair, 28) + '<small>PAIR</small><b>' + esc(pairLabel(t.pair)) + '</b></div></div></div>' +
       '<div class="tc-name2"><b>' + esc(t.name) + '</b><span class="mono">$' + esc(t.tick) + '</span></div>' +
       riskTiles(t) + socialsHTML(t) +
@@ -1985,7 +1985,7 @@
         '<div class="hs-pills" style="margin-top:8px"><button class="pill copy2" data-act="ca" data-arg="' + id + '">CA ' + esc(short(t.ca)) + ' ' + I.copy + '</button><span class="pill" style="padding-left:11px">created <span data-t="' + t.born + '">&nbsp;' + ago(t.born) + '</span>&nbsp;ago by&nbsp;' + makerHTML(devOf(t), t) + '</span>' +
         socialsHTML(t, true) +
         '<button class="iconbtn" data-act="star" data-arg="' + id + '" aria-label="Watchlist" aria-pressed="' + on + '">' + I.star(on) + '</button><button class="iconbtn" data-act="share" aria-label="Copy link"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8h16v-8M12 3v13M7 8l5-5 5 5"/></svg></button></div></div>' +
-      '<div class="tp-key">' + (trapLeft(t) > 0 ? trapBox(t, 'head') : '') + '<div class="tax" style="background:' + taxBg(tmax) + ';padding:9px 14px"><small>TAX</small><b style="font-size:24px">' + tmax + '%</b><small style="letter-spacing:.04em;font-size:9px">BUY & SELL</small></div>' +
+      '<div class="tp-key">' + (trapLeft(t) > 0 ? trapBox(t, 'head') : '') + '<div class="tax" style="background:' + taxBg(tmax) + ';padding:9px 14px"><small>TAX</small><b style="font-size:24px">' + tmax + '%</b><small style="letter-spacing:.04em;font-size:9px">BUY & SELL</small>' + (splitOf(t) ? splitBar(splitOf(t), 'mini') : '') + '</div>' +
         '<button class="pairbig" data-act="pairOpen" data-arg="' + esc(t.pair) + '">' + coinHTML(t.pair, 42) + '<div><small>PAIRED WITH</small><b>' + esc(pairLabel(t.pair)) + '</b><span>' + esc(pairInfo(t.pair).name) + '</span></div></button></div></section>';
     var bp = nb + ns ? nb / (nb + ns) * 100 : 50, vp = vb + vs ? vb / (vb + vs) * 100 : 50, offAth = (1 - t.mcN / ath) * 100;
     var mcrow = '<section class="card-s mcrow2"><div class="mc2-top"><div class="mc2-main"><small>Market cap</small><div class="mc2-v"><span data-mc="' + id + '" data-v="' + fmtK(t.mcN) + '">' + fmtK(t.mcN) + '</span><span class="chgpill ' + (c >= 0 ? 'up' : 'down') + '" data-chg="' + id + '">' + chgTxt(c) + '</span></div>' +
@@ -2091,7 +2091,7 @@
       '<span class="muted" style="font-size:12.5px;line-height:1.55">' + (t.prog >= 100 ? 'Liquidity is live on Raydium.' : curveSol + ' SOL in the curve. Graduates to Raydium at 100%.') + '</span></section>';
     var mbuy = '<button class="m-buy" data-act="mBuy">Buy / Sell $' + id + (trapLeft(t) > 0 ? ' · 🪤 ' + snipeNow(t) + '%' : ' · tax ' + tmax + '%') + '</button>';
     return mbuy + '<main class="wrap tp-env" style="padding-top:14px;--coin:' + ((t.spec && t.spec.bg) || '#2A2418') + '"><div class="tp-glow" aria-hidden="true">' + avatarHTML(t, 300) + '</div><button class="link" data-act="home">' + I.back + 'Back to board</button>' + head +
-      '<div class="tp-grid3">' + thread + '<div class="tp-main">' + mcrow + chart + tabsHTML + '</div><aside class="tp-side">' + panel + posCard + safety + curve + '</aside></div></main>';
+      '<div class="tp-grid3">' + thread + '<div class="tp-main">' + mcrow + chart + tabsHTML + '</div><aside class="tp-side">' + panel + posCard + taxSplitPanel(t) + safety + curve + '</aside></div></main>';
   }
   // give seeded trades real makers / prices
   S.trades.forEach(function (tr) { var t = find(tr.tick); tr.wallet = pickWallet(); tr.price = t ? price(t) * (1 + (Math.random() - 0.5) * 0.12) : 0; tr.tokens = tr.sol * SOL_USD / (tr.price || 1); tr.sig = b58(64); });
@@ -2194,6 +2194,41 @@
       }; im.src = r.result; }; r.readAsDataURL(f);
     });
   }
+  // ===== TAX SPLIT: holders / burn / dev, locked at launch =====
+  var SPRE = { community: ['💎', 'Community', 70, 20, 10], deflation: ['🔥', 'Deflation', 20, 70, 10], balanced: ['⚖️', 'Balanced', 40, 30, 30] };
+  var SPC = { h: ['#7FB6FF', '💎', 'Holders'], b: ['#FF8A5B', '🔥', 'Burn'], d: ['#F5D9A8', '👤', 'Dev'] };
+  function splitOf(t) {
+    if (!t || Math.max(t.buy || 0, t.sell || 0) <= 0) return null;
+    if (t.split) return t.split;
+    var r = rng(hash(t.tick + 'split')), k = t.burn && !t.rewards ? 'deflation' : t.rewards ? 'community' : ['community', 'deflation', 'balanced', 'community'][Math.floor(r() * 4)], p = SPRE[k];
+    if (r() < .3) { var h = 20 + Math.round(r() * 12) * 5, d = Math.min(50, 5 + Math.round(r() * 5) * 5); if (h + d > 95) h = 95 - d; t.split = { p: 'custom', h: h, b: 100 - h - d, d: d }; }
+    else t.split = { p: k, h: p[2], b: p[3], d: p[4] };
+    return t.split;
+  }
+  function splitBar(sp, cls) { return '<span class="spbar ' + (cls || '') + '">' + ['h', 'b', 'd'].filter(function (k) { return sp[k] > 0; }).map(function (k) { return '<i style="flex:' + sp[k] + ';background:' + SPC[k][0] + '"></i>'; }).join('') + '</span>'; }
+  function splitTip(t) { var sp = splitOf(t), m = Math.max(t.buy, t.sell); return sp ? 'Tax ' + m + '% → ' + sp.h + '% holders · ' + sp.b + '% burn · ' + sp.d + '% dev (locked)' : 'No tax — plain coin'; }
+  function splitPicker(c) {
+    var base = c.buy; if (base <= 0) return '<div class="spk off"><b>Where the tax goes</b><small>0% tax — nothing to split. Your coin trades as a plain token.</small></div>';
+    var sp = c.split || (c.split = { p: 'community', h: 70, b: 20, d: 10 });
+    var chips = Object.keys(SPRE).map(function (k) { var p = SPRE[k]; return '<button class="spc' + (sp.p === k ? ' on' : '') + '" data-act="spPre" data-arg="' + k + '"><span class="spc-ic">' + p[0] + '</span><b>' + p[1] + '</b><small class="mono">' + p[2] + ' / ' + p[3] + ' / ' + p[4] + '</small>' + splitBar({ h: p[2], b: p[3], d: p[4] }) + '</button>'; }).join('') +
+      '<button class="spc' + (sp.p === 'custom' ? ' on' : '') + '" data-act="spPre" data-arg="custom"><span class="spc-ic">🎛️</span><b>Custom</b><small>set it yourself</small><span class="spbar"><i style="flex:1;background:repeating-linear-gradient(90deg,#3a3a40 0 4px,#26262a 4px 8px)"></i></span></button>';
+    var ex = function (k) { return (base * sp[k] / 100).toFixed(2).replace(/\.?0+$/, '') + '%'; };
+    var rows = ['h', 'b', 'd'].map(function (k) { var c0 = SPC[k]; return '<div class="spr" style="--c:' + c0[0] + '"><span class="spr-l">' + c0[1] + ' ' + c0[2] + '</span>' + (sp.p === 'custom' ? '<input type="range" min="0" max="' + (k === 'd' ? 50 : 100) + '" step="5" value="' + sp[k] + '" data-split="' + k + '">' : '<span class="spr-fill"><i style="width:' + sp[k] + '%"></i></span>') + '<b class="mono" data-spv="' + k + '">' + sp[k] + '%</b><small class="mono" data-spx="' + k + '">' + ex(k) + ' of each trade</small></div>'; }).join('');
+    return '<div class="spk"><div class="spk-h"><b>Where the tax goes</b><span class="spk-lock">🔒 Locked forever at launch</span></div><div class="spk-chips">' + chips + '</div>' +
+      '<div class="spk-viz"><div class="spk-big" data-spbig>' + splitBar(sp, 'big') + '</div>' + rows + '</div>' +
+      '<small class="spk-note">Dev share is capped at 50%. The treid platform fee is separate and never comes out of this split.</small></div>';
+  }
+  function spUpdate() {
+    var sp = S.c.split, base = S.c.buy; ['h', 'b', 'd'].forEach(function (k) { var v = document.querySelector('[data-spv="' + k + '"]'), x = document.querySelector('[data-spx="' + k + '"]'), r = document.querySelector('[data-split="' + k + '"]'); if (v) v.textContent = sp[k] + '%'; if (x) x.textContent = (base * sp[k] / 100).toFixed(2).replace(/\.?0+$/, '') + '% of each trade'; if (r && +r.value !== sp[k]) r.value = sp[k]; });
+    var bg = document.querySelector('[data-spbig]'); if (bg) bg.innerHTML = splitBar(sp, 'big');
+  }
+  function taxSplitPanel(t) {
+    var sp = splitOf(t), m = Math.max(t.buy, t.sell); if (!sp) return '<section class="card-s panel tsp-panel"><b>Where the tax goes</b><small class="muted">0% tax — plain coin, nothing is split.</small></section>';
+    var pre = SPRE[sp.p], name = pre ? pre[0] + ' ' + pre[1] : '🎛️ Custom';
+    return '<section class="card-s panel tsp-panel"><div class="tsp-h"><b>Where the ' + m + '% tax goes</b><span class="tsp-p">' + name + ' · 🔒 locked</span></div>' + splitBar(sp, 'big') +
+      '<div class="tsp-rows">' + ['h', 'b', 'd'].map(function (k) { var c0 = SPC[k]; return '<div class="tsp-r" style="--c:' + c0[0] + '"><em>' + c0[1] + '</em><span>' + c0[2] + '</span><b class="mono">' + sp[k] + '%</b><small class="mono">' + (m * sp[k] / 100).toFixed(2).replace(/\.?0+$/, '') + '% / trade</small></div>'; }).join('') + '</div>' +
+      '<small class="muted tsp-n">On a 1 SOL buy: ' + ['h', 'b', 'd'].map(function (k) { return (m / 100 * sp[k] / 100).toFixed(4).replace(/0+$/, '') + ' SOL ' + SPC[k][1]; }).join(' · ') + '</small></section>';
+  }
   function taxPicker(c) {
     var sn = c.snipe || { on: false, start: 80, dur: 60 }, base = c.buy;
     var steps = []; for (var v = 0; v <= 10; v++) steps.push('<button class="txs' + (base === v ? ' on' : '') + '" style="--tc:' + taxBg(v) + '" data-act="ctax" data-arg="' + v + '">' + v + '%</button>');
@@ -2243,7 +2278,7 @@
   function createPage() {
     var c = S.c, sp = c.spec, tmax = Math.max(c.buy, c.sell);
     var dq = devQuote(String(c.devBuy || '').replace(',', '.'));
-    var preview = { devPct: +dq.pct.toFixed(2), name: c.name || 'Your token', tick: c.tick || 'TICKER', spec: sp, img: c.img, banner: c.banner, buy: c.buy, sell: c.sell, pair: c.pair, mcN: 5, mc0: 5, prog: 1, born: Date.now(), holders: 1, vol: 0, ca: 'preview', hist: [5, 5.1, 5, 5.2, 5.4], rewards: false, burn: false };
+    var preview = { devPct: +dq.pct.toFixed(2), name: c.name || 'Your token', tick: c.tick || 'TICKER', spec: sp, img: c.img, banner: c.banner, buy: c.buy, sell: c.sell, split: c.buy > 0 ? c.split : null, pair: c.pair, mcN: 5, mc0: 5, prog: 1, born: Date.now(), holders: 1, vol: 0, ca: 'preview', hist: [5, 5.1, 5, 5.2, 5.4], rewards: false, burn: false };
     function opts(key, list) { return '<div class="optrow">' + list.map(function (v) { return '<button class="opt' + (sp[key] === v ? ' on' : '') + '" data-act="spec" data-k="' + key + '" data-arg="' + v + '">' + v + '</button>'; }).join('') + '</div>'; }
     function sws(key, list) { return '<div class="optrow">' + list.map(function (v) { return '<button class="sw' + (sp[key] === v ? ' on' : '') + '" style="background:' + v + '" data-act="spec" data-k="' + key + '" data-arg="' + v + '" aria-label="Colour ' + v + '"></button>'; }).join('') + '</div>'; }
     return '<main class="wrap" style="padding-top:22px;max-width:1240px">' +
@@ -2262,7 +2297,7 @@
           '<div class="field"><label for="c-desc" style="font-weight:700">Description</label><textarea id="c-desc" class="inp" data-bind="c.desc" placeholder="What is this token about?">' + esc(c.desc) + '</textarea></div>' +
           '<div class="fsec"><i>2</i>Market</div>' +
           pairPicker(c) +
-          taxPicker(c) + devBuyPicker(c) +
+          taxPicker(c) + splitPicker(c) + devBuyPicker(c) +
           '<div class="fsec"><i>3</i>Community</div>' +
           '<div class="socrow"><span class="soc-l">Socials <small>optional · shown as buttons on your coin</small></span><div class="socgrid">' + socField(c, 'x', 'X', '', 'Paste X link') + socField(c, 'tg', 'Telegram', '', 'Paste Telegram link') + socField(c, 'web', 'Website', '', 'Paste website link') + '</div></div>' +
           '<button class="big-btn btn pri" data-act="launch">' + (S.account ? 'Launch token' : 'Connect wallet to launch') + '</button>' +
@@ -2525,6 +2560,7 @@
       case 'demoImgsReset': BASE.forEach(function (t) { if (DIMG[t.tick]) delete t.img; }); DIMG = {}; try { localStorage.removeItem('dl.demoimgs'); } catch (er) {} render(); break;
       case 'devbuy': setC({ devBuy: arg === '0' ? '' : arg }); break;
       case 'ctax': setC({ buy: +arg, sell: +arg }); break;
+      case 'spPre': var sp1 = S.c.split || {}; if (arg === 'custom') setC({ split: { p: 'custom', h: sp1.h || 70, b: sp1.b || 20, d: sp1.d || 10 } }); else { var pp = SPRE[arg]; setC({ split: { p: arg, h: pp[2], b: pp[3], d: pp[4] } }); } break;
       case 'snipeToggle': var sn0 = S.c.snipe || { on: false, start: 80, dur: 60 }; sn0.on = !sn0.on; setC({ snipe: sn0 }); break;
       case 'snipeStart': var sn1 = S.c.snipe; sn1.start = +arg; setC({ snipe: sn1 }); break;
       case 'snipeDur': var sn2 = S.c.snipe; sn2.dur = +arg; setC({ snipe: sn2 }); break;
@@ -2629,7 +2665,7 @@
         var dq2 = devQuote(String(c.devBuy || '').replace(',', '.'));
         if (dq2.sol > 0 && typeof S.balance === 'number' && dq2.sol > S.balance) { toast('Not enough devnet SOL for a ' + dq2.sol + ' SOL buy — balance ' + S.balance.toFixed(3)); break; }
         if (find(c.tick)) { toast('$' + c.tick + ' is already taken'); break; }
-        var nt = { name: c.name.trim(), tick: c.tick, spec: c.spec, img: c.img, banner: c.banner || null, snipe: c.snipe && c.snipe.on ? { on: true, start: c.snipe.start, dur: c.snipe.dur } : null, buy: c.buy, sell: c.sell, pair: c.pair, mcN: 5, mc0: 5, prog: 1, born: Date.now(), holders: 1,
+        var nt = { name: c.name.trim(), tick: c.tick, spec: c.spec, img: c.img, banner: c.banner || null, snipe: c.snipe && c.snipe.on ? { on: true, start: c.snipe.start, dur: c.snipe.dur } : null, buy: c.buy, sell: c.sell, split: c.buy > 0 && c.split ? { p: c.split.p, h: c.split.h, b: c.split.b, d: c.split.d } : null, pair: c.pair, mcN: 5, mc0: 5, prog: 1, born: Date.now(), holders: 1,
           soc: !!(c.x || c.tg || c.web), links: { web: linkOf(c.web), x: c.x ? linkOf(/[\/.]/.test(c.x) ? c.x : 'x.com/' + c.x.replace(/^@/, '')) : null, tg: c.tg ? linkOf(/[\/.]/.test(c.tg) ? c.tg : 't.me/' + c.tg.replace(/^@/, '')) : null, demo: false }, rewards: false, burn: false, ca: fakeCA(), vol: 0, hist: [5, 5], desc: c.desc.trim(), creator: S.account };
         nt.devPct = +dq2.pct.toFixed(2);
         S.created.unshift(nt);
@@ -2641,6 +2677,12 @@
   });
 
   document.addEventListener('input', function (e) {
+    var spk = e.target.getAttribute && e.target.getAttribute('data-split');
+    if (spk && S.c.split) { var sp = S.c.split, v = Math.min(spk === 'd' ? 50 : 100, +e.target.value), others = ['h', 'b', 'd'].filter(function (k) { return k !== spk; }), rest = 100 - v;
+      var a = others[0], b2 = others[1], sumO = sp[a] + sp[b2];
+      var na = sumO ? Math.round(rest * sp[a] / sumO / 5) * 5 : Math.round(rest / 10) * 5, nb = rest - na;
+      if (b2 === 'd' && nb > 50) { nb = 50; na = rest - 50; } if (a === 'd' && na > 50) { na = 50; nb = rest - 50; }
+      sp[spk] = v; sp[a] = na; sp[b2] = nb; spUpdate(); return; }
     var rg = e.target.getAttribute && e.target.getAttribute('data-range');
     if (rg) {
       var pk = rg.split('|'), k = pk[0], idx = +pk[1], val = +e.target.value, r = S.r[k];
@@ -2790,7 +2832,7 @@
     ['Tax flywheel', 'Every trade’s tax splits three ways: creator, holders and burn. More trading, more rewards.']
   ];
   var FW = { raf: 0, el: null, coins: [], last: 0, lt: 0, paused: false, hi: -1, jars: [0, 0, 0], spawn: 0, cnt: [1240, 386, 0, [52, 171], 214, 0] };
-  var FST = [['Launch', 'Make a coin, pick a tax', '#F5D9A8'], ['Sniper trap', 'Early bots pay huge tax', '#FF5E6C'], ['Bonding curve', 'Every buy lifts the price', '#3DDC97'], ['Risk scan', 'We flag risks, never hide', '#FFB15C'], ['Graduate', 'At $69K it moves to Raydium', '#F5D9A8'], ['Tax split', 'Tax goes to 3 places', '#7FB6FF']];
+  var FST = [['Launch', 'Make a coin, pick a tax', '#F5D9A8'], ['Sniper trap', 'Early bots pay huge tax', '#FF5E6C'], ['Bonding curve', 'Every buy lifts the price', '#3DDC97'], ['Risk scan', 'We flag risks, never hide', '#FFB15C'], ['Graduate', 'At $69K it moves to Raydium', '#F5D9A8'], ['Tax split', 'Creator picks the split, locked', '#7FB6FF']];
   function fxMini(k) {
     var t = all()[3] || all()[0];
     if (k === 0) return '<div class="fm fm0"><span class="fm-blank">?</span><span class="fm-arr">→</span><span class="fm-coin">' + avatarHTML(t, 26) + '<i class="mono">2%</i></span></div>';
@@ -2798,7 +2840,7 @@
     if (k === 2) return '<div class="fm fm2"><svg viewBox="0 0 120 34"><path class="fm-ln" d="M2 32 C40 30 60 24 80 14 S110 3 118 2" fill="none" stroke="#3DDC97" stroke-width="2.5" stroke-linecap="round"/></svg><span class="fm-up mono">▲ price</span></div>';
     if (k === 3) return '<div class="fm fm3"><span class="g">Dev ✓</span><span class="r">Top10 ⚠</span><span class="g">Bundle ✓</span></div>';
     if (k === 4) return '<div class="fm fm4"><span class="fm-bar"><i></i></span><span class="fm-cap">🎓</span><small class="mono">$69K</small></div>';
-    return '<div class="fm fm5"><span class="fm-split"><i style="flex:5;background:#F5D9A8"></i><i style="flex:3;background:#7FB6FF"></i><i style="flex:2;background:#FF8A5B"></i></span><span class="fm-lab"><em>👤 dev</em><em>💎 holders</em><em>🔥 burn</em></span></div>';
+    return '<div class="fm fm5"><span class="fm-split"><i style="flex:5;background:#7FB6FF"></i><i style="flex:3;background:#FF8A5B"></i><i style="flex:2;background:#F5D9A8"></i></span><span class="fm-lab"><em>💎 holders</em><em>🔥 burn</em><em>👤 dev</em></span></div>';
   }
   function fxRead(k) {
     var c = FW.cnt, v = k === 0 ? '<b>' + fmtNum(c[0]) + '</b> coins minted' : k === 1 ? '<b>' + fmtNum(c[1]) + '</b> bots taxed' : k === 2 ? '<b>+' + c[2].toFixed(1) + ' SOL</b> bought' : k === 3 ? '<b class="r">⚠ ' + c[3][0] + '</b> · <b class="g">✓ ' + c[3][1] + '</b>' : k === 4 ? '<b>🎓 ' + c[4] + '</b> graduated' : '<b>$' + fmtNum(Math.round(c[5])) + '</b> paid out';
