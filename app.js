@@ -394,7 +394,7 @@
       '<div class="tc-hero' + (t.banner ? ' has-ban' : '') + '"><div class="tch-bg' + (t.banner ? ' ban' : '') + '" aria-hidden="true">' + (t.banner ? '<img src="' + t.banner + '" alt="">' : avatarHTML(t, 240)) + '</div>' +
         '<div class="tc-age tch-age ' + fr.cls + '"><span class="ag-dot"></span><span class="ag-lab">' + fr.lab + '</span><b class="mono" data-t="' + t.born + '">' + ago(t.born) + '</b>' + (done ? '<span class="ag-grad">GRADUATED</span>' : '') + '</div>' +
         '<div class="tch-av">' + avatarHTML(t, 150) + '</div>' + '' + (opts.preview ? '' : '<button class="tch-star' + (on ? ' on' : '') + '" data-act="star" data-arg="' + esc(t.tick) + '" aria-label="Add to watchlist" aria-pressed="' + on + '">' + I.star(on) + '</button>') +
-        '<div class="tch-side">' + (trapLeft(t) > 0 ? '<div class="tax hgtax" data-hgtax="' + esc(t.tick) + '" data-tip="Sniper trap: ' + snipeNow(t) + '% tax until the timer runs out, then ' + tmax + '%">' + hgSVG(trapLeft(t) / t.snipe.dur) + '<span class="hgt"><small>TAX</small><b>' + snipeNow(t) + '%</b><em class="hgt-t mono">' + trapFmt(trapLeft(t)) + '</em></span></div>' : '<div class="tax" style="background:' + taxBg(tmax) + '" data-tip="Tax ' + tmax + '% on buys and sells"><small>TAX</small><b>' + tmax + '%</b></div>') +
+        '<div class="tch-side">' + (trapLeft(t) > 0 ? trapBox(t, 'card') : '<div class="tax" style="background:' + taxBg(tmax) + '" data-tip="Tax ' + tmax + '% on buys and sells"><small>TAX</small><b>' + tmax + '%</b></div>') +
         '<div class="pairmini" data-tip="Paired with ' + esc(pairInfo(t.pair).name) + '">' + coinHTML(t.pair, 28) + '<small>PAIR</small><b>' + esc(pairLabel(t.pair)) + '</b></div></div></div>' +
       '<div class="tc-name2"><b>' + esc(t.name) + '</b><span class="mono">$' + esc(t.tick) + '</span></div>' +
       riskTiles(t) + socialsHTML(t) +
@@ -1791,7 +1791,7 @@
         '<div class="hs-pills" style="margin-top:8px"><button class="pill copy2" data-act="ca" data-arg="' + id + '">CA ' + esc(short(t.ca)) + ' ' + I.copy + '</button><span class="pill" style="padding-left:11px">created <span data-t="' + t.born + '">&nbsp;' + ago(t.born) + '</span>&nbsp;ago by&nbsp;' + makerHTML(devOf(t), t) + '</span>' +
         socialsHTML(t, true) +
         '<button class="iconbtn" data-act="star" data-arg="' + id + '" aria-label="Watchlist" aria-pressed="' + on + '">' + I.star(on) + '</button><button class="iconbtn" data-act="share" aria-label="Copy link"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8h16v-8M12 3v13M7 8l5-5 5 5"/></svg></button></div></div>' +
-      '<div class="tp-key">' + (trapLeft(t) > 0 ? '<div class="trap-live2" data-traphost>' + trapRing(t, 52) + '<span><b>🪤 Sniper trap on</b><small>drops to ' + tmax + '% in <i data-trapt="' + id + '">' + trapFmt(trapLeft(t)) + '</i></small></span></div>' : '') + '<div class="tax" style="background:' + taxBg(tmax) + ';padding:9px 14px"><small>TAX</small><b style="font-size:24px">' + tmax + '%</b><small style="letter-spacing:.04em;font-size:9px">BUY & SELL</small></div>' +
+      '<div class="tp-key">' + (trapLeft(t) > 0 ? trapBox(t, 'head') : '') + '<div class="tax" style="background:' + taxBg(tmax) + ';padding:9px 14px"><small>TAX</small><b style="font-size:24px">' + tmax + '%</b><small style="letter-spacing:.04em;font-size:9px">BUY & SELL</small></div>' +
         '<button class="pairbig" data-act="pairOpen" data-arg="' + esc(t.pair) + '">' + coinHTML(t.pair, 42) + '<div><small>PAIRED WITH</small><b>' + esc(pairLabel(t.pair)) + '</b><span>' + esc(pairInfo(t.pair).name) + '</span></div></button></div></section>';
     var bp = nb + ns ? nb / (nb + ns) * 100 : 50, vp = vb + vs ? vb / (vb + vs) * 100 : 50, offAth = (1 - t.mcN / ath) * 100;
     var mcrow = '<section class="card-s mcrow2"><div class="mc2-top"><div class="mc2-main"><small>Market cap</small><div class="mc2-v"><span data-mc="' + id + '" data-v="' + fmtK(t.mcN) + '">' + fmtK(t.mcN) + '</span><span class="chgpill ' + (c >= 0 ? 'up' : 'down') + '" data-chg="' + id + '">' + chgTxt(c) + '</span></div>' +
@@ -1872,7 +1872,7 @@
         '<div><span class="muted">Price impact</span><span class="' + (q.impact > 5 ? 'down' : '') + '">' + q.impact.toFixed(2) + '%</span></div>' +
         '<div><span class="muted">Min received (' + S.slip + '% slip)</span><span>' + (q.isBuy ? fmtNum(q.min) + ' $' + id : q.min.toFixed(4) + ' SOL') + '</span></div>' +
         '<div style="padding-top:9px;border-top:1px solid var(--line)"><span class="muted">You receive ≈</span><span style="font-weight:800;font-size:15px">' + (q.isBuy ? fmtNum(q.out) + ' $' + id : q.out.toFixed(4) + ' SOL') + '</span></div></div>' +
-      (trapLeft(t) > 0 ? '<div class="trap-warn" data-traphost>' + trapRing(t, 44) + '<span><b>Sniper trap: ' + snipeNow(t) + '% tax right now</b><small>When the sand runs out (<i data-trapt="' + id + '">' + trapFmt(trapLeft(t)) + '</i>) tax drops instantly to <b>' + tmax + '%</b>. Waiting saves you money.</small></span></div>' : '') +
+      (trapLeft(t) > 0 ? trapBox(t, 'buy') : '') +
       '<button class="big-btn btn ' + (!S.account ? 'pri' : q.isBuy ? 'up-b' : 'down-b') + '" data-act="trade" data-arg="' + id + '">' + (!S.account ? 'Connect wallet to trade' : (q.isBuy ? 'Buy $' : 'Sell $') + id) + '</button>' +
       '<span class="note">Wallet is real (devnet). Trades are simulated in this beta — nothing is sent on-chain.</span></section>';
     var posCard = pos ? '<section class="card-s panel poscard"><div style="display:flex;justify-content:space-between;align-items:center"><b>Your position</b><button class="link" style="min-height:0;font-size:12.5px;color:var(--down)" data-act="sellall">Sell all</button></div>' +
@@ -1930,6 +1930,22 @@
     var left = trapLeft(t), f = t.snipe ? left / t.snipe.dur : 0;
     return '<span class="tring hg" data-trapr="' + esc(t.tick) + '" style="height:' + sz + 'px" title="Sniper trap: extra tax until the timer runs out">' + hgSVG(f) + '<b class="mono">' + snipeNow(t) + '%</b></span>';
   }
+  function liqContent(t, cls, rel) {
+    var m = Math.max(t.buy, t.sell), id = esc(t.tick), left = trapFmt(trapLeft(t));
+    if (rel) return cls === 'card' ? '<small>TAX</small><b>' + m + '%</b><em>released</em>' : cls === 'head' ? '<b>✓ Trap over</b><small>tax is now ' + m + '%</small>' : '<b>✓ Sniper trap is over</b><small>Normal ' + m + '% tax from now on.</small>';
+    if (cls === 'card') return '<small>SNIPER TAX</small><b>' + t.snipe.start + '%</b><em class="mono" data-liqt>' + left + '</em>';
+    if (cls === 'head') return '<span class="lq-big mono">' + t.snipe.start + '%</span><span class="lq-tx"><b>🪤 Sniper tax</b><small>drops to <i>' + m + '%</i> in <i class="mono" data-liqt>' + left + '</i></small></span>';
+    return '<span class="lq-big mono">' + t.snipe.start + '%</span><span class="lq-tx"><b>Sniper tax is on</b><small>Buying now costs <i>' + t.snipe.start + '%</i> tax. When it drains (<i class="mono" data-liqt>' + left + '</i>) it drops instantly to <i>' + m + '%</i>.</small></span>';
+  }
+  function trapBox(t, cls) {
+    var f = t.snipe ? trapLeft(t) / t.snipe.dur : 0;
+    return '<div class="liq liq-' + cls + '" data-liq="' + esc(t.tick) + '" data-liqc="' + cls + '" style="--f:' + f.toFixed(3) + '"><span class="liq-fill"><svg class="liq-w" viewBox="0 0 120 10" preserveAspectRatio="none"><path d="M0 5 Q7.5 0 15 5 T30 5 T45 5 T60 5 T75 5 T90 5 T105 5 T120 5 V10 H0Z"/></svg></span><span class="liq-c">' + liqContent(t, cls) + '</span></div>';
+  }
+  setInterval(function () {
+    document.querySelectorAll('[data-liq]').forEach(function (e) { var t = find(e.getAttribute('data-liq')); if (!t || !t.snipe) return; var left = trapLeft(t);
+      if (left <= 0) { if (e.classList.contains('rel')) return; e.classList.add('rel'); e.style.setProperty('--f', 0); e.querySelector('.liq-c').innerHTML = liqContent(t, e.getAttribute('data-liqc'), true); var tc = e.closest('.tcard'); if (tc) tc.classList.add('released'); return; }
+      e.style.setProperty('--f', (left / t.snipe.dur).toFixed(3)); var tt = e.querySelectorAll('[data-liqt]'); for (var k = 0; k < tt.length; k++) tt[k].textContent = trapFmt(left); });
+  }, 200);
   function trapRingOld(t, sz) {
     var left = trapLeft(t), f = t.snipe ? left / t.snipe.dur : 0, R = 15.5, C = 2 * Math.PI * R;
     return '<span class="tring" data-trapr="' + esc(t.tick) + '" style="width:' + sz + 'px;height:' + sz + 'px" title="Sniper trap: higher tax for early buyers"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="' + R + '" class="tr-bg"/><circle cx="18" cy="18" r="' + R + '" class="tr-fg" stroke-dasharray="' + (C * f).toFixed(2) + ' ' + C.toFixed(2) + '" transform="rotate(-90 18 18)"/></svg><b class="mono">' + snipeNow(t) + '%</b></span>';
@@ -2002,8 +2018,8 @@
         var at = function (f) { return Math.round(sn.start - (sn.start - base) * f); };
         var ticks = '';
         return '<div class="trap-cfg2"><div class="tc-row"><span class="tc-l">Trap tax</span><div class="tc-seg">' + [25, 50, 80, 90].map(function (v) { return '<button class="' + (sn.start === v ? 'on' : '') + '" data-act="snipeStart" data-arg="' + v + '">' + v + '%</button>'; }).join('') + '</div></div>' +
-          '<div class="tc-row"><span class="tc-l">Lasts for</span><div class="tc-seg g">' + [[10, '10s'], [30, '30s'], [60, '1 min'], [180, '3 min'], [300, '5 min']].map(function (d) { return '<button class="' + (sn.dur === d[0] ? 'on' : '') + '" data-act="snipeDur" data-arg="' + d[0] + '">' + d[1] + '</button>'; }).join('') + '</div></div>' +
-          '<div class="tl2"><div class="tl2-trap"><span>' + hgSVG(.6) + '</span><b class="mono">' + sn.start + '% tax</b><small>launch → +' + durTxt(sn.dur) + '</small></div><div class="tl2-drop">⤵</div><div class="tl2-norm"><b class="mono">' + base + '%</b><small>forever after</small></div></div>' +
+          '<div class="tc-row"><span class="tc-l">Lasts for</span><div class="tc-seg g">' + [[5, '5s'], [10, '10s'], [15, '15s'], [20, '20s'], [30, '30s'], [45, '45s'], [60, '1 min']].map(function (d) { return '<button class="' + (sn.dur === d[0] ? 'on' : '') + '" data-act="snipeDur" data-arg="' + d[0] + '">' + d[1] + '</button>'; }).join('') + '</div></div>' +
+          '<div class="tl3"><div class="liq liq-prev" style="--f:.62"><span class="liq-fill"><svg class="liq-w" viewBox="0 0 120 10" preserveAspectRatio="none"><path d="M0 5 Q7.5 0 15 5 T30 5 T45 5 T60 5 T75 5 T90 5 T105 5 T120 5 V10 H0Z"/></svg></span><span class="liq-c"><span class="lq-big mono">' + sn.start + '%</span><span class="lq-tx"><b>What buyers see</b><small>drains over ' + durTxt(sn.dur) + ', then tax drops to <i>' + base + '%</i></small></span></span></div></div>' +
           '<div class="tc-ex">💡 A bot buying <b>1 SOL</b> in the first ' + durTxt(sn.dur) + ' pays <b class="dn">' + (sn.start / 100).toFixed(2) + ' SOL</b> tax. One second after the sand runs out, the same buy pays just <b>' + (base / 100).toFixed(2) + ' SOL</b>.</div></div>';
       })() : '') + '</div>';
   }
@@ -2224,7 +2240,7 @@
     var t = { name: name, tick: tick, spec: { kind: kind, skin: pick(A.SKINS), bg: pick(A.BGS), eyes: pick(A.EYES), mouth: pick(A.MOUTHS), acc: pick(A.ACCS) },
       buy: Math.floor(rnd(0, 4)), sell: Math.floor(rnd(0, 6)), pair: Math.random() < 0.25 ? pick(BASE).tick : pick(PAIRS), mcN: mc, mc0: mc, prog: rnd(1, 4), born: Date.now(), holders: 1 + Math.floor(rnd(0, 6)),
       soc: false, rewards: Math.random() < 0.3, burn: false, ca: fakeCA(), vol: rnd(0.5, 2), hist: [mc * 0.98, mc] };
-    if (Math.random() < 0.5 || !S.trapSeen) { t.snipe = { on: true, start: pick([50, 80, 90]), dur: pick([30, 60, 90]) }; S.trapSeen = true; }
+    if (Math.random() < 0.5 || !S.trapSeen) { t.snipe = { on: true, start: pick([50, 80, 90]), dur: pick([20, 30, 45, 60]) }; S.trapSeen = true; }
     S.launched.unshift(t); if (S.launched.length > 20) S.launched.pop();
     var hl = document.getElementById('hlive-n'); if (hl) { hl.textContent = all().length; hl.classList.remove('tick'); void hl.offsetWidth; hl.classList.add('tick'); }
     toast('New launch: ' + name + ' $' + tick, t);

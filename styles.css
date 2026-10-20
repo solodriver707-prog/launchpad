@@ -3185,3 +3185,32 @@ button.dh2-row{cursor:pointer;border-radius:10px}button.dh2-row:hover{background
 .tring.hg b{position:static;white-space:nowrap}
 .trap-live2 .tring.hg{height:40px!important}
 .trap-warn .tring.hg{height:40px!important}
+/* ===== liquid sniper-tax box (drains as time runs out) ===== */
+.liq{position:relative;overflow:hidden;isolation:isolate;border-radius:14px;background:#140C10;box-shadow:inset 0 0 0 1.5px rgba(242,112,138,.55),0 0 26px -8px rgba(242,112,138,.6);color:#fff}
+.liq-fill{position:absolute;left:0;right:0;bottom:0;height:calc(var(--f) * 100%);background:linear-gradient(180deg,#FF5D82,#C9365A);transition:height .2s linear;z-index:-1}
+.liq-fill::after{content:"";position:absolute;inset:0;background:radial-gradient(3px 3px at 20% 70%,rgba(255,255,255,.5),transparent),radial-gradient(2px 2px at 55% 40%,rgba(255,255,255,.4),transparent),radial-gradient(2.5px 2.5px at 80% 80%,rgba(255,255,255,.45),transparent);animation:bub 2.6s linear infinite}
+@keyframes bub{from{background-position:0 0,0 0,0 0}to{background-position:0 -40px,0 -60px,0 -30px}}
+.liq-w{position:absolute;left:0;bottom:100%;width:200%;height:8px;fill:#FF5D82;animation:waveX 1.8s linear infinite;margin-bottom:-1px}
+.liq-c{position:relative;display:flex;align-items:center;gap:10px;text-shadow:0 1px 6px rgba(0,0,0,.45)}
+.liq.rel{background:#0C1611;box-shadow:inset 0 0 0 1.5px #3DDC97,0 0 24px -6px rgba(61,220,151,.7);animation:relPop .6s cubic-bezier(.2,1.8,.4,1)}
+.liq.rel .liq-fill{display:none}
+.liq.rel b{color:#3DDC97}
+/* card */
+.liq-card{min-width:74px;padding:7px 10px}
+.liq-card .liq-c{flex-direction:column;align-items:center;gap:0;line-height:1.05}
+.liq-card small{font:800 8px var(--mono);letter-spacing:.1em;opacity:.9}
+.liq-card b{font-size:22px;font-weight:800}
+.liq-card em{font-style:normal;font-size:10.5px;font-weight:700;margin-top:2px;opacity:.95}
+/* coin header */
+.liq-head{padding:8px 16px 8px 12px;border-radius:16px;min-width:210px}
+.lq-big{font-size:26px;font-weight:800;letter-spacing:-.03em}
+.lq-tx{display:flex;flex-direction:column;gap:1px}
+.lq-tx b{font-size:13px}.lq-tx small{font-size:11.5px;opacity:.95}.lq-tx i{font-style:normal;font-weight:800}
+.liq-head.rel .liq-c{flex-direction:column;align-items:flex-start;gap:0}
+/* buy panel */
+.liq-buy{padding:12px 14px;margin-bottom:10px}
+.liq-buy .lq-big{font-size:30px}
+.liq-buy .lq-tx small{font-size:12px;line-height:1.45}
+.liq-buy.rel .liq-c{flex-direction:column;align-items:flex-start;gap:2px}
+.hgtax,.trap-live2,.trap-warn{display:none!important}
+.liq-prev{padding:10px 14px}.liq-prev .lq-big{font-size:24px}.tl3{display:flex}.tl3 .liq{flex:1}.tc-seg button{font-size:11.5px}
