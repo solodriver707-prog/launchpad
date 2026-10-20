@@ -351,6 +351,7 @@
     function lv(v, a, b) { return v < a ? 'g' : v < b ? 'y' : 'r'; }
     var dev = devSold ? 0 : ((h % 80) / 10), top = 16 + (h >> 2) % 52, sn = (h >> 5) % 19, bu = (h >> 8) % 16;
     if (t.creator && S.account && t.creator === S.account) { dev = 2.1; top = 22; sn = 0; bu = 0; devSold = false; }
+    if (t.devPct != null) { dev = t.devPct; top = Math.round(Math.max(t.devPct, 0)); sn = 0; bu = 0; devSold = false; }
     return [
       { k: 'dev', lab: 'DEV', val: devSold ? 'SOLD' : dev.toFixed(1) + '%', lv: devSold ? 'r' : lv(dev, 3, 8), tip: devSold ? 'The creator already sold their tokens' : 'Share of supply the creator still holds' },
       { k: 'top', lab: 'TOP 10', val: top + '%', lv: lv(top, 30, 45), tip: 'Share of supply held by the 10 biggest wallets (excl. curve)' },
@@ -1480,6 +1481,7 @@
   }
   function holdersOf(t) {
     var rm = riskMetrics(t), devP = rm[0].val === 'SOLD' ? 0 : parseFloat(rm[0].val), top = parseFloat(rm[1].val), sn = parseFloat(rm[2].val), bu = parseFloat(rm[3].val);
+    if (t.devPct != null && t.holders <= 3) { var o2 = [{ a: 'curve', pct: 100 - t.devPct, label: 'Bonding curve', kind: 'curve' }]; if (t.devPct > 0) o2.push({ a: t.creator || devOf(t), pct: t.devPct, tags: ['dev'].concat(S.account && t.creator === S.account ? ['you'] : []), first: t.born }); return o2; }
     var r = rng(hash(t.tick + 'hold')), dev = devOf(t), out = [], used = {}, B58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
     var fa = function () { var x = ''; for (var q = 0; q < 44; q++) x += B58[Math.floor(r() * 58)]; return x; };
     var poolP = t.prog < 100 ? Math.max(8, 100 - (10 + t.prog * .75)) : 20.6;
@@ -1807,6 +1809,20 @@
   // ---- one tax for buy & sell + optional anti-sniper trap ----
   function snipeNow(t, at) { var sn = t.snipe; if (!sn || !sn.on) return 0; var age = ((at || Date.now()) - t.born) / 1000; if (age >= sn.dur) return 0; return Math.round(sn.start - (sn.start - Math.max(t.buy, t.sell)) * (age / sn.dur)); }
   function effTax(t, at) { return Math.max(Math.max(t.buy, t.sell), snipeNow(t, at)); }
+  function devQuote(sol) {
+    sol = Math.max(0, +sol || 0); var px0 = 5 * 1000 / 1e9, impact = Math.min(25, sol * 3 / Math.sqrt(5));
+    var tok = sol * SOL_USD / (px0 * (1 + impact / 200)); tok = Math.min(tok, 8e8);
+    return { sol: sol, tok: tok, pct: tok / 1e9 * 100 };
+  }
+  function devBuyPicker(c) {
+    var q = devQuote(String(c.devBuy || '').replace(',', '.')), lv = q.pct === 0 ? 'z' : q.pct < 3 ? 'g' : q.pct < 8 ? 'y' : 'r';
+    var note = { z: 'No initial buy — you start with 0%. Fair launch.', g: 'Looks fair to buyers.', y: 'Buyers will notice your holding.', r: 'Big dev bag — buyers will see this as a risk.' }[lv];
+    return '<div class="field devb"><div class="lbl"><b>Your initial buy <span class="muted" style="font-weight:500;font-size:12px">· optional, no tax for the creator</span></b></div>' +
+      '<div class="devb-row"><label class="devb-in" for="c-devbuy"><input id="c-devbuy" inputmode="decimal" data-bind="c.devBuy" value="' + esc(c.devBuy || '') + '" placeholder="0.0" autocomplete="off"><span class="devb-u">' + coinHTML('SOL', 20) + 'SOL</span></label>' +
+      '<div class="devb-q">' + ['0', '0.1', '0.5', '1', '2', '5'].map(function (v) { return '<button class="' + (String(c.devBuy || '0') === v ? 'on' : '') + '" data-act="devbuy" data-arg="' + v + '">' + (v === '0' ? 'None' : v) + '</button>'; }).join('') + '</div></div>' +
+      '<div class="devb-res ' + lv + '"><div class="devb-n"><span><small>You get</small><b class="mono">' + fmtNum(Math.round(q.tok)) + '</b><em>$' + esc(c.tick || 'TICKER') + '</em></span><span class="devb-p"><small>Share of supply</small><b class="mono">' + q.pct.toFixed(2) + '%</b></span></div>' +
+      '<div class="devb-bar"><i style="width:' + Math.min(100, q.pct / 20 * 100).toFixed(2) + '%"></i><u style="left:15%"><em>3%</em></u><u style="left:40%"><em>8%</em></u><u style="left:100%"><em>20%+</em></u></div><div class="devb-note">' + note + '</div></div></div>';
+  }
   function taxPicker(c) {
     var sn = c.snipe || { on: false, start: 50, dur: 120 }, base = c.buy;
     var steps = []; for (var v = 0; v <= 10; v++) steps.push('<button class="txs' + (base === v ? ' on' : '') + '" style="--tc:' + taxBg(v) + '" data-act="ctax" data-arg="' + v + '">' + v + '%</button>');
@@ -1848,7 +1864,8 @@
   }
   function createPage() {
     var c = S.c, sp = c.spec, tmax = Math.max(c.buy, c.sell);
-    var preview = { name: c.name || 'Your token', tick: c.tick || 'TICKER', spec: sp, img: c.img, banner: c.banner, buy: c.buy, sell: c.sell, pair: c.pair, mcN: 5, mc0: 5, prog: 1, born: Date.now(), holders: 1, vol: 0, ca: 'preview', hist: [5, 5.1, 5, 5.2, 5.4], rewards: false, burn: false };
+    var dq = devQuote(String(c.devBuy || '').replace(',', '.'));
+    var preview = { devPct: +dq.pct.toFixed(2), name: c.name || 'Your token', tick: c.tick || 'TICKER', spec: sp, img: c.img, banner: c.banner, buy: c.buy, sell: c.sell, pair: c.pair, mcN: 5, mc0: 5, prog: 1, born: Date.now(), holders: 1, vol: 0, ca: 'preview', hist: [5, 5.1, 5, 5.2, 5.4], rewards: false, burn: false };
     function opts(key, list) { return '<div class="optrow">' + list.map(function (v) { return '<button class="opt' + (sp[key] === v ? ' on' : '') + '" data-act="spec" data-k="' + key + '" data-arg="' + v + '">' + v + '</button>'; }).join('') + '</div>'; }
     function sws(key, list) { return '<div class="optrow">' + list.map(function (v) { return '<button class="sw' + (sp[key] === v ? ' on' : '') + '" style="background:' + v + '" data-act="spec" data-k="' + key + '" data-arg="' + v + '" aria-label="Colour ' + v + '"></button>'; }).join('') + '</div>'; }
     return '<main class="wrap" style="padding-top:22px;max-width:1240px">' +
@@ -1867,14 +1884,16 @@
           '<div class="field"><label for="c-desc" style="font-weight:700">Description</label><textarea id="c-desc" class="inp" data-bind="c.desc" placeholder="What is this token about?">' + esc(c.desc) + '</textarea></div>' +
           '<div class="fsec"><i>2</i>Market</div>' +
           pairPicker(c) +
-          taxPicker(c) +
+          taxPicker(c) + devBuyPicker(c) +
           '<div class="fsec"><i>3</i>Community</div>' +
           '<div class="socrow"><span class="soc-l">Socials <small>optional · shown as buttons on your coin</small></span><div class="socgrid">' + socField(c, 'x', 'X', 'x.com/', 'yourcoin') + socField(c, 'tg', 'Telegram', 't.me/', 'yourcoin') + socField(c, 'web', 'Website', 'https://', 'yourcoin.fun') + '</div></div>' +
           '<button class="big-btn btn pri" data-act="launch">' + (S.account ? 'Launch token' : 'Connect wallet to launch') + '</button>' +
           '<span class="note">Beta: launching adds your token to this board (saved in your browser). On-chain launch via Raydium LaunchLab is coming next.</span>' +
         '</section>' +
         '<aside style="flex:1 1 320px;display:flex;flex-direction:column;gap:12px;position:sticky;top:90px"><span class="kicker">LIVE PREVIEW</span>' + card(preview, { preview: true }) +
-          '<div class="card-s panel" style="display:flex;align-items:center;gap:16px">' + avatarHTML(preview, 72) + '<div><b>Your logo</b><div class="muted" style="font-size:13px;margin-top:4px;line-height:1.5">' + (tmax > 6 ? 'High tax shows in pink — buyers will notice.' : tmax > 0 ? 'Moderate tax, clearly shown to buyers.' : '0% tax — a strong selling point.') + '</div></div></div></aside>' +
+          '<div class="card-s panel pv-sum"><div class="pv-row">' + avatarHTML(preview, 52) + '<div><b>At launch</b><small class="muted">what buyers will see</small></div></div>' +
+            '<div class="pv-grid"><div><small>You hold</small><b class="mono" style="color:' + (dq.pct < 3 ? '#3DDC97' : dq.pct < 8 ? '#FFD15C' : '#F2708A') + '">' + dq.pct.toFixed(2) + '%</b></div><div><small>Snipers</small><b class="mono up">0%</b></div><div><small>Bundles</small><b class="mono up">0%</b></div><div><small>Tax</small><b class="mono">' + tmax + '%</b></div></div>' +
+            (c.snipe && c.snipe.on ? '<div class="pv-trap">🪤 Sniper trap: ' + c.snipe.start + '% → ' + tmax + '% over ' + (c.snipe.dur < 60 ? c.snipe.dur + 's' : c.snipe.dur / 60 + 'm') + '</div>' : '') + '</div></aside>' +
       '</div></main>';
   }
 
@@ -2108,6 +2127,7 @@
       case 'clearImg': setC({ img: null }); break;
       case 'clearBanner': setC({ banner: null }); break;
       case 'cpair': setC({ pair: arg }); break;
+      case 'devbuy': setC({ devBuy: arg === '0' ? '' : arg }); break;
       case 'ctax': setC({ buy: +arg, sell: +arg }); break;
       case 'snipeToggle': var sn0 = S.c.snipe || { on: false, start: 50, dur: 120 }; sn0.on = !sn0.on; if (sn0.dur === 120) sn0.dur = 180; setC({ snipe: sn0 }); break;
       case 'snipeStart': var sn1 = S.c.snipe; sn1.start = +arg; setC({ snipe: sn1 }); break;
@@ -2196,11 +2216,16 @@
         var c = S.c;
         if (!c.name.trim() || c.tick.length < 2) { toast('Add a name and a ticker (2+ characters)'); break; }
         if (!c.img) { toast('Upload a logo image for your coin'); break; }
+        var dq2 = devQuote(String(c.devBuy || '').replace(',', '.'));
+        if (dq2.sol > 0 && typeof S.balance === 'number' && dq2.sol > S.balance) { toast('Not enough devnet SOL for a ' + dq2.sol + ' SOL buy — balance ' + S.balance.toFixed(3)); break; }
         if (find(c.tick)) { toast('$' + c.tick + ' is already taken'); break; }
         var nt = { name: c.name.trim(), tick: c.tick, spec: c.spec, img: c.img, banner: c.banner || null, snipe: c.snipe && c.snipe.on ? { on: true, start: c.snipe.start, dur: c.snipe.dur } : null, buy: c.buy, sell: c.sell, pair: c.pair, mcN: 5, mc0: 5, prog: 1, born: Date.now(), holders: 1,
           soc: !!(c.x || c.tg || c.web), links: { web: linkOf(c.web), x: c.x ? linkOf(/[\/.]/.test(c.x) ? c.x : 'x.com/' + c.x.replace(/^@/, '')) : null, tg: c.tg ? linkOf(/[\/.]/.test(c.tg) ? c.tg : 't.me/' + c.tg.replace(/^@/, '')) : null, demo: false }, rewards: false, burn: false, ca: fakeCA(), vol: 0, hist: [5, 5], desc: c.desc.trim(), creator: S.account };
-        S.created.unshift(nt); saveCreated();
-        S.c = { name: '', tick: '', desc: '', x: '', tg: '', web: '', pair: 'SOL', buy: 0, sell: 0, img: null, banner: null, spec: { kind: pick(A.KINDS), skin: pick(A.SKINS), bg: pick(A.BGS), eyes: 'normal', mouth: 'smile', acc: 'none' } };
+        nt.devPct = +dq2.pct.toFixed(2);
+        S.created.unshift(nt);
+        if (dq2.sol > 0) { var dtr = applyTrade(nt, 'buy', dq2.sol, S.account, true); dtr.tokens = dq2.tok; dtr.tax = 0; S.pos[nt.tick] = { tok: dq2.tok, cost: dq2.sol }; }
+        saveCreated();
+        S.c = { name: '', tick: '', desc: '', x: '', tg: '', web: '', pair: 'SOL', buy: 0, sell: 0, img: null, banner: null, devBuy: '', spec: { kind: pick(A.KINDS), skin: pick(A.SKINS), bg: pick(A.BGS), eyes: 'normal', mouth: 'smile', acc: 'none' } };
         openToken(nt.tick); confetti(); toast('$' + nt.tick + ' is live on treid', nt); break;
     }
   });
@@ -2218,6 +2243,7 @@
     var v = el.value;
     if (el.getAttribute('data-num')) v = Number(v);
     if (key === 'c.tick') v = v.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
+    if (key === 'c.devBuy') v = v.replace(/[^0-9.,]/g, '').slice(0, 8);
     if (key === 'amount') { v = v.replace(/[^0-9.,]/g, ''); S.pctAmt = 0; }
     if (key === 'pctAmt') { var base = (S.account && typeof S.balance === 'number') ? Math.max(0, S.balance - 0.01) : 10; el.style.setProperty('--p', v + '%'); set({ pctAmt: v, amount: v ? (base * v / 100).toFixed(3) : '' }); return; }
     if (key.indexOf('c.') === 0) { var p = {}; p[key.slice(2)] = v; setC(p); return; }
