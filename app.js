@@ -316,11 +316,11 @@
     }
     return '<header><div class="wrap hdr">' +
       '<button class="brand" data-act="home" aria-label="treid home"><span class="brand-name">treid</span></button>' +
-      '<nav class="navlinks"><span class="nav-ind" id="nav-ind"></span><button class="' + (S.screen === 'home' ? 'on' : '') + '" data-act="home">Board</button><button class="' + (S.screen === 'create' ? 'on' : '') + '" data-act="create">Create</button><button class="' + (S.screen === 'leaders' ? 'on' : '') + '" data-act="leaders">Leaderboard</button><button class="' + (S.screen === 'home' && S.view === 'list' ? 'on' : '') + '" data-act="trendList">Trending</button><button data-act="how">How it works</button></nav>' +
+      '<nav class="navlinks"><span class="nav-ind" id="nav-ind"></span><button class="' + (S.screen === 'home' ? 'on' : '') + '" data-act="home">Board</button><button class="' + (S.screen === 'create' ? 'on' : '') + '" data-act="create">Create</button><button class="' + (S.screen === 'leaders' ? 'on' : '') + '" data-act="leaders">Leaderboard</button><button class="' + (S.screen === 'burn' ? 'on' : '') + '" data-act="burnPage">🔥 Burnery</button><button class="' + (S.screen === 'home' && S.view === 'list' ? 'on' : '') + '" data-act="trendList">Trending</button><button data-act="how">How it works</button></nav>' +
       '<button class="searchbtn" data-act="palette">' + I.search + '<span>Search tokens or paste CA</span><span class="kbd">Ctrl K</span></button>' +
       '<div class="hdr-right"><button class="wl-btn co-btn' + (S.coOpen ? ' on' : '') + '" data-act="coToggle" title="Hot callouts">🔥<span>Callouts</span><b class="mono" id="co-new" style="display:none">0</b></button><button class="wl-btn' + (S.screen === 'watch' ? ' on' : '') + '" data-act="watchPage" aria-label="Watchlist" data-tip="Your watchlist">' + I.star(S.watch.length > 0) + (S.watch.length ? '<b class="mono" id="wl-n">' + S.watch.length + '</b>' : '') + '</button><button class="btn pri" data-act="create">+ Launch token</button>' + right + '</div>' +
       '</div></header>' +
-      '<nav class="mnav" aria-label="Main">' + [['home', 'Board', '<path d="M3 11l9-7 9 7v9a1 1 0 01-1 1h-5v-6H9v6H4a1 1 0 01-1-1z"/>', S.screen === 'home'], ['leaders', 'Ranks', '<path d="M8 21V11M16 21V7M12 21V3M4 21h16"/>', S.screen === 'leaders'], ['create', 'Launch', '<path d="M12 5v14M5 12h14"/>', S.screen === 'create', 'pri'], ['coToggle', 'Callouts', '<path d="M21 12a8 8 0 01-11.6 7.1L4 21l1.9-5.4A8 8 0 1121 12z"/>', S.coOpen], ['watchPage', 'Watchlist', '<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/>', S.screen === 'watch']].map(function (x) { return '<button class="' + (x[3] ? 'on ' : '') + (x[4] || '') + '" data-act="' + x[0] + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round">' + x[2] + '</svg><span>' + x[1] + '</span></button>'; }).join('') + '</nav>';
+      '<nav class="mnav" aria-label="Main">' + [['home', 'Board', '<path d="M3 11l9-7 9 7v9a1 1 0 01-1 1h-5v-6H9v6H4a1 1 0 01-1-1z"/>', S.screen === 'home'], ['leaders', 'Ranks', '<path d="M8 21V11M16 21V7M12 21V3M4 21h16"/>', S.screen === 'leaders'], ['create', 'Launch', '<path d="M12 5v14M5 12h14"/>', S.screen === 'create', 'pri'], ['coToggle', 'Callouts', '<path d="M21 12a8 8 0 01-11.6 7.1L4 21l1.9-5.4A8 8 0 1121 12z"/>', S.coOpen], ['burnPage', 'Burnery', '<path d="M12 22c4 0 7-3 7-7 0-3-2-5-3-7-1 2-2 3-3 3 0-3-1-6-4-9 0 4-4 6-4 12 0 5 3 8 7 8z"/>', S.screen === 'burn'], ['watchPage', 'Watchlist', '<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/>', S.screen === 'watch']].map(function (x) { return '<button class="' + (x[3] ? 'on ' : '') + (x[4] || '') + '" data-act="' + x[0] + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round">' + x[2] + '</svg><span>' + x[1] + '</span></button>'; }).join('') + '</nav>';
   }
 
   function cardPts(t) {
@@ -1041,6 +1041,55 @@
         '<span class="hd2 lt-cv">' + (t.prog >= 100 ? '<em>🎓 Raydium</em>' : '<i><u style="width:' + Math.min(100, t.prog).toFixed(0) + '%"></u></i><small class="mono">' + Math.min(100, t.prog).toFixed(0) + '%</small>') + '</span></div>'; }).join('');
     return '<section class="ltable"><div class="lt-scroll">' + head + body + '</div></section>';
   }
+  // ===== THE BURNERY: platform buys supply of coins and burns it =====
+  function burnLog() {
+    if (S._burns && S._burnsN === all().length) return S._burns;
+    var out = [];
+    all().forEach(function (t) { var r = rng(hash(t.tick + 'burn')); if (r() < .3 && t.prog < 40) return; var n = 1 + Math.floor(r() * 3);
+      for (var i = 0; i < n; i++) { var pct = +(0.05 + r() * r() * 1.6).toFixed(3), tok = pct / 100 * 1e9, mc = t.mcN * (.35 + r() * .7), usd = tok * mc * 1000 / 1e9, at = Math.min(Date.now() - 60000, t.born + (Date.now() - t.born) * (.2 + r() * .8));
+        out.push({ t: t, tok: tok, pct: pct, usd: usd, at: at, sig: b58(64) }); } });
+    out.sort(function (a, b) { return b.at - a.at; }); S._burns = out; S._burnsN = all().length; return out;
+  }
+  function burnPage() {
+    var log = burnLog(), by = {}, totUsd = 0, totTok = 0;
+    log.forEach(function (b) { totUsd += b.usd; totTok += b.tok; var e = by[b.t.tick] = by[b.t.tick] || { t: b.t, tok: 0, pct: 0, usd: 0, n: 0, last: 0 }; e.tok += b.tok; e.pct += b.pct; e.usd += b.usd; e.n++; e.last = Math.max(e.last, b.at); });
+    var coins = Object.keys(by).map(function (k) { return by[k]; }).sort(function (a, b) { return b.usd - a.usd; });
+    var mx = coins.length ? coins[0].pct : 1;
+    var stats = [['Total burned', '$' + fmtNum(Math.round(totUsd)), 'value at time of burn'], ['Coins supported', coins.length, 'bought & burned'], ['Burns', log.length, 'transactions'], ['Last burn', log.length ? ago(log[0].at) + ' ago' : '—', log.length ? '$' + esc(log[0].t.tick) : '']];
+    return '<main class="wrap burn"><section class="bn-hero"><div class="bn-copy"><span class="kicker">TREASURY · BUY &amp; BURN</span><h1 class="bn-h">The Burnery</h1><p>Part of every trade fee goes to the treid treasury. We use it to <b>buy supply</b> of coins launched here — then <b>burn every token</b>. Gone forever, less supply for everyone else.</p>' +
+      '<div class="bn-stats">' + stats.map(function (x) { return '<div><small>' + x[0] + '</small><b class="mono">' + x[1] + '</b><span>' + x[2] + '</span></div>'; }).join('') + '</div></div>' +
+      '<div class="bn-fire" id="bn-fire"><canvas id="bn-cv"></canvas><div class="bn-pit"></div><div class="bn-fly" id="bn-fly"></div><div class="bn-now" id="bn-now"></div></div></section>' +
+      '<section class="bn-list card-s"><div class="bn-lh"><b>Burned by coin</b><span class="muted">' + coins.length + ' coins · ' + fmtNum(Math.round(totTok)) + ' tokens destroyed</span></div>' +
+      '<div class="bn-row bn-head"><span>Coin</span><span>Supply burned</span><span class="r">Tokens</span><span class="r">Value</span><span class="r">Burns</span><span class="r">Last</span></div>' +
+      coins.map(function (e) { return '<div class="bn-row" data-act="open" data-arg="' + esc(e.t.tick) + '"><span class="bn-c">' + avatarHTML(e.t, 30) + '<span><b>$' + esc(e.t.tick) + '</b><small>' + esc(e.t.name) + '</small></span></span><span class="bn-bar"><i style="width:' + (e.pct / mx * 100).toFixed(1) + '%"></i><b class="mono">' + e.pct.toFixed(2) + '%</b></span><span class="r mono">' + fmtNum(Math.round(e.tok)) + '</span><span class="r mono bn-usd">$' + fmtNum(Math.round(e.usd)) + '</span><span class="r mono">' + e.n + '</span><span class="r mono muted">' + ago(e.last) + '</span></div>'; }).join('') + '</section>' +
+      '<section class="bn-feed card-s"><div class="bn-lh"><b>Burn log</b><span class="muted">every burn, newest first</span></div><div id="bn-log">' + log.slice(0, 30).map(burnLogRow).join('') + '</div></section></main>';
+  }
+  function burnLogRow(b) { return '<div class="bn-lg">🔥<span class="bn-c">' + avatarHTML(b.t, 22) + '<b>$' + esc(b.t.tick) + '</b></span><span class="mono">' + fmtNum(Math.round(b.tok)) + ' tokens</span><span class="mono muted">' + b.pct.toFixed(3) + '% supply</span><span class="mono bn-usd">$' + fmtNum(Math.round(b.usd)) + '</span><span class="mono muted" data-t="' + b.at + '">' + ago(b.at) + '</span><button class="txb" data-act="tx" data-arg="' + esc(b.sig) + '" aria-label="View transaction">' + I.copy + '</button></div>'; }
+  var BN = { raf: 0, el: null, parts: [], last: 0 };
+  function bnLoop(now) {
+    var box = document.getElementById('bn-fire'); if (!box) { BN.raf = 0; BN.el = null; return; }
+    var cv = box.querySelector('#bn-cv');
+    if (BN.el !== box) { BN.el = box; var r = box.getBoundingClientRect(), d = Math.min(2, devicePixelRatio || 1); cv.width = r.width * d; cv.height = r.height * d; BN.w = r.width; BN.h = r.height; BN.ctx = cv.getContext('2d'); BN.ctx.setTransform(d, 0, 0, d, 0, 0); BN.last = now; BN.next = now + 900; }
+    var c = BN.ctx, W = BN.w, H = BN.h, base = H * .78, boost = Math.max(0, 1 - (now - (BN.boost || 0)) / 900);
+    for (var i = 0; i < 5 + boost * 14; i++) { var off = (Math.random() - .5) * 2, sp = Math.max(0, 1 - Math.abs(off)); BN.parts.push({ x: W / 2 + off * W * (.16 + boost * .08), y: base + Math.random() * 8, vx: -off * .25, vy: -(1.2 + sp * 2.6 + Math.random() * 1.2 + boost * 2.5), life: .55 + sp * .45, s: 12 + sp * 20 + Math.random() * 8 + boost * 10 }); }
+    if (Math.random() < .5) BN.parts.push({ x: W / 2 + (Math.random() - .5) * W * .25, y: base - 20, vx: (Math.random() - .5) * .8, vy: -(2 + Math.random() * 2), life: 1, s: 1.6, spark: 1 });
+    c.globalCompositeOperation = 'source-over'; c.clearRect(0, 0, W, H); c.globalCompositeOperation = 'lighter';
+    BN.parts = BN.parts.filter(function (p) { p.life -= p.spark ? .008 : .014 + Math.random() * .008; p.x += p.vx + Math.sin(now / 180 + p.y / 25) * (p.spark ? .6 : .35); p.y += p.vy; if (!p.spark) p.vx += (W / 2 - p.x) * .0016; return p.life > 0; });
+    BN.parts.forEach(function (p) { var l = p.life;
+      if (p.spark) { c.fillStyle = 'rgba(255,200,120,' + l.toFixed(2) + ')'; c.beginPath(); c.arc(p.x, p.y, p.s, 0, 6.283); c.fill(); return; }
+      var rr = p.s * (.25 + l * .9), g = c.createRadialGradient(p.x, p.y, 0, p.x, p.y, rr), col = l > .8 ? '255,214,150' : l > .55 ? '255,150,50' : l > .3 ? '232,72,40' : '110,30,30';
+      g.addColorStop(0, 'rgba(' + col + ',' + (l * .22).toFixed(3) + ')'); g.addColorStop(1, 'rgba(' + col + ',0)'); c.fillStyle = g; c.beginPath(); c.arc(p.x, p.y, rr, 0, 6.283); c.fill(); });
+    if (BN.parts.length > 900) BN.parts.splice(0, BN.parts.length - 900);
+    if (now > BN.next) { BN.next = now + 2200 + Math.random() * 1200; bnThrow(); }
+    BN.raf = requestAnimationFrame(bnLoop);
+  }
+  function bnThrow() {
+    var fly = document.getElementById('bn-fly'), log = burnLog(); if (!fly || !log.length) return; var b = pick(log.slice(0, 20)), left = Math.random() < .5;
+    var e = document.createElement('div'); e.className = 'bn-coin ' + (left ? 'l' : 'r'); e.innerHTML = avatarHTML(b.t, 46) + '<span class="mono">' + fmtNum(Math.round(b.tok)) + '</span>'; fly.appendChild(e);
+    setTimeout(function () { BN.boost = performance.now(); var nw = document.getElementById('bn-now'); if (nw) { nw.innerHTML = '🔥 <b>$' + esc(b.t.tick) + '</b> ' + fmtNum(Math.round(b.tok)) + ' tokens · <span class="bn-usd">$' + fmtNum(Math.round(b.usd)) + '</span>'; nw.classList.remove('go'); void nw.offsetWidth; nw.classList.add('go'); } }, 1150);
+    setTimeout(function () { e.remove(); }, 1400);
+  }
+  function bnKick() { if (!BN.raf && document.getElementById('bn-fire')) BN.raf = requestAnimationFrame(bnLoop); }
   function bubblesHTML(list) {
     return '<section class="grid" style="display:block"><div class="bubbles" id="bubbles">' + list.slice(0, 40).map(function (t) {
       var r = bubR(t), c = chg(t), b = BUB[t.tick];
@@ -2172,13 +2221,13 @@
   function render() {
     var ae = document.activeElement, fid = ae && ae.id, ss = null, se = null;
     try { if (fid && ae.selectionStart != null) { ss = ae.selectionStart; se = ae.selectionEnd; } } catch (e) {}
-    var body = S.screen === 'token' ? tokenPage() : S.screen === 'create' ? createPage() : S.screen === 'leaders' ? leadersPage() : S.screen === 'watch' ? watchPage() : home();
+    var body = S.screen === 'token' ? tokenPage() : S.screen === 'create' ? createPage() : S.screen === 'leaders' ? leadersPage() : S.screen === 'watch' ? watchPage() : S.screen === 'burn' ? burnPage() : home();
     document.getElementById('app').innerHTML = '<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="ccUp" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3DDC97" stop-opacity=".28"/><stop offset="1" stop-color="#3DDC97" stop-opacity="0"/></linearGradient><linearGradient id="ccDn" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F2708A" stop-opacity=".26"/><stop offset="1" stop-color="#F2708A" stop-opacity="0"/></linearGradient></defs></svg>' + tape() + header() + body + footer() + walletModal() + demoImgModal() + calloutDrawer() + palette() + walletDrawer();
     if (fid) { var el = document.getElementById(fid); if (el) { el.focus({ preventScroll: true }); try { if (ss != null) el.setSelectionRange(ss, se); } catch (e) {} } }
     if (S.palOpen && !fid) { var p = document.getElementById('pal'); if (p) p.focus(); }
     if (S.screen === 'home' && !S.loading && firstCount) { firstCount = false; countUp(); }
     if (typeof reveal === 'function') reveal();
-    setTimeout(function () { navInd(); labKick(); fwKick(); mbuyWatch(); }, 0);
+    setTimeout(function () { navInd(); labKick(); fwKick(); mbuyWatch(); bnKick(); }, 0);
     mFit(); if (S.screen === 'home') mSetStep(M.step);
   }
   function countUp() {
@@ -2362,6 +2411,7 @@
       case 'clearImg': setC({ img: null }); break;
       case 'clearBanner': setC({ banner: null }); break;
       case 'cpair': setC({ pair: arg }); break;
+      case 'burnPage': set({ screen: 'burn', palOpen: false, coOpen: false }); window.scrollTo(0, 0); break;
       case 'lsort': if (S.lsort === arg) S.ldir = -S.ldir; else { S.lsort = arg; S.ldir = -1; } render(); break;
       case 'trendList': S.lsort = 'rank'; S.ldir = -1; set({ screen: 'home', view: 'list', palOpen: false }); setTimeout(function () { var bd = document.getElementById('board'); if (bd) bd.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 40); break;
       case 'mBuy': var tbx = document.querySelector('.tradebox'); if (tbx) tbx.scrollIntoView({ behavior: 'smooth', block: 'center' }); break;
