@@ -316,11 +316,11 @@
     }
     return '<header><div class="wrap hdr">' +
       '<button class="brand" data-act="home" aria-label="treid home"><span class="brand-name">treid</span></button>' +
-      '<nav class="navlinks"><span class="nav-ind" id="nav-ind"></span><button class="' + (S.screen === 'home' ? 'on' : '') + '" data-act="home">Board</button><button class="' + (S.screen === 'create' ? 'on' : '') + '" data-act="create">Create</button><button class="' + (S.screen === 'leaders' ? 'on' : '') + '" data-act="leaders">Leaderboard</button><button class="' + (S.screen === 'burn' ? 'on' : '') + '" data-act="burnPage">🔥 Burnery</button><button class="' + (S.screen === 'home' && S.view === 'list' ? 'on' : '') + '" data-act="trendList">Trending</button><button data-act="how">How it works</button></nav>' +
+      '<nav class="navlinks"><span class="nav-ind" id="nav-ind"></span><button class="' + (S.screen === 'home' ? 'on' : '') + '" data-act="home">Board</button><button class="' + (S.screen === 'create' ? 'on' : '') + '" data-act="create">Create</button><button class="' + (S.screen === 'leaders' ? 'on' : '') + '" data-act="leaders">Leaderboard</button><button class="' + (S.screen === 'burn' ? 'on' : '') + '" data-act="burnPage">🔥 Burnery</button><button class="' + (S.screen === 'trend' ? 'on' : '') + '" data-act="trendList">Trending</button><button data-act="how">How it works</button></nav>' +
       '<button class="searchbtn" data-act="palette">' + I.search + '<span>Search tokens or paste CA</span><span class="kbd">Ctrl K</span></button>' +
       '<div class="hdr-right"><button class="wl-btn co-btn' + (S.coOpen ? ' on' : '') + '" data-act="coToggle" title="Hot callouts">🔥<span>Callouts</span><b class="mono" id="co-new" style="display:none">0</b></button><button class="wl-btn' + (S.screen === 'watch' ? ' on' : '') + '" data-act="watchPage" aria-label="Watchlist" data-tip="Your watchlist">' + I.star(S.watch.length > 0) + (S.watch.length ? '<b class="mono" id="wl-n">' + S.watch.length + '</b>' : '') + '</button><button class="btn pri" data-act="create">+ Launch token</button>' + right + '</div>' +
       '</div></header>' +
-      '<nav class="mnav" aria-label="Main">' + [['home', 'Board', '<path d="M3 11l9-7 9 7v9a1 1 0 01-1 1h-5v-6H9v6H4a1 1 0 01-1-1z"/>', S.screen === 'home'], ['leaders', 'Ranks', '<path d="M8 21V11M16 21V7M12 21V3M4 21h16"/>', S.screen === 'leaders'], ['create', 'Launch', '<path d="M12 5v14M5 12h14"/>', S.screen === 'create', 'pri'], ['coToggle', 'Callouts', '<path d="M21 12a8 8 0 01-11.6 7.1L4 21l1.9-5.4A8 8 0 1121 12z"/>', S.coOpen], ['burnPage', 'Burnery', '<path d="M12 22c4 0 7-3 7-7 0-3-2-5-3-7-1 2-2 3-3 3 0-3-1-6-4-9 0 4-4 6-4 12 0 5 3 8 7 8z"/>', S.screen === 'burn'], ['watchPage', 'Watchlist', '<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/>', S.screen === 'watch']].map(function (x) { return '<button class="' + (x[3] ? 'on ' : '') + (x[4] || '') + '" data-act="' + x[0] + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round">' + x[2] + '</svg><span>' + x[1] + '</span></button>'; }).join('') + '</nav>';
+      '<nav class="mnav" aria-label="Main">' + [['home', 'Board', '<path d="M3 11l9-7 9 7v9a1 1 0 01-1 1h-5v-6H9v6H4a1 1 0 01-1-1z"/>', S.screen === 'home'], ['trendList', 'Trending', '<path d="M3 17l6-6 4 4 8-8M15 7h6v6"/>', S.screen === 'trend'], ['leaders', 'Ranks', '<path d="M8 21V11M16 21V7M12 21V3M4 21h16"/>', S.screen === 'leaders'], ['create', 'Launch', '<path d="M12 5v14M5 12h14"/>', S.screen === 'create', 'pri'], ['coToggle', 'Callouts', '<path d="M21 12a8 8 0 01-11.6 7.1L4 21l1.9-5.4A8 8 0 1121 12z"/>', S.coOpen], ['burnPage', 'Burnery', '<path d="M12 22c4 0 7-3 7-7 0-3-2-5-3-7-1 2-2 3-3 3 0-3-1-6-4-9 0 4-4 6-4 12 0 5 3 8 7 8z"/>', S.screen === 'burn'], ['watchPage', 'Watchlist', '<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/>', S.screen === 'watch']].map(function (x) { return '<button class="' + (x[3] ? 'on ' : '') + (x[4] || '') + '" data-act="' + x[0] + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round">' + x[2] + '</svg><span>' + x[1] + '</span></button>'; }).join('') + '</nav>';
   }
 
   function cardPts(t) {
@@ -1041,30 +1041,40 @@
         '<span class="hd2 lt-cv">' + (t.prog >= 100 ? '<em>🎓 Raydium</em>' : '<i><u style="width:' + Math.min(100, t.prog).toFixed(0) + '%"></u></i><small class="mono">' + Math.min(100, t.prog).toFixed(0) + '%</small>') + '</span></div>'; }).join('');
     return '<section class="ltable"><div class="lt-scroll">' + head + body + '</div></section>';
   }
-  // ===== THE BURNERY: platform buys supply of coins and burns it =====
+  // ===== THE BURNERY: leaderboard of coins that burned their own supply =====
+  var BSRC = { dev: ['Dev burn', '#F5B14C'], holder: ['Holder burn', '#FF7A59'], tax: ['Tax buyback', '#3DDC97'] };
   function burnLog() {
     if (S._burns && S._burnsN === all().length) return S._burns;
     var out = [];
-    all().forEach(function (t) { var r = rng(hash(t.tick + 'burn')); if (r() < .3 && t.prog < 40) return; var n = 1 + Math.floor(r() * 3);
-      for (var i = 0; i < n; i++) { var pct = +(0.05 + r() * r() * 1.6).toFixed(3), tok = pct / 100 * 1e9, mc = t.mcN * (.35 + r() * .7), usd = tok * mc * 1000 / 1e9, at = Math.min(Date.now() - 60000, t.born + (Date.now() - t.born) * (.2 + r() * .8));
-        out.push({ t: t, tok: tok, pct: pct, usd: usd, at: at, sig: b58(64) }); } });
+    all().forEach(function (t) { var r = rng(hash(t.tick + 'burn2')); if (r() < .35) return;
+      var heavy = r() < .25, n = 1 + Math.floor(r() * (heavy ? 7 : 3));
+      for (var i = 0; i < n; i++) { var pct = +((heavy ? 1.2 : .08) + r() * r() * (heavy ? 9 : 2.4)).toFixed(3), tok = pct / 100 * 1e9, mc = t.mcN * (.35 + r() * .7), usd = tok * mc * 1000 / 1e9, at = Math.min(Date.now() - 60000, t.born + (Date.now() - t.born) * (.2 + r() * .8));
+        var x = r(), src = (Math.max(t.buy, t.sell) > 0 && x < .4) ? 'tax' : x < .72 ? 'dev' : 'holder';
+        out.push({ t: t, tok: tok, pct: pct, usd: usd, at: at, src: src, who: src === 'tax' ? 'auto' : b58(4) + '…' + b58(4), sig: b58(64) }); } });
     out.sort(function (a, b) { return b.at - a.at; }); S._burns = out; S._burnsN = all().length; return out;
   }
+  S.bsort = 'pct';
   function burnPage() {
     var log = burnLog(), by = {}, totUsd = 0, totTok = 0;
-    log.forEach(function (b) { totUsd += b.usd; totTok += b.tok; var e = by[b.t.tick] = by[b.t.tick] || { t: b.t, tok: 0, pct: 0, usd: 0, n: 0, last: 0 }; e.tok += b.tok; e.pct += b.pct; e.usd += b.usd; e.n++; e.last = Math.max(e.last, b.at); });
-    var coins = Object.keys(by).map(function (k) { return by[k]; }).sort(function (a, b) { return b.usd - a.usd; });
-    var mx = coins.length ? coins[0].pct : 1;
-    var stats = [['Total burned', '$' + fmtNum(Math.round(totUsd)), 'value at time of burn'], ['Coins supported', coins.length, 'bought & burned'], ['Burns', log.length, 'transactions'], ['Last burn', log.length ? ago(log[0].at) + ' ago' : '—', log.length ? '$' + esc(log[0].t.tick) : '']];
-    return '<main class="wrap burn"><section class="bn-hero"><div class="bn-copy"><span class="kicker">TREASURY · BUY &amp; BURN</span><h1 class="bn-h">The Burnery</h1><p>Part of every trade fee goes to the treid treasury. We use it to <b>buy supply</b> of coins launched here — then <b>burn every token</b>. Gone forever, less supply for everyone else.</p>' +
+    log.forEach(function (b) { totUsd += b.usd; totTok += b.tok; var e = by[b.t.tick] = by[b.t.tick] || { t: b.t, tok: 0, pct: 0, usd: 0, n: 0, last: 0, src: {} }; e.tok += b.tok; e.pct += b.pct; e.usd += b.usd; e.n++; e.last = Math.max(e.last, b.at); e.src[b.src] = (e.src[b.src] || 0) + b.pct; });
+    var key = { pct: function (e) { return e.pct; }, usd: function (e) { return e.usd; }, n: function (e) { return e.n; }, last: function (e) { return e.last; } }[S.bsort] || function (e) { return e.pct; };
+    var coins = Object.keys(by).map(function (k) { return by[k]; }).sort(function (a, b) { return key(b) - key(a); });
+    var byPct = coins.slice().sort(function (a, b) { return b.pct - a.pct; });
+    var mx = byPct.length ? byPct[0].pct : 1;
+    var srcBar = function (e) { return ['dev', 'holder', 'tax'].filter(function (k) { return e.src[k]; }).map(function (k) { return '<i style="width:' + (e.src[k] / mx * 100).toFixed(2) + '%;background:' + BSRC[k][1] + '"></i>'; }).join(''); };
+    var podium = byPct.slice(0, 3), order = [1, 0, 2];
+    var pod = '<div class="bn-pod">' + order.filter(function (i) { return podium[i]; }).map(function (i) { var e = podium[i]; return '<button class="bn-p bn-p' + (i + 1) + '" data-act="open" data-arg="' + esc(e.t.tick) + '"><span class="bn-pr">' + ['🥇', '🥈', '🥉'][i] + '</span>' + avatarHTML(e.t, i ? 48 : 62) + '<b>$' + esc(e.t.tick) + '</b><strong class="mono">' + e.pct.toFixed(2) + '%</strong><small>supply burned</small></button>'; }).join('') + '</div>';
+    var stats = [['Supply destroyed', totTok >= 1e9 ? (totTok / 1e9).toFixed(2) + 'B' : fmtNum(Math.round(totTok)), 'tokens, all coins'], ['Value burned', '$' + fmtNum(Math.round(totUsd)), 'at time of burn'], ['Coins burning', coins.length, 'of ' + all().length + ' launched'], ['Last burn', log.length ? ago(log[0].at) + ' ago' : '—', log.length ? '$' + esc(log[0].t.tick) + ' · ' + BSRC[log[0].src][0] : '']];
+    var sorts = [['pct', '% supply'], ['usd', 'Value'], ['n', 'Burns'], ['last', 'Recent']];
+    return '<main class="wrap burn"><section class="bn-hero"><div class="bn-copy"><span class="kicker">BURN LEADERBOARD</span><h1 class="bn-h">The Burnery</h1><p>Every coin launched on treid can <b>burn its own supply</b> — the dev, any holder, or an automatic <b>tax buyback</b>. Burned tokens are gone forever. The more a coin destroys, the higher it climbs.</p>' +
       '<div class="bn-stats">' + stats.map(function (x) { return '<div><small>' + x[0] + '</small><b class="mono">' + x[1] + '</b><span>' + x[2] + '</span></div>'; }).join('') + '</div></div>' +
-      '<div class="bn-fire" id="bn-fire"><canvas id="bn-cv"></canvas><div class="bn-pit"></div><div class="bn-fly" id="bn-fly"></div><div class="bn-now" id="bn-now"></div></div></section>' +
-      '<section class="bn-list card-s"><div class="bn-lh"><b>Burned by coin</b><span class="muted">' + coins.length + ' coins · ' + fmtNum(Math.round(totTok)) + ' tokens destroyed</span></div>' +
-      '<div class="bn-row bn-head"><span>Coin</span><span>Supply burned</span><span class="r">Tokens</span><span class="r">Value</span><span class="r">Burns</span><span class="r">Last</span></div>' +
-      coins.map(function (e) { return '<div class="bn-row" data-act="open" data-arg="' + esc(e.t.tick) + '"><span class="bn-c">' + avatarHTML(e.t, 30) + '<span><b>$' + esc(e.t.tick) + '</b><small>' + esc(e.t.name) + '</small></span></span><span class="bn-bar"><i style="width:' + (e.pct / mx * 100).toFixed(1) + '%"></i><b class="mono">' + e.pct.toFixed(2) + '%</b></span><span class="r mono">' + fmtNum(Math.round(e.tok)) + '</span><span class="r mono bn-usd">$' + fmtNum(Math.round(e.usd)) + '</span><span class="r mono">' + e.n + '</span><span class="r mono muted">' + ago(e.last) + '</span></div>'; }).join('') + '</section>' +
-      '<section class="bn-feed card-s"><div class="bn-lh"><b>Burn log</b><span class="muted">every burn, newest first</span></div><div id="bn-log">' + log.slice(0, 30).map(burnLogRow).join('') + '</div></section></main>';
+      '<div class="bn-fire" id="bn-fire"><canvas id="bn-cv"></canvas><div class="bn-pit"></div><div class="bn-fly" id="bn-fly"></div><div class="bn-now" id="bn-now"></div></div></section>' + pod +
+      '<section class="bn-list card-s"><div class="bn-lh"><b>Burn leaderboard</b><div class="bn-leg">' + Object.keys(BSRC).map(function (k) { return '<span><i style="background:' + BSRC[k][1] + '"></i>' + BSRC[k][0] + '</span>'; }).join('') + '</div><div class="seg">' + sorts.map(function (x) { return '<button class="' + (S.bsort === x[0] ? 'on' : '') + '" data-act="bsort" data-arg="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div></div>' +
+      '<div class="bn-row bn-head"><span>#</span><span>Coin</span><span>Supply burned</span><span class="r">Tokens</span><span class="r">Value</span><span class="r">Burns</span><span class="r">Last</span></div>' +
+      coins.map(function (e, i) { return '<div class="bn-row" data-act="open" data-arg="' + esc(e.t.tick) + '"><span class="mono bn-rk' + (i < 3 ? ' top' : '') + '">' + (i + 1) + '</span><span class="bn-c">' + avatarHTML(e.t, 30) + '<span><b>$' + esc(e.t.tick) + '</b><small>' + esc(e.t.name) + '</small></span></span><span class="bn-bar"><span class="bn-stk">' + srcBar(e) + '</span><b class="mono">' + e.pct.toFixed(2) + '%</b></span><span class="r mono">' + fmtNum(Math.round(e.tok)) + '</span><span class="r mono bn-usd">$' + fmtNum(Math.round(e.usd)) + '</span><span class="r mono">' + e.n + '</span><span class="r mono muted">' + ago(e.last) + '</span></div>'; }).join('') + '</section>' +
+      '<section class="bn-feed card-s"><div class="bn-lh"><b>Live burns</b><span class="muted">every burn across treid, newest first</span></div><div id="bn-log">' + log.slice(0, 30).map(burnLogRow).join('') + '</div></section></main>';
   }
-  function burnLogRow(b) { return '<div class="bn-lg">🔥<span class="bn-c">' + avatarHTML(b.t, 22) + '<b>$' + esc(b.t.tick) + '</b></span><span class="mono">' + fmtNum(Math.round(b.tok)) + ' tokens</span><span class="mono muted">' + b.pct.toFixed(3) + '% supply</span><span class="mono bn-usd">$' + fmtNum(Math.round(b.usd)) + '</span><span class="mono muted" data-t="' + b.at + '">' + ago(b.at) + '</span><button class="txb" data-act="tx" data-arg="' + esc(b.sig) + '" aria-label="View transaction">' + I.copy + '</button></div>'; }
+  function burnLogRow(b) { return '<div class="bn-lg">🔥<span class="bn-c">' + avatarHTML(b.t, 22) + '<b>$' + esc(b.t.tick) + '</b></span><span class="bn-src" style="--c:' + BSRC[b.src || 'dev'][1] + '">' + BSRC[b.src || 'dev'][0] + (b.who && b.who !== 'auto' ? ' <em class="mono">' + b.who + '</em>' : '') + '</span><span class="mono">' + fmtNum(Math.round(b.tok)) + ' tokens</span><span class="mono muted">' + b.pct.toFixed(3) + '% supply</span><span class="mono bn-usd">$' + fmtNum(Math.round(b.usd)) + '</span><span class="mono muted" data-t="' + b.at + '">' + ago(b.at) + '</span><button class="txb" data-act="tx" data-arg="' + esc(b.sig) + '" aria-label="View transaction">' + I.copy + '</button></div>'; }
   var BN = { raf: 0, el: null, parts: [], last: 0 };
   function bnLoop(now) {
     var box = document.getElementById('bn-fire'); if (!box) { BN.raf = 0; BN.el = null; return; }
@@ -1086,10 +1096,19 @@
   function bnThrow() {
     var fly = document.getElementById('bn-fly'), log = burnLog(); if (!fly || !log.length) return; var b = pick(log.slice(0, 20)), left = Math.random() < .5;
     var e = document.createElement('div'); e.className = 'bn-coin ' + (left ? 'l' : 'r'); e.innerHTML = avatarHTML(b.t, 46) + '<span class="mono">' + fmtNum(Math.round(b.tok)) + '</span>'; fly.appendChild(e);
-    setTimeout(function () { BN.boost = performance.now(); var nw = document.getElementById('bn-now'); if (nw) { nw.innerHTML = '🔥 <b>$' + esc(b.t.tick) + '</b> ' + fmtNum(Math.round(b.tok)) + ' tokens · <span class="bn-usd">$' + fmtNum(Math.round(b.usd)) + '</span>'; nw.classList.remove('go'); void nw.offsetWidth; nw.classList.add('go'); } }, 1150);
+    setTimeout(function () { BN.boost = performance.now(); var nw = document.getElementById('bn-now'); if (nw) { nw.innerHTML = '🔥 <b>$' + esc(b.t.tick) + '</b> ' + fmtNum(Math.round(b.tok)) + ' tokens · <span style="color:' + BSRC[b.src][1] + '">' + BSRC[b.src][0] + '</span> · <span class="bn-usd">$' + fmtNum(Math.round(b.usd)) + '</span>'; nw.classList.remove('go'); void nw.offsetWidth; nw.classList.add('go'); } }, 1150);
     setTimeout(function () { e.remove(); }, 1400);
   }
   function bnKick() { if (!BN.raf && document.getElementById('bn-fire')) BN.raf = requestAnimationFrame(bnLoop); }
+  S.tcat = 'all';
+  function trendPage() {
+    var a = all().filter(function (t) { return S.tcat === 'all' || pairInfo(t.pair).cat === S.tcat; });
+    var pre = [['rank', '🔥 Trending'], ['vol', 'Top volume'], ['c1', '📈 Gainers 1h'], ['age', '✨ New'], ['curve', '🎓 Near graduation'], ['mc', 'Market cap']];
+    return '<main class="wrap trend"><div class="tr-head"><div><span class="kicker">TOP 100</span><h1 class="tr-h">Trending</h1></div><span class="muted mono">' + Math.min(100, a.length) + ' coins · updates live</span></div>' +
+      '<div class="tr-bar"><div class="seg">' + pre.map(function (x) { return '<button class="' + (S.lsort === x[0] ? 'on' : '') + '" data-act="tpreset" data-arg="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div>' +
+      '<div class="seg tr-cats">' + [['all', 'All pairs']].concat(CATS.slice(1).map(function (c) { return [c[0], c[1]]; })).map(function (c) { return '<button class="' + (S.tcat === c[0] ? 'on' : '') + '" data-act="tcat" data-arg="' + c[0] + '">' + c[1] + '</button>'; }).join('') + '</div></div>' +
+      listHTML(a) + '</main>';
+  }
   function bubblesHTML(list) {
     return '<section class="grid" style="display:block"><div class="bubbles" id="bubbles">' + list.slice(0, 40).map(function (t) {
       var r = bubR(t), c = chg(t), b = BUB[t.tick];
@@ -1373,7 +1392,6 @@
       var ir = e && e.closest('.irange'); if (ir) ir.classList.toggle('on', l !== 'Any');
     });
     if (S.view === 'orbit') raceRefresh();
-    if (S.view === 'list') { var lt = document.querySelector('.ltable'); if (lt) lt.outerHTML = listHTML(list); return; }
     if (g && S.view !== 'bubbles') g.innerHTML = list.length ? list.map(function (t) { return card(t); }).join('') : '<div class="empty"><b style="font-size:19px">No coins in this range</b><span class="muted">Widen a slider or hit Reset.</span><button class="btn pri" data-act="reset">Reset filters</button></div>';
   }
   var SLOGANS = ['The market', 'is yours.'];
@@ -1426,12 +1444,13 @@
     var list = filtered();
     var toolbar = '<div class="toolbar"><h2 class="h2">Tokens</h2><span class="demo" data-tip="Market data is simulated until on-chain launch goes live.">DEMO DATA</span><button class="demo-img-btn" data-act="demoImgs">🖼 Try real images</button><div class="seg">' + SORTS.map(function (s) {
       return '<button class="' + (S.sort === s[0] ? 'on' : '') + '" aria-pressed="' + (S.sort === s[0]) + '" data-act="sort" data-arg="' + s[0] + '">' + s[1] + '</button>';
-    }).join('') + '</div><div class="seg" role="group" aria-label="View"><button class="' + (S.view === 'grid' ? 'on' : '') + '" data-act="view" data-arg="grid">Grid</button><button class="' + (S.view === 'bubbles' ? 'on' : '') + '" data-act="view" data-arg="bubbles">Bubbles</button><button class="' + (S.view === 'orbit' ? 'on' : '') + '" data-act="view" data-arg="orbit">Orbit</button><button class="' + (S.view === 'list' ? 'on' : '') + '" data-act="view" data-arg="list">List</button></div><span class="mono muted" style="margin-left:auto;font-size:12.5px" id="count">' + list.length + ' of ' + all().length + ' tokens</span></div>' +
+    }).join('') + '</div><div class="seg" role="group" aria-label="View"><button class="' + (S.view === 'grid' ? 'on' : '') + '" data-act="view" data-arg="grid">Grid</button><button class="' + (S.view === 'bubbles' ? 'on' : '') + '" data-act="view" data-arg="bubbles">Bubbles</button><button class="' + (S.view === 'orbit' ? 'on' : '') + '" data-act="view" data-arg="orbit">Orbit</button></div><span class="mono muted" style="margin-left:auto;font-size:12.5px" id="count">' + list.length + ' of ' + all().length + ' tokens</span></div>' +
       '';
 
     var filters = filterBar();
 
-    var grid = (!S.loading && S.view === 'list') ? listHTML(list) : (!S.loading && S.view === 'orbit') ? (function () { var a = list; return '<div class="orb-inline">' + orbitStage(a, a.filter(function (t) { return t.prog < 100; }), a.filter(function (t) { return t.prog >= 100; })) + '</div>'; })() : (!S.loading && S.view === 'bubbles') ? bubblesHTML(list) : '<section class="grid" id="grid">' + (S.loading ? [0, 1, 2, 3, 4, 5].map(skeletonCard).join('') : list.length ? list.map(function (t) { return card(t); }).join('') :
+    if (S.view === 'list') S.view = 'grid';
+    var grid = (!S.loading && S.view === 'orbit') ? (function () { var a = list; return '<div class="orb-inline">' + orbitStage(a, a.filter(function (t) { return t.prog < 100; }), a.filter(function (t) { return t.prog >= 100; })) + '</div>'; })() : (!S.loading && S.view === 'bubbles') ? bubblesHTML(list) : '<section class="grid" id="grid">' + (S.loading ? [0, 1, 2, 3, 4, 5].map(skeletonCard).join('') : list.length ? list.map(function (t) { return card(t); }).join('') :
       '<div class="empty"><b style="font-size:19px">No tokens match these filters</b><span class="muted">Loosen the tax or market cap filters.</span><button class="btn pri" data-act="reset">Reset filters</button></div>') + '</section>';
 
     var how = '<section id="how" style="margin-top:56px"><h2 class="h2" style="margin-bottom:16px">How treid works</h2><div class="row">' +
@@ -1908,7 +1927,7 @@
           (t.desc ? '<div class="st-desc"><small>About</small><p>' + esc(t.desc) + '</p></div>' : '') + '</section>';
       })();
     var chart = '<section class="card-s panel cpanel' + (S.cfull ? ' chart-fs' : '') + '">' + chartToolbar(t) +
-      '<div class="chartbox" id="chart">' + chartSVG(t) + '</div><div class="c-help muted">scroll or pinch to zoom · drag to pan · + / − keys</div></section>';
+      '<div class="chartbox" id="chart">' + chartSVG(t) + '</div><div class="c-help muted">scroll to zoom where you point · pinch · drag to pan · + / − keys</div></section>';
     // tabs
     if (S.tpTab === 'thread') S.tpTab = 'trades';
     var tabs = [['trades', 'Trades'], ['holders', 'Holders'], ['top', 'Top traders']];
@@ -2221,7 +2240,7 @@
   function render() {
     var ae = document.activeElement, fid = ae && ae.id, ss = null, se = null;
     try { if (fid && ae.selectionStart != null) { ss = ae.selectionStart; se = ae.selectionEnd; } } catch (e) {}
-    var body = S.screen === 'token' ? tokenPage() : S.screen === 'create' ? createPage() : S.screen === 'leaders' ? leadersPage() : S.screen === 'watch' ? watchPage() : S.screen === 'burn' ? burnPage() : home();
+    var body = S.screen === 'token' ? tokenPage() : S.screen === 'create' ? createPage() : S.screen === 'leaders' ? leadersPage() : S.screen === 'watch' ? watchPage() : S.screen === 'burn' ? burnPage() : S.screen === 'trend' ? trendPage() : home();
     document.getElementById('app').innerHTML = '<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="ccUp" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3DDC97" stop-opacity=".28"/><stop offset="1" stop-color="#3DDC97" stop-opacity="0"/></linearGradient><linearGradient id="ccDn" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F2708A" stop-opacity=".26"/><stop offset="1" stop-color="#F2708A" stop-opacity="0"/></linearGradient></defs></svg>' + tape() + header() + body + footer() + walletModal() + demoImgModal() + calloutDrawer() + palette() + walletDrawer();
     if (fid) { var el = document.getElementById(fid); if (el) { el.focus({ preventScroll: true }); try { if (ss != null) el.setSelectionRange(ss, se); } catch (e) {} } }
     if (S.palOpen && !fid) { var p = document.getElementById('pal'); if (p) p.focus(); }
@@ -2413,10 +2432,13 @@
       case 'cpair': setC({ pair: arg }); break;
       case 'burnPage': set({ screen: 'burn', palOpen: false, coOpen: false }); window.scrollTo(0, 0); break;
       case 'lsort': if (S.lsort === arg) S.ldir = -S.ldir; else { S.lsort = arg; S.ldir = -1; } render(); break;
-      case 'trendList': S.lsort = 'rank'; S.ldir = -1; set({ screen: 'home', view: 'list', palOpen: false }); setTimeout(function () { var bd = document.getElementById('board'); if (bd) bd.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 40); break;
+      case 'trendList': S.lsort = 'rank'; S.ldir = -1; set({ screen: 'trend', palOpen: false, coOpen: false }); window.scrollTo(0, 0); break;
+      case 'bsort': S.bsort = arg; render(); break;
+      case 'tcat': S.tcat = arg; render(); break;
+      case 'tpreset': S.lsort = arg; S.ldir = -1; render(); break;
       case 'mBuy': var tbx = document.querySelector('.tradebox'); if (tbx) tbx.scrollIntoView({ behavior: 'smooth', block: 'center' }); break;
       case 'stf': S.stf = arg; render(); break;
-      case 'fwGo': FW.i = +arg; FW.t0 = performance.now(); FW.paused = false; fwCenter(FW.i); break;
+      case 'fwGo': fwCenter(FW.hi === +arg ? -1 : +arg); break;
       case 'demoImgs': set({ demoImgOpen: true }); break;
       case 'realMemes': try { localStorage.setItem('dl.realmemes', REAL_ON ? '0' : '1'); } catch (er) {} location.reload(); break;
       case 'demoImgsClose': if (e.target === el || el.tagName === 'BUTTON') set({ demoImgOpen: false }); break;
@@ -2645,7 +2667,12 @@
   document.addEventListener('keydown', function (e) { if (S.screen !== 'token' || /INPUT|TEXTAREA/.test(document.activeElement && document.activeElement.tagName)) return; if (e.key === '+' || e.key === '=') { S.czoom = Math.max(12, Math.round(S.czoom * .8)); chartRedraw(); } else if (e.key === '-') { S.czoom = Math.min(240, Math.round(S.czoom * 1.25)); chartRedraw(); } });
   document.addEventListener('wheel', function (e) {
     var box = e.target.closest && e.target.closest('#chart'); if (!box) return;
-    e.preventDefault(); S.czoom = Math.max(12, Math.min(240, Math.round(S.czoom * (e.deltaY > 0 ? 1.12 : .89)))); chartRedraw(); var zl = document.querySelector('.czoom .mono'); if (zl) zl.textContent = S.czoom;
+    e.preventDefault();
+    var sv = box.querySelector('svg'), rr = (sv || box).getBoundingClientRect(), vb = sv && sv.viewBox.baseVal, W0 = vb && vb.width ? vb.width : rr.width;
+    var f = Math.max(0, Math.min(1, (e.clientX - rr.left) / rr.width * W0 / Math.max(1, W0 - 70)));
+    var n0 = S.czoom, n1 = Math.max(12, Math.min(240, Math.round(n0 * (e.deltaY > 0 ? 1.12 : .89)))); if (n1 === n0) n1 = Math.max(12, Math.min(240, n0 + (e.deltaY > 0 ? 1 : -1)));
+    var anchor = S.cpan + (n0 - 1) - f * n0; // buckets back from now under the cursor
+    S.czoom = n1; S.cpan = Math.max(0, Math.round(anchor - (n1 - 1) + f * n1)); chartRedraw(); var zl = document.querySelector('.czoom .mono'); if (zl) zl.textContent = S.czoom;
   }, { passive: false });
   document.addEventListener('pointerdown', function (e) {
     var box = e.target.closest && e.target.closest('#chart'); if (!box || e.button > 0 || e.target.closest('button')) return;
@@ -2682,38 +2709,60 @@
     ['Graduate', 'At ~$69K the curve fills, liquidity moves to Raydium and milestone badges start.'],
     ['Tax flywheel', 'Every trade’s tax splits three ways: creator, holders and burn. More trading, more rewards.']
   ];
-  var FW = { i: 0, t0: 0, ms: 5200, raf: 0, el: null, coin: null, paused: false, pt: 0 };
+  var FW = { raf: 0, el: null, coins: [], last: 0, lt: 0, paused: false, hi: -1, jars: [0, 0, 0], spawn: 0 };
+  var FSX = [8.3, 25, 41.7, 58.3, 75, 91.7]; // station centres, % of belt
+  var FICO = [
+    '<svg viewBox="0 0 24 24"><path d="M12 3v10M7 8l5 5 5-5M4 21h16"/></svg>',
+    '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 4v4M12 16v4M4 12h4M16 12h4"/></svg>',
+    '<svg viewBox="0 0 24 24"><path d="M3 20c6 0 9-4 11-9s4-7 7-7"/></svg>',
+    '<svg viewBox="0 0 24 24"><path d="M3 12h18M6 6l12 12M18 6L6 18" opacity=".0"/><path d="M4 7V4h3M20 7V4h-3M4 17v3h3M20 17v3h-3M4 12h16"/></svg>',
+    '<svg viewBox="0 0 24 24"><path d="M2 9l10-5 10 5-10 5z"/><path d="M6 11v5c3 2 9 2 12 0v-5"/></svg>',
+    '<svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9"/><path d="M21 3l-9 9M15 3h6v6"/></svg>'
+  ];
   function machineSection() {
-    return '<section class="story card-s" id="machine"><div class="st2-head"><div><span class="kicker">HOW IT WORKS</span><h2 class="title-xl lab-title">A coin’s life in 30 seconds</h2></div><span class="muted st2-hint">hover to pause · tap a step</span></div>' +
-      '<div class="st2-bars">' + STS.map(function (x, k) { return '<button class="st2-bar" data-act="fwGo" data-arg="' + k + '" data-stb="' + k + '"><i><u></u></i><span><b class="mono">0' + (k + 1) + '</b> ' + x[0] + '</span></button>'; }).join('') + '</div>' +
-      '<div class="st2-stage" id="fw-wheel"><div class="st2-copy" id="st2-copy"></div><div class="st2-vis" id="st2-vis"></div></div></section>';
+    var st = STS.map(function (x, k) { return '<div class="fx-st fx-s' + k + '" data-fst="' + k + '" style="left:calc(2% + ' + (FSX[k] * .96).toFixed(2) + '%)"><div class="fx-house"><span class="fx-ico">' + FICO[k] + '</span><b class="mono">0' + (k + 1) + '</b>' +
+      (k === 0 ? '<span class="fx-press"></span>' : k === 1 ? '<span class="fx-gauge"><i></i></span>' : k === 3 ? '<span class="fx-laser"></span>' : k === 4 ? '<span class="fx-portal"></span>' : '') + '</div><span class="fx-leg"></span></div>'; }).join('');
+    var cap = STS.map(function (x, k) { return '<button class="fx-cap" data-act="fwGo" data-arg="' + k + '" data-fcap="' + k + '"><span class="mono">0' + (k + 1) + '</span><b>' + x[0] + '</b><small>' + x[1] + '</small>' +
+      (k === 5 ? '<span class="fx-jars">' + [['Creator', '#F5D9A8'], ['Holders', '#7FB6FF'], ['Burn', '#FF8A5B']].map(function (j, q) { return '<span class="fx-jar" style="--c:' + j[1] + '"><i data-jar="' + q + '"></i><em>' + j[0] + '</em></span>'; }).join('') + '</span>' : '') + '</button>'; }).join('');
+    return '<section class="story card-s fx" id="machine"><div class="st2-head"><div><span class="kicker">HOW IT WORKS</span><h2 class="title-xl lab-title">The treid factory</h2></div><span class="muted st2-hint">every coin rides the same line · hover to pause</span></div>' +
+      '<div class="fx-scroll"><div class="fx-floor" id="fw-wheel"><div class="fx-belt"><span class="fx-tread"></span><span class="fx-roll l"></span><span class="fx-roll r"></span></div><div class="fx-coins" id="fx-coins"></div>' + st + '</div>' +
+      '<div class="fx-caps">' + cap + '</div></div></section>';
   }
-  function storyScene(k, t) {
-    var tm = Math.max(t.buy, t.sell) || 2, nm = esc(t.name), tk = esc(t.tick), bg = (t.spec && t.spec.bg) || '#1B2440';
-    if (k === 0) return '<div class="sc sc1"><div class="s1-card"><div class="s1-ban" style="background:linear-gradient(120deg,' + bg + ',#0E0E10)"></div><div class="s1-av">' + avatarHTML(t, 92) + '</div><div class="s1-meta"><b class="s1-name">' + nm + '</b><span class="mono s1-tk">$' + tk + '</span></div><div class="s1-chips"><span class="s1-chip tax" style="background:' + taxBg(tm) + '">TAX ' + tm + '%</span><span class="s1-chip pair">' + coinHTML(t.pair, 18) + ' ' + esc(pairLabel(t.pair)) + '</span><span class="s1-chip live">● LIVE</span></div></div></div>';
-    if (k === 1) return '<div class="sc sc2"><div class="s2-lane bots">' + [0, 1, 2].map(function (q) { return '<span class="s2-who" style="--d:' + (q * .25) + 's">🤖<em>−80%</em></span>'; }).join('') + '</div>' +
-      '<div class="s2-box"><span class="s2-liq"></span><span class="s2-t"><small>SNIPER TAX</small><b class="mono s2-v">80%</b></span><span class="s2-ok"><small>TAX</small><b class="mono">' + tm + '%</b></span></div>' +
-      '<div class="s2-lane ppl">' + [0, 1, 2, 3].map(function (q) { return '<span class="s2-who" style="--d:' + (3.2 + q * .2) + 's">🙂<em class="ok">−' + tm + '%</em></span>'; }).join('') + '</div></div>';
-    if (k === 2) return '<div class="sc sc3"><svg class="s3-g" viewBox="0 0 400 200"><defs><linearGradient id="s3f" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3DDC97" stop-opacity=".35"/><stop offset="1" stop-color="#3DDC97" stop-opacity="0"/></linearGradient></defs><path class="s3-area" d="M10 185 C120 180 200 150 260 110 S360 30 390 18 L390 195 L10 195Z" fill="url(#s3f)"/><path class="s3-line" d="M10 185 C120 180 200 150 260 110 S360 30 390 18" fill="none" stroke="#3DDC97" stroke-width="3" stroke-linecap="round"/></svg>' +
-      [0, 1, 2, 3, 4, 5].map(function (q) { return '<span class="s3-b mono" style="left:' + (18 + q * 13) + '%;bottom:' + (12 + q * 12) + '%;--d:' + (.4 + q * .55) + 's">+' + (0.3 + (q * 0.37) % 2).toFixed(1) + ' SOL</span>'; }).join('') +
-      '<div class="s3-curve"><small>Bonding curve</small><i><u></u></i><b class="mono s3-p">0%</b></div></div>';
-    if (k === 3) { var rm = riskMetrics(t); return '<div class="sc sc4"><div class="s4-card">' + avatarHTML(t, 56) + '<b>' + nm + '</b><span class="s4-scan"></span><div class="s4-tiles">' + rm.map(function (m, q) { return '<span class="s4-t ' + m.lv + '" style="--d:' + (.5 + q * .45) + 's"><small>' + m.lab + '</small><b class="mono">' + m.val + '</b></span>'; }).join('') + '</div></div><div class="s4-note">' + (rm.some(function (m) { return m.lv === 'r'; }) ? '⚠ Flagged — still tradable. Your call.' : '✓ Nothing suspicious found') + '</div></div>'; }
-    if (k === 4) return '<div class="sc sc5"><div class="s5-curve"><i><u></u></i><b class="mono">100%</b></div><div class="s5-burst">' + Array(18).join('<i></i>') + '</div><div class="s5-ray">🎓 Graduated <span>→ Raydium</span></div><div class="s5-axis"><i></i>' + [['GRAD', '🎓'], ['100K', '🔥'], ['1M', '🚀'], ['10M', '🌕']].map(function (m, q) { return '<span class="s5-m" style="left:' + (8 + q * 28) + '%;--d:' + (1.6 + q * .6) + 's"><em>' + m[1] + '</em><small>' + m[0] + '</small></span>'; }).join('') + '</div></div>';
-    return '<div class="sc sc6"><div class="s6-src">' + avatarHTML(t, 54) + '<small>every trade</small></div>' + [0, 1, 2, 3, 4, 5, 6, 7, 8].map(function (q) { return '<span class="s6-dot j' + (q % 3) + '" style="--d:' + (q * .42) + 's"></span>'; }).join('') +
-      '<div class="s6-jars">' + [['c', '50%', 'Creator', '👤'], ['h', '30%', 'Holders', '💎'], ['v', '20%', 'Burn', '🔥']].map(function (j) { return '<div class="s6-jar ' + j[0] + '"><span class="s6-fill"></span><em>' + j[3] + '</em><b class="mono">' + j[1] + '</b><small>' + j[2] + '</small></div>'; }).join('') + '</div></div>';
+  function fxSpawn() {
+    var box = document.getElementById('fx-coins'); if (!box) return;
+    var t = pick(all()), r = Math.random(), tm = Math.max(t.buy, t.sell) || 2, el = document.createElement('div');
+    el.className = 'fxc'; el.innerHTML = '<span class="fxc-ring"></span><span class="fxc-blank">?</span><span class="fxc-face">' + avatarHTML(t, 44) + '</span><span class="fxc-tax mono" style="background:' + taxBg(tm) + '">' + tm + '%</span><span class="fxc-cap">🎓</span><span class="fxc-flag"></span><span class="fxc-mc mono"></span>';
+    box.appendChild(el); FW.coins.push({ el: el, x: -4, t: t, risky: r < .33, st: -1, mc: 5 });
   }
-  function fwCenter(k) {
-    var c = document.getElementById('st2-copy'), v = document.getElementById('st2-vis'); if (!c || !v) return;
-    c.innerHTML = '<span class="st2-n mono">0' + (k + 1) + ' / 06</span><h3>' + STS[k][0] + '</h3><p>' + STS[k][1] + '</p>';
-    v.innerHTML = storyScene(k, FW.coin);
-    document.querySelectorAll('[data-stb]').forEach(function (e) { var n = +e.getAttribute('data-stb'); e.classList.toggle('on', n === k); e.classList.toggle('done', n < k); });
-    if (k === 2) { var p0 = 0; (function up() { var e = v.querySelector('.s3-p'); if (!e || FW.i !== 2) return; p0 = Math.min(85, p0 + 2); e.textContent = p0 + '%'; if (p0 < 85) setTimeout(up, 70); })(); }
+  function fxPop(c, txt, cls) { var box = document.getElementById('fx-coins'); if (!box) return; var e = document.createElement('span'); e.className = 'fxp ' + (cls || ''); e.textContent = txt; e.style.left = c.x + '%'; box.appendChild(e); setTimeout(function () { e.remove(); }, 1300); }
+  function fxHit(k) { var e = document.querySelector('[data-fst="' + k + '"]'); if (!e) return; e.classList.remove('hit'); void e.offsetWidth; e.classList.add('hit'); var cp = document.querySelector('[data-fcap="' + k + '"]'); if (cp) { cp.classList.remove('hit'); void cp.offsetWidth; cp.classList.add('hit'); } }
+  function fxStage(c, k) {
+    c.st = k; var el = c.el; el.classList.add('s' + k); fxHit(k);
+    if (k === 0) fxPop(c, 'minted', 'g');
+    if (k === 1) { fxPop(c, '🤖 sniper −80%', 'r'); setTimeout(function () { if (el.isConnected) fxPop(c, '🙂 you −' + (Math.max(c.t.buy, c.t.sell) || 2) + '%', 'g'); }, 380); }
+    if (k === 3) { var f = el.querySelector('.fxc-flag'); f.textContent = c.risky ? '⚠' : '✓'; f.className = 'fxc-flag ' + (c.risky ? 'r' : 'g'); fxPop(c, c.risky ? 'flagged · still tradable' : 'clean', c.risky ? 'r' : 'g'); }
+    if (k === 4) fxPop(c, '→ Raydium', 'y');
+    if (k === 5) { [0, 1, 2].forEach(function (q) { setTimeout(function () { FW.jars[q] = Math.min(100, FW.jars[q] + [5, 3.4, 2.4][q]); var j = document.querySelector('[data-jar="' + q + '"]'); if (j) j.style.height = (12 + FW.jars[q] * .88) + '%'; }, q * 160); }); fxPop(c, 'tax → creator · holders · burn', 'y'); if (FW.jars[0] >= 100) FW.jars = [20, 14, 10]; }
   }
+  function fwCenter(k) { FW.hi = k; document.querySelectorAll('[data-fcap]').forEach(function (e) { e.classList.toggle('on', +e.getAttribute('data-fcap') === k); }); document.querySelectorAll('[data-fst]').forEach(function (e) { e.classList.toggle('on', +e.getAttribute('data-fst') === k); }); }
   function fwLoop(now) {
-    var w = document.getElementById('fw-wheel'); if (!w) { FW.raf = 0; FW.el = null; return; }
-    if (FW.el !== w) { FW.el = w; FW.t0 = now; FW.i = 0; FW.coin = pick(all().filter(function (x) { return x.prog < 100; }).concat(all())); fwCenter(0); w.onmouseenter = function () { FW.paused = true; FW.pt = performance.now(); w.parentNode.classList.add('paused'); }; w.onmouseleave = function () { FW.paused = false; FW.t0 += performance.now() - FW.pt; w.parentNode.classList.remove('paused'); }; }
-    if (!FW.paused) { var p = (now - FW.t0) / FW.ms; if (p >= 1) { FW.i = (FW.i + 1) % STS.length; FW.t0 = now; p = 0; if (FW.i === 0) FW.coin = pick(all()); fwCenter(FW.i); }
-      document.querySelectorAll('[data-stb] u').forEach(function (u, k) { u.style.width = (k < FW.i ? 100 : k === FW.i ? p * 100 : 0) + '%'; }); }
+    var w = document.getElementById('fw-wheel'); if (!w) { FW.raf = 0; FW.el = null; FW.coins = []; return; }
+    if (FW.el !== w) { FW.el = w; FW.coins = []; FW.lt = now; FW.spawn = 0; var sec = w.closest('.fx'); sec.onmouseenter = function () { FW.paused = true; sec.classList.add('paused'); }; sec.onmouseleave = function () { FW.paused = false; sec.classList.remove('paused'); fwCenter(-1); };
+      for (var i = 0; i < 5; i++) { fxSpawn(); var c0 = FW.coins[FW.coins.length - 1]; c0.x = 88 - i * 21; for (var k = 0; k < 6; k++) if (c0.x > FSX[k]) { c0.st = k; c0.el.classList.add('s' + k); if (k === 3) { var f0 = c0.el.querySelector('.fxc-flag'); f0.textContent = c0.risky ? '⚠' : '✓'; f0.className = 'fxc-flag ' + (c0.risky ? 'r' : 'g'); } } } }
+    var dt = Math.min(64, now - FW.lt); FW.lt = now;
+    if (!FW.paused) {
+      FW.spawn -= dt; if (FW.spawn <= 0) { fxSpawn(); FW.spawn = 2900 + Math.random() * 900; }
+      FW.coins.forEach(function (c) {
+        c.x += dt * 0.0072;
+        while (c.st < 5 && c.x >= FSX[c.st + 1]) fxStage(c, c.st + 1);
+        var mcEl = c.el.querySelector('.fxc-mc');
+        if (c.st >= 2) { var p = c.st >= 4 ? 1 : Math.min(1, (c.x - FSX[2]) / (FSX[4] - FSX[2])); var mc = c.st >= 4 ? 69 + (c.x - FSX[4]) * 9 : 5 + p * 64; mcEl.textContent = '$' + mc.toFixed(0) + 'K'; c.el.style.setProperty('--p', (p * 100).toFixed(0)); }
+        var lift = c.st >= 2 && c.st < 4 ? Math.sin(Math.min(1, (c.x - FSX[2]) / (FSX[4] - FSX[2])) * Math.PI) * 14 : 0;
+        c.el.style.left = c.x + '%'; c.el.style.transform = 'translate(-50%,' + (-lift).toFixed(1) + 'px)';
+        if (c.x > 103) { c.el.remove(); c.gone = true; }
+      });
+      FW.coins = FW.coins.filter(function (c) { return !c.gone; });
+    }
     FW.raf = requestAnimationFrame(fwLoop);
   }
   function mbuyWatch() { var tb = document.querySelector('.tradebox'), mb = document.querySelector('.m-buy'); if (!tb || !mb || !window.IntersectionObserver) return; if (mbuyWatch.o) mbuyWatch.o.disconnect(); mbuyWatch.o = new IntersectionObserver(function (en) { mb.classList.toggle('hide', en[0].isIntersecting); }, { threshold: .15 }); mbuyWatch.o.observe(tb); }
