@@ -1572,8 +1572,8 @@
     t.tk = out; return out;
   }
   function candles(t) {
-    var tk = ensureTicks(t), b = tfMs(), now = Date.now(), endB = Math.floor(now / b) - S.cpan, n = S.czoom, startB = endB - n + 1;
-    var firstB = Math.floor(tk[0][0] / b), lo = 0, hi = tk.length;
+    var tk = ensureTicks(t), b = tfMs(), now = Date.now(), nowB = Math.floor(now / b), firstB = Math.floor(tk[0][0] / b), A = Math.max(1, nowB - firstB + 1), n = Math.max(6, Math.min(S.czoom, A + 1));
+    S.cA = A; S.cEff = n; var endB = nowB - S.cpan, startB = endB - n + 1, pre = Math.max(0, firstB - startB), lo = 0, hi = tk.length;
     while (lo < hi) { var m = (lo + hi) >> 1; if (tk[m][0] < startB * b) lo = m + 1; else hi = m; }
     var k = lo, prevC = k > 0 ? tk[k - 1][1] : tk[0][1], out = [];
     var fut = Math.max(0, endB - Math.floor(now / b)); endB -= fut;
@@ -1583,7 +1583,7 @@
       out.push({ o: o, h: h2, l: l2, c: c, v: v, t: bt, flat: !any }); prevC = c;
     }
     if (!out.length) out.push({ o: t.mcN, h: t.mcN, l: t.mcN, c: t.mcN, v: 0, t: endB * b });
-    out.fut = fut; return out;
+    out.fut = fut; out.pre = Math.min(pre, n - out.length - fut); out.n = n; return out;
   }
   function yLabel(v) { return S.chartMode === 'price' ? fmtPrice(v * 1000 / 1e9) : fmtK(v); }
   function tLabel(ms) { var d = new Date(ms), p = function (x) { return (x < 10 ? '0' : '') + x; }; return tfMs() >= 864e5 ? (d.getMonth() + 1) + '/' + d.getDate() : p(d.getHours()) + ':' + p(d.getMinutes()); }
@@ -1594,8 +1594,8 @@
     var minSp = mx * 0.06; if (mx - mn < minSp) { var mid = (mx + mn) / 2; mx = mid + minSp / 2; mn = mid - minSp / 2; } var pad = (mx - mn) * .06; mx += pad; mn -= pad; var sp = mx - mn;
     if (S.cys !== 1 || S.cyo) { var md0 = (mx + mn) / 2 + S.cyo * sp, h0 = sp / 2 * S.cys; mx = md0 + h0; mn = md0 - h0; sp = mx - mn; }
     var vmx = Math.max(.0001, Math.max.apply(null, cs.map(function (c) { return c.v; })));
-    var fut = cs.fut || 0, slots = Math.max(cs.length + fut, Math.min(S.czoom, cs.length + fut + 1));
-    S.cEff = slots; var cw = (W - 70) / slots, off0 = (slots - cs.length - fut) * cw, Y = function (v) { return top + (mx - v) / sp * ph; }, bw = Math.max(1.5, Math.min(26, cw * 0.64));
+    var fut = cs.fut || 0, slots = Math.max(cs.n || 0, cs.length + fut + (cs.pre || 0));
+    var cw = (W - 70) / slots, off0 = (cs.pre || 0) * cw, Y = function (v) { return top + (mx - v) / sp * ph; }, bw = Math.max(1.5, Math.min(26, cw * 0.64));
     var g = '', pts = [], xl = '';
     for (var k = 1; k < 5; k++) g += '<line x1="0" x2="' + W + '" y1="' + (top + k * ph / 5) + '" y2="' + (top + k * ph / 5) + '" stroke="#18181A" vector-effect="non-scaling-stroke"/>';
     var every = Math.max(1, Math.round(slots / 7));
@@ -1607,7 +1607,7 @@
         '<rect x="' + (x - bw / 2).toFixed(1) + '" y="' + y1.toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + Math.max(1.2, y2 - y1).toFixed(1) + '" rx="1" fill="' + col + '"' + (i === cs.length - 1 && S.cpan <= 0 ? ' class="lastc"' : '') + '/>';
       line += (i ? 'L' : 'M') + x.toFixed(1) + ' ' + Y(c.c).toFixed(1);
       if (S.cvol && c.v > 0) vol += '<rect x="' + (x - bw / 2).toFixed(1) + '" y="' + (H - bot - c.v / vmx * vh).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + (c.v / vmx * vh).toFixed(1) + '" fill="' + (up ? '#3DDC97' : '#F2708A') + '" opacity=".3"/>';
-      if ((slots - cs.length + i) % every === 0) xl += '<span class="xlab" style="left:' + (x / W * 100).toFixed(2) + '%">' + tLabel(c.t) + '</span>';
+      if (((cs.pre || 0) + i) % every === 0) xl += '<span class="xlab" style="left:' + (x / W * 100).toFixed(2) + '%">' + tLabel(c.t) + '</span>';
     });
     if (S.ctype === 'line') { var x0 = off0 + cw / 2, x1 = off0 + (cs.length - 1) * cw + cw / 2, upAll = cs[cs.length - 1].c >= cs[0].o, lc = upAll ? '#3DDC97' : '#F2708A';
       area = '<defs><linearGradient id="cfill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="' + lc + '" stop-opacity=".25"/><stop offset="1" stop-color="' + lc + '" stop-opacity="0"/></linearGradient></defs><path d="' + line + 'L' + x1.toFixed(1) + ' ' + (top + ph) + 'L' + x0.toFixed(1) + ' ' + (top + ph) + 'Z" fill="url(#cfill)"/>';
@@ -1631,7 +1631,7 @@
       }); }
     S.chartPts = pts; S.chartW = W; S.chartH = H; S.chartOff = off0; S.chartCw = cw;
     var last = cs[cs.length - 1], ly = Math.max(2, Math.min(H - bot - 2, Y(last.c))), lcol = last.c >= last.o ? '#3DDC97' : '#F2708A';
-    if (fut) { var bms = tfMs(), lastT = cs[cs.length - 1].t; for (var fi = 1; fi <= fut; fi++) { var ii = cs.length - 1 + fi; if ((slots - cs.length + ii) % every === 0) { var fx = off0 + ii * cw + cw / 2; if (fx < W - 70) xl += '<span class="xlab fut" style="left:' + (fx / W * 100).toFixed(2) + '%">' + tLabel(lastT + fi * bms) + '</span>'; } } }
+    if (fut) { var bms = tfMs(), lastT = cs[cs.length - 1].t; for (var fi = 1; fi <= fut; fi++) { var ii = cs.length - 1 + fi; if (((cs.pre || 0) + ii) % every === 0) { var fx = off0 + ii * cw + cw / 2; if (fx < W - 70) xl += '<span class="xlab fut" style="left:' + (fx / W * 100).toFixed(2) + '%">' + tLabel(lastT + fi * bms) + '</span>'; } } }
     var labels = '', NL = yfree ? 7 : 4; for (var j = 0; j <= NL; j++) { var v = mx - j * sp / NL; if (v < 0 && !yfree) continue; labels += '<span class="ylab" style="top:' + ((top + j * ph / NL) / H * 100).toFixed(2) + '%">' + yLabel(v) + '</span>'; }
     return '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" role="img" aria-label="Price chart"><defs><clipPath id="pclip"><rect x="0" y="0" width="' + W + '" height="' + (yfree ? H - bot : top + ph + 4) + '"/></clipPath></defs>' + g + vol + '<g clip-path="url(#pclip)">' + area + body + ma + '</g>' +
       '<line x1="0" x2="' + W + '" y1="' + ly.toFixed(1) + '" y2="' + ly.toFixed(1) + '" stroke="' + lcol + '" stroke-opacity=".55" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"/></svg>' + labels + xl + marks +
@@ -2952,7 +2952,7 @@
   document.addEventListener('pointermove', function (e) {
     if (!CDRAG) return; var dx = e.clientX - CDRAG.x, dy = e.clientY - CDRAG.y;
     if (CDRAG.axis) { S.cys = Math.max(.08, Math.min(40, CDRAG.ys * Math.exp(dy / 160))); if (!CDRAG.raf) CDRAG.raf = requestAnimationFrame(function () { if (CDRAG) CDRAG.raf = 0; chartRedraw(); }); return; }
-    var np = Math.max(-Math.floor(S.czoom * .8), Math.round(CDRAG.pan + dx / CDRAG.w * S.czoom)), ny = (S.cys !== 1 || CDRAG.yo) ? CDRAG.yo + dy / (CDRAG.h * .78) * S.cys : 0;
+    var np = Math.max(-Math.floor((S.cEff || S.czoom) * .8), Math.min((S.cA || 1e6) - 2, Math.round(CDRAG.pan + dx / CDRAG.w * (S.cEff || S.czoom)))), ny = (S.cys !== 1 || CDRAG.yo) ? CDRAG.yo + dy / (CDRAG.h * .78) * S.cys : 0;
     if (np !== S.cpan || ny !== S.cyo) { S.cpan = np; S.cyo = ny; if (!CDRAG.raf) CDRAG.raf = requestAnimationFrame(function () { if (CDRAG) CDRAG.raf = 0; chartRedraw(); }); }
   });
   document.addEventListener('pointerup', function () { if (!CDRAG) return; CDRAG = null; var b = document.getElementById('chart'); if (b) b.classList.remove('panning', 'yscaling'); });
