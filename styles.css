@@ -3921,3 +3921,9 @@ button.dh2-row{cursor:pointer;border-radius:10px}button.dh2-row:hover{background
 .spr-rg.cap::before{content:"";position:absolute;left:50%;right:0;top:50%;height:8px;margin-top:-4px;border-radius:0 99px 99px 0;background:repeating-linear-gradient(135deg,rgba(255,255,255,.07) 0 4px,transparent 4px 8px);border-left:2px solid rgba(230,203,149,.6);pointer-events:none}
 .spr-rg.cap em{position:absolute;left:50%;top:-11px;transform:translateX(-50%);font:700 9px var(--mono);font-style:normal;color:rgba(230,203,149,.75);white-space:nowrap;pointer-events:none}
 .spr-rg.cap::before{z-index:2;height:6px;margin-top:-3px;background:repeating-linear-gradient(135deg,rgba(255,255,255,.18) 0 3px,rgba(0,0,0,.35) 3px 6px)}
+/* banner header: keep ticker + socials readable on bright banners */
+.tp-banner .tp-id .title-xl{text-shadow:0 2px 14px rgba(0,0,0,.65)}
+.tp-banner .tp-id .tk{display:inline-flex;align-items:center;vertical-align:middle;margin-left:6px;padding:3px 10px;border-radius:99px;font-size:15px;font-weight:700;letter-spacing:.02em;color:#F1DDB0;background:rgba(8,8,10,.72);border:1px solid rgba(241,221,176,.22);backdrop-filter:blur(8px);-webkit-text-fill-color:#F1DDB0;text-shadow:none}
+.tp-banner .soc.big .sbtn2{background:rgba(8,8,10,.72)!important;border-color:rgba(255,255,255,.14)!important;backdrop-filter:blur(8px);color:#EDEDED}
+.tp-banner .soc.big .sbtn2.off{color:rgba(237,237,237,.55)!important;border-style:dashed!important;text-decoration:none}
+.tp-banner .soc.big .sbtn2.off *{opacity:1}
