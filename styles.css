@@ -3903,3 +3903,16 @@ button.dh2-row{cursor:pointer;border-radius:10px}button.dh2-row:hover{background
 .orb-core.pl .oc-live .av{width:24px!important;height:24px!important}
 .orb-core.pl .oc-live b{font-size:13px}
 .xlab.fut{opacity:.55}
+/* split: pro icons + gradients */
+.svi{width:100%;height:100%;display:block}
+.spc-ic{width:30px;height:30px;padding:6px;border-radius:9px;color:#F1DDB0;background:rgba(241,221,176,.08);border:1px solid rgba(241,221,176,.14);font-size:0}
+.spc.on .spc-ic{color:#0b0b0c;background:linear-gradient(180deg,#F5E6C4,#C9A86A);border-color:transparent}
+.spr-l{display:flex;align-items:center;gap:8px}
+.sp-ic{display:inline-grid;width:22px;height:22px;padding:4px;border-radius:7px;color:var(--c);background:color-mix(in srgb,var(--c) 13%,transparent);border:1px solid color-mix(in srgb,var(--c) 25%,transparent)}
+.spk-lock{display:inline-flex;align-items:center;gap:6px}.spk-lock .svi{width:12px;height:12px}
+.tsp-p{display:inline-flex;align-items:center;gap:5px}.tsp-p .svi{width:11px;height:11px}
+.tsp-r em.sp-ic{width:30px;height:30px;padding:6px;font-size:0}
+.spbar i{box-shadow:inset 0 1px 0 rgba(255,255,255,.25)}
+.spbar.big{height:14px;padding:2px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);border-radius:10px}
+.spbar.big i{border-radius:6px}
+.spr input[type=range]{accent-color:var(--c)}

@@ -2197,8 +2197,19 @@
     });
   }
   // ===== TAX SPLIT: holders / burn / dev, locked at launch =====
-  var SPRE = { community: ['💎', 'Community', 70, 20, 10], deflation: ['🔥', 'Deflation', 20, 70, 10], balanced: ['⚖️', 'Balanced', 40, 30, 30] };
-  var SPC = { h: ['#7FB6FF', '💎', 'Holders'], b: ['#FF8A5B', '🔥', 'Burn'], d: ['#F5D9A8', '👤', 'Dev'] };
+  var SVI = function (d) { return '<svg class="svi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + d + '</svg>'; };
+  var ICO = {
+    holders: SVI('<circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c.6-3 2.8-4.6 5.5-4.6s4.9 1.6 5.5 4.6"/><circle cx="17" cy="9" r="2.5"/><path d="M15.8 14.6c2.4.2 4 1.6 4.6 4.4"/>'),
+    burn: SVI('<path d="M12 3c.6 3.2 4.8 5 4.8 10a4.8 4.8 0 0 1-9.6 0c0-2.2 1-3.6 2.2-4.8.2 1.6.9 2.6 2 3 0-3 .2-5.6.6-8.2z"/>'),
+    dev: SVI('<path d="M8.5 8 4.5 12l4 4M15.5 8l4 4-4 4M13.5 5l-3 14"/>'),
+    community: SVI('<circle cx="12" cy="7.5" r="2.6"/><circle cx="5.5" cy="10" r="2"/><circle cx="18.5" cy="10" r="2"/><path d="M7.5 19c.5-2.8 2.2-4.2 4.5-4.2s4 1.4 4.5 4.2M2.5 18c.3-1.8 1.3-2.8 3-3M21.5 18c-.3-1.8-1.3-2.8-3-3"/>'),
+    deflation: SVI('<path d="M12 3c.6 3.2 4.8 5 4.8 10a4.8 4.8 0 0 1-9.6 0c0-2.2 1-3.6 2.2-4.8.2 1.6.9 2.6 2 3 0-3 .2-5.6.6-8.2z"/>'),
+    balanced: SVI('<path d="M12 4v16M7 20h10M5 7h14M5 7l-2.5 6a2.5 2.5 0 0 0 5 0zM19 7l-2.5 6a2.5 2.5 0 0 0 5 0z"/>'),
+    custom: SVI('<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>'),
+    lock: SVI('<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>')
+  };
+  var SPRE = { community: ['community', 'Community', 70, 20, 10], deflation: ['deflation', 'Deflation', 20, 70, 10], balanced: ['balanced', 'Balanced', 40, 30, 30] };
+  var SPC = { h: ['#5CC8FF', 'holders', 'Holders', 'linear-gradient(90deg,#3B82F6,#5CC8FF)'], b: ['#FF8A4C', 'burn', 'Burn', 'linear-gradient(90deg,#FF4D2E,#FFB547)'], d: ['#E6CB95', 'dev', 'Dev', 'linear-gradient(90deg,#B08D57,#F1DDB0)'] };
   function splitOf(t) {
     if (!t || Math.max(t.buy || 0, t.sell || 0) <= 0) return null;
     if (t.split) return t.split;
@@ -2207,16 +2218,16 @@
     else t.split = { p: k, h: p[2], b: p[3], d: p[4] };
     return t.split;
   }
-  function splitBar(sp, cls) { return '<span class="spbar ' + (cls || '') + '">' + ['h', 'b', 'd'].filter(function (k) { return sp[k] > 0; }).map(function (k) { return '<i style="flex:' + sp[k] + ';background:' + SPC[k][0] + '"></i>'; }).join('') + '</span>'; }
+  function splitBar(sp, cls) { return '<span class="spbar ' + (cls || '') + '">' + ['h', 'b', 'd'].filter(function (k) { return sp[k] > 0; }).map(function (k) { return '<i style="flex:' + sp[k] + ';background:' + SPC[k][3] + '"></i>'; }).join('') + '</span>'; }
   function splitTip(t) { var sp = splitOf(t), m = Math.max(t.buy, t.sell); return sp ? 'Tax ' + m + '% → ' + sp.h + '% holders · ' + sp.b + '% burn · ' + sp.d + '% dev (locked)' : 'No tax — plain coin'; }
   function splitPicker(c) {
     var base = c.buy; if (base <= 0) return '<div class="spk off"><b>Where the tax goes</b><small>0% tax — nothing to split. Your coin trades as a plain token.</small></div>';
     var sp = c.split || (c.split = { p: 'community', h: 70, b: 20, d: 10 });
-    var chips = Object.keys(SPRE).map(function (k) { var p = SPRE[k]; return '<button class="spc' + (sp.p === k ? ' on' : '') + '" data-act="spPre" data-arg="' + k + '"><span class="spc-ic">' + p[0] + '</span><b>' + p[1] + '</b><small class="mono">' + p[2] + ' / ' + p[3] + ' / ' + p[4] + '</small>' + splitBar({ h: p[2], b: p[3], d: p[4] }) + '</button>'; }).join('') +
-      '<button class="spc' + (sp.p === 'custom' ? ' on' : '') + '" data-act="spPre" data-arg="custom"><span class="spc-ic">🎛️</span><b>Custom</b><small>set it yourself</small><span class="spbar"><i style="flex:1;background:repeating-linear-gradient(90deg,#3a3a40 0 4px,#26262a 4px 8px)"></i></span></button>';
+    var chips = Object.keys(SPRE).map(function (k) { var p = SPRE[k]; return '<button class="spc' + (sp.p === k ? ' on' : '') + '" data-act="spPre" data-arg="' + k + '"><span class="spc-ic">' + ICO[p[0]] + '</span><b>' + p[1] + '</b><small class="mono">' + p[2] + ' / ' + p[3] + ' / ' + p[4] + '</small>' + splitBar({ h: p[2], b: p[3], d: p[4] }) + '</button>'; }).join('') +
+      '<button class="spc' + (sp.p === 'custom' ? ' on' : '') + '" data-act="spPre" data-arg="custom"><span class="spc-ic">' + ICO.custom + '</span><b>Custom</b><small>set it yourself</small><span class="spbar"><i style="flex:1;background:repeating-linear-gradient(90deg,#3a3a40 0 4px,#26262a 4px 8px)"></i></span></button>';
     var ex = function (k) { return (base * sp[k] / 100).toFixed(2).replace(/\.?0+$/, '') + '%'; };
-    var rows = ['h', 'b', 'd'].map(function (k) { var c0 = SPC[k]; return '<div class="spr" style="--c:' + c0[0] + '"><span class="spr-l">' + c0[1] + ' ' + c0[2] + '</span>' + (sp.p === 'custom' ? '<input type="range" min="0" max="' + (k === 'd' ? 50 : 100) + '" step="5" value="' + sp[k] + '" data-split="' + k + '">' : '<span class="spr-fill"><i style="width:' + sp[k] + '%"></i></span>') + '<b class="mono" data-spv="' + k + '">' + sp[k] + '%</b><small class="mono" data-spx="' + k + '">' + ex(k) + ' of each trade</small></div>'; }).join('');
-    return '<div class="spk"><div class="spk-h"><b>Where the tax goes</b><span class="spk-lock">🔒 Locked forever at launch</span></div><div class="spk-chips">' + chips + '</div>' +
+    var rows = ['h', 'b', 'd'].map(function (k) { var c0 = SPC[k]; return '<div class="spr" style="--c:' + c0[0] + '"><span class="spr-l"><span class="sp-ic">' + ICO[c0[1]] + '</span>' + c0[2] + '</span>' + (sp.p === 'custom' ? '<input type="range" min="0" max="' + (k === 'd' ? 50 : 100) + '" step="5" value="' + sp[k] + '" data-split="' + k + '">' : '<span class="spr-fill"><i style="width:' + sp[k] + '%;background:' + c0[3] + '"></i></span>') + '<b class="mono" data-spv="' + k + '">' + sp[k] + '%</b><small class="mono" data-spx="' + k + '">' + ex(k) + ' of each trade</small></div>'; }).join('');
+    return '<div class="spk"><div class="spk-h"><b>Where the tax goes</b><span class="spk-lock">' + ICO.lock + 'Locked forever at launch</span></div><div class="spk-chips">' + chips + '</div>' +
       '<div class="spk-viz"><div class="spk-big" data-spbig>' + splitBar(sp, 'big') + '</div>' + rows + '</div>' +
       '<small class="spk-note">Dev share is capped at 50%. The treid platform fee is separate and never comes out of this split.</small></div>';
   }
@@ -2226,10 +2237,10 @@
   }
   function taxSplitPanel(t) {
     var sp = splitOf(t), m = Math.max(t.buy, t.sell); if (!sp) return '<section class="card-s panel tsp-panel"><b>Where the tax goes</b><small class="muted">0% tax — plain coin, nothing is split.</small></section>';
-    var pre = SPRE[sp.p], name = pre ? pre[0] + ' ' + pre[1] : '🎛️ Custom';
-    return '<section class="card-s panel tsp-panel"><div class="tsp-h"><b>Where the ' + m + '% tax goes</b><span class="tsp-p">' + name + ' · 🔒 locked</span></div>' + splitBar(sp, 'big') +
-      '<div class="tsp-rows">' + ['h', 'b', 'd'].map(function (k) { var c0 = SPC[k]; return '<div class="tsp-r" style="--c:' + c0[0] + '"><em>' + c0[1] + '</em><span>' + c0[2] + '</span><b class="mono">' + sp[k] + '%</b><small class="mono">' + (m * sp[k] / 100).toFixed(2).replace(/\.?0+$/, '') + '% / trade</small></div>'; }).join('') + '</div>' +
-      '<small class="muted tsp-n">On a 1 SOL buy: ' + ['h', 'b', 'd'].map(function (k) { return (m / 100 * sp[k] / 100).toFixed(4).replace(/0+$/, '') + ' SOL ' + SPC[k][1]; }).join(' · ') + '</small></section>';
+    var pre = SPRE[sp.p], name = pre ? pre[1] : 'Custom';
+    return '<section class="card-s panel tsp-panel"><div class="tsp-h"><b>Where the ' + m + '% tax goes</b><span class="tsp-p">' + ICO.lock + name + ' · locked</span></div>' + splitBar(sp, 'big') +
+      '<div class="tsp-rows">' + ['h', 'b', 'd'].map(function (k) { var c0 = SPC[k]; return '<div class="tsp-r" style="--c:' + c0[0] + '"><em class="sp-ic">' + ICO[c0[1]] + '</em><span>' + c0[2] + '</span><b class="mono">' + sp[k] + '%</b><small class="mono">' + (m * sp[k] / 100).toFixed(2).replace(/\.?0+$/, '') + '% / trade</small></div>'; }).join('') + '</div>' +
+      '<small class="muted tsp-n">On a 1 SOL buy: ' + ['h', 'b', 'd'].map(function (k) { return (m / 100 * sp[k] / 100).toFixed(4).replace(/0+$/, '') + ' SOL ' + SPC[k][2].toLowerCase(); }).join(' · ') + '</small></section>';
   }
   function taxPicker(c) {
     var sn = c.snipe || { on: false, start: 80, dur: 60 }, base = c.buy;
