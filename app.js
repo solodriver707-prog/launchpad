@@ -1578,7 +1578,8 @@
   function yLabel(v) { return S.chartMode === 'price' ? fmtPrice(v * 1000 / 1e9) : fmtK(v); }
   function tLabel(ms) { var d = new Date(ms), p = function (x) { return (x < 10 ? '0' : '') + x; }; return tfMs() >= 864e5 ? (d.getMonth() + 1) + '/' + d.getDate() : p(d.getHours()) + ':' + p(d.getMinutes()); }
   function chartSVG(t) {
-    var cs = candles(t), W = 1000, H = 400, top = 16, vh = S.cvol ? 64 : 0, bot = 22, ph = H - vh - top - bot - 8;
+    var cs = candles(t), W = 1000, H = 400, top = 16, vh = S.cvol ? 64 : 0, bot = 22, ph = H - vh - top - bot - 8, yfree = S.cys !== 1 || !!S.cyo;
+    if (yfree) { top = 4; ph = H - bot - top - 2; }
     var mx = Math.max.apply(null, cs.map(function (c) { return c.h; })), mn = Math.min.apply(null, cs.map(function (c) { return c.l; }));
     var minSp = mx * 0.06; if (mx - mn < minSp) { var mid = (mx + mn) / 2; mx = mid + minSp / 2; mn = mid - minSp / 2; } var pad = (mx - mn) * .06; mx += pad; mn -= pad; var sp = mx - mn;
     if (S.cys !== 1 || S.cyo) { var md0 = (mx + mn) / 2 + S.cyo * sp, h0 = sp / 2 * S.cys; mx = md0 + h0; mn = md0 - h0; sp = mx - mn; }
@@ -1609,21 +1610,23 @@
       var place = function (ts, side) { var idx = Math.floor((ts - t0) / b), c = cs[idx]; if (!c) return null; var n = stack[idx] = (stack[idx] || 0) + 1; if (n > 6) return null; var yy = Y(c.h) - 16 - (n - 1) * 22; if (yy < 40) yy = Y(c.l) + 16 + (n - 1) * 22; return { x: off0 + idx * cw + cw / 2, y: yy }; };
       S.trades.filter(function (tr) { return tr.tick === t.tick && (tr.mine || tr.sol >= 1 || tr.wallet === devOf(t)) && tr.t >= t0 && tr.t < tEnd; }).slice(0, 70).forEach(function (tr) {
         var p0 = place(tr.t); if (!p0) return; var buy = tr.side === 'buy', k = S.cmarkData.push({ k: 'tr', d: tr }) - 1, dev = tr.wallet === devOf(t);
+        if (p0.y < top - 6 || p0.y > top + ph + 6) return;
         marks += '<span class="cmark ' + (buy ? 'b' : 's') + (tr.mine ? ' me' : '') + (dev ? ' dev' : '') + '" data-cmi="' + k + '" data-act="walletAny" data-arg="' + esc(tr.wallet) + '" style="left:' + (p0.x / W * 100).toFixed(2) + '%;top:' + (Math.max(2, p0.y) / H * 100).toFixed(2) + '%">' + A.svg(walletSpec(tr.wallet)) + (dev ? '<i class="cm-d">' + (buy ? 'DEV B' : 'DEV S') + '</i>' : '') + '</span>';
       });
       seedComments(t).filter(function (c) { return c.t >= t0 && c.t < tEnd && c.reply == null; }).slice(0, 12).forEach(function (c) {
         var p0 = place(c.t); if (!p0) return; var k = S.cmarkData.push({ k: 'co', d: c }) - 1;
+        if (p0.y < top - 6 || p0.y > top + ph + 6) return;
         marks += '<span class="cmark cmco' + (c.w === devOf(t) ? ' dev' : '') + '" data-cmi="' + k + '" data-act="walletAny" data-arg="' + esc(c.w) + '" style="left:' + (p0.x / W * 100).toFixed(2) + '%;top:' + (Math.max(2, p0.y) / H * 100).toFixed(2) + '%">' + A.svg(walletSpec(c.w)) + '<i class="cm-c">💬</i></span>';
       }); }
     S.chartPts = pts; S.chartW = W; S.chartH = H; S.chartOff = off0; S.chartCw = cw;
-    var last = cs[cs.length - 1], ly = Y(last.c), lcol = last.c >= last.o ? '#3DDC97' : '#F2708A';
+    var last = cs[cs.length - 1], ly = Math.max(2, Math.min(H - bot - 2, Y(last.c))), lcol = last.c >= last.o ? '#3DDC97' : '#F2708A';
     if (fut) { var bms = tfMs(), lastT = cs[cs.length - 1].t; for (var fi = 1; fi <= fut; fi++) { var ii = cs.length - 1 + fi; if ((slots - cs.length + ii) % every === 0) { var fx = off0 + ii * cw + cw / 2; if (fx < W - 70) xl += '<span class="xlab fut" style="left:' + (fx / W * 100).toFixed(2) + '%">' + tLabel(lastT + fi * bms) + '</span>'; } } }
-    var labels = ''; for (var j = 0; j <= 4; j++) { var v = mx - j * sp / 4; if (v < 0) continue; labels += '<span class="ylab" style="top:' + ((top + j * ph / 4) / H * 100).toFixed(2) + '%">' + yLabel(v) + '</span>'; }
-    return '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" role="img" aria-label="Price chart"><defs><clipPath id="pclip"><rect x="0" y="0" width="' + W + '" height="' + (top + ph + 4) + '"/></clipPath></defs>' + g + vol + '<g clip-path="url(#pclip)">' + area + body + ma + '</g>' +
+    var labels = '', NL = yfree ? 7 : 4; for (var j = 0; j <= NL; j++) { var v = mx - j * sp / NL; if (v < 0 && !yfree) continue; labels += '<span class="ylab" style="top:' + ((top + j * ph / NL) / H * 100).toFixed(2) + '%">' + yLabel(v) + '</span>'; }
+    return '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" role="img" aria-label="Price chart"><defs><clipPath id="pclip"><rect x="0" y="0" width="' + W + '" height="' + (yfree ? H - bot : top + ph + 4) + '"/></clipPath></defs>' + g + vol + '<g clip-path="url(#pclip)">' + area + body + ma + '</g>' +
       '<line x1="0" x2="' + W + '" y1="' + ly.toFixed(1) + '" y2="' + ly.toFixed(1) + '" stroke="' + lcol + '" stroke-opacity=".55" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"/></svg>' + labels + xl + marks +
       (S.cpan > 0 ? '' : '<span class="lastlab" style="top:' + (ly / H * 100).toFixed(2) + '%;background:' + lcol + '">' + yLabel(last.c) + '</span>') +
       (S.cpan > 0 ? '<button class="c-live" data-act="cnow">Back to now →</button>' : '') +
-      '<div class="yhit" title="Drag to scale · double-click to auto-fit"></div>' + (S.cys !== 1 || S.cyo ? '<button class="c-auto" data-act="cauto">Auto ↕</button>' : '') +
+      '<div class="yhit" title="Drag to scale · double-click to auto-fit"></div><button class="c-auto' + (yfree ? '' : ' on') + '" data-act="cauto" title="Auto-fit price scale">A</button>' +
       '<div class="cm-tip" id="cmtip"></div><div class="xh" id="xh"></div><div class="yh" id="yh"></div><div class="xh-dot" id="xhd" style="background:#fff"></div><div class="xh-tip" id="xht"></div>' +
       '<span class="wm">treid.fun</span>';
   }
