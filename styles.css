@@ -4022,3 +4022,14 @@ button.dh2-row{cursor:pointer;border-radius:10px}button.dh2-row:hover{background
 .ctog .cclean{display:inline-flex;align-items:center;gap:5px;margin-left:4px}
 .ctog .cclean svg{width:14px;height:14px}
 .ctog .cclean.on{background:var(--ivory,#F2EDE4);color:#0b0b0c;border-color:transparent}
+/* activity: slim single-line rows */
+.st-box{padding:9px 12px;gap:6px}
+.st-h>b{font-size:13px}
+.st-h .seg.sm button{padding:3px 9px;font-size:11px;min-height:0}
+.st-row{display:grid;grid-template-columns:minmax(92px,auto) 1fr minmax(92px,auto);align-items:center;gap:10px}
+.st-row .st-v{display:contents}
+.st-row .st-v .up{order:1;white-space:nowrap}
+.st-row .bs-bar{order:2;height:4px}
+.st-row .st-v .down{order:3;text-align:right;white-space:nowrap}
+.st-row .st-v span{font-size:11px}.st-row .st-v b{font-size:12px}
+@media (max-width:760px){.st-row{grid-template-columns:auto 1fr auto;gap:8px}.st-h .st-tf{margin-left:auto}}
