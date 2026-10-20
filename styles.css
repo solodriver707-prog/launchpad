@@ -3927,3 +3927,9 @@ button.dh2-row{cursor:pointer;border-radius:10px}button.dh2-row:hover{background
 .tp-banner .soc.big .sbtn2{background:rgba(8,8,10,.72)!important;border-color:rgba(255,255,255,.14)!important;backdrop-filter:blur(8px);color:#EDEDED}
 .tp-banner .soc.big .sbtn2.off{color:rgba(237,237,237,.55)!important;border-style:dashed!important;text-decoration:none}
 .tp-banner .soc.big .sbtn2.off *{opacity:1}
+.tc-tkr{display:flex;align-items:center;gap:6px;min-width:0}
+.tc-ca{display:inline-flex;align-items:center;gap:4px;padding:3px 7px;border-radius:7px;border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--muted);font-size:10.5px;cursor:pointer;white-space:nowrap;transition:color .15s,border-color .15s,background .15s}
+.tc-ca svg{width:11px;height:11px}
+.tc-ca:hover{color:#fff;border-color:rgba(241,221,176,.4);background:rgba(241,221,176,.06)}
+.tc-ca.ok{color:#3DDC97;border-color:rgba(61,220,151,.45)}
+.tc-name2{align-items:center}.tc-name2 .tc-ca{font-size:10.5px;color:var(--muted)}.tc-name2 .tc-ca.ok{color:#3DDC97}
