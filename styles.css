@@ -3767,3 +3767,39 @@ button.dh2-row{cursor:pointer;border-radius:10px}button.dh2-row:hover{background
 .bq-rocket{position:absolute;left:50%;top:calc(100% - 40px);transform:translateX(-50%) rotate(180deg);font-size:26px;filter:drop-shadow(0 0 10px #FF8A3D)}
 .bq.out .bh-tk,.bq.out .bh-sup,.bq.out .bh-left{opacity:0}
 @media (max-width:760px){.bq{width:84px;margin-left:-42px;margin-right:-42px;bottom:12%}.bq.act{--p:19%}.bq.w1{--p:6%;transform:scale(.5)}.bq.w2{--p:-2%;opacity:0}.bq-say{font-size:10.5px;padding:5px 8px}}
+/* ===== burn sides: source tubes + rate gauge ===== */
+.bh-stage{grid-template-columns:250px minmax(0,1fr) 250px}
+.bh-side.bh-src,.bh-side.bh-gauge{padding:16px 16px 14px;border-radius:20px;background:linear-gradient(180deg,rgba(255,140,60,.06),rgba(255,255,255,.012));border:1px solid #2E231C;box-shadow:inset 0 1px 0 rgba(255,255,255,.04);gap:12px}
+.bh-sh{display:flex;flex-direction:column;gap:1px}.bh-sh b{font-size:14px;font-weight:800;letter-spacing:-.02em;color:#fff}.bh-sh small{font-size:11px;color:var(--muted)}
+.bh-tubes{display:flex;justify-content:space-between;gap:8px}
+.bh-tube{position:relative;flex:1;display:flex;flex-direction:column;align-items:center;gap:3px}
+.bh-pct{font-size:15px;font-weight:800;color:var(--c)}
+.bh-glass{position:relative;width:40px;height:150px;border-radius:20px;background:rgba(255,255,255,.03);border:1.5px solid rgba(255,255,255,.12);overflow:hidden;box-shadow:inset 0 0 14px rgba(0,0,0,.6)}
+.bh-liq{position:absolute;left:0;right:0;bottom:0;background:linear-gradient(0deg,color-mix(in srgb,var(--c) 85%,#000),var(--c));box-shadow:0 0 22px color-mix(in srgb,var(--c) 70%,transparent);transition:height 1s cubic-bezier(.3,1.3,.5,1)}
+.bh-wv{position:absolute;left:-50%;top:-7px;width:200%;height:14px;background:radial-gradient(circle at 10px -3px,transparent 9px,var(--c) 10px) 0 0/20px 14px repeat-x;animation:bhWv 1.6s linear infinite}
+@keyframes bhWv{to{transform:translateX(20px)}}
+.bh-liq u{position:absolute;bottom:4px;width:5px;height:5px;border-radius:50%;background:rgba(255,255,255,.55);animation:bhBub 2.2s ease-in infinite}
+.bh-liq u:nth-of-type(1){left:9px}.bh-liq u:nth-of-type(2){left:20px;animation-delay:.7s;width:4px;height:4px}.bh-liq u:nth-of-type(3){left:28px;animation-delay:1.4s}
+@keyframes bhBub{0%{transform:translateY(0);opacity:0}15%{opacity:.8}100%{transform:translateY(-120px);opacity:0}}
+.bh-shine{position:absolute;left:7px;top:10px;bottom:10px;width:5px;border-radius:9px;background:linear-gradient(180deg,rgba(255,255,255,.28),rgba(255,255,255,.04))}
+.bh-tube em{font-style:normal;font-size:16px;margin-top:4px}
+.bh-tube b{font-size:12px;font-weight:800;color:#fff;letter-spacing:-.01em}
+.bh-tube small{font-size:10.5px;color:var(--muted)}.bh-tube .bh-cn{font-size:10px;color:var(--faint)}
+.bh-tube.kick .bh-glass{animation:bhTk .6s cubic-bezier(.3,1.6,.5,1);border-color:var(--c)}
+@keyframes bhTk{30%{transform:scale(1.08,.94)}60%{transform:scale(.96,1.05)}}
+.bh-tpop{position:absolute;top:-18px;left:50%;transform:translateX(-50%);font-size:11.5px;font-weight:800;color:var(--c);white-space:nowrap;animation:bhTp 1.4s ease forwards;text-shadow:0 0 10px color-mix(in srgb,var(--c) 70%,transparent)}
+@keyframes bhTp{0%{opacity:0;transform:translate(-50%,10px)}20%{opacity:1;transform:translate(-50%,0)}100%{opacity:0;transform:translate(-50%,-22px)}}
+.bh-dial{position:relative}
+.bh-dial svg{width:100%;display:block}
+.bh-ticks line{stroke:rgba(255,255,255,.25);stroke-width:1.5}
+.bh-needle{transform-origin:100px 100px;transition:transform .5s cubic-bezier(.3,1.8,.5,1);filter:drop-shadow(0 0 6px rgba(255,200,120,.7))}
+.bh-dv{display:flex;flex-direction:column;align-items:center;margin-top:2px}
+.bh-dv b{font-size:24px;font-weight:800;color:#FFD2A8;letter-spacing:-.02em}
+.bh-hot{margin-top:2px;padding:3px 10px;border-radius:99px;font:800 11px Manrope,sans-serif;letter-spacing:.08em;color:#1a0b05;background:linear-gradient(90deg,#FFD15C,#FF6A2B)}
+.bh-hot.pulse{animation:bhBump .5s cubic-bezier(.2,1.8,.4,1)}
+.bh-mini{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;border-top:1px solid #2E231C;padding-top:10px}
+.bh-mini div{display:flex;flex-direction:column;gap:1px;text-align:center}.bh-mini small{font-size:9.5px;color:var(--muted)}.bh-mini b{font-size:13px;color:#FFD2A8}
+@media (max-width:980px){.bh-stage{grid-template-columns:1fr 1fr}.bh-stage .bn-fire{grid-column:1/-1;order:-1}.bh-side.bh-src,.bh-side.bh-gauge{order:0}}
+@media (max-width:760px){.bh-stage{grid-template-columns:1fr}.bh-glass{height:110px}.bh-gauge .bh-dial{max-width:240px;margin:0 auto}}
+@media (max-width:980px){.bh-side.bh-src,.bh-side.bh-gauge{flex-direction:column}}
+@media (max-width:760px){.bh-gauge .bh-dial{max-width:200px}}
