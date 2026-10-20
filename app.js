@@ -309,7 +309,7 @@
       '<button class="brand" data-act="home" aria-label="treid home"><span class="brand-name">treid</span></button>' +
       '<nav class="navlinks"><span class="nav-ind" id="nav-ind"></span><button class="' + (S.screen === 'home' ? 'on' : '') + '" data-act="home">Board</button><button class="' + (S.screen === 'create' ? 'on' : '') + '" data-act="create">Create</button><button class="' + (S.screen === 'leaders' ? 'on' : '') + '" data-act="leaders">Leaderboard</button><button data-act="how">How it works</button></nav>' +
       '<button class="searchbtn" data-act="palette">' + I.search + '<span>Search tokens or paste CA</span><span class="kbd">Ctrl K</span></button>' +
-      '<div class="hdr-right"><button class="wl-btn' + (S.screen === 'watch' ? ' on' : '') + '" data-act="watchPage" aria-label="Watchlist" data-tip="Your watchlist">' + I.star(S.watch.length > 0) + (S.watch.length ? '<b class="mono" id="wl-n">' + S.watch.length + '</b>' : '') + '</button><button class="btn pri" data-act="create">+ Launch token</button>' + right + '</div>' +
+      '<div class="hdr-right"><button class="wl-btn co-btn' + (S.coOpen ? ' on' : '') + '" data-act="coToggle" title="Hot callouts">🔥<span>Callouts</span><b class="mono" id="co-new" style="display:none">0</b></button><button class="wl-btn' + (S.screen === 'watch' ? ' on' : '') + '" data-act="watchPage" aria-label="Watchlist" data-tip="Your watchlist">' + I.star(S.watch.length > 0) + (S.watch.length ? '<b class="mono" id="wl-n">' + S.watch.length + '</b>' : '') + '</button><button class="btn pri" data-act="create">+ Launch token</button>' + right + '</div>' +
       '</div></header>';
   }
 
@@ -1543,16 +1543,59 @@
     for (var i = 0; i < 9; i++) { var w = WALLETS[Math.floor(r() * WALLETS.length)]; out.push({ id: i, w: w.a, text: CMT[Math.floor(r() * CMT.length)], t: Date.now() - (i * 7 + r() * 6) * 60000, likes: Math.floor(r() * 30), liked: false, reply: i > 2 && r() < 0.3 ? i - 1 - Math.floor(r() * 2) : null }); }
     S.comments[t.tick] = out; return out;
   }
-  function commentHTML(c, t, enter) {
-    var w = WMAP[c.w], me = S.account && c.w === S.account, dev = c.w === devOf(t), r = rng(hash(t.tick + c.id + 'co'));
-    if (c.pos == null) { c.pos = me ? 0 : Math.round(8 + r() * r() * 900); c.mc0 = t.mcN * (0.55 + r() * 0.8); c.views = Math.floor(20 + r() * 900); c.rt = Math.floor(r() * 6); }
-    var pnl = c.pos * (t.mcN / c.mc0 - 1), up = pnl >= 0, name = me ? 'You' : w && w.n ? w.n : short(c.w);
-    return '<article class="co' + (enter ? ' enter' : '') + '"><div class="co-h"><span class="av" style="width:30px;height:30px">' + A.svg(walletSpec(c.w)) + '</span><b>' + esc(name) + '</b>' + (dev ? '<span class="bdg dev">DEV</span>' : '') + '<span class="muted mono" data-t="' + c.t + '">' + ago(c.t) + '</span>' + (c.reply != null ? '<span class="co-re muted">↩ #' + (1000 + c.reply) + '</span>' : '') + '</div>' +
-      '<div class="co-t">' + esc(c.text) + '</div>' +
-      (c.pos > 0 ? '<div class="co-pos">' + avatarHTML(t, 22) + '<span><b>' + esc(t.tick) + '</b> <small>' + esc(t.name) + '</small></span><span class="co-pv"><small>Position</small> <b class="mono">$' + fmtNum(c.pos) + '</b> <small>PnL</small> <b class="mono ' + (up ? 'up' : 'down') + '">' + (up ? '+' : '−') + '$' + Math.abs(pnl).toFixed(2) + '</b></span></div>' : '') +
-      '<div class="co-a"><button data-act="replyTo" data-arg="' + c.id + '" title="Reply">↩</button><button title="Repost">⟳ ' + (c.rt || '') + '</button><button class="' + (c.liked ? 'on' : '') + '" data-act="like" data-arg="' + c.id + '" title="Like">♥ ' + c.likes + '</button><span class="muted">◉ ' + (c.views || 0) + '</span><span class="muted mono co-mc">' + fmtK(c.mc0 || t.mcN) + ' MC</span></div></article>';
+  // ===== CALLOUTS (pump.fun-style, upgraded) =====
+  S.follow = {}; S.muted = {}; S.coMenu = null; S.coExp = {}; S.coPaused = false; S.coF = 'all'; S.coOpen = false; S.coQueue = 0;
+  try { S.follow = JSON.parse(localStorage.getItem('dl.follow') || '{}'); } catch (e) {}
+  var CO_LONG = ['Been watching this since launch — dev is active, chart keeps making higher lows and the tax is clearly shown. Holding a small bag and adding on dips, not financial advice.', 'Paired with gold is such a clean narrative. If this keeps holding the curve it is going to graduate today, then it is a different game on Raydium.', 'Not gonna lie I aped on the mascot alone. Then checked holders: no snipers, no bundles, dev under 3%. That is rare these days.'];
+  function coMeta(c, t) { if (c.pos == null) { var r = rng(hash(t.tick + c.id + 'co')), me = S.account && c.w === S.account; c.pos = me ? Math.round((position(t) || { val: 0 }).val * SOL_USD) : Math.round(8 + r() * r() * 900); c.mc0 = t.mcN * (0.55 + r() * 0.8); c.views = Math.floor(20 + r() * 900); c.rt = Math.floor(r() * 6); if (r() < .18) c.text = CO_LONG[Math.floor(r() * CO_LONG.length)]; } }
+  function coName(w) { var x = WMAP[w]; return S.account && w === S.account ? 'You' : x && x.n ? x.n : short(w); }
+  function commentHTML(c, t, enter, opts) {
+    opts = opts || {}; coMeta(c, t);
+    var dev = c.w === devOf(t), pnl = c.pos * (t.mcN / c.mc0 - 1), up = pnl >= 0, key = t.tick + '|' + c.id, fol = !!S.follow[c.w], me = S.account && c.w === S.account, long = c.text.length > 120 && !S.coExp[key];
+    var kids = opts.kids || [];
+    return '<article class="co' + (enter ? ' enter' : '') + (opts.child ? ' child' : '') + '" data-co="' + esc(key) + '"><div class="co-h"><button class="co-u" data-act="walletAny" data-arg="' + esc(c.w) + '"><span class="av" style="width:30px;height:30px">' + A.svg(walletSpec(c.w)) + '</span><b>' + esc(coName(c.w)) + '</b></button>' + (dev ? '<span class="bdg dev">DEV</span>' : '') + (c.pos > 0 && !opts.child && pnl > c.pos * .5 ? '<span class="bdg win">🔥 +' + Math.round(pnl / c.pos * 100) + '%</span>' : '') + '<span class="muted mono co-time" data-t="' + c.t + '">' + ago(c.t) + '</span>' +
+      (me ? '' : '<button class="co-ic co-fol' + (fol ? ' on' : '') + '" data-act="coFollow" data-arg="' + esc(c.w) + '" title="' + (fol ? 'Following' : 'Follow') + '">' + (fol ? '✓' : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="4"/><path d="M2 21c0-4 3-6 7-6s7 2 7 6M19 8v6M16 11h6"/></svg>') + '</button>') +
+      '<span class="co-mw"><button class="co-ic" data-act="coMenu" data-arg="' + esc(key) + '" title="More">⋯</button>' + (S.coMenu === key ? '<span class="co-menu"><button data-act="coCopy" data-arg="' + esc(key) + '">Copy text</button><button data-act="coShare" data-arg="' + esc(key) + '">Copy link</button>' + (me ? '' : '<button data-act="coMute" data-arg="' + esc(c.w) + '">Mute ' + esc(coName(c.w)) + '</button><button data-act="coReport" data-arg="' + esc(key) + '">Report</button>') + '</span>' : '') + '</span></div>' +
+      '<div class="co-t' + (long ? ' clamp' : '') + '">' + esc(c.text) + '</div>' + (long ? '<button class="co-more" data-act="coExpand" data-arg="' + esc(key) + '">Show more</button>' : '') +
+      (c.pos > 0 && !opts.child ? '<button class="co-pos" data-act="open" data-arg="' + esc(t.tick) + '" title="Open $' + esc(t.tick) + '">' + avatarHTML(t, 26) + '<span class="co-pn"><b>' + esc(t.tick) + '</b><small>' + esc(t.name) + '</small></span><span class="co-pv"><small>Position</small><b class="mono">$' + fmtNum(c.pos) + '</b></span><span class="co-pv"><small>PnL</small><b class="mono ' + (up ? 'up' : 'down') + '">' + (up ? '+' : '−') + '$' + Math.abs(pnl).toFixed(2) + '</b></span><span class="co-go">›</span></button>' : '') +
+      '<div class="co-a"><button data-act="coShare" data-arg="' + esc(key) + '" title="Share"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8h16v-8M12 3v13M7 8l5-5 5 5"/></svg></button>' +
+        '<button class="' + (c.rtd ? 'on rt' : '') + '" data-act="coRT" data-arg="' + esc(key) + '" title="Repost"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 2l4 4-4 4M3 11V9a3 3 0 013-3h15M7 22l-4-4 4-4M21 13v2a3 3 0 01-3 3H3"/></svg>' + (c.rt || '') + '</button>' +
+        '<button class="' + (c.liked ? 'on lk' : '') + '" data-act="coLike" data-arg="' + esc(key) + '" title="Like"><svg viewBox="0 0 24 24" fill="' + (c.liked ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="2"><path d="M12 21s-8-5.2-8-11a4.5 4.5 0 018-2.8A4.5 4.5 0 0120 10c0 5.8-8 11-8 11z"/></svg>' + (c.likes || '') + '</button>' +
+        '<button data-act="coReply" data-arg="' + esc(key) + '" title="Reply"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a8 8 0 01-11.6 7.1L4 21l1.9-5.4A8 8 0 1121 12z"/></svg>' + (kids.length || '') + '</button>' +
+        '<span class="co-v"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>' + (c.views || 0) + '</span>' +
+        (opts.child ? '' : '<span class="co-mc mono">' + fmtK(c.mc0 || t.mcN) + ' MC</span>') + '</div>' +
+      (kids.length ? '<div class="co-kids">' + kids.map(function (k) { return commentHTML(k, t, false, { child: true }); }).join('') + '</div>' : '') + '</article>';
   }
-
+  function threadHTML(t, list) {
+    var byId = {}; list.forEach(function (c) { byId[c.id] = c; });
+    var tops = list.filter(function (c) { return (c.reply == null || !byId[c.reply]) && !S.muted[c.w]; }).sort(function (a, b) { return b.t - a.t; });
+    return tops.map(function (c) { var kids = list.filter(function (k) { return k.reply === c.id && !S.muted[k.w]; }).sort(function (a, b) { return a.t - b.t; }); return commentHTML(c, t, false, { kids: kids }); }).join('');
+  }
+  function coFind(key) { var p = key.split('|'), t = find(p[0]); if (!t) return null; var c = seedComments(t).filter(function (x) { return x.id === +p[1]; })[0]; return c ? { t: t, c: c } : null; }
+  function globalCallouts() {
+    var out = []; all().forEach(function (t) { seedComments(t).forEach(function (c) { coMeta(c, t); if (c.pos > 0 && !S.muted[c.w]) out.push({ c: c, t: t }); }); });
+    if (S.coF === 'follow') out = out.filter(function (x) { return S.follow[x.c.w]; });
+    if (S.coF === 'win') out = out.filter(function (x) { return x.c.pos * (x.t.mcN / x.c.mc0 - 1) > 0; });
+    if (S.coF === 'hold') out = out.filter(function (x) { return position(x.t); });
+    return out.sort(function (a, b) { return b.c.t - a.c.t; }).slice(0, 40);
+  }
+  function calloutDrawer() {
+    if (!S.coOpen) return '';
+    var list = globalCallouts();
+    return '<aside class="co-drawer"><div class="cd-h"><b>🔥 Hot callouts</b><button class="cd-pause' + (S.coPaused ? ' on' : '') + '" data-act="coPause">' + (S.coPaused ? '▶ Resume' + (S.coQueue ? ' · ' + S.coQueue + ' new' : '') : '❚❚ Pause') + '</button><button class="iconbtn" data-act="coClose" aria-label="Close">✕</button></div>' +
+      '<div class="cd-f">' + [['all', 'All'], ['follow', 'Following'], ['win', 'In profit'], ['hold', 'I hold']].map(function (f) { return '<button class="' + (S.coF === f[0] ? 'on' : '') + '" data-act="coFilter" data-arg="' + f[0] + '">' + f[1] + '</button>'; }).join('') + '</div>' +
+      '<div class="cd-list" id="cd-list">' + (list.length ? list.map(function (x) { return commentHTML(x.c, x.t); }).join('') : '<div class="muted" style="padding:30px 16px;text-align:center">' + (S.coF === 'follow' ? 'Follow people from their callouts and their posts show up here.' : 'Nothing here yet.') + '</div>') + '</div></aside>';
+  }
+  setInterval(function () {
+    if (document.hidden) return; var t = pick(all()); if (!t) return;
+    var cm = seedComments(t), w = WALLETS[Math.floor(Math.random() * WALLETS.length)];
+    var c = { id: cm.length, w: w.a, text: pick(CMT), t: Date.now(), likes: 0, liked: false, reply: Math.random() < 0.25 && cm.length ? cm[Math.floor(Math.random() * cm.length)].id : null };
+    cm.push(c); coMeta(c, t);
+    var tb2 = document.getElementById('cmts'); if (tb2 && S.screen === 'token' && S.tick === t.tick && c.reply == null) tb2.insertAdjacentHTML('afterbegin', commentHTML(c, t, true));
+    var dl = document.getElementById('cd-list');
+    if (dl && c.pos > 0 && c.reply == null && S.coF === 'all') { if (S.coPaused || dl.matches(':hover')) { S.coQueue++; var pb = document.querySelector('.cd-pause'); if (pb && S.coPaused) pb.textContent = '▶ Resume · ' + S.coQueue + ' new'; } else { dl.insertAdjacentHTML('afterbegin', commentHTML(c, t, true)); while (dl.children.length > 40) dl.removeChild(dl.lastChild); } }
+    var nb = document.getElementById('co-new'); if (nb && !S.coOpen) { nb.textContent = (+nb.textContent || 0) + 1; nb.style.display = ''; }
+  }, 3500);
   function position(t) { var p = S.pos[t.tick]; if (!p || p.tok <= 0) return null; var val = p.tok * price(t) / SOL_USD; return { tok: p.tok, cost: p.cost, val: val, pnl: val - p.cost, pct: p.cost ? (val / p.cost - 1) * 100 : 0 }; }
   function quoteFor(t) {
     var isBuy = S.side === 'buy', amt = parseFloat(String(S.amount).replace(',', '.')) || 0, px = price(t);
@@ -1726,7 +1769,7 @@
     var thread = '<aside class="tp-thread card-s"><div class="tt-h"><b>Callouts</b><span class="mono">' + cmAll.length + '</span><small class="muted">what holders are saying</small></div>' +
       '<div class="composer">' + (S.account ? '<textarea id="cmt-in" class="inp" data-bind="cmtDraft" placeholder="' + (S.replyTo != null ? 'Replying to #' + (1000 + S.replyTo) + '…' : 'Call it: what\'s your take on $' + id + '?') + '" maxlength="280">' + esc(S.cmtDraft || '') + '</textarea><button class="btn pri" data-act="post">Post</button>' :
         '<span class="muted">Connect a wallet to post a callout.</span><button class="btn sec" data-act="openWallet">Connect</button>') + '</div>' +
-      '<div id="cmts" class="tt-list">' + cmAll.slice().sort(function (a, b) { return b.t - a.t; }).map(function (x) { return commentHTML(x, t); }).join('') + '</div></aside>';
+      '<div id="cmts" class="tt-list">' + threadHTML(t, cmAll) + '</div></aside>';
     var body = '';
     if (S.tpTab === 'trades') {
       var rows = tt.filter(tradeMatches).slice(0, 40);
@@ -1810,12 +1853,6 @@
     if (tbl && tbl.matches(':hover')) { S.tpQueue++; var p = document.getElementById('tp-paused'); if (p) { p.style.display = ''; document.getElementById('tp-qn').textContent = S.tpQueue; } return; }
     tb.insertAdjacentHTML('afterbegin', tradeRow(tr, t, true)); while (tb.children.length > 40) tb.removeChild(tb.lastChild);
   }
-  setInterval(function () {
-    if (S.screen !== 'token') return; var t = find(S.tick); if (!t || Math.random() > 0.35) return;
-    var cm = seedComments(t), w = WALLETS[Math.floor(Math.random() * WALLETS.length)];
-    var c = { id: cm.length, w: w.a, text: pick(CMT), t: Date.now(), likes: 0, liked: false, reply: Math.random() < 0.3 && cm.length ? Math.floor(Math.random() * cm.length) : null };
-    cm.push(c); var box = document.getElementById('cmts'); if (box) box.insertAdjacentHTML('afterbegin', commentHTML(c, t, true));
-  }, 6000);
 
   // ---- compact pair picker with search by name / ticker / contract address ----
   S.cpq = ''; S.cpTab = 'crypto';
@@ -1987,7 +2024,7 @@
     var ae = document.activeElement, fid = ae && ae.id, ss = null, se = null;
     try { if (fid && ae.selectionStart != null) { ss = ae.selectionStart; se = ae.selectionEnd; } } catch (e) {}
     var body = S.screen === 'token' ? tokenPage() : S.screen === 'create' ? createPage() : S.screen === 'leaders' ? leadersPage() : S.screen === 'watch' ? watchPage() : home();
-    document.getElementById('app').innerHTML = '<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="ccUp" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3DDC97" stop-opacity=".28"/><stop offset="1" stop-color="#3DDC97" stop-opacity="0"/></linearGradient><linearGradient id="ccDn" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F2708A" stop-opacity=".26"/><stop offset="1" stop-color="#F2708A" stop-opacity="0"/></linearGradient></defs></svg>' + tape() + header() + body + footer() + walletModal() + demoImgModal() + palette() + walletDrawer();
+    document.getElementById('app').innerHTML = '<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="ccUp" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3DDC97" stop-opacity=".28"/><stop offset="1" stop-color="#3DDC97" stop-opacity="0"/></linearGradient><linearGradient id="ccDn" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F2708A" stop-opacity=".26"/><stop offset="1" stop-color="#F2708A" stop-opacity="0"/></linearGradient></defs></svg>' + tape() + header() + body + footer() + walletModal() + demoImgModal() + calloutDrawer() + palette() + walletDrawer();
     if (fid) { var el = document.getElementById(fid); if (el) { el.focus({ preventScroll: true }); try { if (ss != null) el.setSelectionRange(ss, se); } catch (e) {} } }
     if (S.palOpen && !fid) { var p = document.getElementById('pal'); if (p) p.focus(); }
     if (S.screen === 'home' && !S.loading && firstCount) { firstCount = false; countUp(); }
@@ -2126,6 +2163,7 @@
     var el = e.target.closest('[data-act]');
     if (S.fpop && !e.target.closest('.fdrop')) { S.fpop = null; if (!el) { render(); return; } }
     if (S.walletMenu && !e.target.closest('.wpill') && !(el && /airdrop|refresh|copyAddr|disconnect/.test(el.getAttribute('data-act')))) { S.walletMenu = false; if (!el) { render(); return; } }
+    if (S.coMenu && !e.target.closest('.co-mw')) { S.coMenu = null; if (!el) { render(); return; } }
     if (!el) return;
     var act = el.getAttribute('data-act'), arg = el.getAttribute('data-arg');
     if (el.tagName === 'A' && act !== 'how') e.preventDefault();
@@ -2231,12 +2269,26 @@
       case 'share': copy(location.href.split('#')[0] + '#' + (S.tick || ''), 'Link copied'); break;
       case 'sellpct': var tp0 = find(S.tick), ps0 = tp0 && S.pos[tp0.tick]; if (ps0) set({ side: 'sell', amount: (ps0.tok * (+arg) / 100).toFixed(0) }); break;
       case 'sellall': var tp1 = find(S.tick), ps1 = tp1 && S.pos[tp1.tick]; if (ps1) set({ side: 'sell', amount: ps1.tok.toFixed(0) }); break;
+      case 'coToggle': set({ coOpen: !S.coOpen, coQueue: 0 }); break;
+      case 'coClose': set({ coOpen: false }); break;
+      case 'coPause': S.coPaused = !S.coPaused; if (!S.coPaused) S.coQueue = 0; render(); break;
+      case 'coFilter': S.coF = arg; render(); break;
+      case 'coFollow': if (S.follow[arg]) delete S.follow[arg]; else S.follow[arg] = 1; try { localStorage.setItem('dl.follow', JSON.stringify(S.follow)); } catch (er) {} toast(S.follow[arg] ? 'Following ' + coName(arg) : 'Unfollowed ' + coName(arg)); render(); break;
+      case 'coMenu': S.coMenu = S.coMenu === arg ? null : arg; render(); break;
+      case 'coExpand': S.coExp[arg] = 1; render(); break;
+      case 'coLike': var cx = coFind(arg); if (cx) { cx.c.liked = !cx.c.liked; cx.c.likes = (cx.c.likes || 0) + (cx.c.liked ? 1 : -1); render(); } break;
+      case 'coRT': var cr = coFind(arg); if (cr) { cr.c.rtd = !cr.c.rtd; cr.c.rt = (cr.c.rt || 0) + (cr.c.rtd ? 1 : -1); toast(cr.c.rtd ? 'Reposted' : 'Repost removed'); render(); } break;
+      case 'coShare': S.coMenu = null; copy(location.href.split('#')[0] + '#' + arg.split('|')[0], 'Link copied'); render(); break;
+      case 'coCopy': var cc = coFind(arg); S.coMenu = null; if (cc) copy(cc.c.text, 'Text copied'); render(); break;
+      case 'coMute': S.muted[arg] = 1; S.coMenu = null; toast('Muted ' + coName(arg)); render(); break;
+      case 'coReport': S.coMenu = null; toast('Thanks — reported for review'); render(); break;
+      case 'coReply': var cp = arg.split('|'); if (S.screen !== 'token' || S.tick !== cp[0]) openToken(cp[0]); S.coOpen = false; set({ replyTo: +cp[1] }); setTimeout(function () { var ci = document.getElementById('cmt-in'); if (ci) ci.focus(); else toast('Connect a wallet to reply'); }, 60); break;
       case 'like': var cl = (S.comments[S.tick] || [])[+arg]; if (cl) { cl.liked = !cl.liked; cl.likes += cl.liked ? 1 : -1; render(); } break;
       case 'replyTo': set({ replyTo: +arg }); setTimeout(function () { var ci = document.getElementById('cmt-in'); if (ci) ci.focus(); }, 20); break;
       case 'post':
         var txt = (S.cmtDraft || '').trim(); if (!txt) { toast('Write something first'); break; }
         var cms = seedComments(find(S.tick)); cms.push({ id: cms.length, w: S.account, text: txt, t: Date.now(), likes: 0, liked: false, reply: S.replyTo != null ? S.replyTo : null });
-        set({ cmtDraft: '', replyTo: null }); toast('Posted to the thread'); break;
+        set({ cmtDraft: '', replyTo: null }); toast('Callout posted'); break;
       case 'pairOpen': set({ cat: pairInfo(arg).cat, pair: arg }); setTimeout(function () { var g = document.getElementById('grid') || document.getElementById('bubbles'); if (g) g.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 30); break;
       case 'hero': heroGo(S.heroIdx + (+arg)); break;
       case 'heroGo': heroGo(+arg); break;
