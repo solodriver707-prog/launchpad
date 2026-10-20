@@ -1479,15 +1479,51 @@
       '<span class="r"><button class="txb" data-act="wallet" data-arg="' + esc(tr.wallet) + '" aria-label="Open wallet details"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></button></span></div>';
   }
   function holdersOf(t) {
-    var m = {}, tot = 1e9, px = price(t);
-    S.trades.forEach(function (tr) { if (tr.tick !== t.tick) return; var tok = tr.tokens || tr.sol * SOL_USD / px; m[tr.wallet] = (m[tr.wallet] || 0) + (tr.side === 'buy' ? tok : -tok * 0.6); });
-    var list = Object.keys(m).filter(function (k) { return m[k] > 0; }).map(function (k) { return { a: k, tok: m[k] }; }).sort(function (a, b) { return b.tok - a.tok; });
-    var held = 0; list.forEach(function (h) { held += h.tok; });
-    var circ = tot * Math.min(0.85, 0.1 + t.prog / 100 * 0.75), scale = held ? circ / held : 0;
-    list.forEach(function (h) { h.pct = h.tok * scale / tot * 100; });
-    var out = [];
-    if (t.prog < 100) out.push({ a: 'curve', pct: 100 - circ / tot * 100, label: 'Bonding curve' }); else out.push({ a: 'pool', pct: 20.6, label: 'Raydium pool' });
-    return out.concat(list.slice(0, 18));
+    var rm = riskMetrics(t), devP = rm[0].val === 'SOLD' ? 0 : parseFloat(rm[0].val), top = parseFloat(rm[1].val), sn = parseFloat(rm[2].val), bu = parseFloat(rm[3].val);
+    var r = rng(hash(t.tick + 'hold')), dev = devOf(t), out = [], used = {}, B58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+    var fa = function () { var x = ''; for (var q = 0; q < 44; q++) x += B58[Math.floor(r() * 58)]; return x; };
+    var poolP = t.prog < 100 ? Math.max(8, 100 - (10 + t.prog * .75)) : 20.6;
+    out.push({ a: t.prog < 100 ? 'curve' : 'pool', pct: poolP, label: t.prog < 100 ? 'Bonding curve' : 'Raydium pool', kind: 'curve' });
+    // top 10 wallets share `top` %, power-law split
+    var w = [], sum = 0; for (var i = 0; i < 10; i++) { var x = Math.pow(.72, i) * (.8 + r() * .4); w.push(x); sum += x; }
+    var top10 = [], snLeft = sn, buLeft = bu, buGroup = 0;
+    for (var k = 0; k < 10; k++) {
+      var pct = w[k] / sum * top, a = k === 0 && devP > 0 ? null : WALLETS[(hash(t.tick + k) >>> 0) % WALLETS.length].a;
+      var h = { a: a, pct: pct, tags: [], first: Date.now() - (t.born ? (Date.now() - t.born) * (0.05 + r() * .9) : 3600e3) };
+      if (!a || used[a]) h.a = fa();
+      used[h.a] = 1; top10.push(h);
+    }
+    if (devP > 0) { top10.sort(function (a, b) { return b.pct - a.pct; }); var di = Math.min(9, Math.floor(r() * 6)); top10[di].a = dev; top10[di].pct = devP; top10[di].tags.push('dev'); }
+    top10.forEach(function (h) { if (h.tags.length) return; if (snLeft > 1.2 && r() < .45) { h.tags.push('sniper'); snLeft -= h.pct; h.first = t.born + 2000 + r() * 4000; } else if (buLeft > 1.2 && r() < .35) { h.tags.push('bundle'); buLeft -= h.pct; h.first = t.born + 400; buGroup++; } });
+    var minTop = Math.min.apply(null, top10.map(function (h) { return h.pct; })), rest = [];
+    for (var m = 0; m < 10; m++) rest.push({ a: fa(), pct: minTop * Math.pow(.84, m + 1) * (.85 + r() * .1), tags: [], first: Date.now() - (Date.now() - t.born) * r() });
+    var pos = position(t); if (pos && S.account) rest.unshift({ a: S.account, pct: Math.max(.01, pos.tok / 1e9 * 100), tags: ['you'], first: Date.now() - 60000 });
+    return out.concat(top10.sort(function (a, b) { return b.pct - a.pct; }), rest.sort(function (a, b) { return b.pct - a.pct; }));
+  }
+  function holdersTab(t) {
+    var hs = holdersOf(t), curve = hs[0], wallets = hs.slice(1), top10 = 0, devP = 0, snP = 0, buP = 0, mc = t.mcN * 1000;
+    wallets.slice(0, 10).forEach(function (h) { top10 += h.pct; });
+    wallets.forEach(function (h) { if (h.tags.indexOf('dev') > -1) devP += h.pct; if (h.tags.indexOf('sniper') > -1) snP += h.pct; if (h.tags.indexOf('bundle') > -1) buP += h.pct; });
+    var shades = ['#EDE9E1', '#CFC9BE', '#B3ADA2', '#989388', '#7F7A71', '#69655D', '#57534D', '#48453F', '#3C3A35', '#33312D'];
+    function colOf(h, i) { return h.kind === 'curve' ? 'curve' : h.tags.indexOf('dev') > -1 ? '#F2708A' : h.tags.indexOf('sniper') > -1 ? '#FF9A4D' : h.tags.indexOf('bundle') > -1 ? '#B794FF' : h.tags.indexOf('you') > -1 ? '#3DDC97' : shades[Math.min(9, i)]; }
+    var shown = 0, segs = '<i class="hseg curve" style="flex:' + curve.pct.toFixed(2) + '" title="' + curve.label + ' ' + curve.pct.toFixed(1) + '%"><span>' + (t.prog < 100 ? 'CURVE' : 'POOL') + '</span></i>';
+    wallets.slice(0, 10).forEach(function (h, i) { shown += h.pct; segs += '<i class="hseg" style="flex:' + h.pct.toFixed(2) + ';background:' + colOf(h, i) + '" title="' + esc(h.a === S.account ? 'You' : short(h.a)) + ' ' + h.pct.toFixed(2) + '%"></i>'; });
+    segs += '<i class="hseg rest" style="flex:' + Math.max(0, 100 - curve.pct - shown).toFixed(2) + '" title="Everyone else"></i>';
+    var lvc = function (v, a, b) { return v < a ? 'g' : v < b ? 'y' : 'r'; };
+    var tiles = [['Holders', fmtNum(t.holders), ''], ['Top 10', top10.toFixed(1) + '%', lvc(top10, 30, 45)], ['Dev', devP ? devP.toFixed(1) + '%' : 'sold', devP ? lvc(devP, 3, 8) : 'r'], ['Snipers', snP.toFixed(1) + '%', lvc(snP, 5, 12)], ['Bundles', buP.toFixed(1) + '%', lvc(buP, 4, 9)], [t.prog < 100 ? 'Unsold in curve' : 'In pool', curve.pct.toFixed(1) + '%', 'c']];
+    var legend = [['curve', t.prog < 100 ? 'Bonding curve' : 'Raydium pool'], ['#F2708A', 'Dev'], ['#FF9A4D', 'Sniper'], ['#B794FF', 'Bundle'], ['#3DDC97', 'You'], ['#CFC9BE', 'Holders'], ['rest', 'Everyone else']];
+    var TAG = { dev: 'DEV', sniper: 'SNIPER', bundle: 'BUNDLE', you: 'YOU' };
+    var rows = hs.map(function (h, i) {
+      var c = colOf(h, i - 1), isC = h.kind === 'curve', val = mc * h.pct / 100;
+      var who = isC ? '<span class="hw-ic curve"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="15" fill="none" stroke="rgba(216,195,160,.2)" stroke-width="4"/><circle cx="18" cy="18" r="15" fill="none" stroke="#D8C3A0" stroke-width="4" stroke-dasharray="' + (Math.min(100, t.prog) * .942).toFixed(1) + ' 94.2" transform="rotate(-90 18 18)" stroke-linecap="round"/></svg></span><span class="hw-n"><b>' + h.label + '</b><small>' + (t.prog < 100 ? 'unsold supply · ' + Math.min(100, t.prog).toFixed(0) + '% of curve filled' : 'liquidity locked in the pool') + '</small></span>'
+        : '<span class="av" style="width:28px;height:28px">' + A.svg(walletSpec(h.a)) + '</span><span class="hw-n"><b class="mono">' + (h.a === S.account ? 'You' : WMAP[h.a] && WMAP[h.a].n ? '@' + WMAP[h.a].n : short(h.a)) + '</b><small>first buy ' + ago(h.first) + ' ago</small></span>' + h.tags.map(function (g) { return '<span class="htag ' + g + '">' + TAG[g] + '</span>'; }).join('');
+      return '<div class="hrow2' + (isC ? ' is-curve' : '') + '"><span class="mono muted hr-n">' + (isC ? '—' : i) + '</span><span class="hw">' + who + '</span>' +
+        '<span class="hbar2"><i style="width:' + Math.min(100, isC ? h.pct : h.pct / Math.max(1, wallets[0].pct) * 100).toFixed(1) + '%;' + (c === 'curve' ? '' : 'background:' + c) + '" class="' + (c === 'curve' ? 'curve' : '') + '"></i></span>' +
+        '<span class="mono r hr-p">' + h.pct.toFixed(2) + '%</span><span class="mono r muted hr-v">$' + fmtNum(Math.round(val)) + '</span></div>';
+    }).join('');
+    return '<div class="htiles">' + tiles.map(function (x) { return '<div class="htile ' + x[2] + '"><small>' + x[0] + '</small><b class="mono">' + x[1] + '</b></div>'; }).join('') + '</div>' +
+      '<div class="hdist2">' + segs + '</div><div class="hlegend">' + legend.map(function (l) { return '<span><i class="' + (l[0] === 'curve' ? 'curve' : l[0] === 'rest' ? 'rest' : '') + '" style="' + (l[0][0] === '#' ? 'background:' + l[0] : '') + '"></i>' + l[1] + '</span>'; }).join('') + '</div>' +
+      '<div class="hhead"><span>#</span><span>Holder</span><span>Share</span><span class="r">%</span><span class="r">Value</span></div>' + rows;
   }
   function topTraders(t) {
     var m = {}, px = price(t);
@@ -1674,12 +1710,7 @@
         '<span class="muted">Connect a wallet to join the thread.</span><button class="btn sec" data-act="openWallet">Connect wallet</button>') + '</div>' +
         '<div id="cmts">' + cm.slice().sort(function (a, b) { return b.t - a.t; }).map(function (x) { return commentHTML(x, t); }).join('') + '</div>';
     } else if (S.tpTab === 'holders') {
-      var hs = holdersOf(t), cols = ['#E8E8EA', '#A3B1C2', '#3DDC97', '#FFD15C', '#FF9A4D', '#FF6B8B', '#5CE1E6', '#C4B5FD'];
-      var top10 = 0; hs.slice(1, 11).forEach(function (h) { top10 += h.pct; });
-      body = '<div class="hdist">' + hs.slice(0, 9).map(function (h, i) { return '<i style="flex:' + h.pct.toFixed(2) + ';background:' + (i ? cols[(i - 1) % cols.length] : '#3A3A3C') + '" title="' + (h.label || short(h.a)) + ' ' + h.pct.toFixed(2) + '%"></i>'; }).join('') + '<i style="flex:12;background:#1E1E1F"></i></div>' +
-        '<div class="muted" style="font-size:12.5px;margin:6px 0 12px">Top 10 holders own <b style="color:' + (top10 > 40 ? 'var(--down)' : 'var(--up)') + '">' + top10.toFixed(1) + '%</b> · ' + fmtNum(t.holders) + ' holders</div>' +
-        hs.map(function (h, i) { return '<div class="hrow"><span class="mono muted">' + (i + 1) + '</span>' + (h.label ? '<span class="maker"><span class="av" style="width:20px;height:20px;background:#3A3A3C"></span><span>' + h.label + '</span><span class="bdg pool">' + (h.a === 'curve' ? 'CURVE' : 'POOL') + '</span></span>' : makerHTML(h.a, t)) +
-          '<span class="hbar"><i style="width:' + Math.min(100, h.pct * 2).toFixed(1) + '%;background:' + (i ? cols[(i - 1) % cols.length] : '#3A3A3C') + '"></i></span><span class="mono r">' + h.pct.toFixed(2) + '%</span></div>'; }).join('');
+      body = holdersTab(t);
     } else {
       var tl = topTraders(t), maxAbs = Math.max.apply(null, tl.map(function (e) { return Math.abs(e.pnl); }).concat([0.01])), maxB = Math.max.apply(null, tl.map(function (e) { return Math.max(e.b, e.s); }).concat([0.01]));
       var medal = ['#FFD15C', '#D7DEEA', '#E0A36B'], order = [1, 0, 2];
@@ -1756,7 +1787,7 @@
 
   function createPage() {
     var c = S.c, sp = c.spec, tmax = Math.max(c.buy, c.sell);
-    var preview = { name: c.name || 'Your token', tick: c.tick || 'TICKER', spec: sp, img: c.img, buy: c.buy, sell: c.sell, pair: c.pair, mcN: 5, mc0: 5, prog: 1, born: Date.now(), holders: 1, ca: 'preview', hist: [5, 5.1, 5, 5.2, 5.4], rewards: false, burn: false };
+    var preview = { name: c.name || 'Your token', tick: c.tick || 'TICKER', spec: sp, img: c.img, buy: c.buy, sell: c.sell, pair: c.pair, mcN: 5, mc0: 5, prog: 1, born: Date.now(), holders: 1, vol: 0, ca: 'preview', hist: [5, 5.1, 5, 5.2, 5.4], rewards: false, burn: false };
     function opts(key, list) { return '<div class="optrow">' + list.map(function (v) { return '<button class="opt' + (sp[key] === v ? ' on' : '') + '" data-act="spec" data-k="' + key + '" data-arg="' + v + '">' + v + '</button>'; }).join('') + '</div>'; }
     function sws(key, list) { return '<div class="optrow">' + list.map(function (v) { return '<button class="sw' + (sp[key] === v ? ' on' : '') + '" style="background:' + v + '" data-act="spec" data-k="' + key + '" data-arg="' + v + '" aria-label="Colour ' + v + '"></button>'; }).join('') + '</div>'; }
     return '<main class="wrap" style="padding-top:22px;max-width:1240px">' +
