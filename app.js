@@ -393,7 +393,7 @@
     return '<article class="tcard' + (S.newTick === t.tick ? ' is-new' : '') + ' ' + fr.cls + '" data-card="' + esc(t.tick) + '" data-act="open" data-arg="' + esc(t.tick) + '">' +
       '<div class="tc-hero' + (t.banner ? ' has-ban' : '') + '"><div class="tch-bg' + (t.banner ? ' ban' : '') + '" aria-hidden="true">' + (t.banner ? '<img src="' + t.banner + '" alt="">' : avatarHTML(t, 240)) + '</div>' +
         '<div class="tc-age tch-age ' + fr.cls + '"><span class="ag-dot"></span><span class="ag-lab">' + fr.lab + '</span><b class="mono" data-t="' + t.born + '">' + ago(t.born) + '</b>' + (done ? '<span class="ag-grad">GRADUATED</span>' : '') + '</div>' +
-        '<div class="tch-av">' + avatarHTML(t, 150) + '</div>' + (snipeNow(t) > 0 ? '<span class="trap-b" data-trap="' + esc(t.tick) + '">🪤 ' + snipeNow(t) + '%</span>' : '') + (opts.preview ? '' : '<button class="tch-star' + (on ? ' on' : '') + '" data-act="star" data-arg="' + esc(t.tick) + '" aria-label="Add to watchlist" aria-pressed="' + on + '">' + I.star(on) + '</button>') +
+        '<div class="tch-av">' + avatarHTML(t, 150) + '</div>' + (trapLeft(t) > 0 ? '<span class="trap-c" data-traphost>' + trapRing(t, 38) + '<small>🪤 <i data-trapt="' + esc(t.tick) + '">' + trapFmt(trapLeft(t)) + '</i></small></span>' : '') + (opts.preview ? '' : '<button class="tch-star' + (on ? ' on' : '') + '" data-act="star" data-arg="' + esc(t.tick) + '" aria-label="Add to watchlist" aria-pressed="' + on + '">' + I.star(on) + '</button>') +
         '<div class="tch-side"><div class="tax" style="background:' + taxBg(tmax) + '" data-tip="Buy ' + t.buy + '% · Sell ' + t.sell + '%"><small>TAX</small><b>' + tmax + '%</b></div>' +
         '<div class="pairmini" data-tip="Paired with ' + esc(pairInfo(t.pair).name) + '">' + coinHTML(t.pair, 28) + '<small>PAIR</small><b>' + esc(pairLabel(t.pair)) + '</b></div></div></div>' +
       '<div class="tc-name2"><b>' + esc(t.name) + '</b><span class="mono">$' + esc(t.tick) + '</span></div>' +
@@ -1607,7 +1607,7 @@
   function position(t) { var p = S.pos[t.tick]; if (!p || p.tok <= 0) return null; var val = p.tok * price(t) / SOL_USD; return { tok: p.tok, cost: p.cost, val: val, pnl: val - p.cost, pct: p.cost ? (val / p.cost - 1) * 100 : 0 }; }
   function quoteFor(t) {
     var isBuy = S.side === 'buy', amt = parseFloat(String(S.amount).replace(',', '.')) || 0, px = price(t);
-    var sol = isBuy ? amt : amt * px / SOL_USD, pct = isBuy ? t.buy : t.sell, tax = sol * pct / 100, net = sol - tax;
+    var sol = isBuy ? amt : amt * px / SOL_USD, pct = effTax(t), tax = sol * pct / 100, net = sol - tax;
     var impact = Math.min(25, net * 3 / Math.sqrt(Math.max(t.mcN, 4)));
     var outTok = isBuy ? net * SOL_USD / (px * (1 + impact / 200)) : 0, outSol = isBuy ? 0 : net * (1 - impact / 200);
     return { isBuy: isBuy, amt: amt, sol: sol, pct: pct, tax: tax, impact: impact, out: isBuy ? outTok : outSol, min: (isBuy ? outTok : outSol) * (1 - S.slip / 100) };
@@ -1759,7 +1759,7 @@
         '<div class="hs-pills" style="margin-top:8px"><button class="pill copy2" data-act="ca" data-arg="' + id + '">CA ' + esc(short(t.ca)) + ' ' + I.copy + '</button><span class="pill" style="padding-left:11px">created <span data-t="' + t.born + '">&nbsp;' + ago(t.born) + '</span>&nbsp;ago by&nbsp;' + makerHTML(devOf(t), t) + '</span>' +
         socialsHTML(t, true) +
         '<button class="iconbtn" data-act="star" data-arg="' + id + '" aria-label="Watchlist" aria-pressed="' + on + '">' + I.star(on) + '</button><button class="iconbtn" data-act="share" aria-label="Copy link"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8h16v-8M12 3v13M7 8l5-5 5 5"/></svg></button></div></div>' +
-      '<div class="tp-key">' + (t.snipe && t.snipe.on ? '<div class="trap-live' + (snipeNow(t) > 0 ? '' : ' done') + '" data-trapl="' + id + '"><span>🪤</span><span><b>Sniper trap</b><small>' + (snipeNow(t) > 0 ? 'tax now <i>' + snipeNow(t) + '%</i>, fading to ' + tmax + '%' : 'ended — tax is ' + tmax + '%') + '</small></span></div>' : '') + '<div class="tax" style="background:' + taxBg(tmax) + ';padding:9px 14px"><small>TAX</small><b style="font-size:24px">' + tmax + '%</b><small style="letter-spacing:.04em;font-size:9px">BUY & SELL</small></div>' +
+      '<div class="tp-key">' + (trapLeft(t) > 0 ? '<div class="trap-live2" data-traphost>' + trapRing(t, 52) + '<span><b>🪤 Sniper trap on</b><small>tax falls to ' + tmax + '% in <i data-trapt="' + id + '">' + trapFmt(trapLeft(t)) + '</i></small></span></div>' : '') + '<div class="tax" style="background:' + taxBg(tmax) + ';padding:9px 14px"><small>TAX</small><b style="font-size:24px">' + tmax + '%</b><small style="letter-spacing:.04em;font-size:9px">BUY & SELL</small></div>' +
         '<button class="pairbig" data-act="pairOpen" data-arg="' + esc(t.pair) + '">' + coinHTML(t.pair, 42) + '<div><small>PAIRED WITH</small><b>' + esc(pairLabel(t.pair)) + '</b><span>' + esc(pairInfo(t.pair).name) + '</span></div></button></div></section>';
     var bp = nb + ns ? nb / (nb + ns) * 100 : 50, vp = vb + vs ? vb / (vb + vs) * 100 : 50, offAth = (1 - t.mcN / ath) * 100;
     var mcrow = '<section class="card-s mcrow2"><div class="mc2-top"><div class="mc2-main"><small>Market cap</small><div class="mc2-v"><span data-mc="' + id + '" data-v="' + fmtK(t.mcN) + '">' + fmtK(t.mcN) + '</span><span class="chgpill ' + (c >= 0 ? 'up' : 'down') + '" data-chg="' + id + '">' + chgTxt(c) + '</span></div>' +
@@ -1840,6 +1840,7 @@
         '<div><span class="muted">Price impact</span><span class="' + (q.impact > 5 ? 'down' : '') + '">' + q.impact.toFixed(2) + '%</span></div>' +
         '<div><span class="muted">Min received (' + S.slip + '% slip)</span><span>' + (q.isBuy ? fmtNum(q.min) + ' $' + id : q.min.toFixed(4) + ' SOL') + '</span></div>' +
         '<div style="padding-top:9px;border-top:1px solid var(--line)"><span class="muted">You receive ≈</span><span style="font-weight:800;font-size:15px">' + (q.isBuy ? fmtNum(q.out) + ' $' + id : q.out.toFixed(4) + ' SOL') + '</span></div></div>' +
+      (trapLeft(t) > 0 ? '<div class="trap-warn" data-traphost>' + trapRing(t, 44) + '<span><b>Sniper trap active</b><small>Tax is higher right now. It drops to <b>' + tmax + '%</b> in <i data-trapt="' + id + '">' + trapFmt(trapLeft(t)) + '</i> — waiting saves you money.</small></span></div>' : '') +
       '<button class="big-btn btn ' + (!S.account ? 'pri' : q.isBuy ? 'up-b' : 'down-b') + '" data-act="trade" data-arg="' + id + '">' + (!S.account ? 'Connect wallet to trade' : (q.isBuy ? 'Buy $' : 'Sell $') + id) + '</button>' +
       '<span class="note">Wallet is real (devnet). Trades are simulated in this beta — nothing is sent on-chain.</span></section>';
     var posCard = pos ? '<section class="card-s panel poscard"><div style="display:flex;justify-content:space-between;align-items:center"><b>Your position</b><button class="link" style="min-height:0;font-size:12.5px;color:var(--down)" data-act="sellall">Sell all</button></div>' +
@@ -1886,6 +1887,18 @@
   }
   // ---- one tax for buy & sell + optional anti-sniper trap ----
   function snipeNow(t, at) { var sn = t.snipe; if (!sn || !sn.on) return 0; var age = ((at || Date.now()) - t.born) / 1000; if (age >= sn.dur) return 0; return Math.round(sn.start - (sn.start - Math.max(t.buy, t.sell)) * (age / sn.dur)); }
+  function trapLeft(t) { return t.snipe && t.snipe.on ? Math.max(0, t.snipe.dur - (Date.now() - t.born) / 1000) : 0; }
+  function trapRing(t, sz) {
+    var left = trapLeft(t), f = t.snipe ? left / t.snipe.dur : 0, R = 15.5, C = 2 * Math.PI * R;
+    return '<span class="tring" data-trapr="' + esc(t.tick) + '" style="width:' + sz + 'px;height:' + sz + 'px" title="Sniper trap: higher tax for early buyers"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="' + R + '" class="tr-bg"/><circle cx="18" cy="18" r="' + R + '" class="tr-fg" stroke-dasharray="' + (C * f).toFixed(2) + ' ' + C.toFixed(2) + '" transform="rotate(-90 18 18)"/></svg><b class="mono">' + snipeNow(t) + '%</b></span>';
+  }
+  function trapFmt(sec) { sec = Math.ceil(sec); return sec >= 60 ? Math.floor(sec / 60) + 'm ' + (sec % 60 < 10 ? '0' : '') + (sec % 60) + 's' : sec + 's'; }
+  setInterval(function () {
+    document.querySelectorAll('[data-trapr]').forEach(function (e) { var t = find(e.getAttribute('data-trapr')); if (!t) return; var left = trapLeft(t);
+      if (left <= 0) { var host = e.closest('[data-traphost]'); if (host) host.classList.add('trap-over'); e.classList.add('over'); e.querySelector('b').textContent = Math.max(t.buy, t.sell) + '%'; e.querySelector('.tr-fg').setAttribute('stroke-dasharray', '0 99'); return; }
+      var C = 2 * Math.PI * 15.5; e.querySelector('.tr-fg').setAttribute('stroke-dasharray', (C * left / t.snipe.dur).toFixed(2) + ' ' + C.toFixed(2)); e.querySelector('b').textContent = snipeNow(t) + '%'; });
+    document.querySelectorAll('[data-trapt]').forEach(function (e) { var t = find(e.getAttribute('data-trapt')); if (t) e.textContent = trapFmt(trapLeft(t)); });
+  }, 250);
   function effTax(t, at) { return Math.max(Math.max(t.buy, t.sell), snipeNow(t, at)); }
   function devQuote(sol) {
     sol = Math.max(0, +sol || 0); var px0 = 5 * 1000 / 1e9, impact = Math.min(25, sol * 3 / Math.sqrt(5));
@@ -1944,7 +1957,7 @@
         var at = function (f) { return Math.round(sn.start - (sn.start - base) * f); };
         var ticks = [0, .25, .5, .75, 1].map(function (f) { return '<span class="tl-t" style="left:' + (f * 100) + '%"><b class="mono" style="color:' + (f < 1 ? '#F2708A' : 'var(--ivory)') + '">' + at(f) + '%</b><small>' + (f === 0 ? 'launch' : '+' + durTxt(Math.round(sn.dur * f))) + '</small></span>'; }).join('');
         return '<div class="trap-cfg2"><div class="tc-row"><span class="tc-l">Starts at</span><div class="tc-seg">' + [25, 50, 75, 90].map(function (v) { return '<button class="' + (sn.start === v ? 'on' : '') + '" data-act="snipeStart" data-arg="' + v + '">' + v + '%</button>'; }).join('') + '</div></div>' +
-          '<div class="tc-row"><span class="tc-l">Back to ' + base + '% after</span><div class="tc-seg g">' + [[30, '30s'], [60, '1 min'], [180, '3 min'], [300, '5 min']].map(function (d) { return '<button class="' + (sn.dur === d[0] ? 'on' : '') + '" data-act="snipeDur" data-arg="' + d[0] + '">' + d[1] + '</button>'; }).join('') + '</div></div>' +
+          '<div class="tc-row"><span class="tc-l">Back to ' + base + '% after</span><div class="tc-seg g">' + [[10, '10s'], [30, '30s'], [60, '1 min'], [180, '3 min'], [300, '5 min']].map(function (d) { return '<button class="' + (sn.dur === d[0] ? 'on' : '') + '" data-act="snipeDur" data-arg="' + d[0] + '">' + d[1] + '</button>'; }).join('') + '</div></div>' +
           '<div class="tl"><div class="tl-bar"></div>' + ticks + '</div>' +
           '<div class="tc-ex">💡 A bot buying <b>1 SOL</b> at launch pays <b class="dn">' + (sn.start / 100).toFixed(2) + ' SOL</b> tax. A normal buyer after ' + durTxt(sn.dur) + ' pays just <b>' + (base / 100).toFixed(2) + ' SOL</b>.</div></div>';
       })() : '') + '</div>';
