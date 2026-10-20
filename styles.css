@@ -2829,3 +2829,4 @@ header::before{background:linear-gradient(90deg,transparent,rgba(216,195,160,.6)
 .pv-grid b{font-size:14px}
 .pv-trap{font-size:12px;padding:8px 10px;border-radius:10px;background:rgba(242,112,138,.08);border:1px solid rgba(242,112,138,.35);color:var(--soft)}
 .devb-bar{margin-bottom:12px}.devb-bar u em{position:absolute;top:12px;left:50%;transform:translateX(-50%);font:600 9px var(--mono);color:var(--muted);font-style:normal;white-space:nowrap}.devb-bar u:last-child em{transform:translateX(-100%)}
+.socf-in{flex:1;min-width:0}.socf-in input{font:600 13px Manrope,sans-serif!important}.socf{min-height:56px}

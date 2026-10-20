@@ -1849,7 +1849,7 @@
     var ic = k === 'x' ? '<svg viewBox="0 0 24 24"><path fill="#fff" d="M17.75 3h3.07l-6.71 7.67L22 21h-6.18l-4.84-6.33L5.44 21H2.37l7.18-8.2L2 3h6.34l4.37 5.78L17.75 3zm-1.08 16.17h1.7L7.42 4.74H5.6l11.07 14.43z"/></svg>'
       : k === 'tg' ? '<svg viewBox="0 0 24 24"><path fill="#fff" d="M9.04 15.47l-.37 5.2c.53 0 .76-.23 1.04-.5l2.5-2.39 5.18 3.8c.95.52 1.62.25 1.88-.88l3.4-15.96c.31-1.41-.5-1.96-1.43-1.62L1.28 10.9c-1.37.53-1.35 1.3-.23 1.65l5.1 1.6L17.98 6.7c.56-.37 1.06-.17.64.2"/></svg>'
       : '<svg viewBox="0 0 24 24" fill="none" stroke="#0A0A0B" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.8 3 2.8 15 0 18M12 3c-2.8 3-2.8 15 0 18"/></svg>';
-    return '<label class="socf s-' + k + (ok ? ' ok' : '') + '" for="c-' + k + '"><span class="socf-ic">' + ic + '</span><span class="socf-b"><small>' + name + '</small><span class="socf-in"><em>' + pre + '</em><input id="c-' + k + '" data-bind="c.' + k + '" value="' + esc(v.replace(/^https?:\/\/(www\.)?(x\.com|twitter\.com|t\.me)\/?/i, '').replace(/^https?:\/\//i, '')) + '" placeholder="' + ph + '" autocomplete="off"></span></span><span class="socf-ck">✓</span></label>';
+    return '<label class="socf s-' + k + (ok ? ' ok' : '') + '" for="c-' + k + '"><span class="socf-ic">' + ic + '</span><span class="socf-in"><input id="c-' + k + '" data-bind="c.' + k + '" value="' + esc(v) + '" placeholder="' + ph + '" autocomplete="off" aria-label="' + name + ' link"></span><span class="socf-ck">✓</span></label>';
   }
   function pairPicker(c) {
     var pi = pairInfo(c.pair), q = S.cpq.trim(), res = q ? pairSearch(q) : [];
@@ -1886,7 +1886,7 @@
           pairPicker(c) +
           taxPicker(c) + devBuyPicker(c) +
           '<div class="fsec"><i>3</i>Community</div>' +
-          '<div class="socrow"><span class="soc-l">Socials <small>optional · shown as buttons on your coin</small></span><div class="socgrid">' + socField(c, 'x', 'X', 'x.com/', 'yourcoin') + socField(c, 'tg', 'Telegram', 't.me/', 'yourcoin') + socField(c, 'web', 'Website', 'https://', 'yourcoin.fun') + '</div></div>' +
+          '<div class="socrow"><span class="soc-l">Socials <small>optional · shown as buttons on your coin</small></span><div class="socgrid">' + socField(c, 'x', 'X', '', 'Paste X link') + socField(c, 'tg', 'Telegram', '', 'Paste Telegram link') + socField(c, 'web', 'Website', '', 'Paste website link') + '</div></div>' +
           '<button class="big-btn btn pri" data-act="launch">' + (S.account ? 'Launch token' : 'Connect wallet to launch') + '</button>' +
           '<span class="note">Beta: launching adds your token to this board (saved in your browser). On-chain launch via Raydium LaunchLab is coming next.</span>' +
         '</section>' +
