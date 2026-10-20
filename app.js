@@ -2254,8 +2254,14 @@
   function vanEta(n) { return n <= 4 ? 'instant' : n === 5 ? '~10 sec' : '~5 min · queued'; }
   function vanPrev(c) { var v = c.van || {}, suf = v.mode === 'custom' && v.suf ? v.suf : 'treid', pre = (c.vanPre || (c.vanPre = b58(44))).slice(0, 44 - suf.length); return '<span class="mono">' + pre.slice(0, 6) + '<i>' + pre.slice(6, 14) + '…</i></span><b class="mono">' + esc(suf) + '</b>'; }
   function vanityPicker(c) {
-    return '<div class="van fixed"><div class="van-h"><b>Contract address</b><small>every coin launched here ends in treid</small></div>' +
-      '<div class="van-prev"><small>Your address</small><div id="van-prev">' + vanPrev({ vanPre: c.vanPre || (c.vanPre = b58(44)) }) + '</div><span class="van-fee ok mono">free · instant</span></div></div>';
+    var v = c.van || (c.van = { mode: 'treid', suf: '' }), n = (v.suf || '').length, cus = v.mode === 'custom';
+    return '<div class="van"><div class="van-h"><b>Contract address</b><small>how your coin’s address ends</small></div>' +
+      '<div class="van-opts"><button class="van-o' + (cus ? '' : ' on') + '" data-act="vanMode" data-arg="treid"><span class="van-t">…<b>treid</b></span><span><b>treid ending</b><small>Instantly recognised as launched on treid</small></span><em class="van-free">FREE</em></button>' +
+      '<button class="van-o' + (cus ? ' on' : '') + '" data-act="vanMode" data-arg="custom"><span class="van-t">…<b>' + (cus && v.suf ? esc(v.suf) : 'MOON') + '</b></span><span><b>Custom ending</b><small>Your own letters, 3–6 characters</small></span><em class="van-paid">from 0.1 SOL</em></button></div>' +
+      (cus ? '<div class="van-cfg"><label class="van-in"><span>…</span><input id="van-suf" data-van maxlength="6" value="' + esc(v.suf || '') + '" placeholder="MOON" autocomplete="off" spellcheck="false"></label>' +
+        '<div class="van-tiers">' + [[3, '3–4 chars', 0.1, 'instant'], [5, '5 chars', 0.5, '~10 sec'], [6, '6 chars', 2, '~5 min']].map(function (x) { var on = n && (x[0] === 3 ? n <= 4 : n === x[0]); return '<span class="' + (on ? 'on' : '') + '"><b>' + x[1] + '</b><small class="mono">' + x[2] + ' SOL · ' + x[3] + '</small></span>'; }).join('') + '</div>' +
+        '<small class="van-err" id="van-err"></small></div>' : '') +
+      '<div class="van-prev"><small>Preview</small><div id="van-prev">' + vanPrev(c) + '</div>' + (cus && n >= 3 ? '<span class="van-fee mono" id="van-fee">+' + vanFee(n) + ' SOL · ' + vanEta(n) + '</span>' : cus ? '<span class="van-fee mono" id="van-fee">type at least 3 characters</span>' : '<span class="van-fee ok mono">free · instant</span>') + '</div></div>';
   }
   function devBuyPicker(c) {
     var q = devQuote(String(c.devBuy || '').replace(',', '.')), lv = q.pct === 0 ? 'z' : q.pct < 3 ? 'g' : q.pct < 8 ? 'y' : 'r';
@@ -2789,7 +2795,8 @@
         var dq2 = devQuote(String(c.devBuy || '').replace(',', '.'));
         if (dq2.sol > 0 && typeof S.balance === 'number' && dq2.sol > S.balance) { toast('Not enough devnet SOL for a ' + dq2.sol + ' SOL buy — balance ' + S.balance.toFixed(3)); break; }
         if (find(c.tick)) { toast('$' + c.tick + ' is already taken'); break; }
-        var vc = false, vs = 'treid', vf = 0;
+        var vc = c.van && c.van.mode === 'custom', vs = vc ? (c.van.suf || '') : 'treid', vf = vc ? vanFee(vs.length) : 0;
+        if (vc && vs.length < 3) { toast('Custom address ending needs at least 3 characters'); break; }
         if (vf && typeof S.balance === 'number' && dq2.sol + vf > S.balance) { toast('Not enough devnet SOL — need ' + (dq2.sol + vf).toFixed(2) + ' SOL incl. ' + vf + ' SOL address fee'); break; }
         var nt = { name: c.name.trim(), tick: c.tick, spec: c.spec, img: c.img, banner: c.banner || null, snipe: c.snipe && c.snipe.on ? { on: true, start: c.snipe.start, dur: c.snipe.dur } : null, buy: c.buy, sell: c.sell, split: c.buy > 0 && c.split ? { p: c.split.p, h: c.split.h, b: c.split.b, d: c.split.d } : null, pair: c.pair, mcN: 5, mc0: 5, prog: 1, born: Date.now(), holders: 1,
           soc: !!(c.x || c.tg || c.web), links: { web: linkOf(c.web), x: c.x ? linkOf(/[\/.]/.test(c.x) ? c.x : 'x.com/' + c.x.replace(/^@/, '')) : null, tg: c.tg ? linkOf(/[\/.]/.test(c.tg) ? c.tg : 't.me/' + c.tg.replace(/^@/, '')) : null, demo: false }, rewards: false, burn: false, ca: fakeCA(vs), vanity: vc ? vs : null, vol: 0, hist: [5, 5], desc: c.desc.trim(), creator: S.account };
@@ -2816,7 +2823,7 @@
       var pv = document.getElementById('van-prev'); if (pv) pv.innerHTML = vanPrev(S.c);
       var fe = document.getElementById('van-fee'); if (fe) fe.textContent = n >= 3 ? '+' + vanFee(n) + ' SOL · ' + vanEta(n) : 'type at least 3 characters';
       document.querySelectorAll('.van-tiers span').forEach(function (sp, i) { sp.classList.toggle('on', !!n && (i === 0 ? n >= 3 && n <= 4 : i === 1 ? n === 5 : n === 6)); });
-      var vt = document.querySelector('.van-o.on .van-t b'); if (vt) vt.textContent = clean || 'GOAT';
+      var vt = document.querySelector('.van-o.on .van-t b'); if (vt) vt.textContent = clean || 'MOON';
       return;
     }
     var spk = e.target.getAttribute && e.target.getAttribute('data-split');
