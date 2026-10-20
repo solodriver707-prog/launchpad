@@ -4122,3 +4122,7 @@ button.dh2-row{cursor:pointer;border-radius:10px}button.dh2-row:hover{background
 .bt-warn{font-size:12px;color:#FFB15C;margin-bottom:12px}
 .bt-go{width:100%;min-height:48px;border-radius:14px;border:0;background:linear-gradient(180deg,#FFD15C,#FF6A2B);color:#1a0b05;font:800 15px Manrope,sans-serif;cursor:pointer}
 @media (max-width:760px){.bt-sum{grid-template-columns:1fr 1fr}}
+.pairmini.plain{opacity:.85}.pairmini.plain small{color:#5BE6A8}
+.pairbig.plain{cursor:default}.pairbig.plain small{color:#5BE6A8}
+.nopair{display:flex;align-items:center;gap:12px;padding:14px;border-radius:14px;border:1px dashed rgba(61,220,151,.3);background:rgba(61,220,151,.04)}
+.nopair>span:last-child{display:flex;flex-direction:column;gap:3px}.nopair b{font-size:14px}.nopair small{font-size:12px;color:var(--muted);line-height:1.45}
