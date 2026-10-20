@@ -1566,13 +1566,14 @@
     var firstB = Math.floor(tk[0][0] / b), lo = 0, hi = tk.length;
     while (lo < hi) { var m = (lo + hi) >> 1; if (tk[m][0] < startB * b) lo = m + 1; else hi = m; }
     var k = lo, prevC = k > 0 ? tk[k - 1][1] : tk[0][1], out = [];
+    var fut = Math.max(0, endB - Math.floor(now / b)); endB -= fut;
     for (var B = Math.max(startB, firstB); B <= endB; B++) {
       var o = prevC, h2 = o, l2 = o, c = o, v = 0, any = false, bt = B * b, be = bt + b;
       while (k < tk.length && tk[k][0] < be) { var x = tk[k]; if (x[0] >= bt) { any = true; h2 = Math.max(h2, x[1]); l2 = Math.min(l2, x[1]); c = x[1]; v += x[2]; } k++; }
       out.push({ o: o, h: h2, l: l2, c: c, v: v, t: bt, flat: !any }); prevC = c;
     }
     if (!out.length) out.push({ o: t.mcN, h: t.mcN, l: t.mcN, c: t.mcN, v: 0, t: endB * b });
-    return out;
+    out.fut = fut; return out;
   }
   function yLabel(v) { return S.chartMode === 'price' ? fmtPrice(v * 1000 / 1e9) : fmtK(v); }
   function tLabel(ms) { var d = new Date(ms), p = function (x) { return (x < 10 ? '0' : '') + x; }; return tfMs() >= 864e5 ? (d.getMonth() + 1) + '/' + d.getDate() : p(d.getHours()) + ':' + p(d.getMinutes()); }
@@ -1581,7 +1582,7 @@
     var mx = Math.max.apply(null, cs.map(function (c) { return c.h; })), mn = Math.min.apply(null, cs.map(function (c) { return c.l; }));
     var minSp = mx * 0.06; if (mx - mn < minSp) { var mid = (mx + mn) / 2; mx = mid + minSp / 2; mn = mid - minSp / 2; } var pad = (mx - mn) * .06; mx += pad; mn -= pad; var sp = mx - mn;
     var vmx = Math.max(.0001, Math.max.apply(null, cs.map(function (c) { return c.v; })));
-    var slots = Math.max(cs.length, S.czoom), cw = (W - 70) / slots, off0 = (slots - cs.length) * cw, Y = function (v) { return top + (mx - v) / sp * ph; }, bw = Math.max(1.5, cw * 0.64);
+    var fut = cs.fut || 0, slots = Math.max(cs.length + fut, S.czoom), cw = (W - 70) / slots, off0 = (slots - cs.length - fut) * cw, Y = function (v) { return top + (mx - v) / sp * ph; }, bw = Math.max(1.5, cw * 0.64);
     var g = '', pts = [], xl = '';
     for (var k = 1; k < 5; k++) g += '<line x1="0" x2="' + W + '" y1="' + (top + k * ph / 5) + '" y2="' + (top + k * ph / 5) + '" stroke="#18181A" vector-effect="non-scaling-stroke"/>';
     var every = Math.max(1, Math.round(slots / 7));
@@ -1590,7 +1591,7 @@
       var x = off0 + i * cw + cw / 2, up = c.c >= c.o, col = c.flat ? '#3A3A3D' : up ? '#3DDC97' : '#F2708A', y1 = Y(Math.max(c.o, c.c)), y2 = Y(Math.min(c.o, c.c));
       pts.push({ x: x, y: Y(c.c), v: c.c, o: c.o, h: c.h, l: c.l, vol: c.v, t: c.t });
       if (S.ctype === 'candle') body += '<line x1="' + x.toFixed(1) + '" x2="' + x.toFixed(1) + '" y1="' + Y(c.h).toFixed(1) + '" y2="' + Y(c.l).toFixed(1) + '" stroke="' + col + '" stroke-width="1.2" vector-effect="non-scaling-stroke"/>' +
-        '<rect x="' + (x - bw / 2).toFixed(1) + '" y="' + y1.toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + Math.max(1.2, y2 - y1).toFixed(1) + '" rx="1" fill="' + col + '"' + (i === cs.length - 1 && !S.cpan ? ' class="lastc"' : '') + '/>';
+        '<rect x="' + (x - bw / 2).toFixed(1) + '" y="' + y1.toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + Math.max(1.2, y2 - y1).toFixed(1) + '" rx="1" fill="' + col + '"' + (i === cs.length - 1 && S.cpan <= 0 ? ' class="lastc"' : '') + '/>';
       line += (i ? 'L' : 'M') + x.toFixed(1) + ' ' + Y(c.c).toFixed(1);
       if (S.cvol && c.v > 0) vol += '<rect x="' + (x - bw / 2).toFixed(1) + '" y="' + (H - bot - c.v / vmx * vh).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + (c.v / vmx * vh).toFixed(1) + '" fill="' + (up ? '#3DDC97' : '#F2708A') + '" opacity=".3"/>';
       if ((slots - cs.length + i) % every === 0) xl += '<span class="xlab" style="left:' + (x / W * 100).toFixed(2) + '%">' + tLabel(c.t) + '</span>';
@@ -1615,11 +1616,12 @@
       }); }
     S.chartPts = pts; S.chartW = W; S.chartH = H; S.chartOff = off0; S.chartCw = cw;
     var last = cs[cs.length - 1], ly = Y(last.c), lcol = last.c >= last.o ? '#3DDC97' : '#F2708A';
+    if (fut) { var bms = tfMs(), lastT = cs[cs.length - 1].t; for (var fi = 1; fi <= fut; fi++) { var ii = cs.length - 1 + fi; if ((slots - cs.length + ii) % every === 0) { var fx = off0 + ii * cw + cw / 2; if (fx < W - 70) xl += '<span class="xlab fut" style="left:' + (fx / W * 100).toFixed(2) + '%">' + tLabel(lastT + fi * bms) + '</span>'; } } }
     var labels = ''; for (var j = 0; j <= 4; j++) { var v = mx - j * sp / 4; labels += '<span class="ylab" style="top:' + ((top + j * ph / 4) / H * 100).toFixed(2) + '%">' + yLabel(v) + '</span>'; }
     return '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" role="img" aria-label="Price chart">' + g + area + vol + body + ma +
       '<line x1="0" x2="' + W + '" y1="' + ly.toFixed(1) + '" y2="' + ly.toFixed(1) + '" stroke="' + lcol + '" stroke-opacity=".55" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"/></svg>' + labels + xl + marks +
-      (S.cpan ? '' : '<span class="lastlab" style="top:' + (ly / H * 100).toFixed(2) + '%;background:' + lcol + '">' + yLabel(last.c) + '</span>') +
-      (S.cpan ? '<button class="c-live" data-act="cnow">Back to now →</button>' : '') +
+      (S.cpan > 0 ? '' : '<span class="lastlab" style="top:' + (ly / H * 100).toFixed(2) + '%;background:' + lcol + '">' + yLabel(last.c) + '</span>') +
+      (S.cpan > 0 ? '<button class="c-live" data-act="cnow">Back to now →</button>' : '') +
       '<div class="cm-tip" id="cmtip"></div><div class="xh" id="xh"></div><div class="yh" id="yh"></div><div class="xh-dot" id="xhd" style="background:#fff"></div><div class="xh-tip" id="xht"></div>' +
       '<span class="wm">treid.fun</span>';
   }
@@ -2794,14 +2796,14 @@
     var f = Math.max(0, Math.min(1, (e.clientX - rr.left) / rr.width * W0 / Math.max(1, W0 - 70)));
     var n0 = S.czoom, n1 = Math.max(12, Math.min(240, Math.round(n0 * (e.deltaY > 0 ? 1.12 : .89)))); if (n1 === n0) n1 = Math.max(12, Math.min(240, n0 + (e.deltaY > 0 ? 1 : -1)));
     var anchor = S.cpan + (n0 - 1) - f * n0; // buckets back from now under the cursor
-    S.czoom = n1; S.cpan = Math.max(0, Math.round(anchor - (n1 - 1) + f * n1)); chartRedraw(); var zl = document.querySelector('.czoom .mono'); if (zl) zl.textContent = S.czoom;
+    S.czoom = n1; S.cpan = Math.max(-Math.floor(n1 * .8), Math.round(anchor - (n1 - 1) + f * n1)); chartRedraw(); var zl = document.querySelector('.czoom .mono'); if (zl) zl.textContent = S.czoom;
   }, { passive: false });
   document.addEventListener('pointerdown', function (e) {
     var box = e.target.closest && e.target.closest('#chart'); if (!box || e.button > 0 || e.target.closest('button')) return;
     CDRAG = { x: e.clientX, pan: S.cpan, w: box.getBoundingClientRect().width }; box.classList.add('panning');
   });
   document.addEventListener('pointermove', function (e) {
-    if (!CDRAG) return; var dx = e.clientX - CDRAG.x, np = Math.max(0, Math.round(CDRAG.pan + dx / CDRAG.w * S.czoom));
+    if (!CDRAG) return; var dx = e.clientX - CDRAG.x, np = Math.max(-Math.floor(S.czoom * .8), Math.round(CDRAG.pan + dx / CDRAG.w * S.czoom));
     if (np !== S.cpan) { S.cpan = np; if (!CDRAG.raf) CDRAG.raf = requestAnimationFrame(function () { if (CDRAG) CDRAG.raf = 0; chartRedraw(); }); }
   });
   document.addEventListener('pointerup', function () { if (!CDRAG) return; CDRAG = null; var b = document.getElementById('chart'); if (b) b.classList.remove('panning'); });
