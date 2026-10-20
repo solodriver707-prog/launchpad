@@ -1926,7 +1926,7 @@
     var sum = function (k) { return placed.filter(function (q) { return q.k === k; }).reduce(function (a, q) { return a + q.h.pct; }, 0); };
     var top10 = hs.slice(0, 10).reduce(function (a, h) { return a + h.pct; }, 0);
     var stats = [['Top 10', top10.toFixed(1) + '%', top10 > 45 ? 'r' : top10 > 30 ? 'y' : 'g'], ['Connected (bundle)', bu.length ? bu.length + (bu.length > 1 ? ' wallets · ' : ' wallet · ') + sum('bu').toFixed(1) + '%' : 'none', bu.length ? (sum('bu') > 9 ? 'r' : 'y') : 'g'], ['Snipers', sn.length ? sn.length + (sn.length > 1 ? ' wallets · ' : ' wallet · ') + sum('sn').toFixed(1) + '%' : 'none', sn.length ? (sum('sn') > 12 ? 'r' : 'y') : 'g'], ['Dev', sum('dev') ? sum('dev').toFixed(1) + '%' : 'holds 0%', sum('dev') > 8 ? 'r' : 'g']];
-    return '<div class="hm-ov" data-act="hmapClose"><div class="hm card-s" data-stop><div class="hm-h"><div><b>Holder map</b><small>$' + esc(t.tick) + ' · top ' + placed.length + ' wallets · bubble size = share of supply · bonding curve hidden</small></div><button class="iconbtn" data-act="hmapClose" aria-label="Close">✕</button></div>' +
+    return '<div class="hm-ov" data-act="hmapClose"><div class="hm card-s" data-stop><div class="hm-h"><div><b>Bubble map</b><small>$' + esc(t.tick) + ' · top ' + placed.length + ' wallets · bubble size = share of supply · bonding curve hidden</small></div><button class="iconbtn" data-act="hmapClose" aria-label="Close">✕</button></div>' +
       '<div class="hm-body"><svg class="hm-svg" viewBox="0 0 ' + W + ' ' + H + '"><g class="hm-links">' + links + '</g>' + bubbles + '</svg>' +
       '<div class="hm-side">' + stats.map(function (x) { return '<div class="hm-st lv-' + x[2] + '"><small>' + x[0] + '</small><b class="mono">' + x[1] + '</b></div>'; }).join('') +
       '<div class="hm-leg">' + [['dev', 'Dev'], ['sn', 'Sniper'], ['bu', 'Bundle'], ['you', 'You'], ['w', 'Other wallet']].map(function (x) { return '<span><i class="k-' + x[0] + '"></i>' + x[1] + '</span>'; }).join('') + '<span><em></em>linked wallets</span></div>' +
@@ -2062,7 +2062,7 @@
           row(['buys', 'sells'], b, se, fmtNum(b), fmtNum(se)) + row(['bought', 'sold'], bv, sv, fmtK(bv / 1000), fmtK(sv / 1000)) + row(['buyers', 'sellers'], nbw, nsw, fmtNum(nbw), fmtNum(nsw)) + '</div>' +
           '<div class="st-foot"><div><small>Pool</small><b class="mono">' + fmtK(curveSol * SOL_USD / 1000) + ' <em>(' + curveSol + ' SOL)</em></b><span class="muted">paired with ' + coinHTML(t.pair, 14) + ' ' + esc(pairLabel(t.pair)) + '</span></div>' +
           '<div><small>Creator</small><b>' + makerHTML(devOf(t), t) + '</b><span class="muted">' + (splitOf(t) ? 'earns ' + splitOf(t).d + '% of tax' : 'no tax on this coin') + '</span></div>' +
-          '<button class="st-bub" data-act="hmap" data-arg="' + id + '">◎ Holder map</button></div>' +
+          '<button class="st-bub" data-act="hmap" data-arg="' + id + '">◎ Bubble map</button></div>' +
           (t.desc ? '<div class="st-desc"><small>About</small><p>' + esc(t.desc) + '</p></div>' : '') + '</section>';
       })();
     var chart = '<section class="card-s panel cpanel' + (S.cfull ? ' chart-fs' : '') + '">' + chartToolbar(t) +
