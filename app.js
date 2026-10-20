@@ -1557,7 +1557,7 @@
   // ===== time-based chart engine (1m … 1d candles, zoom, pan, line/candles, MA, trade markers) =====
   var TFS = [['1M', '1m', 6e4], ['5M', '5m', 3e5], ['15M', '15m', 9e5], ['1H', '1h', 36e5], ['4H', '4h', 144e5], ['1D', '1d', 864e5]];
   function tfMs() { for (var i = 0; i < TFS.length; i++) if (TFS[i][0] === S.tf) return TFS[i][2]; return 6e4; }
-  S.ctype = 'candle'; S.cma = true; S.cvol = true; S.cmarks = true; S.czoom = 70; S.cpan = 0; S.cys = 1; S.cyo = 0; S.cfull = false;
+  S.ctype = 'candle'; S.cma = true; S.cvol = true; S.cmarks = true; S.ccall = true; try { var cpf = JSON.parse(localStorage.getItem('dl.cmarks') || 'null'); if (cpf) { S.cmarks = cpf[0]; S.ccall = cpf[1]; S.cma = cpf[2] !== false; S.cvol = cpf[3] !== false; } } catch (e) {} S.czoom = 70; S.cpan = 0; S.cys = 1; S.cyo = 0; S.cfull = false;
   function ensureTicks(t) {
     if (t.tk) return t.tk;
     var now = Date.now(), start = Math.max(t.born, now - 7 * 864e5), span = Math.max(60000, now - start), n = Math.min(2200, Math.max(30, Math.floor(span / 9000)));
@@ -1614,15 +1614,15 @@
     if (S.cma && cs.length > 5) { var per = Math.min(20, Math.floor(cs.length / 2)), d = ''; for (var m = per - 1; m < cs.length; m++) { var sum = 0; for (var q2 = m - per + 1; q2 <= m; q2++) sum += cs[q2].c; d += (m === per - 1 ? 'M' : 'L') + (off0 + m * cw + cw / 2).toFixed(1) + ' ' + Y(sum / per).toFixed(1); }
       ma = '<path d="' + d + '" fill="none" stroke="#D8C3A0" stroke-width="1.4" stroke-opacity=".85" vector-effect="non-scaling-stroke"/>'; }
     var marks = '';
-    if (S.cmarks) { var b = tfMs(), t0 = cs[0].t, tEnd = cs[cs.length - 1].t + b;
+    if (S.cmarks || S.ccall) { var b = tfMs(), t0 = cs[0].t, tEnd = cs[cs.length - 1].t + b;
       seedDevTrades(t); var stack = {}; S.cmarkData = [];
       var place = function (ts, side) { var idx = Math.floor((ts - t0) / b), c = cs[idx]; if (!c) return null; var n = stack[idx] = (stack[idx] || 0) + 1; if (n > 6) return null; var yy = Y(c.h) - 16 - (n - 1) * 22; if (yy < 40) yy = Y(c.l) + 16 + (n - 1) * 22; return { x: off0 + idx * cw + cw / 2, y: yy }; };
-      S.trades.filter(function (tr) { return tr.tick === t.tick && (tr.mine || tr.sol >= 1 || tr.wallet === devOf(t)) && tr.t >= t0 && tr.t < tEnd; }).slice(0, 70).forEach(function (tr) {
+      if (S.cmarks) S.trades.filter(function (tr) { return tr.tick === t.tick && (tr.mine || tr.sol >= 1 || tr.wallet === devOf(t)) && tr.t >= t0 && tr.t < tEnd; }).slice(0, 70).forEach(function (tr) {
         var p0 = place(tr.t); if (!p0) return; var buy = tr.side === 'buy', k = S.cmarkData.push({ k: 'tr', d: tr }) - 1, dev = tr.wallet === devOf(t);
         if (p0.y < top - 6 || p0.y > top + ph + 6) return;
         marks += '<span class="cmark ' + (buy ? 'b' : 's') + (tr.mine ? ' me' : '') + (dev ? ' dev' : '') + '" data-cmi="' + k + '" data-act="walletAny" data-arg="' + esc(tr.wallet) + '" style="left:' + (p0.x / W * 100).toFixed(2) + '%;top:' + (Math.max(2, p0.y) / H * 100).toFixed(2) + '%">' + A.svg(walletSpec(tr.wallet)) + (dev ? '<i class="cm-d">' + (buy ? 'DEV B' : 'DEV S') + '</i>' : '') + '</span>';
       });
-      seedComments(t).filter(function (c) { return c.t >= t0 && c.t < tEnd && c.reply == null; }).slice(0, 12).forEach(function (c) {
+      if (S.ccall) seedComments(t).filter(function (c) { return c.t >= t0 && c.t < tEnd && c.reply == null; }).slice(0, 12).forEach(function (c) {
         var p0 = place(c.t); if (!p0) return; var k = S.cmarkData.push({ k: 'co', d: c }) - 1;
         if (p0.y < top - 6 || p0.y > top + ph + 6) return;
         marks += '<span class="cmark cmco' + (c.w === devOf(t) ? ' dev' : '') + '" data-cmi="' + k + '" data-act="walletAny" data-arg="' + esc(c.w) + '" style="left:' + (p0.x / W * 100).toFixed(2) + '%;top:' + (Math.max(2, p0.y) / H * 100).toFixed(2) + '%">' + A.svg(walletSpec(c.w)) + '<i class="cm-c">💬</i></span>';
@@ -1645,7 +1645,7 @@
     return '<div class="chart-tb"><div class="seg tfseg">' + TFS.map(function (x) { return '<button class="' + (S.tf === x[0] ? 'on' : '') + '" data-act="tf" data-arg="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div>' +
       '<div class="seg"><button class="' + (S.ctype === 'candle' ? 'on' : '') + '" data-act="ctype" data-arg="candle" title="Candles"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 3v4M7 17v4M17 5v3M17 16v3"/><rect x="4" y="7" width="6" height="10" rx="1"/><rect x="14" y="8" width="6" height="8" rx="1"/></svg></button><button class="' + (S.ctype === 'line' ? 'on' : '') + '" data-act="ctype" data-arg="line" title="Line"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 17l6-6 4 4 8-8"/></svg></button></div>' +
       '<div class="seg"><button class="' + (S.chartMode === 'mc' ? 'on' : '') + '" data-act="cmode" data-arg="mc">MCap</button><button class="' + (S.chartMode === 'price' ? 'on' : '') + '" data-act="cmode" data-arg="price">Price</button></div>' +
-      '<div class="ctog">' + [['cma', 'MA', S.cma], ['cvol', 'Vol', S.cvol], ['cmarks', 'Trades', S.cmarks]].map(function (x) { return '<button class="' + (x[2] ? 'on' : '') + '" data-act="ctog" data-arg="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div>' +
+      '<div class="ctog">' + [['cma', 'MA', S.cma], ['cvol', 'Vol', S.cvol], ['cmarks', 'Trades', S.cmarks], ['ccall', 'Callouts', S.ccall]].map(function (x) { return '<button class="' + (x[2] ? 'on' : '') + '" data-act="ctog" data-arg="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '<button class="cclean' + (!S.cmarks && !S.ccall ? ' on' : '') + '" data-act="cclean" title="Hide all markers for a clean chart">' + (!S.cmarks && !S.ccall ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 3l18 18M10.6 5.1A10 10 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-3.2 4M6.6 6.6A17 17 0 0 0 2 12s3.5 7 10 7a9.7 9.7 0 0 0 5.4-1.6"/></svg>Clean' : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>Clean') + '</button>' + '</div>' +
       '<div class="czoom"><button data-act="czoom" data-arg="out" title="Zoom out">−</button><span class="mono">' + S.czoom + '</span><button data-act="czoom" data-arg="in" title="Zoom in">+</button><button data-act="czoom" data-arg="reset" title="Reset view">⟲</button></div>' +
       '<span class="muted mono c-pair">$' + id + '/' + esc(pairLabel(t.pair)) + '</span>' +
       '<button class="iconbtn c-fs" data-act="cfull" aria-label="Fullscreen chart" title="Fullscreen">' + (S.cfull ? '✕' : '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>') + '</button></div>';
@@ -2606,7 +2606,8 @@
       case 'reset': S.r = JSON.parse(JSON.stringify(RDEF)); S.pairQ = ''; S.pairTab = 'all'; set({ fpop: null, cleanOnly: false, maxTax: 10, minProg: 0, minMc: 0, pair: 'All', cat: 'all', zeroOnly: false, gradOnly: false, rewardsOnly: false, watchOnly: false }); break;
       case 'tf': S.cpan = 0; S.cys = 1; S.cyo = 0; var tA2 = find(S.tick); if (tA2 && tA2.archived && tA2.span) { var bA2 = TFS.filter(function (x) { return x[0] === arg; })[0][2]; S.cpan = Math.max(0, Math.floor(Date.now() / bA2) - Math.floor((tA2.born + tA2.span) / bA2) - 3); } set({ tf: arg }); break;
       case 'ctype': set({ ctype: arg }); break;
-      case 'ctog': S[arg] = !S[arg]; render(); break;
+      case 'ctog': S[arg] = !S[arg]; try { localStorage.setItem('dl.cmarks', JSON.stringify([S.cmarks, S.ccall, S.cma, S.cvol])); } catch (er) {} render(); break;
+      case 'cclean': var allOff = !S.cmarks && !S.ccall; if (allOff) { S.cmarks = S._cm0 != null ? S._cm0 : true; S.ccall = S._cc0 != null ? S._cc0 : true; } else { S._cm0 = S.cmarks; S._cc0 = S.ccall; S.cmarks = false; S.ccall = false; } try { localStorage.setItem('dl.cmarks', JSON.stringify([S.cmarks, S.ccall, S.cma, S.cvol])); } catch (er) {} render(); break;
       case 'cfull': set({ cfull: !S.cfull }); break;
       case 'ttab': S.ttab = arg; try { localStorage.setItem('dl.ttab', arg); } catch (e) {} render(); break;
       case 'ttNew': var tl = document.getElementById('cmts'); if (tl) tl.scrollTo({ top: 0, behavior: 'smooth' }); var npb = document.getElementById('tt-new'); if (npb) { npb._n = 0; npb.style.display = 'none'; } break;
