@@ -1052,7 +1052,7 @@
     var out = [];
     all().forEach(function (t) { var r = rng(hash(t.tick + 'burn2')); if (r() < .35) return; if (Date.now() - t.born < 3 * 36e5 && r() < .75) return;
       var heavy = r() < .25, n = 1 + Math.floor(r() * (heavy ? 7 : 3));
-      for (var i = 0; i < n; i++) { var pct = +((heavy ? 1.2 : .08) + r() * r() * (heavy ? 9 : 2.4)).toFixed(3), tok = pct / 100 * 1e9, mc = t.mcN * (.35 + r() * .7), usd = tok * mc * 1000 / 1e9, at = Date.now() - 60000 - Math.min(Date.now() - t.born, 36 * 36e5) * r() * .98;
+      for (var i = 0; i < n; i++) { var pct = +((heavy ? 1.2 : .08) + r() * r() * (heavy ? 9 : 2.4)).toFixed(3), tok = pct / 100 * 1e9, mc = t.mcN * (.35 + r() * .7), usd = tok * mc * 1000 / 1e9, at = Date.now() - 60000 - Math.min(Date.now() - t.born, 30 * 864e5) * r() * .98;
         var x = r(), src = (Math.max(t.buy, t.sell) > 0 && x < .55) ? 'tax' : 'dev';
         out.push({ t: t, tok: tok, pct: pct, usd: usd, at: at, src: src, who: src === 'tax' ? 'auto' : b58(4) + '…' + b58(4), sig: b58(64) }); } });
     out.sort(function (a, b) { return b.at - a.at; }); S._burns = out; S._burnsN = all().length; return out;
@@ -1065,15 +1065,16 @@
       return '<div class="bh-tube" data-tube="' + k + '" style="--c:' + BSRC[k][1] + '"><span class="bh-pct mono" data-tpct="' + k + '">' + sh.toFixed(0) + '%</span><div class="bh-glass"><div class="bh-liq" data-tliq="' + k + '" style="height:' + Math.max(8, sh).toFixed(1) + '%"><i class="bh-wv"></i><u></u><u></u><u></u></div><span class="bh-shine"></span></div><em>' + BSI[k] + '</em><b>' + BSRC[k][0].replace(' burn', 's').replace('Tax buyback', 'Buybacks') + '</b><small class="mono" data-ttok="' + k + '">' + fmtBig(st[k]) + '</small><small class="bh-cn">' + Object.keys(cn[k]).length + ' coins</small></div>'; }).join('') + '</div></div>';
   }
   function bhGauge(log, usd, ncoins) {
-    var now = Date.now(), day = now - 864e5, hr = now - 36e5, r24 = 0, r1 = 0, u1 = 0, n1 = 0, c1 = {};
-    var h2 = now - 72e5, rp = 0; log.forEach(function (b) { if (b.at > day) r24 += b.tok; if (b.at > h2 && b.at <= hr) rp += b.tok; if (b.at > hr) { r1 += b.tok; u1 += b.usd; n1++; c1[b.t.tick] = 1; } });
-    var avg = Math.max(1, rp || r24 / 24); BN.h1 = { tok: r1, usd: u1, n: n1, coins: c1, avg: avg }; var rate = r1; BN.rate = rate; BN.lvl = Math.max(.08, Math.min(.95, .5 * rate / avg));
+    var per = S.bhPer || '1h', W0 = { '1h': 36e5, '24h': 864e5, '7d': 6048e5, '30d': 2592e6 }[per], PL = { '1h': ['hour', '1h'], '24h': ['24 hours', '24h'], '7d': ['7 days', '7d'], '30d': ['30 days', '30d'] }[per];
+    var now = Date.now(), hr = now - W0, h2 = now - 2 * W0, r1 = 0, u1 = 0, n1 = 0, c1 = {}, rp = 0;
+    log.forEach(function (b) { if (b.at > h2 && b.at <= hr) rp += b.tok; if (b.at > hr) { r1 += b.tok; u1 += b.usd; n1++; c1[b.t.tick] = 1; } });
+    var avg = Math.max(1, rp || r1); BN.h1 = { tok: r1, usd: u1, n: n1, coins: c1, avg: avg, rp: rp }; var rate = r1; BN.rate = rate; BN.lvl = Math.max(.08, Math.min(.95, .5 * rate / avg));
     var ticks = ''; for (var i = 0; i <= 10; i++) { var a = Math.PI * (1 - i / 10), x1 = 100 + Math.cos(a) * 66, y1 = 100 - Math.sin(a) * 66, x2 = 100 + Math.cos(a) * (i % 5 ? 72 : 76), y2 = 100 - Math.sin(a) * (i % 5 ? 72 : 76); ticks += '<line x1="' + x1.toFixed(1) + '" y1="' + y1.toFixed(1) + '" x2="' + x2.toFixed(1) + '" y2="' + y2.toFixed(1) + '"/>'; }
-    return '<div class="bh-side bh-gauge"><div class="bh-sh"><b>Burn rate</b><small>tokens destroyed in the last hour</small></div>' +
+    return '<div class="bh-side bh-gauge"><div class="bh-sh bh-shr"><div><b>Burn rate</b><small>tokens destroyed in the last ' + PL[0] + '</small></div><div class="bh-per">' + ['1h', '24h', '7d', '30d'].map(function (x) { return '<button class="' + (per === x ? 'on' : '') + '" data-act="bhPer" data-arg="' + x + '">' + x.toUpperCase() + '</button>'; }).join('') + '</div></div>' +
       '<div class="bh-dial"><svg viewBox="0 0 200 116"><defs><linearGradient id="bhg" x1="0" x2="1"><stop offset="0" stop-color="#3DDC97"/><stop offset=".5" stop-color="#FFD15C"/><stop offset="1" stop-color="#FF4D2E"/></linearGradient></defs><path d="M20 100 A80 80 0 0 1 180 100" fill="none" stroke="rgba(255,255,255,.06)" stroke-width="14" stroke-linecap="round"/><path d="M20 100 A80 80 0 0 1 180 100" fill="none" stroke="url(#bhg)" stroke-width="14" stroke-linecap="round" opacity=".9"/><g class="bh-ticks">' + ticks + '</g>' +
       '<g class="bh-needle" id="bh-needle" style="transform:rotate(' + (-90 + BN.lvl * 180) + 'deg)"><path d="M97 100 L100 28 L103 100Z" fill="#FFF1D6"/></g><circle cx="100" cy="100" r="8" fill="#1b130e" stroke="#FFD15C" stroke-width="2.5"/></svg>' +
-      '<div class="bh-dv"><b class="mono"><span id="bh-rate">' + fmtBig(rate) + '</span><em>/ hr</em></b><span class="bh-hot" id="bh-hot">' + (BN.lvl > .8 ? '🔥 ON FIRE' : BN.lvl > .5 ? '🔥 HOT' : '♨ WARM') + '</span><small class="bh-avg">' + (rate >= avg ? '▲ +' : '▼ −') + Math.abs(Math.round((rate / avg - 1) * 100)) + '% vs previous hour</small></div></div>' +
-      '<div class="bh-mini"><div><small>Value · 1h</small><b class="mono" id="bh-u1">$' + fmtNum(Math.round(u1)) + '</b></div><div><small>Burns · 1h</small><b class="mono" id="bh-n1">' + n1 + '</b></div><div><small>Coins · 1h</small><b class="mono" id="bh-c1">' + Object.keys(c1).length + '</b></div></div></div>';
+      '<div class="bh-dv"><b class="mono"><span id="bh-rate">' + fmtBig(rate) + '</span><em>/ ' + PL[1] + '</em></b><span class="bh-hot" id="bh-hot">' + (BN.lvl > .8 ? '🔥 ON FIRE' : BN.lvl > .5 ? '🔥 HOT' : '♨ WARM') + '</span><small class="bh-avg">' + (!rp ? 'no earlier data to compare' : (rate >= avg ? '▲ +' : '▼ −') + Math.min(999, Math.abs(Math.round((rate / avg - 1) * 100))) + '% vs previous ' + PL[0]) + '</small></div></div>' +
+      '<div class="bh-mini"><div><small>Value · ' + PL[1] + '</small><b class="mono" id="bh-u1">$' + fmtNum(Math.round(u1)) + '</b></div><div><small>Burns · ' + PL[1] + '</small><b class="mono" id="bh-n1">' + n1 + '</b></div><div><small>Coins · ' + PL[1] + '</small><b class="mono" id="bh-c1">' + Object.keys(c1).length + '</b></div></div></div>';
   }
   function bhKick(b) {
     var k = b.src, st = BN.src || {}; st[k] = (st[k] || 0) + b.tok; var tot = (st.dev || 0) + (st.tax || 0);
@@ -1083,7 +1084,7 @@
     var H1 = BN.h1 || { tok: 0, usd: 0, n: 0, coins: {}, avg: 1 }; H1.tok += b.tok; H1.usd += b.usd; H1.n++; H1.coins[b.t.tick] = 1; BN.h1 = H1; BN.rate = H1.tok;
     var rt = document.getElementById('bh-rate'); if (rt) rt.textContent = fmtBig(H1.tok);
     var u1 = document.getElementById('bh-u1'), n1 = document.getElementById('bh-n1'), c1 = document.getElementById('bh-c1'); if (u1) u1.textContent = '$' + fmtNum(Math.round(H1.usd)); if (n1) n1.textContent = H1.n; if (c1) c1.textContent = Object.keys(H1.coins).length;
-    var av = document.querySelector('.bh-avg'); if (av) av.textContent = (H1.tok >= H1.avg ? '▲ +' : '▼ −') + Math.abs(Math.round((H1.tok / H1.avg - 1) * 100)) + '% vs previous hour';
+    var av = document.querySelector('.bh-avg'); if (av && H1.rp) av.textContent = (H1.tok >= H1.avg ? '▲ +' : '▼ −') + Math.min(999, Math.abs(Math.round((H1.tok / H1.avg - 1) * 100))) + '% vs previous ' + ({ '1h': 'hour', '24h': '24 hours', '7d': '7 days', '30d': '30 days' })[S.bhPer || '1h'];
     var nd = document.getElementById('bh-needle'), lv = Math.max(.08, Math.min(.95, .5 * H1.tok / H1.avg)); if (nd) { nd.style.transform = 'rotate(' + (-90 + Math.min(.99, lv + .14) * 180) + 'deg)'; setTimeout(function () { nd.style.transform = 'rotate(' + (-90 + lv * 180) + 'deg)'; }, 380); }
     var hot = document.getElementById('bh-hot'); if (hot) { hot.textContent = lv > .8 ? '🔥 ON FIRE' : lv > .5 ? '🔥 HOT' : '♨ WARM'; hot.classList.remove('pulse'); void hot.offsetWidth; hot.classList.add('pulse'); }
   }
@@ -1101,7 +1102,7 @@
     var sorts = [['pct', '% supply'], ['usd', 'Value'], ['n', 'Burns'], ['last', 'Recent']];
     S._bnAgg = by; BN.tot = totTok; S._bnRank = {}; byPct.forEach(function (e, i) { S._bnRank[e.t.tick] = i + 1; });
     var stat = function (x) { return '<div class="bh-st"><small>' + x[0] + '</small><b class="mono">' + x[1] + '</b><span>' + x[2] + '</span></div>'; };
-    return '<main class="wrap burn"><section class="bh"><div class="bh-top"><span class="kicker">BURN LEADERBOARD</span><h1 class="bn-h">The Burnery</h1><p>Every coin on treid can <b>burn its own supply</b> — the dev burns their bag, or the coin’s <b>tax buys back and burns</b> automatically. Gone forever. Less supply, higher rank.</p></div>' +
+    return '<main class="wrap burn"><section class="bh"><div class="bh-top"><span class="kicker">BURN LEADERBOARD</span><h1 class="bn-h">The Burnery</h1><button class="btn pri bh-cta" data-act="burnOpen">🔥 Burn your tokens</button><p>Every coin on treid can <b>burn its own supply</b> — the dev burns their bag, or the coin’s <b>tax buys back and burns</b> automatically. Gone forever. Less supply, higher rank.</p></div>' +
       '<div class="bh-stage">' + bhTubes(log) +
       '<div class="bn-fire" id="bn-fire"><canvas id="bn-cv"></canvas><div class="bn-pit"></div><div class="bh-count"><small>SUPPLY DESTROYED</small><b class="mono" id="bh-count">' + (totTok >= 1e9 ? (totTok / 1e9).toFixed(3) + 'B' : fmtNum(Math.round(totTok))) + '</b></div><div class="bn-fly" id="bn-fly"></div><div class="bn-now" id="bn-now"></div></div>' +
       bhGauge(log, totUsd, coins.length) + '</div></section>' + pod +
@@ -1593,7 +1594,8 @@
     var minSp = mx * 0.06; if (mx - mn < minSp) { var mid = (mx + mn) / 2; mx = mid + minSp / 2; mn = mid - minSp / 2; } var pad = (mx - mn) * .06; mx += pad; mn -= pad; var sp = mx - mn;
     if (S.cys !== 1 || S.cyo) { var md0 = (mx + mn) / 2 + S.cyo * sp, h0 = sp / 2 * S.cys; mx = md0 + h0; mn = md0 - h0; sp = mx - mn; }
     var vmx = Math.max(.0001, Math.max.apply(null, cs.map(function (c) { return c.v; })));
-    var fut = cs.fut || 0, slots = Math.max(cs.length + fut, S.czoom), cw = (W - 70) / slots, off0 = (slots - cs.length - fut) * cw, Y = function (v) { return top + (mx - v) / sp * ph; }, bw = Math.max(1.5, cw * 0.64);
+    var fut = cs.fut || 0, slots = Math.max(cs.length + fut, Math.min(S.czoom, Math.max(24, cs.length + fut + 2)));
+    S.cEff = slots; var cw = (W - 70) / slots, off0 = (slots - cs.length - fut) * cw, Y = function (v) { return top + (mx - v) / sp * ph; }, bw = Math.max(1.5, cw * 0.64);
     var g = '', pts = [], xl = '';
     for (var k = 1; k < 5; k++) g += '<line x1="0" x2="' + W + '" y1="' + (top + k * ph / 5) + '" y2="' + (top + k * ph / 5) + '" stroke="#18181A" vector-effect="non-scaling-stroke"/>';
     var every = Math.max(1, Math.round(slots / 7));
@@ -1646,7 +1648,7 @@
       '<div class="seg"><button class="' + (S.ctype === 'candle' ? 'on' : '') + '" data-act="ctype" data-arg="candle" title="Candles"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 3v4M7 17v4M17 5v3M17 16v3"/><rect x="4" y="7" width="6" height="10" rx="1"/><rect x="14" y="8" width="6" height="8" rx="1"/></svg></button><button class="' + (S.ctype === 'line' ? 'on' : '') + '" data-act="ctype" data-arg="line" title="Line"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 17l6-6 4 4 8-8"/></svg></button></div>' +
       '<div class="seg"><button class="' + (S.chartMode === 'mc' ? 'on' : '') + '" data-act="cmode" data-arg="mc">MCap</button><button class="' + (S.chartMode === 'price' ? 'on' : '') + '" data-act="cmode" data-arg="price">Price</button></div>' +
       '<div class="ctog">' + [['cma', 'MA', S.cma], ['cvol', 'Vol', S.cvol], ['cmarks', 'Trades', S.cmarks], ['ccall', 'Callouts', S.ccall]].map(function (x) { return '<button class="' + (x[2] ? 'on' : '') + '" data-act="ctog" data-arg="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '<button class="cclean' + (!S.cmarks && !S.ccall ? ' on' : '') + '" data-act="cclean" title="Hide all markers for a clean chart">' + (!S.cmarks && !S.ccall ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 3l18 18M10.6 5.1A10 10 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-3.2 4M6.6 6.6A17 17 0 0 0 2 12s3.5 7 10 7a9.7 9.7 0 0 0 5.4-1.6"/></svg>Clean' : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>Clean') + '</button>' + '</div>' +
-      '<div class="czoom"><button data-act="czoom" data-arg="out" title="Zoom out">−</button><span class="mono">' + S.czoom + '</span><button data-act="czoom" data-arg="in" title="Zoom in">+</button><button data-act="czoom" data-arg="reset" title="Reset view">⟲</button></div>' +
+      '<div class="czoom"><button data-act="czoom" data-arg="out" title="Zoom out">−</button><span class="mono">' + Math.min(S.czoom, S.cEff || S.czoom) + '</span><button data-act="czoom" data-arg="in" title="Zoom in">+</button><button data-act="czoom" data-arg="reset" title="Reset view">⟲</button></div>' +
       '<span class="muted mono c-pair">$' + id + '/' + esc(pairLabel(t.pair)) + '</span>' +
       '<button class="iconbtn c-fs" data-act="cfull" aria-label="Fullscreen chart" title="Fullscreen">' + (S.cfull ? '✕' : '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>') + '</button></div>';
   }
@@ -1899,6 +1901,21 @@
       '<div class="dh2-head"><span>Coin</span><span class="r">ATH MC</span><span class="r">Dev sold after</span></div>' + rows +
       '<div class="dh2-foot"><span>Avg time until dev sold: <b class="mono">' + (avg != null ? durH(avg) : '—') + '</b></span><span>Best ATH <b class="mono">' + (h.best ? fmtK(h.best) : '—') + '</b></span></div></div>';
   }
+  // ===== BURN TOOL: devs / projects burn their own supply =====
+  function burnCoins() { return S.account ? all().filter(function (t) { return t.creator === S.account && position(t); }) : []; }
+  function burnModal() {
+    if (!S.burnOpen) return '';
+    var head = '<div class="hm-h"><div><b>🔥 Burn tokens</b><small>Permanently destroy supply of a coin you launched · shows up in the Burnery</small></div><button class="iconbtn" data-act="burnClose" aria-label="Close">✕</button></div>';
+    var wrap = function (inner) { return '<div class="hm-ov" data-act="burnClose"><div class="hm card-s bt" data-stop>' + head + inner + '</div></div>'; };
+    if (!S.account) return wrap('<div class="bt-empty"><p>Connect the wallet that launched your coin to burn its tokens.</p><button class="btn pri" data-act="openWallet">Connect wallet</button></div>');
+    var cs = burnCoins(); if (!cs.length) return wrap('<div class="bt-empty"><p>You don’t hold tokens of a coin you launched yet. Launch a coin (with an initial buy), then come back to burn part of your bag.</p><button class="btn pri" data-act="create">+ Launch a coin</button></div>');
+    var t = find(S.burnTick) && cs.indexOf(find(S.burnTick)) >= 0 ? find(S.burnTick) : cs[0]; S.burnTick = t.tick;
+    var pos = position(t), pct = S.burnPct || 25, tok = pos.tok * pct / 100, sup = tok / 1e9 * 100, usd = tok * price(t);
+    return wrap('<div class="bt-coins">' + cs.map(function (c) { return '<button class="bt-c' + (c === t ? ' on' : '') + '" data-act="burnPick" data-arg="' + esc(c.tick) + '">' + avatarHTML(c, 28) + '<span><b>$' + esc(c.tick) + '</b><small class="mono">' + fmtNum(Math.round(position(c).tok)) + ' held</small></span></button>'; }).join('') + '</div>' +
+      '<div class="bt-amt"><div class="bt-row"><small>Amount</small><b class="mono" id="bt-tok">' + fmtNum(Math.round(tok)) + ' $' + esc(t.tick) + '</b></div><input type="range" min="1" max="100" value="' + pct + '" data-burnpct><div class="bt-pre">' + [10, 25, 50, 100].map(function (v) { return '<button class="' + (pct === v ? 'on' : '') + '" data-act="burnPreset" data-arg="' + v + '">' + (v === 100 ? 'All' : v + '%') + '</button>'; }).join('') + '</div></div>' +
+      '<div class="bt-sum"><div><small>Share of supply</small><b class="mono" id="bt-sup">' + sup.toFixed(3) + '%</b></div><div><small>Value</small><b class="mono" id="bt-usd">$' + fmtNum(Math.round(usd)) + '</b></div><div><small>Supply after</small><b class="mono" id="bt-after">' + fmtNum(Math.round(1e9 - tok - ((S._bnAgg || {})[t.tick] ? S._bnAgg[t.tick].tok : 0))) + '</b></div></div>' +
+      '<div class="bt-warn">⚠ Burning is permanent. Tokens are destroyed on-chain and can never be recovered.</div><button class="btn pri bt-go" data-act="burnGo">🔥 Burn ' + pct + '% of my $' + esc(t.tick) + '</button>');
+  }
   // ===== HOLDER MAP: bubble map of top wallets =====
   function holderMap() {
     if (!S.hmap) return ''; var t = find(S.hmap); if (!t) return '';
@@ -2139,7 +2156,7 @@
       (trapLeft(t) > 0 ? trapBox(t, 'buy') : '') +
       '<button class="big-btn btn ' + (!S.account ? 'pri' : q.isBuy ? 'up-b' : 'down-b') + '" data-act="trade" data-arg="' + id + '">' + (!S.account ? 'Connect wallet to trade' : (q.isBuy ? 'Buy $' : 'Sell $') + id) + '</button>' +
       '<span class="note">Wallet is real (devnet). Trades are simulated in this beta — nothing is sent on-chain.</span></section>';
-    var posCard = pos ? '<section class="card-s panel poscard"><div style="display:flex;justify-content:space-between;align-items:center"><b>Your position</b><button class="link" style="min-height:0;font-size:12.5px;color:var(--down)" data-act="sellall">Sell all</button></div>' +
+    var posCard = pos ? '<section class="card-s panel poscard"><div style="display:flex;justify-content:space-between;align-items:center"><b>Your position</b><span style="display:flex;gap:10px">' + (t.creator && t.creator === S.account ? '<button class="link" style="min-height:0;font-size:12.5px;color:#FFB15C" data-act="burnOpen" data-arg="' + id + '">🔥 Burn</button>' : '') + '<button class="link" style="min-height:0;font-size:12.5px;color:var(--down)" data-act="sellall">Sell all</button></span></div>' +
       '<div class="pos-v"><span class="mono" style="font-size:22px;font-weight:700">' + pos.val.toFixed(4) + ' SOL</span><span class="chgpill ' + (pos.pnl >= 0 ? 'up' : 'down') + '">' + (pos.pnl >= 0 ? '+' : '') + pos.pct.toFixed(1) + '%</span></div>' +
       '<div class="muted mono" style="font-size:12px">' + fmtNum(pos.tok) + ' $' + id + ' · cost ' + pos.cost.toFixed(4) + ' SOL · PnL <span class="' + (pos.pnl >= 0 ? 'up' : 'down') + '">' + (pos.pnl >= 0 ? '+' : '') + pos.pnl.toFixed(4) + '</span></div></section>' : '';
     var hsS = holdersOf(t), top10S = 0, devPct = 0, devA = devOf(t);
@@ -2446,7 +2463,7 @@
     var ae = document.activeElement, fid = ae && ae.id, ss = null, se = null;
     try { if (fid && ae.selectionStart != null) { ss = ae.selectionStart; se = ae.selectionEnd; } } catch (e) {}
     var body = S.screen === 'token' ? tokenPage() : S.screen === 'create' ? createPage() : S.screen === 'leaders' ? leadersPage() : S.screen === 'watch' ? watchPage() : S.screen === 'burn' ? burnPage() : S.screen === 'trend' ? trendPage() : home();
-    document.getElementById('app').innerHTML = '<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="ccUp" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3DDC97" stop-opacity=".28"/><stop offset="1" stop-color="#3DDC97" stop-opacity="0"/></linearGradient><linearGradient id="ccDn" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F2708A" stop-opacity=".26"/><stop offset="1" stop-color="#F2708A" stop-opacity="0"/></linearGradient></defs></svg>' + tape() + header() + body + footer() + walletModal() + demoImgModal() + calloutDrawer() + palette() + walletDrawer() + holderMap();
+    document.getElementById('app').innerHTML = '<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="ccUp" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3DDC97" stop-opacity=".28"/><stop offset="1" stop-color="#3DDC97" stop-opacity="0"/></linearGradient><linearGradient id="ccDn" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F2708A" stop-opacity=".26"/><stop offset="1" stop-color="#F2708A" stop-opacity="0"/></linearGradient></defs></svg>' + tape() + header() + body + footer() + walletModal() + demoImgModal() + calloutDrawer() + palette() + walletDrawer() + holderMap() + burnModal();
     if (fid) { var el = document.getElementById(fid); if (el) { el.focus({ preventScroll: true }); try { if (ss != null) el.setSelectionRange(ss, se); } catch (e) {} } }
     if (S.palOpen && !fid) { var p = document.getElementById('pal'); if (p) p.focus(); }
     if (S.screen === 'home' && !S.loading && firstCount) { firstCount = false; countUp(); }
@@ -2621,12 +2638,20 @@
       case 'cfull': set({ cfull: !S.cfull }); break;
       case 'ttab': S.ttab = arg; try { localStorage.setItem('dl.ttab', arg); } catch (e) {} render(); break;
       case 'ttNew': var tl = document.getElementById('cmts'); if (tl) tl.scrollTo({ top: 0, behavior: 'smooth' }); var npb = document.getElementById('tt-new'); if (npb) { npb._n = 0; npb.style.display = 'none'; } break;
+      case 'bhPer': S.bhPer = arg; render(); break;
       case 'cauto': S.cys = 1; S.cyo = 0; chartRedraw(); break;
       case 'cnow': S.cpan = 0; S.cys = 1; S.cyo = 0; chartRedraw(); break;
       case 'czoom': S.czoom = arg === 'reset' ? 70 : Math.max(12, Math.min(240, Math.round(S.czoom * (arg === 'in' ? .7 : 1.4)))); if (arg === 'reset') { S.cpan = 0; S.cys = 1; S.cyo = 0; } chartRedraw(); var zl = document.querySelector('.czoom .mono'); if (zl) zl.textContent = S.czoom; break;
       case 'tpTab': set({ tpTab: arg }); break;
       case 'descToggle': S.descOpen = !S.descOpen; render(); break;
       case 'hmap': set({ hmap: arg }); break;
+      case 'burnOpen': set({ burnOpen: true, burnTick: arg || S.burnTick, burnPct: S.burnPct || 25 }); break;
+      case 'burnClose': if (el.classList.contains('hm-ov') && e.target.closest('[data-stop]')) break; set({ burnOpen: false }); break;
+      case 'burnPick': set({ burnTick: arg }); break;
+      case 'burnPreset': set({ burnPct: +arg }); break;
+      case 'burnGo': (function () { var t = find(S.burnTick), pos = t && position(t); if (!pos) return; var tok = pos.tok * (S.burnPct || 25) / 100; S.pos[t.tick].tok -= tok; if (S.pos[t.tick].tok < 1) delete S.pos[t.tick];
+        var b = { t: t, tok: tok, pct: tok / 1e9 * 100, usd: tok * price(t), at: Date.now(), src: 'dev', who: S.account, sig: b58(64), mine: true }; burnLog().unshift(b);
+        S.burnOpen = false; S._bnAgg = null; toast('🔥 Burned ' + fmtNum(Math.round(tok)) + ' $' + t.tick + ' — gone forever'); if (S.screen === 'burn') { render(); setTimeout(function () { var fl = document.getElementById('bn-fly'); if (fl) { var r = fl.getBoundingClientRect(); bnImpact(b, r.width / 2, r.height * .74); } }, 400); } else render(); })(); break;
       case 'hmapClose': if (el.classList.contains('hm-ov') && e.target.closest('[data-stop]')) break; set({ hmap: null }); break;
       case 'side': set({ side: arg }); break;
       case 'preset': if (arg === 'reset') { set({ amount: '' }); break; } set({ pctAmt: 0, amount: arg === 'max' ? Math.max(0, S.balance - 0.01).toFixed(3) : arg }); break;
@@ -2782,6 +2807,9 @@
   document.addEventListener('click', function (e) { var b = e.target.closest && e.target.closest('.tc-ca'); if (!b) return; b.classList.add('ok'); var h = b.innerHTML; b.innerHTML = 'Copied ✓'; setTimeout(function () { if (b.isConnected) { b.innerHTML = h; b.classList.remove('ok'); } }, 1200); }, true);
   document.addEventListener('scroll', function (e) { if (e.target && e.target.id === 'cmts' && e.target.scrollTop < 20) { var np = document.getElementById('tt-new'); if (np && np._n) { np._n = 0; np.style.display = 'none'; } } }, true);
   document.addEventListener('input', function (e) {
+    if (e.target.hasAttribute && e.target.hasAttribute('data-burnpct')) { S.burnPct = +e.target.value; var t = find(S.burnTick), pos = t && position(t); if (!pos) return; var tok = pos.tok * S.burnPct / 100;
+      var q = function (id, v) { var x = document.getElementById(id); if (x) x.textContent = v; }; q('bt-tok', fmtNum(Math.round(tok)) + ' $' + t.tick); q('bt-sup', (tok / 1e9 * 100).toFixed(3) + '%'); q('bt-usd', '$' + fmtNum(Math.round(tok * price(t))));
+      var g = document.querySelector('.bt-go'); if (g) g.textContent = '🔥 Burn ' + S.burnPct + '% of my $' + t.tick; document.querySelectorAll('.bt-pre button').forEach(function (bb) { bb.classList.toggle('on', +bb.getAttribute('data-arg') === S.burnPct); }); return; }
     if (e.target.hasAttribute && e.target.hasAttribute('data-van')) {
       var raw = e.target.value, clean = raw.split('').filter(function (ch) { return B58C.indexOf(ch) >= 0; }).join('').slice(0, 6), bad = raw.replace(/./g, function (ch) { return B58C.indexOf(ch) >= 0 ? '' : ch; });
       if (clean !== raw) e.target.value = clean; S.c.van.suf = clean; var n = clean.length;
@@ -2907,9 +2935,9 @@
     e.preventDefault();
     var sv = box.querySelector('svg'), rr = (sv || box).getBoundingClientRect(), vb = sv && sv.viewBox.baseVal, W0 = vb && vb.width ? vb.width : rr.width;
     var f = Math.max(0, Math.min(1, (e.clientX - rr.left) / rr.width * W0 / Math.max(1, W0 - 70)));
-    var n0 = S.czoom, n1 = Math.max(12, Math.min(240, Math.round(n0 * (e.deltaY > 0 ? 1.12 : .89)))); if (n1 === n0) n1 = Math.max(12, Math.min(240, n0 + (e.deltaY > 0 ? 1 : -1)));
+    var n0 = Math.min(S.czoom, S.cEff || S.czoom), n1 = Math.max(12, Math.min(240, Math.round(n0 * (e.deltaY > 0 ? 1.12 : .89)))); if (n1 === n0) n1 = Math.max(12, Math.min(240, n0 + (e.deltaY > 0 ? 1 : -1)));
     var anchor = S.cpan + (n0 - 1) - f * n0; // buckets back from now under the cursor
-    S.czoom = n1; S.cpan = Math.max(-Math.floor(n1 * .8), Math.round(anchor - (n1 - 1) + f * n1)); chartRedraw(); var zl = document.querySelector('.czoom .mono'); if (zl) zl.textContent = S.czoom;
+    S.czoom = n1; S.cpan = Math.max(-Math.floor(n1 * .8), Math.round(anchor - (n1 - 1) + f * n1)); chartRedraw(); var zl = document.querySelector('.czoom .mono'); if (zl) zl.textContent = S.cEff || S.czoom;
   }, { passive: false });
   document.addEventListener('pointerdown', function (e) {
     var box = e.target.closest && e.target.closest('#chart'); if (!box || e.button > 0 || e.target.closest('button')) return;
