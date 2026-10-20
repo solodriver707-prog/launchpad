@@ -1619,13 +1619,25 @@
   }
 
   S.lbTab = 'mcap';
+  // ---- ATH + milestone badges (ever reached) ----
+  function athOf(t) {
+    if (t.ath == null) { var hmax = Math.max.apply(null, t.hist.concat([t.mcN])); t.ath = t.devPct != null ? hmax : hmax * (1 + (hash(t.tick + 'ath') % 45) / 100); }
+    if (t.mcN > t.ath) t.ath = t.mcN; return t.ath;
+  }
+  var MSB = [[1e5, '100K', '🔥', 'Hit $100K'], [1e6, '1M', '🚀', 'Hit $1M'], [1e7, '10M', '🌕', 'Hit $10M'], [1e8, '100M', '👑', 'Hit $100M']];
+  function msBadges(t, cls) {
+    var a = athOf(t) * 1000, out = '';
+    if (t.prog >= 100) out += '<span class="msb grad" title="Graduated from the bonding curve">🎓<b>GRAD</b></span>';
+    MSB.forEach(function (m) { if (a >= m[0]) out += '<span class="msb m' + m[1] + '" title="' + m[3] + ' (all-time high ' + fmtK(a / 1000) + ')">' + m[2] + '<b>' + m[1] + '</b></span>'; });
+    return out ? '<span class="msbs ' + (cls || '') + '">' + out + '</span>' : '';
+  }
   function mcJourney(t) {
     var L0 = Math.log10(5e3), L1 = Math.log10(1e8), f = function (usd) { return Math.max(0, Math.min(1, (Math.log10(Math.max(5e3, usd)) - L0) / (L1 - L0))) * 100; };
-    var mc = t.mcN * 1000, ath = Math.max.apply(null, t.hist.concat([t.mcN])) * 1000, x = f(mc), ax = f(ath);
+    var mc = t.mcN * 1000, ath = athOf(t) * 1000, x = f(mc), ax = f(ath);
     var ms = [[5e3, '5K'], [69e3, 'GRAD'], [1e6, '1M'], [1e7, '10M'], [1e8, '100M']];
     return '<span class="jr" title="' + fmtK(t.mcN) + ' now · ATH ' + fmtK(ath / 1000) + '"><span class="jr-track"><i class="jr-fill" style="width:' + x.toFixed(1) + '%"></i>' +
       (ax - x > 1.5 ? '<i class="jr-ath" style="left:' + x.toFixed(1) + '%;width:' + (ax - x).toFixed(1) + '%"></i>' : '') +
-      ms.map(function (m) { var p = f(m[0]), hit = m[1] === 'GRAD' ? t.prog >= 100 : mc >= m[0]; return '<i class="jr-ms' + (hit ? ' hit' : '') + (m[1] === 'GRAD' ? ' grad' : '') + '" style="left:' + p.toFixed(1) + '%"><u>' + m[1] + '</u></i>'; }).join('') +
+      ms.map(function (m) { var p = f(m[0]), hit = m[1] === 'GRAD' ? t.prog >= 100 : ath >= m[0]; return '<i class="jr-ms' + (hit ? ' hit' : '') + (m[1] === 'GRAD' ? ' grad' : '') + '" style="left:' + p.toFixed(1) + '%"><u>' + m[1] + '</u></i>'; }).join('') +
       '<span class="jr-dot" style="left:' + x.toFixed(1) + '%"></span></span></span>';
   }
   function lbSpark(t, w, h, id) {
@@ -1667,8 +1679,8 @@
       rows = l2.slice(3).map(function (t, i) {
         var v = Math.max(2, Math.abs(key(t)) / mx * 100), c = chg(t), mv = ((hash(t.tick + S.lbTab) % 7) - 3);
         return '<button class="lrow" style="--d:' + (i * 45) + 'ms" data-act="open" data-arg="' + esc(t.tick) + '"><span class="lr-rank">' + (i + 4) + '</span><span class="lr-mv ' + (mv > 0 ? 'up' : mv < 0 ? 'down' : '') + '">' + (mv > 0 ? '▲' + mv : mv < 0 ? '▼' + (-mv) : '–') + '</span>' + avatarHTML(t, 42) +
-          '<span class="lr-name"><b>' + esc(t.name) + '</b><small class="mono">$' + esc(t.tick) + ' · ' + coinHTML(t.pair, 13) + ' ' + esc(pairLabel(t.pair)) + '</small></span>' +
-          mcJourney(t) + '<span class="lr-chg mono ' + (c >= 0 ? 'up' : 'down') + '" data-chg2="' + esc(t.tick) + '">' + chgTxt(c) + '</span>' +
+          '<span class="lr-name"><b>' + esc(t.name) + msBadges(t, 'sm') + '</b><small class="mono">$' + esc(t.tick) + ' · ' + coinHTML(t.pair, 13) + ' ' + esc(pairLabel(t.pair)) + '</small></span>' +
+          mcJourney(t) + '<span class="lr-ath"><small>ATH</small><b class="mono">' + fmtK(athOf(t)) + '</b><em class="mono ' + (t.mcN >= athOf(t) * .98 ? 'up' : 'down') + '">' + (t.mcN >= athOf(t) * .98 ? 'at ATH' : '−' + ((1 - t.mcN / athOf(t)) * 100).toFixed(0) + '%') + '</em></span><span class="lr-chg mono ' + (c >= 0 ? 'up' : 'down') + '" data-chg2="' + esc(t.tick) + '">' + chgTxt(c) + '</span>' +
           '<span class="lr-big mono"' + (S.lbTab === 'mcap' ? ' data-mc="' + esc(t.tick) + '" data-v="' + fmtK(t.mcN) + '"' : '') + '>' + fmt(t) + '</span></button>';
       }).join('');
     }
@@ -1680,13 +1692,13 @@
 
   function tokenPage() {
     var t = find(S.tick) || featured(), on = S.watch.indexOf(t.tick) !== -1, c = chg(t), id = esc(t.tick);
-    var ath = Math.max.apply(null, t.hist.concat([t.mcN])), athPct = t.mcN / ath * 100;
+    var ath = athOf(t), athPct = t.mcN / ath * 100;
     var tt = S.trades.filter(function (x) { return x.tick === t.tick; }), nb = 0, ns = 0, vb = 0, vs = 0;
     tt.forEach(function (x) { if (x.side === 'buy') { nb++; vb += x.sol; } else { ns++; vs += x.sol; } });
     var q = quoteFor(t), pos = position(t), tmax = Math.max(t.buy, t.sell);
     var curveSol = (t.prog / 100 * 85).toFixed(2);
     var head = '<section class="card-s tp-head2 tp-banner"><div class="tb-bg' + (t.banner ? ' ban' : '') + '" aria-hidden="true">' + (t.banner ? '<img src="' + t.banner + '" alt="">' : avatarHTML(t, 420)) + '</div><div class="tb-av">' + avatarHTML(t, 104) + '</div>' +
-      '<div class="tp-id"><div class="title-xl" style="margin:0;font-size:30px">' + esc(t.name) + ' <span class="tk">$' + id + '</span></div>' +
+      '<div class="tp-id"><div class="title-xl" style="margin:0;font-size:30px">' + esc(t.name) + ' <span class="tk">$' + id + '</span></div>' + msBadges(t, 'lg') +
         '<div class="hs-pills" style="margin-top:8px"><button class="pill copy2" data-act="ca" data-arg="' + id + '">CA ' + esc(short(t.ca)) + ' ' + I.copy + '</button><span class="pill" style="padding-left:11px">created <span data-t="' + t.born + '">&nbsp;' + ago(t.born) + '</span>&nbsp;ago by&nbsp;' + makerHTML(devOf(t), t) + '</span>' +
         socialsHTML(t, true) +
         '<button class="iconbtn" data-act="star" data-arg="' + id + '" aria-label="Watchlist" aria-pressed="' + on + '">' + I.star(on) + '</button><button class="iconbtn" data-act="share" aria-label="Copy link"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8h16v-8M12 3v13M7 8l5-5 5 5"/></svg></button></div></div>' +
@@ -1986,7 +1998,7 @@
     var wasGrad = t.prog >= 100;
     if (t.prog < 100) t.prog = Math.max(0, Math.min(100, t.prog + dir * sol * 0.25));
     if (side === 'buy' && Math.random() < 0.4) t.holders += 1;
-    t.hist.push(t.mcN); if (t.hist.length > 160) t.hist.shift();
+    t.hist.push(t.mcN); if (t.hist.length > 160) t.hist.shift(); athOf(t);
     if (t.tk) { t.tk.push([Date.now(), t.mcN, sol]); if (t.tk.length > 5000) t.tk.splice(0, 500); }
     var tr = { tick: t.tick, side: side, sol: sol, wallet: wallet || pickWallet(), t: Date.now(), tax: sol * effTax(t) / 100, mine: !!mine, price: price(t), sig: b58(64) }; tr.tokens = sol * SOL_USD / tr.price;
     S.trades.unshift(tr); if (S.trades.length > 400) S.trades.pop();
@@ -2034,7 +2046,7 @@
       var box = document.getElementById('chart');
       if (box && !box.matches(':hover')) { box.innerHTML = chartSVG(t); }
       tpNewTrade(tr, t);
-      var ab = document.querySelector('[data-athbar="' + t.tick + '"]'); if (ab) { var athv = Math.max.apply(null, t.hist); ab.style.width = (t.mcN / athv * 100).toFixed(1) + '%'; }
+      var ab = document.querySelector('[data-athbar="' + t.tick + '"]'); if (ab) { var athv = athOf(t); ab.style.width = (t.mcN / athv * 100).toFixed(1) + '%'; }
     }
   }
 
