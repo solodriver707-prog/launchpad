@@ -360,7 +360,7 @@
     return { cls: 'f3', lab: 'LIVE FOR' };
   }
   function liveBal(t) {
-    var m = {}; S.trades.forEach(function (x) { if (x.tick !== t.tick || !x.tokens) return; m[x.wallet] = Math.max(0, (m[x.wallet] || 0) + (x.side === 'buy' ? x.tokens : -x.tokens)); });
+    var m = {}; S.trades.filter(function (x) { return x.tick === t.tick && x.tokens; }).sort(function (a, b) { return a.t - b.t; }).forEach(function (x) { m[x.wallet] = Math.max(0, (m[x.wallet] || 0) + (x.side === 'buy' ? x.tokens : -x.tokens)); });
     return Object.keys(m).filter(function (a) { return m[a] > 0; }).map(function (a) { return { a: a, tok: m[a], pct: m[a] / 1e9 * 100 }; }).sort(function (a, b) { return b.tok - a.tok; });
   }
   function riskMetrics(t) {
@@ -368,7 +368,7 @@
     function lv(v, a, b) { return v < a ? 'g' : v < b ? 'y' : 'r'; }
     var dev = devSold ? 0 : ((h % 80) / 10), top = 16 + (h >> 2) % 52, sn = (h >> 5) % 19, bu = (h >> 8) % 16;
     if (t.creator && S.account && t.creator === S.account) { dev = 2.1; top = 22; sn = 0; bu = 0; devSold = false; }
-    if (t.devPct != null) { var lb = liveBal(t), dv = lb.filter(function (x) { return x.a === t.creator; })[0]; dev = lb.length ? (dv ? dv.pct : 0) : t.devPct; top = lb.slice(0, 10).reduce(function (a, x) { return a + x.pct; }, 0); if (!lb.length) top = Math.max(t.devPct, 0); top = top >= 10 ? Math.round(top) : +top.toFixed(1); sn = 0; bu = 0; devSold = !!(t.devPct > 0 && lb.length && !dv); }
+    if (t.devPct != null) { var lb = liveBal(t), dv = lb.filter(function (x) { return x.a === t.creator; })[0]; var anyTr = S.trades.some(function (x) { return x.tick === t.tick && x.tokens; }); dev = lb.length || anyTr ? (dv ? dv.pct : 0) : t.devPct; top = lb.slice(0, 10).reduce(function (a, x) { return a + x.pct; }, 0); if (!lb.length) top = anyTr ? 0 : Math.max(t.devPct, 0); top = top >= 10 ? Math.round(top) : +top.toFixed(1); sn = 0; bu = 0; devSold = !!(t.devPct > 0 && anyTr && !dv); }
     return [
       { k: 'dev', lab: 'DEV', val: devSold ? 'SOLD' : dev.toFixed(1) + '%', lv: devSold ? 'r' : lv(dev, 3, 8), tip: devSold ? 'The creator already sold their tokens' : 'Share of supply the creator still holds' },
       { k: 'top', lab: 'TOP 10', val: top + '%', lv: lv(top, 30, 45), tip: 'Share of supply held by the 10 biggest wallets (excl. curve)' },
@@ -402,7 +402,7 @@
         '<div class="tch-av">' + avatarHTML(t, 150) + '</div>' + '' + (opts.preview ? '' : '<button class="tch-star' + (on ? ' on' : '') + '" data-act="star" data-arg="' + esc(t.tick) + '" aria-label="Add to watchlist" aria-pressed="' + on + '">' + I.star(on) + '</button>') +
         '<div class="tch-side">' + (trapLeft(t) > 0 ? trapBox(t, 'card') : '<div class="tax" style="background:' + taxBg(tmax) + '" data-tip="' + esc(splitTip(t)) + '"><small>TAX</small><b>' + tmax + '%</b>' + (splitOf(t) ? splitBar(splitOf(t), 'mini') : '') + '</div>') +
         (tmax > 0 ? '<div class="pairmini" data-tip="Paired with ' + esc(pairInfo(t.pair).name) + '">' + coinHTML(t.pair, 28) + '<small>PAIR</small><b>' + esc(pairLabel(t.pair)) + '</b></div>' : '<div class="pairmini plain" data-tip="0% tax — plain coin, no pair">' + coinHTML('SOL', 28) + '<small>PLAIN</small><b>SOL</b></div>') + '</div></div>' +
-      '<div class="tc-name2"><b>' + esc(t.name) + '</b><span class="tc-tkr"><span class="mono">$' + esc(t.tick) + '</span>' + (opts.preview ? '' : '<button class="tc-ca mono" data-act="ca" data-arg="' + esc(t.tick) + '" data-tip="Copy contract address" aria-label="Copy contract address">' + esc(short(t.ca)) + I.copy + '</button>') + '</span></div>' +
+      '<div class="tc-name2"><b>' + esc(t.name) + crBadge(t) + '</b><span class="tc-tkr"><span class="mono">$' + esc(t.tick) + '</span>' + (opts.preview ? '' : '<button class="tc-ca mono" data-act="ca" data-arg="' + esc(t.tick) + '" data-tip="Copy contract address" aria-label="Copy contract address">' + esc(short(t.ca)) + I.copy + '</button>') + '</span></div>' +
       riskTiles(t) + socialsHTML(t) +
       '<div class="tc-mid"><div class="tc-mc"><div class="v"><span data-mc="' + esc(t.tick) + '" data-v="' + fmtK(t.mcN) + '">' + fmtK(t.mcN) + '</span>' +
         '<span class="chgpill ' + (c >= 0 ? 'up' : 'down') + '" data-chg="' + esc(t.tick) + '">' + chgTxt(c) + '</span></div><div class="l">market cap · ' + fmtNum(t.holders) + ' holders · vol ' + fmtK(t.vol) + '</div></div></div>' +
@@ -1046,7 +1046,7 @@
     return '<section class="ltable"><div class="lt-scroll">' + head + body + '</div></section>';
   }
   // ===== THE BURNERY: leaderboard of coins that burned their own supply =====
-  var BSRC = { dev: ['Dev burn', '#F5B14C'], tax: ['Tax buyback', '#3DDC97'] };
+  var BSRC = { dev: ['Dev burn', '#F5B14C'], tax: ['Tax buyback', '#3DDC97'], frozen: ['Frozen dev rewards', '#B48CFF'] };
   function burnLog() {
     if (S._burns && S._burnsN === all().length) return S._burns;
     var out = [];
@@ -1055,14 +1055,16 @@
       for (var i = 0; i < n; i++) { var pct = +((heavy ? 1.2 : .08) + r() * r() * (heavy ? 9 : 2.4)).toFixed(3), tok = pct / 100 * 1e9, mc = t.mcN * (.35 + r() * .7), usd = tok * mc * 1000 / 1e9, at = Date.now() - 60000 - Math.min(Date.now() - t.born, 30 * 864e5) * r() * .98;
         var x = r(), src = (Math.max(t.buy, t.sell) > 0 && x < .55) ? 'tax' : 'dev';
         out.push({ t: t, tok: tok, pct: pct, usd: usd, at: at, src: src, who: src === 'tax' ? 'auto' : b58(4) + '…' + b58(4), sig: b58(64) }); } });
+    all().forEach(function (t) { if (t.devPct != null) return; var d = devStatus(t); if (d.state !== 'out' && d.state !== 'cto' && d.state !== 'inactive') return; var r = rng(hash(t.tick + 'frz')), n = 1 + Math.floor(r() * 3), from = d.state === 'inactive' ? d.last + DR.inactive : d.outAt;
+      for (var i = 0; i < n; i++) { var usd = Math.max(1, d.burned / n), mc = t.mcN, tok = usd / (mc * 1000 / 1e9), at = from + (Date.now() - from) * (.15 + r() * .8); if (at > Date.now() - 60000) continue; out.push({ t: t, tok: tok, pct: tok / 1e9 * 100, usd: usd, at: at, src: 'frozen', who: 'auto', sig: b58(64) }); } });
     out.sort(function (a, b) { return b.at - a.at; }); S._burns = out; S._burnsN = all().length; return out;
   }
   S.bsort = 'pct';
-  var BSI = { dev: '👤', tax: '🔄' };
+  var BSI = { dev: '👤', tax: '🔄', frozen: '🧊' };
   function bhTubes(log) {
-    var st = { dev: 0, tax: 0 }, cn = { dev: {}, tax: {} }, tot = 0; log.forEach(function (b) { st[b.src] += b.tok; cn[b.src][b.t.tick] = 1; tot += b.tok; }); BN.src = st;
-    return '<div class="bh-side bh-src"><div class="bh-sh"><b>Who’s burning</b><small>share of all tokens burned</small></div><div class="bh-tubes">' + ['dev', 'tax'].map(function (k) { var sh = tot ? st[k] / tot * 100 : 0;
-      return '<div class="bh-tube" data-tube="' + k + '" style="--c:' + BSRC[k][1] + '"><span class="bh-pct mono" data-tpct="' + k + '">' + sh.toFixed(0) + '%</span><div class="bh-glass"><div class="bh-liq" data-tliq="' + k + '" style="height:' + Math.max(8, sh).toFixed(1) + '%"><i class="bh-wv"></i><u></u><u></u><u></u></div><span class="bh-shine"></span></div><em>' + BSI[k] + '</em><b>' + BSRC[k][0].replace(' burn', 's').replace('Tax buyback', 'Buybacks') + '</b><small class="mono" data-ttok="' + k + '">' + fmtBig(st[k]) + '</small><small class="bh-cn">' + Object.keys(cn[k]).length + ' coins</small></div>'; }).join('') + '</div></div>';
+    var st = { dev: 0, tax: 0, frozen: 0 }, cn = { dev: {}, tax: {}, frozen: {} }, tot = 0; log.forEach(function (b) { st[b.src] += b.tok; cn[b.src][b.t.tick] = 1; tot += b.tok; }); BN.src = st;
+    return '<div class="bh-side bh-src"><div class="bh-sh"><b>Who’s burning</b><small>share of all tokens burned</small></div><div class="bh-tubes">' + ['dev', 'tax', 'frozen'].map(function (k) { var sh = tot ? st[k] / tot * 100 : 0;
+      return '<div class="bh-tube" data-tube="' + k + '" style="--c:' + BSRC[k][1] + '"><span class="bh-pct mono" data-tpct="' + k + '">' + sh.toFixed(0) + '%</span><div class="bh-glass"><div class="bh-liq" data-tliq="' + k + '" style="height:' + Math.max(8, sh).toFixed(1) + '%"><i class="bh-wv"></i><u></u><u></u><u></u></div><span class="bh-shine"></span></div><em>' + BSI[k] + '</em><b>' + ({ dev: 'Devs', tax: 'Buybacks', frozen: 'Frozen' })[k] + '</b><small class="mono" data-ttok="' + k + '">' + fmtBig(st[k]) + '</small><small class="bh-cn">' + Object.keys(cn[k]).length + ' coins</small></div>'; }).join('') + '</div></div>';
   }
   function bhGauge(log, usd, ncoins) {
     var per = S.bhPer || '1h', W0 = { '1h': 36e5, '24h': 864e5, '7d': 6048e5, '30d': 2592e6 }[per], PL = { '1h': ['hour', '1h'], '24h': ['24 hours', '24h'], '7d': ['7 days', '7d'], '30d': ['30 days', '30d'] }[per];
@@ -1077,8 +1079,8 @@
       '<div class="bh-mini"><div><small>Value · ' + PL[1] + '</small><b class="mono" id="bh-u1">$' + fmtNum(Math.round(u1)) + '</b></div><div><small>Burns · ' + PL[1] + '</small><b class="mono" id="bh-n1">' + n1 + '</b></div><div><small>Coins · ' + PL[1] + '</small><b class="mono" id="bh-c1">' + Object.keys(c1).length + '</b></div></div></div>';
   }
   function bhKick(b) {
-    var k = b.src, st = BN.src || {}; st[k] = (st[k] || 0) + b.tok; var tot = (st.dev || 0) + (st.tax || 0);
-    ['dev', 'tax'].forEach(function (q) { var sh = tot ? st[q] / tot * 100 : 0, l = document.querySelector('[data-tliq="' + q + '"]'), pc = document.querySelector('[data-tpct="' + q + '"]'); if (l) l.style.height = Math.max(8, sh).toFixed(1) + '%'; if (pc) pc.textContent = sh.toFixed(0) + '%'; });
+    var k = b.src, st = BN.src || {}; st[k] = (st[k] || 0) + b.tok; var tot = (st.dev || 0) + (st.tax || 0) + (st.frozen || 0);
+    ['dev', 'tax', 'frozen'].forEach(function (q) { var sh = tot ? st[q] / tot * 100 : 0, l = document.querySelector('[data-tliq="' + q + '"]'), pc = document.querySelector('[data-tpct="' + q + '"]'); if (l) l.style.height = Math.max(8, sh).toFixed(1) + '%'; if (pc) pc.textContent = sh.toFixed(0) + '%'; });
     var tt = document.querySelector('[data-ttok="' + k + '"]'); if (tt) tt.textContent = fmtBig(st[k]);
     var tb = document.querySelector('[data-tube="' + k + '"]'); if (tb) { tb.classList.remove('kick'); void tb.offsetWidth; tb.classList.add('kick'); var pp = document.createElement('span'); pp.className = 'bh-tpop mono'; pp.textContent = '+' + fmtBig(b.tok); tb.appendChild(pp); setTimeout(function () { pp.remove(); }, 1400); }
     var H1 = BN.h1 || { tok: 0, usd: 0, n: 0, coins: {}, avg: 1 }; H1.tok += b.tok; H1.usd += b.usd; H1.n++; H1.coins[b.t.tick] = 1; BN.h1 = H1; BN.rate = H1.tok;
@@ -1095,7 +1097,7 @@
     var coins = Object.keys(by).map(function (k) { return by[k]; }).sort(function (a, b) { return key(b) - key(a); });
     var byPct = coins.slice().sort(function (a, b) { return b.pct - a.pct; });
     var mx = byPct.length ? byPct[0].pct : 1;
-    var srcBar = function (e) { return ['dev', 'tax'].filter(function (k) { return e.src[k]; }).map(function (k) { return '<i style="width:' + (e.src[k] / mx * 100).toFixed(2) + '%;background:' + BSRC[k][1] + '"></i>'; }).join(''); };
+    var srcBar = function (e) { return ['dev', 'tax', 'frozen'].filter(function (k) { return e.src[k]; }).map(function (k) { return '<i style="width:' + (e.src[k] / mx * 100).toFixed(2) + '%;background:' + BSRC[k][1] + '"></i>'; }).join(''); };
     var podium = byPct.slice(0, 3), order = [1, 0, 2];
     var pod = '<div class="bn-pod">' + order.filter(function (i) { return podium[i]; }).map(function (i) { var e = podium[i]; return '<button class="bn-p bn-p' + (i + 1) + '" data-act="open" data-arg="' + esc(e.t.tick) + '"><span class="bn-pr">' + ['🥇', '🥈', '🥉'][i] + '</span>' + avatarHTML(e.t, i ? 48 : 62) + '<b>$' + esc(e.t.tick) + '</b><strong class="mono">' + e.pct.toFixed(2) + '%</strong><small>supply burned</small></button>'; }).join('') + '</div>';
     var stats = [['Supply destroyed', totTok >= 1e9 ? (totTok / 1e9).toFixed(2) + 'B' : fmtNum(Math.round(totTok)), 'tokens, all coins'], ['Value burned', '$' + fmtNum(Math.round(totUsd)), 'at time of burn'], ['Coins burning', coins.length, 'of ' + all().length + ' launched'], ['Last burn', log.length ? ago(log[0].at) + ' ago' : '—', log.length ? '$' + esc(log[0].t.tick) + ' · ' + BSRC[log[0].src][0] : '']];
@@ -1810,6 +1812,7 @@
     if (dl && c.pos > 0 && c.reply == null && S.coF === 'all') { if (S.coPaused || dl.matches(':hover')) { S.coQueue++; var pb = document.querySelector('.cd-pause'); if (pb && S.coPaused) pb.textContent = '▶ Resume · ' + S.coQueue + ' new'; } else { dl.insertAdjacentHTML('afterbegin', commentHTML(c, t, true)); while (dl.children.length > 40) dl.removeChild(dl.lastChild); } }
     var nb = document.getElementById('co-new'); if (nb && !S.coOpen) { nb.textContent = (+nb.textContent || 0) + 1; nb.style.display = ''; }
   }, 3500);
+  setInterval(function () { var ch = false; Object.keys(S.cto).forEach(function (k) { var c = S.cto[k]; if (c.approved || c.demo) return; c.support += .15 + Math.random() * .6; if (c.support >= DR.ctoNeed) { c.approved = true; c.at = Date.now(); toast('🎉 $' + k + ' takeover approved by holders'); } ch = true; }); if (ch) { drSave(); if (S.screen === 'token' && S.cto[S.tick] && !document.querySelector('.hm-ov')) { var c0 = S.cto[S.tick], cp = document.querySelector('.cr-panel'), t = find(S.tick); if (c0.approved) render(); else if (cp && t) cp.outerHTML = crPanel(t); } } }, 6000);
   function position(t) { var p = S.pos[t.tick]; if (!p || p.tok <= 0) return null; var val = p.tok * price(t) / SOL_USD; return { tok: p.tok, cost: p.cost, val: val, pnl: val - p.cost, pct: p.cost ? (val / p.cost - 1) * 100 : 0 }; }
   function quoteFor(t) {
     var isBuy = S.side === 'buy', amt = parseFloat(String(S.amount).replace(',', '.')) || 0, px = price(t);
@@ -2067,7 +2070,7 @@
     var q = quoteFor(t), pos = position(t), tmax = Math.max(t.buy, t.sell);
     var curveSol = (t.prog / 100 * 85).toFixed(2);
     var head = '<section class="card-s tp-head2 tp-banner"><div class="tb-bg' + (t.banner ? ' ban' : '') + '" aria-hidden="true">' + (t.banner ? '<img src="' + t.banner + '" alt="">' : avatarHTML(t, 420)) + '</div><div class="tb-av">' + avatarHTML(t, 104) + '</div>' +
-      '<div class="tp-id"><div class="title-xl" style="margin:0;font-size:30px">' + esc(t.name) + ' <span class="tk">$' + id + '</span></div>' + msBadges(t, 'lg') + (t.archived ? '<div class="arch-note ' + t.archived + '">' + (t.archived === 'rug' ? '⚠ Past coin · dev sold after ' + durH(t.devSoldAfter) : t.archived === 'dead' ? '💤 Past coin · inactive, faded on the curve' : '🎓 Past coin · graduated') + '</div>' : '') +
+      '<div class="tp-id"><div class="title-xl" style="margin:0;font-size:30px">' + esc(t.name) + ' <span class="tk">$' + id + '</span>' + crBadge(t) + '</div>' + msBadges(t, 'lg') + (t.archived ? '<div class="arch-note ' + t.archived + '">' + (t.archived === 'rug' ? '⚠ Past coin · dev sold after ' + durH(t.devSoldAfter) : t.archived === 'dead' ? '💤 Past coin · inactive, faded on the curve' : '🎓 Past coin · graduated') + '</div>' : '') +
         '<div class="hs-pills" style="margin-top:8px"><button class="pill copy2" data-act="ca" data-arg="' + id + '">CA ' + esc(short(t.ca)) + ' ' + I.copy + '</button><span class="pill" style="padding-left:11px">created <span data-t="' + t.born + '">&nbsp;' + ago(t.born) + '</span>&nbsp;ago by&nbsp;' + makerHTML(devOf(t), t) + '</span>' +
         socialsHTML(t, true) +
         '<button class="iconbtn" data-act="star" data-arg="' + id + '" aria-label="Watchlist" aria-pressed="' + on + '">' + I.star(on) + '</button><button class="iconbtn" data-act="share" aria-label="Copy link"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8h16v-8M12 3v13M7 8l5-5 5 5"/></svg></button></div></div>' +
@@ -2180,7 +2183,7 @@
       '<span class="muted" style="font-size:12.5px;line-height:1.55">' + (t.prog >= 100 ? 'Liquidity is live on Raydium.' : curveSol + ' SOL in the curve. Graduates to Raydium at 100%.') + '</span></section>';
     var mbuy = '<button class="m-buy" data-act="mBuy">Buy / Sell $' + id + (trapLeft(t) > 0 ? ' · 🪤 ' + snipeNow(t) + '%' : ' · tax ' + tmax + '%') + '</button>';
     return mbuy + '<main class="wrap tp-env" style="padding-top:14px;--coin:' + ((t.spec && t.spec.bg) || '#2A2418') + '"><div class="tp-glow" aria-hidden="true">' + avatarHTML(t, 300) + '</div><button class="link" data-act="home">' + I.back + 'Back to board</button>' + head +
-      '<div class="tp-grid3">' + thread + '<div class="tp-main">' + mcrow + chart + tabsHTML + '</div><aside class="tp-side">' + panel + (t.desc ? '<section class="card-s panel about-b"><div class="ab-h">' + avatarHTML(t, 26) + '<b>About $' + id + '</b></div><p class="ab-t' + (t.desc.length > 220 && !S.descOpen ? ' clamp' : '') + '">' + esc(t.desc) + '</p>' + (t.desc.length > 220 ? '<button class="ab-more" data-act="descToggle">' + (S.descOpen ? 'Show less' : 'Show more') + '</button>' : '') + '</section>' : '') + posCard + taxSplitPanel(t) + safety + curve + '</aside></div></main>';
+      '<div class="tp-grid3">' + thread + '<div class="tp-main">' + mcrow + chart + tabsHTML + '</div><aside class="tp-side">' + panel + (t.desc ? '<section class="card-s panel about-b"><div class="ab-h">' + avatarHTML(t, 26) + '<b>About $' + id + '</b></div><p class="ab-t' + (t.desc.length > 220 && !S.descOpen ? ' clamp' : '') + '">' + esc(t.desc) + '</p>' + (t.desc.length > 220 ? '<button class="ab-more" data-act="descToggle">' + (S.descOpen ? 'Show less' : 'Show more') + '</button>' : '') + '</section>' : '') + posCard + taxSplitPanel(t) + crPanel(t) + safety + curve + '</aside></div></main>';
   }
   // give seeded trades real makers / prices
   S.trades.forEach(function (tr) { var t = find(tr.tick); tr.wallet = pickWallet(); tr.price = t ? price(t) * (1 + (Math.random() - 0.5) * 0.12) : 0; tr.tokens = tr.sol * SOL_USD / (tr.price || 1); tr.sig = b58(64); });
@@ -2247,6 +2250,68 @@
   var FEE = { plain: 1, taxed: 0.5, creatorPlain: 0.5 }; // treid platform fee, % of each trade
   function feeOf(t) { return Math.max(t.buy || 0, t.sell || 0) > 0 ? FEE.taxed : FEE.plain; }
   function creatorCut(t) { var sp = splitOf(t), m = Math.max(t.buy || 0, t.sell || 0); return m > 0 ? (sp ? m * sp.d / 100 : 0) : FEE.creatorPlain; }
+  // ===== CREATOR REWARDS: freeze rules + community takeover (CTO) =====
+  var DR = { inactive: 48 * 36e5, out: 7 * 864e5, soldOut: 70, fundDays: 14, vestDays: 30, ctoNeed: 10, ctoHold: 1 };
+  S.devSeen = {}; S.cto = {}; S.claimed = {};
+  try { S.devSeen = JSON.parse(localStorage.getItem('dl.devseen') || '{}'); S.cto = JSON.parse(localStorage.getItem('dl.cto') || '{}'); S.claimed = JSON.parse(localStorage.getItem('dl.claimed') || '{}'); } catch (e) {}
+  function drSave() { try { localStorage.setItem('dl.devseen', JSON.stringify(S.devSeen)); localStorage.setItem('dl.cto', JSON.stringify(S.cto)); localStorage.setItem('dl.claimed', JSON.stringify(S.claimed)); } catch (e) {} }
+  function devPing(t) { if (t && S.account && t.creator === S.account) { S.devSeen[t.tick] = Date.now(); drSave(); } }
+  function devStatus(t) {
+    var now = Date.now(), age = Math.max(0, now - t.born), mine = !!(t.creator && t.creator === S.account), r = rng(hash(t.tick + 'dv')), last, sold = 0;
+    if (t.creator && t.devPct != null) { // user-launched: real data
+      last = Math.max(t.born, S.devSeen[t.tick] || 0, (S.trades.filter(function (x) { return x.tick === t.tick && x.wallet === t.creator; }).pop() || {}).t || 0);
+      var peak = 0, bal = 0; S.trades.filter(function (x) { return x.tick === t.tick && x.wallet === t.creator && x.tokens; }).sort(function (a, b) { return a.t - b.t; }).forEach(function (x) { bal += x.side === 'buy' ? x.tokens : -x.tokens; peak = Math.max(peak, bal); });
+      var bt = (burnLog().filter(function (b) { return b.t === t && b.mine; }).reduce(function (a, b) { return a + b.tok; }, 0)); // burns are not selling
+      sold = peak > 0 ? Math.max(0, Math.min(100, (peak - Math.max(0, bal) - bt) / peak * 100)) : 0;
+    } else {
+      var rm = riskMetrics(t); sold = rm[0].val === 'SOLD' ? 100 : Math.round(r() * r() * 82);
+      var roll = r(), ago = roll < .7 ? r() * 40 * 36e5 : roll < .85 ? (50 + r() * 110) * 36e5 : (8 + r() * 14) * 864e5;
+      last = Math.max(t.born, now - Math.min(age, ago));
+    }
+    var idle = now - last, why = null, state = 'active', outAt = null;
+    if (sold >= DR.soldOut) { state = 'out'; why = 'sold'; outAt = last; }
+    else if (idle >= DR.out) { state = 'out'; why = 'idle'; outAt = last + DR.out; }
+    else if (idle >= DR.inactive) { state = 'inactive'; why = 'idle'; }
+    var cto = S.cto[t.tick] || null;
+    if (state === 'out' && !cto && !t.creator && r() < .55) { var w0 = WALLETS[Math.floor(r() * WALLETS.length)]; cto = { lead: w0.a, plan: 'New TG + daily spaces, rebuilding the meme', support: 10 + r() * 25, at: outAt + (1 + r() * 4) * 864e5, approved: true, demo: true }; if (cto.at > now) cto = null; }
+    if (cto && cto.approved) state = 'cto';
+    // money (USD)
+    var cut = creatorCut(t), earned = t.vol * 1000 * cut / 100, span = Math.max(1, age);
+    var frozenFrom = state === 'inactive' ? last + DR.inactive : outAt, fShare = frozenFrom ? Math.max(0, Math.min(1, (now - frozenFrom) / span)) : 0;
+    var pot = earned * fShare, burned = 0, fund = 0, claimable = 0, fundEnds = outAt ? outAt + DR.fundDays * 864e5 : null;
+    if (state === 'active') claimable = Math.max(0, earned * (mine ? 1 : .08 + r() * .1) - (S.claimed[t.tick] || 0));
+    else if (state === 'inactive') burned = pot;
+    else { burned = pot / 2; fund = pot / 2; if (state !== 'cto' && fundEnds && now > fundEnds) { burned += fund; fund = 0; } }
+    var vest = state === 'cto' && cto ? Math.max(0, Math.min(1, (now - cto.at) / (DR.vestDays * 864e5))) : 0;
+    return { state: state, why: why, sold: sold, last: last, idle: idle, outAt: outAt, cut: cut, earned: earned, claimable: claimable, burned: burned, fund: fund, fundEnds: fundEnds, cto: cto, vest: vest, mine: mine };
+  }
+  function crBadge(t) { var d = devStatus(t); return d.state === 'out' ? '<span class="crb out" title="Dev is out — open for community takeover">DEV OUT</span>' : d.state === 'cto' ? '<span class="crb cto" title="Community takeover">CTO</span>' : d.state === 'inactive' ? '<span class="crb idle" title="Dev inactive for 48h+ — rewards frozen">DEV AWAY</span>' : ''; }
+  function crPanel(t) {
+    var d = devStatus(t), id = esc(t.tick), now = Date.now(), dur = function (ms) { return durH(Math.max(1, ms / 60000)); };
+    var st = { active: ['g', 'Active', 'Creator is around and earning'], inactive: ['y', 'Inactive', 'No dev activity for ' + dur(d.idle) + ' — rewards frozen'], out: ['r', 'Dev is out', d.why === 'sold' ? 'Dev sold ' + Math.round(d.sold) + '% of their bag' : 'Inactive for ' + dur(d.idle)], cto: ['b', 'Community takeover', d.cto ? 'Run by the community for ' + dur(now - d.cto.at) : ''] }[d.state];
+    var idleBar = d.state === 'active' || d.state === 'inactive' ? '<div class="cr-meter"><div class="cr-ml"><small>Activity timer</small><small class="mono">' + (d.state === 'active' ? 'freezes in ' + dur(DR.inactive - d.idle) : 'dev out in ' + dur(DR.out - d.idle)) + '</small></div><span class="cr-bar"><i style="width:' + Math.min(100, d.idle / DR.out * 100).toFixed(1) + '%"></i><em style="left:' + (DR.inactive / DR.out * 100).toFixed(1) + '%" title="48h: freeze"></em></span><div class="cr-ticks"><small style="left:0">last seen</small><small style="left:' + (DR.inactive / DR.out * 100).toFixed(1) + '%;transform:translateX(-50%)">48h freeze</small><small style="right:0">7d out</small></div></div>' : '';
+    var soldBar = '<div class="cr-meter"><div class="cr-ml"><small>Dev sold of peak bag</small><small class="mono ' + (d.sold >= DR.soldOut ? 'down' : d.sold >= 40 ? 'warn' : '') + '">' + Math.round(d.sold) + '%</small></div><span class="cr-bar sold"><i style="width:' + Math.min(100, d.sold) + '%"></i><em style="left:' + DR.soldOut + '%" title="70%: dev out"></em></span></div>';
+    var money = d.state === 'active' ? [['Earned', '$' + fmtNum(Math.round(d.earned))], ['Unclaimed', '$' + fmtNum(Math.round(d.claimable))], ['Per trade', d.cut.toFixed(2).replace(/\.?0+$/, '') + '%']]
+      : d.state === 'inactive' ? [['Earned', '$' + fmtNum(Math.round(d.earned))], ['Burned (missed)', '$' + fmtNum(Math.round(d.burned))], ['Per trade', d.cut.toFixed(2).replace(/\.?0+$/, '') + '%']]
+      : [['Burned', '$' + fmtNum(Math.round(d.burned))], ['Recovery fund', '$' + fmtNum(Math.round(d.fund))], [d.state === 'cto' ? 'Paid to CTO' : 'Fund window', d.state === 'cto' ? Math.round(d.vest * 100) + '%' : (d.fundEnds > now ? dur(d.fundEnds - now) + ' left' : 'closed')]];
+    var acts = '';
+    if (d.mine && (d.state === 'active' || d.state === 'inactive')) acts = '<div class="cr-acts"><button class="btn sec" data-act="devPing" data-arg="' + id + '">✋ I’m still here</button><button class="btn pri" data-act="devClaim" data-arg="' + id + '"' + (d.state !== 'active' || d.claimable < .01 ? ' disabled' : '') + '>Claim $' + fmtNum(Math.round(d.claimable)) + '</button></div>';
+    else if (d.state === 'out') { var c = S.cto[t.tick]; acts = c ? '<div class="cr-cto"><div class="cr-ml"><small>Takeover by ' + esc(walletName(c.lead)) + '</small><small class="mono">' + c.support.toFixed(1) + '% / ' + DR.ctoNeed + '% support</small></div><span class="cr-bar sup"><i style="width:' + Math.min(100, c.support / DR.ctoNeed * 100) + '%"></i></span><p class="muted">“' + esc(c.plan) + '”</p><button class="btn pri" data-act="ctoBack" data-arg="' + id + '"' + (c.backed ? ' disabled' : '') + '>' + (c.backed ? '✓ You backed this' : 'Back this takeover') + '</button></div>' : '<div class="cr-acts"><button class="btn pri" data-act="ctoOpen" data-arg="' + id + '">Apply for community takeover</button></div>'; }
+    else if (d.state === 'cto') acts = '<div class="cr-cto"><div class="cr-ml"><small>Lead: ' + esc(walletName(d.cto.lead)) + '</small><small class="mono">recovery fund paid ' + Math.round(d.vest * 100) + '% of ' + DR.vestDays + 'd</small></div><span class="cr-bar sup"><i style="width:' + (d.vest * 100).toFixed(1) + '%"></i></span><p class="muted">“' + esc(d.cto.plan) + '”</p></div>';
+    return '<section class="card-s panel cr-panel s-' + st[0] + '"><div class="cr-h"><b>Creator rewards</b><span class="cr-st ' + st[0] + '"><i></i>' + st[1] + '</span></div><small class="muted cr-sub">' + st[2] + '</small>' +
+      '<div class="cr-money">' + money.map(function (m) { return '<div><small>' + m[0] + '</small><b class="mono">' + m[1] + '</b></div>'; }).join('') + '</div>' + idleBar + soldBar + acts +
+      '<details class="cr-rules"><summary>How the rules work</summary><ul><li><b>48h</b> with no dev activity → rewards freeze, missed rewards are burned. Dev can come back with “I’m still here”.</li><li><b>7 days</b> inactive, or dev sells <b>70%+</b> of their peak bag → dev is out for good.</li><li>When the dev is out: <b>50%</b> of frozen rewards is burned, <b>50%</b> becomes a recovery fund for ' + DR.fundDays + ' days.</li><li>A community takeover needs <b>' + DR.ctoNeed + '%</b> of supply backing it and a lead holding <b>' + DR.ctoHold + '%+</b>. Approved CTOs get future rewards and the fund over ' + DR.vestDays + ' days. No CTO in time → the fund is burned too.</li><li>Burning tokens never counts as selling.</li></ul></details></section>';
+  }
+  function ctoModal() {
+    if (!S.ctoOpen) return ''; var t = find(S.ctoOpen); if (!t) return ''; var pos = position(t), hold = pos ? pos.tok / 1e9 * 100 : 0, exdev = S.account && t.creator === S.account, ok = hold >= DR.ctoHold && !exdev;
+    var head = '<div class="hm-h"><div><b>Community takeover · $' + esc(t.tick) + '</b><small>Lead the coin after the dev left · get future creator rewards + the recovery fund</small></div><button class="iconbtn" data-act="ctoClose" aria-label="Close">✕</button></div>';
+    var body = !S.account ? '<div class="bt-empty"><p>Connect a wallet to apply.</p><button class="btn pri" data-act="openWallet">Connect wallet</button></div>' :
+      (exdev ? '<div class="cto-req no">✕ The original dev can’t lead a takeover of their own coin.</div>' : '<div class="cto-req ' + (ok ? 'ok' : 'no') + '">' + (ok ? '✓' : '✕') + ' You hold <b class="mono">' + hold.toFixed(2) + '%</b> of supply · need ' + DR.ctoHold + '%+</div>') +
+      '<label class="cto-f"><small>New X link</small><input class="inp" id="cto-x" placeholder="x.com/yourcoin"></label><label class="cto-f"><small>New Telegram</small><input class="inp" id="cto-tg" placeholder="t.me/yourcoin"></label><label class="cto-f"><small>Your plan (one line)</small><input class="inp" id="cto-plan" maxlength="90" placeholder="e.g. new art, daily spaces, buybacks"></label>' +
+      '<small class="muted">Holders back your takeover with a free wallet signature. It’s approved once backers hold ' + DR.ctoNeed + '% of circulating supply. If you sell your bag, you’re out too.</small>' +
+      '<button class="btn pri bt-go" data-act="ctoApply"' + (ok ? '' : ' disabled') + '>' + (ok ? 'Submit takeover' : exdev ? 'Not available to the original dev' : 'Buy at least ' + DR.ctoHold + '% to apply') + '</button>';
+    return '<div class="hm-ov" data-act="ctoClose"><div class="hm card-s bt" data-stop>' + head + body + '</div></div>';
+  }
   function effTax(t, at) { return Math.max(Math.max(t.buy, t.sell), snipeNow(t, at)); }
   function devQuote(sol) {
     sol = Math.max(0, +sol || 0); var px0 = 5 * 1000 / 1e9, impact = Math.min(25, sol * 3 / Math.sqrt(5));
@@ -2473,7 +2538,7 @@
     var ae = document.activeElement, fid = ae && ae.id, ss = null, se = null;
     try { if (fid && ae.selectionStart != null) { ss = ae.selectionStart; se = ae.selectionEnd; } } catch (e) {}
     var body = S.screen === 'token' ? tokenPage() : S.screen === 'create' ? createPage() : S.screen === 'leaders' ? leadersPage() : S.screen === 'watch' ? watchPage() : S.screen === 'burn' ? burnPage() : S.screen === 'trend' ? trendPage() : home();
-    document.getElementById('app').innerHTML = '<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="ccUp" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3DDC97" stop-opacity=".28"/><stop offset="1" stop-color="#3DDC97" stop-opacity="0"/></linearGradient><linearGradient id="ccDn" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F2708A" stop-opacity=".26"/><stop offset="1" stop-color="#F2708A" stop-opacity="0"/></linearGradient></defs></svg>' + tape() + header() + body + footer() + walletModal() + demoImgModal() + calloutDrawer() + palette() + walletDrawer() + holderMap() + burnModal();
+    document.getElementById('app').innerHTML = '<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="ccUp" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3DDC97" stop-opacity=".28"/><stop offset="1" stop-color="#3DDC97" stop-opacity="0"/></linearGradient><linearGradient id="ccDn" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F2708A" stop-opacity=".26"/><stop offset="1" stop-color="#F2708A" stop-opacity="0"/></linearGradient></defs></svg>' + tape() + header() + body + footer() + walletModal() + demoImgModal() + calloutDrawer() + palette() + walletDrawer() + holderMap() + burnModal() + ctoModal();
     if (fid) { var el = document.getElementById(fid); if (el) { el.focus({ preventScroll: true }); try { if (ss != null) el.setSelectionRange(ss, se); } catch (e) {} } }
     if (S.palOpen && !fid) { var p = document.getElementById('pal'); if (p) p.focus(); }
     if (S.screen === 'home' && !S.loading && firstCount) { firstCount = false; countUp(); }
@@ -2655,6 +2720,13 @@
       case 'tpTab': set({ tpTab: arg }); break;
       case 'descToggle': S.descOpen = !S.descOpen; render(); break;
       case 'hmap': set({ hmap: arg }); break;
+      case 'devPing': devPing(find(arg)); toast('✋ Check-in signed — activity timer reset'); render(); break;
+      case 'devClaim': (function () { var t = find(arg), d = t && devStatus(t); if (!d || d.state !== 'active' || d.claimable < .01) return; S.claimed[t.tick] = (S.claimed[t.tick] || 0) + d.claimable; devPing(t); drSave(); toast('Claimed $' + fmtNum(Math.round(d.claimable)) + ' creator rewards'); render(); })(); break;
+      case 'ctoOpen': set({ ctoOpen: arg }); break;
+      case 'ctoClose': if (el.classList.contains('hm-ov') && e.target.closest('[data-stop]')) break; set({ ctoOpen: null }); break;
+      case 'ctoApply': (function () { var t = find(S.ctoOpen); if (!t || !S.account) return; var g = function (i) { var x = document.getElementById(i); return x ? x.value.trim() : ''; };
+        S.cto[t.tick] = { lead: S.account, x: g('cto-x'), tg: g('cto-tg'), plan: g('cto-plan') || 'Rebuilding the community', support: (position(t) ? position(t).tok / 1e9 * 100 : 0), at: Date.now(), approved: false, backed: true }; var cc = S.cto[t.tick]; if (cc.support >= DR.ctoNeed) cc.approved = true; drSave(); S.ctoOpen = null; toast(cc.approved ? '🎉 Takeover approved — your bag alone covers ' + DR.ctoNeed + '% support' : 'Takeover submitted — holders can now back it'); render(); })(); break;
+      case 'ctoBack': (function () { var t = find(arg), c = S.cto[arg]; if (!c) return; if (!S.account) { set({ walletOpen: true }); return; } var add = position(t) ? position(t).tok / 1e9 * 100 : 0; if (!add) { toast('Hold some $' + arg + ' to back a takeover'); return; } c.support += add; c.backed = true; if (c.support >= DR.ctoNeed) { c.approved = true; c.at = Date.now(); toast('🎉 Takeover approved — $' + arg + ' is now community-run'); } else toast('Backed with ' + add.toFixed(2) + '% of supply'); drSave(); render(); })(); break;
       case 'burnOpen': set({ burnOpen: true, burnTick: arg || S.burnTick, burnPct: S.burnPct || 25 }); break;
       case 'burnClose': if (el.classList.contains('hm-ov') && e.target.closest('[data-stop]')) break; set({ burnOpen: false }); break;
       case 'burnPick': set({ burnTick: arg }); break;
@@ -2749,7 +2821,7 @@
       case 'setslip': set({ slip: +arg, slipOpen: false }); break;
       case 'share': copy(location.href.split('#')[0] + '#' + (S.tick || ''), 'Link copied'); break;
       case 'sellpct': var tp0 = find(S.tick), ps0 = tp0 && S.pos[tp0.tick]; if (ps0) set({ side: 'sell', amount: (ps0.tok * (+arg) / 100).toFixed(0) }); break;
-      case 'sellall': var tp1 = find(S.tick), ps1 = tp1 && S.pos[tp1.tick]; if (ps1) set({ side: 'sell', amount: ps1.tok.toFixed(0) }); break;
+      case 'sellall': var tp1 = find(S.tick), ps1 = tp1 && S.pos[tp1.tick]; if (ps1) set({ side: 'sell', amount: String(Math.floor(ps1.tok)), sellAll: true }); break;
       case 'coToggle': set({ coOpen: !S.coOpen, coQueue: 0 }); break;
       case 'coClose': set({ coOpen: false }); break;
       case 'coPause': S.coPaused = !S.coPaused; if (!S.coPaused) S.coQueue = 0; render(); break;
@@ -2769,7 +2841,7 @@
       case 'post':
         var txt = (S.cmtDraft || '').trim(); if (!txt) { toast('Write something first'); break; }
         var cms = seedComments(find(S.tick)); cms.push({ id: cms.length, w: S.account, text: txt, t: Date.now(), likes: 0, liked: false, reply: S.replyTo != null ? S.replyTo : null });
-        set({ cmtDraft: '', replyTo: null }); toast('Callout posted'); break;
+        devPing(find(S.tick)); set({ cmtDraft: '', replyTo: null }); toast('Callout posted'); break;
       case 'pairOpen': set({ cat: pairInfo(arg).cat, pair: arg }); setTimeout(function () { var g = document.getElementById('grid') || document.getElementById('bubbles'); if (g) g.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 30); break;
       case 'hero': heroGo(S.heroIdx + (+arg)); break;
       case 'heroGo': heroGo(+arg); break;
@@ -2784,12 +2856,14 @@
         if (amt <= 0) { toast('Enter an amount first'); break; }
         if (typeof S.balance === 'number' && S.side === 'buy' && amt > S.balance) { toast('Not enough devnet SOL — balance ' + S.balance.toFixed(3)); break; }
         var qq = quoteFor(t), ps = S.pos[t.tick] = S.pos[t.tick] || { tok: 0, cost: 0 };
+        if (S.side === 'sell' && amt > ps.tok && amt - ps.tok < 1) amt = ps.tok;
+        if (S.side === 'sell' && S.sellAll && Math.abs(amt - Math.floor(ps.tok)) < 1) amt = ps.tok;
         if (S.side === 'sell' && amt > ps.tok + 1e-6) { toast(ps.tok > 0 ? 'You only hold ' + fmtNum(ps.tok) + ' $' + t.tick : 'You don\'t hold any $' + t.tick + ' yet — buy first'); break; }
         var solAmt = S.side === 'buy' ? amt : qq.sol;
-        var trd = applyTrade(t, S.side, +solAmt.toFixed(4), S.account, true);
+        var trd = applyTrade(t, S.side, +solAmt.toFixed(4), S.account, true); devPing(t);
         if (S.side === 'buy') { ps.tok += qq.out; ps.cost += amt; trd.tokens = qq.out; }
-        else { var frac = Math.min(1, amt / ps.tok); ps.cost -= ps.cost * frac; ps.tok -= amt; trd.tokens = amt; }
-        S.amount = ''; render();
+        else { var frac = Math.min(1, amt / ps.tok); ps.cost -= ps.cost * frac; ps.tok -= amt; trd.tokens = amt; if (ps.tok < 1) delete S.pos[t.tick]; }
+        S.amount = ''; S.sellAll = false; render();
         if (S.side === 'buy') confettiSmall();
         toast((S.side === 'buy' ? 'Bought ' + fmtNum(qq.out) + ' $' + t.tick + ' for ' + amt + ' SOL' : 'Sold ' + fmtNum(amt) + ' $' + t.tick + ' for ' + qq.out.toFixed(4) + ' SOL') + ' · tax ' + trd.tax.toFixed(4) + ' (simulated)', t); break;
       case 'launch':
