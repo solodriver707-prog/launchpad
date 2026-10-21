@@ -1807,7 +1807,7 @@
   function coPeek(c, t) {
     if (S.coPeekMute || S.coOpen || S.screen === 'token' || (railOn() && !S.railHidden) || document.hidden || document.querySelector('.hm-ov')) return; var now = Date.now(); if (now - (S.coPeekAt || 0) < 9000) return; S.coPeekAt = now;
     var box = document.getElementById('toasts'); if (!box) return; var el = document.createElement('button'); el.className = 'toast co-peek'; el.setAttribute('data-act', 'coToggle');
-    el.innerHTML = '<span class="av" style="width:26px;height:26px">' + A.svg(walletSpec(c.w)) + '</span><span class="cp-t"><b>' + esc(coName(c.w)) + '</b> on <b>$' + esc(t.tick) + '</b><small>' + esc(c.text.length > 54 ? c.text.slice(0, 52) + '…' : c.text) + '</small></span><i class="cp-x" data-act="coPeekMute" title="Mute callout pop-ups">✕</i>';
+    el.innerHTML = '<span class="av" style="width:26px;height:26px">' + A.svg(walletSpec(c.w)) + '</span><span class="cp-t"><span class="cp-l"><b>' + esc(coName(c.w)) + '</b> on <b>$' + esc(t.tick) + '</b></span><small>' + esc(c.text.length > 54 ? c.text.slice(0, 52) + '…' : c.text) + '</small></span><i class="cp-x" data-act="coPeekMute" title="Mute callout pop-ups">✕</i>';
     box.appendChild(el); while (box.children.length > 4) box.removeChild(box.firstChild); setTimeout(function () { el.classList.add('out'); setTimeout(function () { el.remove(); }, 400); }, 4200);
   }
   function calloutDrawer() {
