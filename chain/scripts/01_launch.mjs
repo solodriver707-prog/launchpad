@@ -10,6 +10,7 @@ const TAX_BPS = +(process.env.TAX_BPS || 300);       // coin tax (Token-2022 tra
 const SNIPE_START_BPS = Math.max(5000, +(process.env.SNIPE || 5000)); // sniper trap starting fee 50%
 const PLATFORM_BPS = 100;                             // treid fee 1% after the trap
 const TRAP_SECONDS = Math.max(30, +(process.env.TRAP || 30)); // mandatory minimum 30s
+const TRAP_STEPS = 3; // hybrid: 3 equal steps down (e.g. 50% → 34% → 17%), then normal fee
 
 const treid = key('treid'), dev = key('dev'), buyer = key('buyer');
 const client = new DynamicBondingCurveClient(conn, 'confirmed');
@@ -18,7 +19,7 @@ for (const k of [dev, buyer]) if (await sol(k.publicKey) < 0.25) await fund(trei
 
 const curve = buildCurveWithMarketCap({
   token: { tokenType: TokenType.Token2022, tokenBaseDecimal: TokenDecimal.SIX, tokenQuoteDecimal: TokenDecimal.NINE, tokenAuthorityOption: TokenAuthorityOption.Immutable, totalTokenSupply: 1_000_000_000, leftover: 0 },
-  fee: { baseFeeParams: { baseFeeMode: BaseFeeMode.FeeSchedulerLinear, feeSchedulerParam: { startingFeeBps: SNIPE_START_BPS, endingFeeBps: PLATFORM_BPS, numberOfPeriod: 1, totalDuration: TRAP_SECONDS } },
+  fee: { baseFeeParams: { baseFeeMode: BaseFeeMode.FeeSchedulerLinear, feeSchedulerParam: { startingFeeBps: SNIPE_START_BPS, endingFeeBps: PLATFORM_BPS, numberOfPeriod: TRAP_STEPS, totalDuration: TRAP_SECONDS } },
     dynamicFeeEnabled: false, collectFeeMode: CollectFeeMode.QuoteToken, creatorTradingFeePercentage: 50, poolCreationFee: 0, enableFirstSwapWithMinFee: true },
   migration: { migrationOption: MigrationOption.MET_DAMM_V2, migrationFeeOption: MigrationFeeOption.Customizable, migrationFee: { feePercentage: 0, creatorFeePercentage: 0 },
     migratedPoolFee: { collectFeeMode: MigratedCollectFeeMode.Compounding, dynamicFee: DammV2DynamicFeeMode.Disabled, poolFeeBps: 50, compoundingFeeBps: 0 } },

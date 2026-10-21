@@ -4240,3 +4240,14 @@ button.dh2-row{cursor:pointer;border-radius:10px}button.dh2-row:hover{background
 .toast.co-peek{background:rgba(16,16,19,.96);color:var(--text);box-shadow:0 14px 34px -14px rgba(0,0,0,.8)}
 .cp-l{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.co-peek{min-width:240px}
 .trap-t{cursor:default}.trap-on{font-style:normal;font:800 9.5px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:#04140c;background:#3DDC97;padding:2px 6px;border-radius:5px;margin-left:6px;vertical-align:middle}
+/* trap step-down pulse */
+.stepdn{animation:stepdn .7s ease}
+@keyframes stepdn{0%{transform:translateY(-6px) scale(1.15);color:#3DDC97}100%{transform:none}}
+/* trap stair preview */
+.tstair{display:flex;align-items:flex-end;gap:6px;height:74px;margin-top:10px}
+.tstair span{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:2px;height:calc(18px + var(--h)*52px);padding-top:4px;border-radius:8px 8px 3px 3px;background:linear-gradient(180deg,rgba(242,112,138,.55),rgba(242,112,138,.15));border:1px solid rgba(242,112,138,.35)}
+.tstair span.done{background:rgba(61,220,151,.14);border-color:rgba(61,220,151,.35)}
+.tstair b{font-size:12px;color:#fff}.tstair small{font-size:9px;color:#9a958d;padding-bottom:3px}
+.tl3:has(.tstair){display:flex;flex-direction:column;align-items:stretch}
+.tl3 .tstair{width:100%}
+.tstair{height:96px}.tstair span{height:calc(16px + var(--h)*130px);max-height:96px;box-sizing:border-box}

@@ -2224,7 +2224,10 @@
     return out.slice(0, 8);
   }
   // ---- one tax for buy & sell + optional anti-sniper trap ----
-  function snipeNow(t, at) { var sn = t.snipe; if (!sn || !sn.on) return 0; var age = ((at || Date.now()) - t.born) / 1000; if (age >= sn.dur) return 0; return sn.start; }
+  // hybrid trap: 3 equal steps down (mirrors on-chain DBC linear fee scheduler, numberOfPeriod 3)
+  var TRAP_STEPS = 3;
+  function trapStepFee(start, base, i) { return Math.round(start - (start - base) * i / TRAP_STEPS); }
+  function snipeNow(t, at) { var sn = t.snipe; if (!sn || !sn.on) return 0; var age = ((at || Date.now()) - t.born) / 1000; if (age >= sn.dur) return 0; return trapStepFee(sn.start, Math.max(t.buy, t.sell), Math.floor(age / (sn.dur / TRAP_STEPS))); }
   function trapLeft(t) { return t.snipe && t.snipe.on ? Math.max(0, t.snipe.dur - (Date.now() - t.born) / 1000) : 0; }
   function hgSVG(f) {
     f = Math.max(0, Math.min(1, f)); var yt = 19 - 14 * f, w = function (y) { return 1.2 + 8.3 * (19 - y) / 14; }, ph = 14 * (1 - f) + .01;
@@ -2239,9 +2242,9 @@
   function liqContent(t, cls, rel) {
     var m = Math.max(t.buy, t.sell), id = esc(t.tick), left = trapFmt(trapLeft(t));
     if (rel) return cls === 'card' ? '<small>TAX</small><b>' + m + '%</b><em>released</em>' : cls === 'head' ? '<b>✓ Trap over</b><small>tax is now ' + m + '%</small>' : '<b>✓ Sniper trap is over</b><small>Normal ' + m + '% tax from now on.</small>';
-    if (cls === 'card') return '<small>SNIPER TAX</small><b>' + t.snipe.start + '%</b><em class="mono" data-liqt>' + left + '</em>';
-    if (cls === 'head') return '<span class="lq-big mono">' + t.snipe.start + '%</span><span class="lq-tx"><b>🪤 Sniper tax</b><small>drops to <i>' + m + '%</i> in <i class="mono" data-liqt>' + left + '</i></small></span>';
-    return '<span class="lq-big mono">' + t.snipe.start + '%</span><span class="lq-tx"><b>Sniper tax is on</b><small>Buying now costs <i>' + t.snipe.start + '%</i> tax. When it drains (<i class="mono" data-liqt>' + left + '</i>) it drops instantly to <i>' + m + '%</i>.</small></span>';
+    if (cls === 'card') return '<small>SNIPER TAX</small><b data-trapv="' + id + '">' + snipeNow(t) + '%</b><em class="mono" data-liqt>' + left + '</em>';
+    if (cls === 'head') return '<span class="lq-big mono" data-trapv="' + id + '">' + snipeNow(t) + '%</span><span class="lq-tx"><b>🪤 Sniper tax</b><small>drops to <i>' + m + '%</i> in <i class="mono" data-liqt>' + left + '</i></small></span>';
+    return '<span class="lq-big mono" data-trapv="' + id + '">' + snipeNow(t) + '%</span><span class="lq-tx"><b>Sniper tax is on</b><small>Buying now costs <i data-trapv="' + id + '">' + snipeNow(t) + '%</i> tax. It steps down every ' + Math.round(t.snipe.dur / TRAP_STEPS) + 's and reaches <i>' + m + '%</i> in <i class="mono" data-liqt>' + left + '</i>.</small></span>';
   }
   function trapBox(t, cls) {
     var f = t.snipe ? trapLeft(t) / t.snipe.dur : 0;
@@ -2264,6 +2267,7 @@
     document.querySelectorAll('[data-hgtax]').forEach(function (e) { var t = find(e.getAttribute('data-hgtax')); if (!t) return; var left = trapLeft(t);
       if (left <= 0) { if (e.classList.contains('rel')) return; var m = Math.max(t.buy, t.sell); e.classList.add('rel'); e.style.background = taxBg(m); e.innerHTML = '<small>TAX</small><b>' + m + '%</b><i class="rel-burst"></i>'; var tc = e.closest('.tcard'); if (tc) { var tr = tc.querySelector('.trap-c'); if (tr) tr.remove(); tc.classList.add('released'); } return; }
       var sv = e.querySelector('.hg-svg'); if (sv) sv.outerHTML = hgSVG(left / t.snipe.dur); var tt = e.querySelector('.hgt-t'); if (tt) tt.textContent = trapFmt(left); });
+    document.querySelectorAll('[data-trapv]').forEach(function (e) { var t = find(e.getAttribute('data-trapv')); if (t && trapLeft(t) > 0) { var v = snipeNow(t) + '%'; if (e.textContent !== v) { e.textContent = v; e.classList.remove('stepdn'); void e.offsetWidth; e.classList.add('stepdn'); } } });
     document.querySelectorAll('[data-trapt]').forEach(function (e) { var t = find(e.getAttribute('data-trapt')); if (t) e.textContent = trapFmt(trapLeft(t)); });
   }, 250);
   var FEE = { plain: 1, taxed: 0.5, creatorPlain: 0.5 }; // treid platform fee, % of each trade
@@ -2434,24 +2438,25 @@
     var sn = c.snipe || (c.snipe = { on: true, start: 50, dur: 30 }); sn.on = true; if (sn.start < 50) sn.start = 50; if (sn.dur < 30) sn.dur = 30; var base = c.buy;
     var steps = []; for (var v = 0; v <= 10; v++) steps.push('<button class="txs' + (base === v ? ' on' : '') + '" style="--tc:' + taxBg(v) + '" data-act="ctax" data-arg="' + v + '">' + v + '%</button>');
     var W = 280, H = 80, x0 = 34, x1 = W - 10, y = function (v) { return 10 + (1 - v / 100) * (H - 30); }, pts = [];
-    for (var k = 0; k <= 30; k++) { var f = k / 30, tx = sn.start - (sn.start - base) * f; pts.push((x0 + f * (x1 - x0)).toFixed(1) + ',' + y(tx).toFixed(1)); }
+    var stepLbl = ''; for (var k = 0; k < TRAP_STEPS; k++) { var fa = k / TRAP_STEPS, fb = (k + 1) / TRAP_STEPS, tv = trapStepFee(sn.start, base, k), xa = x0 + fa * (x1 - x0), xb = x0 + fb * (x1 - x0); pts.push(xa.toFixed(1) + ',' + y(tv).toFixed(1), xb.toFixed(1) + ',' + y(tv).toFixed(1)); if (k) stepLbl += '<text x="' + ((xa + xb) / 2).toFixed(1) + '" y="' + (y(tv) - 5).toFixed(1) + '" fill="#F2708A" font-size="9" text-anchor="middle" font-family="JetBrains Mono,monospace" opacity=".8">' + tv + '%</text>'; } pts.push(x1.toFixed(1) + ',' + y(base).toFixed(1));
     var graph = '<svg class="trap-g" viewBox="0 0 ' + W + ' ' + H + '"><defs><linearGradient id="trapf" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F2708A" stop-opacity=".35"/><stop offset="1" stop-color="#F2708A" stop-opacity="0"/></linearGradient></defs>' +
       '<line x1="' + x0 + '" x2="' + x1 + '" y1="' + (H - 20) + '" y2="' + (H - 20) + '" stroke="#2A2A2E"/>' +
       '<polygon points="' + x0 + ',' + (H - 20) + ' ' + pts.join(' ') + ' ' + x1 + ',' + (H - 20) + '" fill="url(#trapf)"/><polyline points="' + pts.join(' ') + '" fill="none" stroke="#F2708A" stroke-width="2" stroke-linejoin="round"/>' +
-      '<circle cx="' + x0 + '" cy="' + y(sn.start).toFixed(1) + '" r="3" fill="#F2708A"/><circle cx="' + x1 + '" cy="' + y(base).toFixed(1) + '" r="3" fill="#D6D1C9"/>' +
+      stepLbl + '<circle cx="' + x0 + '" cy="' + y(sn.start).toFixed(1) + '" r="3" fill="#F2708A"/><circle cx="' + x1 + '" cy="' + y(base).toFixed(1) + '" r="3" fill="#D6D1C9"/>' +
       '<text x="' + (x0 - 6) + '" y="' + (y(sn.start) + 3).toFixed(1) + '" fill="#F2708A" font-size="10" text-anchor="end" font-family="JetBrains Mono,monospace">' + sn.start + '%</text>' +
       '<text x="' + x1 + '" y="' + (y(base) - 7).toFixed(1) + '" fill="#D6D1C9" font-size="10" text-anchor="end" font-family="JetBrains Mono,monospace">' + base + '%</text>' +
       '<text x="' + x0 + '" y="' + (H - 6) + '" fill="#7A766F" font-size="9" font-family="JetBrains Mono,monospace">launch</text><text x="' + x1 + '" y="' + (H - 6) + '" fill="#7A766F" font-size="9" text-anchor="end" font-family="JetBrains Mono,monospace">+' + (sn.dur < 60 ? sn.dur + 's' : sn.dur / 60 + 'm') + '</text></svg>';
     return '<div class="field taxf"><div class="lbl"><b>Tax <span class="muted" style="font-weight:500;font-size:12px">· same for buys and sells</span></b><span class="mono" style="color:' + taxBg(base) + '">' + base + '%</span></div><div class="txrow">' + steps.join('') + '</div></div>' +
-      '<div class="trap' + (sn.on ? ' on' : '') + '"><div class="trap-t"><span class="trap-ic">🪤</span><span><b>Sniper trap <em class="trap-on">always on</em></b><small>Every coin on treid starts with a sniper trap: buyers in the first seconds pay a high fee that drops to normal when the timer runs out. Minimum 50% for 30 seconds — make it stronger or longer if you like. Your own initial buy is never affected.</small></span></div>' +
+      '<div class="trap' + (sn.on ? ' on' : '') + '"><div class="trap-t"><span class="trap-ic">🪤</span><span><b>Sniper trap <em class="trap-on">always on</em></b><small>Every coin on treid starts with a sniper trap: buyers in the first seconds pay a high fee that steps down in 3 drops to normal as the timer runs out — no single moment for bots to wait for. Minimum 50% for 30 seconds — make it stronger or longer if you like. Your own initial buy is never affected.</small></span></div>' +
       (sn.on ? (function () {
         var durTxt = function (sec) { return sec < 60 ? sec + 's' : (sec % 60 ? Math.floor(sec / 60) + 'm ' + (sec % 60) + 's' : sec / 60 + 'm'); };
         var at = function (f) { return Math.round(sn.start - (sn.start - base) * f); };
         var ticks = '';
         return '<div class="trap-cfg2"><div class="tc-row"><span class="tc-l">Trap tax</span><div class="tc-seg">' + [50, 65, 80, 90].map(function (v) { return '<button class="' + (sn.start === v ? 'on' : '') + '" data-act="snipeStart" data-arg="' + v + '">' + v + '%</button>'; }).join('') + '</div></div>' +
           '<div class="tc-row"><span class="tc-l">Lasts for</span><div class="tc-seg g">' + [[30, '30s'], [40, '40s'], [45, '45s'], [50, '50s'], [60, '1 min']].map(function (d) { return '<button class="' + (sn.dur === d[0] ? 'on' : '') + '" data-act="snipeDur" data-arg="' + d[0] + '">' + d[1] + '</button>'; }).join('') + '</div></div>' +
-          '<div class="tl3"><div class="liq liq-prev" style="--f:.62"><span class="liq-fill"><svg class="liq-w" viewBox="0 0 120 10" preserveAspectRatio="none"><path d="M0 5 Q7.5 0 15 5 T30 5 T45 5 T60 5 T75 5 T90 5 T105 5 T120 5 V10 H0Z"/></svg></span><span class="liq-c"><span class="lq-big mono">' + sn.start + '%</span><span class="lq-tx"><b>What buyers see</b><small>drains over ' + durTxt(sn.dur) + ', then tax drops to <i>' + base + '%</i></small></span></span></div></div>' +
-          '<div class="tc-ex">💡 A bot buying <b>1 SOL</b> in the first ' + durTxt(sn.dur) + ' pays <b class="dn">' + (sn.start / 100).toFixed(2) + ' SOL</b> tax. One second after the sand runs out, the same buy pays just <b>' + (base / 100).toFixed(2) + ' SOL</b>.</div></div>';
+          '<div class="tl3"><div class="liq liq-prev" style="--f:.62"><span class="liq-fill"><svg class="liq-w" viewBox="0 0 120 10" preserveAspectRatio="none"><path d="M0 5 Q7.5 0 15 5 T30 5 T45 5 T60 5 T75 5 T90 5 T105 5 T120 5 V10 H0Z"/></svg></span><span class="liq-c"><span class="lq-big mono">' + sn.start + '%</span><span class="lq-tx"><b>What buyers see</b><small>steps down every ' + durTxt(Math.round(sn.dur / TRAP_STEPS)) + ', then tax is <i>' + base + '%</i></small></span></span></div>' +
+            '<div class="tstair">' + [0, 1, 2].map(function (i) { var w = sn.dur / TRAP_STEPS; return '<span style="--h:' + Math.max(.12, trapStepFee(sn.start, base, i) / 100).toFixed(2) + '"><b class="mono">' + trapStepFee(sn.start, base, i) + '%</b><small class="mono">' + Math.round(i * w) + '–' + Math.round((i + 1) * w) + 's</small></span>'; }).join('') + '<span class="done" style="--h:.12"><b class="mono">' + base + '%</b><small>after</small></span></div></div>' +
+          '<div class="tc-ex">💡 A bot buying <b>1 SOL</b> at launch pays <b class="dn">' + (sn.start / 100).toFixed(2) + ' SOL</b> tax. Wait ' + durTxt(Math.round(sn.dur / TRAP_STEPS)) + ' → <b class="dn">' + (trapStepFee(sn.start, base, 1) / 100).toFixed(2) + ' SOL</b>, then <b class="dn">' + (trapStepFee(sn.start, base, 2) / 100).toFixed(2) + ' SOL</b>, and after ' + durTxt(sn.dur) + ' just <b>' + (base / 100).toFixed(2) + ' SOL</b>. No single second to camp — waiting costs price, rushing costs tax.</div></div>';
       })() : '') + '</div>';
   }
   setInterval(function () {
@@ -2506,7 +2511,7 @@
         '<aside style="flex:1 1 320px;display:flex;flex-direction:column;gap:12px;position:sticky;top:90px"><span class="kicker">LIVE PREVIEW</span>' + card(preview, { preview: true }) +
           '<div class="card-s panel pv-sum"><div class="pv-row">' + avatarHTML(preview, 52) + '<div><b>At launch</b><small class="muted">what buyers will see</small></div></div>' +
             '<div class="pv-grid"><div><small>You hold</small><b class="mono" style="color:' + (dq.pct < 3 ? '#3DDC97' : dq.pct < 8 ? '#FFD15C' : '#F2708A') + '">' + dq.pct.toFixed(2) + '%</b></div><div><small>Snipers</small><b class="mono up">0%</b></div><div><small>Bundles</small><b class="mono up">0%</b></div><div><small>Tax</small><b class="mono">' + tmax + '%</b></div></div>' +
-            (c.snipe ? '<div class="pv-trap">🪤 Sniper trap: ' + c.snipe.start + '% → ' + tmax + '% over ' + (c.snipe.dur < 60 ? c.snipe.dur + 's' : c.snipe.dur / 60 + 'm') + '</div>' : '') + '</div></aside>' +
+            (c.snipe ? '<div class="pv-trap">🪤 Sniper trap: ' + [0, 1, 2].map(function (i) { return trapStepFee(c.snipe.start, tmax, i) + '%'; }).join(' → ') + ' → ' + tmax + '% over ' + (c.snipe.dur < 60 ? c.snipe.dur + 's' : c.snipe.dur / 60 + 'm') + '</div>' : '') + '</div></aside>' +
       '</div></main>';
   }
 
@@ -3078,7 +3083,7 @@
   // ===== HOW IT WORKS: "A coin's life" — cinematic story, 6 scenes =====
   var STS = [
     ['Launch', 'Logo, banner, any pair, one tax. Live in seconds.'],
-    ['Sniper trap', 'Bots that rush in at launch pay a huge tax. When it drains, everyone pays the normal tax.'],
+    ['Sniper trap', 'Bots that rush in at launch pay a huge tax. It steps down in 3 drops, then everyone pays the normal tax.'],
     ['Trade the curve', 'Every buy pushes the price up the bonding curve. Every trade pays the tax shown on the coin.'],
     ['Risk flags', 'We never hide or delete coins. We show dev, top 10, snipers and bundles — you decide.'],
     ['Graduate', 'At ~$69K the curve fills, liquidity moves to Raydium and milestone badges start.'],
