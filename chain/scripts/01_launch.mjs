@@ -7,9 +7,9 @@ import { DynamicBondingCurveClient, buildCurveWithMarketCap, TokenType, TokenDec
 import { conn, key, send, ex, exa, sol, fund, state } from './common.mjs';
 
 const TAX_BPS = +(process.env.TAX_BPS || 300);       // coin tax (Token-2022 transfer fee), 3%
-const SNIPE_START_BPS = +(process.env.SNIPE || 5000); // sniper trap starting fee 50%
+const SNIPE_START_BPS = Math.max(5000, +(process.env.SNIPE || 5000)); // sniper trap: minimum 50%
 const PLATFORM_BPS = 100;                             // treid fee 1% after the trap
-const TRAP_SECONDS = +(process.env.TRAP || 60);
+const TRAP_SECONDS = Math.max(30, +(process.env.TRAP || 30)); // minimum 30s
 
 const treid = key('treid'), dev = key('dev'), buyer = key('buyer');
 const client = new DynamicBondingCurveClient(conn, 'confirmed');

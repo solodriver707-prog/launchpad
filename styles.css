@@ -4239,3 +4239,4 @@ button.dh2-row{cursor:pointer;border-radius:10px}button.dh2-row:hover{background
 @keyframes peekIn{from{transform:translateX(30px);opacity:0}}
 .toast.co-peek{background:rgba(16,16,19,.96);color:var(--text);box-shadow:0 14px 34px -14px rgba(0,0,0,.8)}
 .cp-l{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.co-peek{min-width:240px}
+.trap-t{cursor:default}.trap-on{font-style:normal;font:800 9.5px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:#04140c;background:#3DDC97;padding:2px 6px;border-radius:5px;margin-left:6px;vertical-align:middle}

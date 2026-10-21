@@ -2431,7 +2431,7 @@
       '<small class="muted tsp-n">Plus a ' + FEE.taxed + '% treid fee per trade (total ' + (m + FEE.taxed) + '%). On a 1 SOL buy: ' + ['h', 'b', 'd'].map(function (k) { return (m / 100 * sp[k] / 100).toFixed(4).replace(/\.?0+$/, '') + ' SOL ' + SPC[k][2].toLowerCase(); }).join(' · ') + '</small></section>';
   }
   function taxPicker(c) {
-    var sn = c.snipe || { on: false, start: 80, dur: 60 }, base = c.buy;
+    var sn = c.snipe || (c.snipe = { on: true, start: 50, dur: 30 }); sn.on = true; if (sn.start < 50) sn.start = 50; if (sn.dur < 30) sn.dur = 30; var base = c.buy;
     var steps = []; for (var v = 0; v <= 10; v++) steps.push('<button class="txs' + (base === v ? ' on' : '') + '" style="--tc:' + taxBg(v) + '" data-act="ctax" data-arg="' + v + '">' + v + '%</button>');
     var W = 280, H = 80, x0 = 34, x1 = W - 10, y = function (v) { return 10 + (1 - v / 100) * (H - 30); }, pts = [];
     for (var k = 0; k <= 30; k++) { var f = k / 30, tx = sn.start - (sn.start - base) * f; pts.push((x0 + f * (x1 - x0)).toFixed(1) + ',' + y(tx).toFixed(1)); }
@@ -2443,13 +2443,13 @@
       '<text x="' + x1 + '" y="' + (y(base) - 7).toFixed(1) + '" fill="#D6D1C9" font-size="10" text-anchor="end" font-family="JetBrains Mono,monospace">' + base + '%</text>' +
       '<text x="' + x0 + '" y="' + (H - 6) + '" fill="#7A766F" font-size="9" font-family="JetBrains Mono,monospace">launch</text><text x="' + x1 + '" y="' + (H - 6) + '" fill="#7A766F" font-size="9" text-anchor="end" font-family="JetBrains Mono,monospace">+' + (sn.dur < 60 ? sn.dur + 's' : sn.dur / 60 + 'm') + '</text></svg>';
     return '<div class="field taxf"><div class="lbl"><b>Tax <span class="muted" style="font-weight:500;font-size:12px">· same for buys and sells</span></b><span class="mono" style="color:' + taxBg(base) + '">' + base + '%</span></div><div class="txrow">' + steps.join('') + '</div></div>' +
-      '<div class="trap' + (sn.on ? ' on' : '') + '"><button class="trap-t" data-act="snipeToggle"><span class="trap-ic">🪤</span><span><b>Sniper trap</b><small>Early buyers pay a much higher tax until the timer runs out — then it drops instantly to your normal ' + base + '%.</small></span><i class="sw2"><i></i></i></button>' +
+      '<div class="trap' + (sn.on ? ' on' : '') + '"><div class="trap-t"><span class="trap-ic">🪤</span><span><b>Sniper trap <em class="trap-on">always on</em></b><small>Every coin on treid starts with a sniper trap: buyers in the first seconds pay a high fee that drops to normal when the timer runs out. Minimum 50% for 30 seconds — make it stronger or longer if you like. Your own initial buy is never affected.</small></span></div>' +
       (sn.on ? (function () {
         var durTxt = function (sec) { return sec < 60 ? sec + 's' : (sec % 60 ? Math.floor(sec / 60) + 'm ' + (sec % 60) + 's' : sec / 60 + 'm'); };
         var at = function (f) { return Math.round(sn.start - (sn.start - base) * f); };
         var ticks = '';
-        return '<div class="trap-cfg2"><div class="tc-row"><span class="tc-l">Trap tax</span><div class="tc-seg">' + [25, 50, 80, 90].map(function (v) { return '<button class="' + (sn.start === v ? 'on' : '') + '" data-act="snipeStart" data-arg="' + v + '">' + v + '%</button>'; }).join('') + '</div></div>' +
-          '<div class="tc-row"><span class="tc-l">Lasts for</span><div class="tc-seg g">' + [[5, '5s'], [10, '10s'], [15, '15s'], [20, '20s'], [30, '30s'], [45, '45s'], [60, '1 min']].map(function (d) { return '<button class="' + (sn.dur === d[0] ? 'on' : '') + '" data-act="snipeDur" data-arg="' + d[0] + '">' + d[1] + '</button>'; }).join('') + '</div></div>' +
+        return '<div class="trap-cfg2"><div class="tc-row"><span class="tc-l">Trap tax</span><div class="tc-seg">' + [50, 65, 80, 90].map(function (v) { return '<button class="' + (sn.start === v ? 'on' : '') + '" data-act="snipeStart" data-arg="' + v + '">' + v + '%</button>'; }).join('') + '</div></div>' +
+          '<div class="tc-row"><span class="tc-l">Lasts for</span><div class="tc-seg g">' + [[30, '30s'], [40, '40s'], [45, '45s'], [50, '50s'], [60, '1 min']].map(function (d) { return '<button class="' + (sn.dur === d[0] ? 'on' : '') + '" data-act="snipeDur" data-arg="' + d[0] + '">' + d[1] + '</button>'; }).join('') + '</div></div>' +
           '<div class="tl3"><div class="liq liq-prev" style="--f:.62"><span class="liq-fill"><svg class="liq-w" viewBox="0 0 120 10" preserveAspectRatio="none"><path d="M0 5 Q7.5 0 15 5 T30 5 T45 5 T60 5 T75 5 T90 5 T105 5 T120 5 V10 H0Z"/></svg></span><span class="liq-c"><span class="lq-big mono">' + sn.start + '%</span><span class="lq-tx"><b>What buyers see</b><small>drains over ' + durTxt(sn.dur) + ', then tax drops to <i>' + base + '%</i></small></span></span></div></div>' +
           '<div class="tc-ex">💡 A bot buying <b>1 SOL</b> in the first ' + durTxt(sn.dur) + ' pays <b class="dn">' + (sn.start / 100).toFixed(2) + ' SOL</b> tax. One second after the sand runs out, the same buy pays just <b>' + (base / 100).toFixed(2) + ' SOL</b>.</div></div>';
       })() : '') + '</div>';
@@ -2506,7 +2506,7 @@
         '<aside style="flex:1 1 320px;display:flex;flex-direction:column;gap:12px;position:sticky;top:90px"><span class="kicker">LIVE PREVIEW</span>' + card(preview, { preview: true }) +
           '<div class="card-s panel pv-sum"><div class="pv-row">' + avatarHTML(preview, 52) + '<div><b>At launch</b><small class="muted">what buyers will see</small></div></div>' +
             '<div class="pv-grid"><div><small>You hold</small><b class="mono" style="color:' + (dq.pct < 3 ? '#3DDC97' : dq.pct < 8 ? '#FFD15C' : '#F2708A') + '">' + dq.pct.toFixed(2) + '%</b></div><div><small>Snipers</small><b class="mono up">0%</b></div><div><small>Bundles</small><b class="mono up">0%</b></div><div><small>Tax</small><b class="mono">' + tmax + '%</b></div></div>' +
-            (c.snipe && c.snipe.on ? '<div class="pv-trap">🪤 Sniper trap: ' + c.snipe.start + '% → ' + tmax + '% over ' + (c.snipe.dur < 60 ? c.snipe.dur + 's' : c.snipe.dur / 60 + 'm') + '</div>' : '') + '</div></aside>' +
+            (c.snipe ? '<div class="pv-trap">🪤 Sniper trap: ' + c.snipe.start + '% → ' + tmax + '% over ' + (c.snipe.dur < 60 ? c.snipe.dur + 's' : c.snipe.dur / 60 + 'm') + '</div>' : '') + '</div></aside>' +
       '</div></main>';
   }
 
@@ -2789,7 +2789,6 @@
       case 'ctax': setC(+arg > 0 ? { buy: +arg, sell: +arg } : { buy: 0, sell: 0, pair: 'SOL' }); break;
       case 'vanMode': S.c.van = S.c.van || { mode: 'treid', suf: '' }; S.c.van.mode = arg; render(); setTimeout(function () { var vi = document.getElementById('van-suf'); if (vi) vi.focus(); }, 30); break;
       case 'spPre': var sp1 = S.c.split || {}; if (arg === 'custom') setC({ split: { p: 'custom', h: sp1.h || 70, b: sp1.b || 20, d: sp1.d || 10 } }); else { var pp = SPRE[arg]; setC({ split: { p: arg, h: pp[2], b: pp[3], d: pp[4] } }); } break;
-      case 'snipeToggle': var sn0 = S.c.snipe || { on: false, start: 80, dur: 60 }; sn0.on = !sn0.on; setC({ snipe: sn0 }); break;
       case 'snipeStart': var sn1 = S.c.snipe; sn1.start = +arg; setC({ snipe: sn1 }); break;
       case 'snipeDur': var sn2 = S.c.snipe; sn2.dur = +arg; setC({ snipe: sn2 }); break;
       case 'cpairPick': S.cpq = ''; setC({ pair: arg }); break;
@@ -2900,7 +2899,7 @@
         var vc = c.van && c.van.mode === 'custom', vs = vc ? (c.van.suf || '') : 'treid', vf = vc ? vanFee(vs.length) : 0;
         if (vc && vs.length < 3) { toast('Custom address ending needs at least 3 characters'); break; }
         if (vf && typeof S.balance === 'number' && dq2.sol + vf > S.balance) { toast('Not enough devnet SOL — need ' + (dq2.sol + vf).toFixed(2) + ' SOL incl. ' + vf + ' SOL address fee'); break; }
-        var nt = { name: c.name.trim(), tick: c.tick, spec: c.spec, img: c.img, banner: c.banner || null, snipe: c.snipe && c.snipe.on ? { on: true, start: c.snipe.start, dur: c.snipe.dur } : null, buy: c.buy, sell: c.sell, split: c.buy > 0 && c.split ? { p: c.split.p, h: c.split.h, b: c.split.b, d: c.split.d } : null, pair: c.pair, mcN: 5, mc0: 5, prog: 1, born: Date.now(), holders: 1,
+        var nt = { name: c.name.trim(), tick: c.tick, spec: c.spec, img: c.img, banner: c.banner || null, snipe: { on: true, start: Math.max(50, (c.snipe && c.snipe.start) || 50), dur: Math.max(30, (c.snipe && c.snipe.dur) || 30) }, buy: c.buy, sell: c.sell, split: c.buy > 0 && c.split ? { p: c.split.p, h: c.split.h, b: c.split.b, d: c.split.d } : null, pair: c.pair, mcN: 5, mc0: 5, prog: 1, born: Date.now(), holders: 1,
           soc: !!(c.x || c.tg || c.web), links: { web: linkOf(c.web), x: c.x ? linkOf(/[\/.]/.test(c.x) ? c.x : 'x.com/' + c.x.replace(/^@/, '')) : null, tg: c.tg ? linkOf(/[\/.]/.test(c.tg) ? c.tg : 't.me/' + c.tg.replace(/^@/, '')) : null, demo: false }, rewards: false, burn: false, ca: fakeCA(vs), vanity: vc ? vs : null, vol: 0, hist: [5, 5], desc: c.desc.trim(), creator: S.account };
         if (vf && typeof S.balance === 'number') S.balance = Math.max(0, S.balance - vf);
         nt.devPct = +dq2.pct.toFixed(2);
