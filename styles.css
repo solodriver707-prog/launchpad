@@ -4182,3 +4182,34 @@ button.dh2-row{cursor:pointer;border-radius:10px}button.dh2-row:hover{background
   .bn-head>*:nth-child(4){display:none!important}
 }
 @media (max-width:760px){.bn-row .bn-c{min-width:0;overflow:hidden}.bn-row .bn-c>span{min-width:0}.bn-row .bn-c b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.bn-row{gap:8px}}
+/* stable header search */
+.searchbtn{flex:1 1 300px;min-width:0;width:auto;height:38px;min-height:38px;max-height:38px;overflow:hidden;white-space:nowrap}
+.searchbtn>span:not(.kbd){flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.searchbtn .kbd{flex:none;white-space:nowrap}
+.searchbtn svg{flex:none}
+@media (max-width:1280px){.searchbtn .kbd{display:none}}
+@media (max-width:1100px){.searchbtn{flex:0 1 220px}}
+@media (max-width:760px){.searchbtn{flex:0 0 40px;width:40px;height:40px;max-height:40px;min-height:40px}}
+.pal-x{cursor:pointer;border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--muted)}.pal-x:hover{color:#fff;border-color:var(--line2)}
+/* header never wraps; search absorbs the space */
+.hdr,.wrap.hdr{flex-wrap:nowrap}
+.hdr .navlinks,.hdr .brand,.hdr .hdr-right{flex:none}
+.hdr-right{flex-wrap:nowrap;white-space:nowrap}
+.searchbtn{flex:1 1 120px;max-width:420px}
+@media (max-width:1440px){.navlinks>button{padding-left:10px;padding-right:10px}}
+@media (max-width:1366px){.hdr-right .co-btn span{display:none}.searchbtn .kbd{display:none}}
+@media (max-width:1180px) and (min-width:761px){.searchbtn{flex:0 0 40px;width:40px;padding:0;justify-content:center}.searchbtn>span{display:none}.navlinks>button{padding-left:8px;padding-right:8px;font-size:13px}}
+@media (max-width:760px){.searchbtn{flex:0 0 40px;width:40px;height:40px;max-height:40px;min-height:40px;padding:0;justify-content:center;margin-left:auto}.searchbtn>span{display:none}}
+/* tablet: bottom tab bar instead of top links so the header never overflows */
+@media (min-width:761px) and (max-width:1100px){
+  body{padding-bottom:72px}
+  .navlinks{display:none!important}
+  .mnav{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:55;height:64px;padding:6px 6px calc(6px + env(safe-area-inset-bottom));background:rgba(10,10,12,.92);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-top:1px solid #222225}
+  .mnav button{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;border:0;background:none;color:var(--muted);font-size:11px;font-weight:700;border-radius:12px;cursor:pointer}
+  .mnav svg{width:21px;height:21px}
+  .mnav button.on{color:var(--ivory)}
+  .mnav button.pri span{margin-top:2px}
+  .searchbtn{flex:1 1 200px!important;width:auto!important;padding:0 10px 0 14px!important;justify-content:flex-start!important;max-width:420px}
+  .searchbtn>span:not(.kbd){display:block!important}
+}
+@media (min-width:761px) and (max-width:1100px){.mnav button.pri{color:#0A0A0B}.mnav button.pri svg{width:40px;height:30px;padding:5px 10px;border-radius:11px;background:var(--ivory);stroke-width:2.6}.mnav button.pri span{color:var(--soft)}#toasts{bottom:78px!important}}

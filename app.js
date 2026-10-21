@@ -2517,7 +2517,7 @@
     if (!S.palOpen) return '';
     var res = palResults();
     return '<div class="overlay" data-act="bg"><div class="palette" role="dialog" aria-modal="true" aria-label="Search tokens">' +
-      '<div class="palette-in">' + I.search + '<input id="pal" data-bind="palQ" value="' + esc(S.palQ) + '" placeholder="Search by name, ticker or contract address" autocomplete="off"><span class="kbd">Esc</span></div>' +
+      '<div class="palette-in">' + I.search + '<input id="pal" data-bind="palQ" value="' + esc(S.palQ) + '" placeholder="Search by name, ticker or contract address" autocomplete="off"><button class="kbd pal-x" data-act="palClose" aria-label="Close search">Esc</button></div>' +
       '<div class="palette-list">' + (S.palQ ? '' : '<div class="muted" style="font-size:12px;padding:6px 10px">Trending now</div>') +
       (res.length ? res.map(function (t, i) {
         var c = chg(t);
@@ -2689,6 +2689,7 @@
     if (el.tagName === 'A' && act !== 'how') e.preventDefault();
     switch (act) {
       case 'bg': if (e.target === el) set({ walletOpen: false, palOpen: false, walletView: null }); break;
+      case 'palClose': set({ palOpen: false }); break;
       case 'home': set({ screen: 'home', palOpen: false }); window.scrollTo(0, 0); break;
       case 'create': set({ screen: 'create', palOpen: false }); window.scrollTo(0, 0); break;
       case 'how':
