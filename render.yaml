@@ -1,0 +1,17 @@
+# One-click deploy of the treid indexer on Render (free plan).
+# Render → New → Blueprint → pick this repo. You'll be asked for RPC and PARTNER.
+services:
+  - type: web
+    name: treid-indexer
+    runtime: docker
+    plan: free
+    rootDir: chain/indexer
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    envVars:
+      - key: RPC          # Helius devnet URL, e.g. https://devnet.helius-rpc.com/?api-key=...
+        sync: false
+      - key: PARTNER      # treid wallet that receives fees (fee claimer of every treid config)
+        sync: false
+      - key: SOL_USD      # fallback SOL price if the live price can't be fetched
+        value: "150"

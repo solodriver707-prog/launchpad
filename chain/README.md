@@ -39,3 +39,19 @@ Flags: **sniper** = bought within ~4 slots (~1.5 s) of launch; **bundle** = 2+ w
 RPC=http://127.0.0.1:8899 PARTNER=<treid wallet> node indexer/indexer.mjs
 RPC=http://127.0.0.1:8899 NAME="Ice Cat" SYMBOL=ICE node scripts/03_simulate.mjs   # launch + 2 snipers + humans
 ```
+
+## Deploy the indexer (Render, free)
+
+1. Get an RPC key at helius.dev (free) → copy the **devnet** URL (`https://devnet.helius-rpc.com/?api-key=…`).
+2. Render → New → **Blueprint** → choose this repo (it reads `render.yaml`).
+3. Fill `RPC` (Helius URL) and `PARTNER` (treid fee wallet public key) → Deploy.
+4. Open `https://<your-service>.onrender.com/api/health` → `{"ok":true,…}`.
+5. Connect the site: open `https://treid.fun/?api=https://<your-service>.onrender.com` once (remembered),
+   or set `window.TREID_API` in `index.html` for everyone.
+
+The indexer rebuilds its database from chain on every start (no disk needed). It only watches treid configs
+(fee claimer = `PARTNER`), never the whole Meteora firehose. Free Render sleeps after 15 min idle; it backfills on wake.
+
+### Site ↔ indexer
+Real coins appear on the board with an **ON-CHAIN** badge: real market cap, curve %, holders, trades,
+chart, sniper/bundle flags and dev %. Demo coins keep running beside them. On-chain buy/sell from the site is next.

@@ -163,7 +163,8 @@
     saved.forEach(function (t) { if (t && t.tick && t.spec) { t.hist = [t.mcN, t.mcN]; if (t.ca && /dmnd$/.test(t.ca)) t.ca = t.ca.slice(0, 39) + 'treid'; S.created.push(t); } });
   } catch (e) {}
 
-  function all() { return S.created.concat(S.launched, BASE); }
+  S.live = [];
+  function all() { return S.live.concat(S.created, S.launched, BASE); }
   S.archive = {};
   function find(tick) { var a = all(); for (var i = 0; i < a.length; i++) if (a[i].tick === tick) return a[i]; return S.archive[tick] || null; }
   function featured() { return BASE.slice().sort(function (a, b) { return b.mcN - a.mcN; })[0]; }
@@ -369,7 +370,8 @@
     function lv(v, a, b) { return v < a ? 'g' : v < b ? 'y' : 'r'; }
     var dev = devSold ? 0 : ((h % 80) / 10), top = 16 + (h >> 2) % 52, sn = (h >> 5) % 19, bu = (h >> 8) % 16;
     if (t.creator && S.account && t.creator === S.account) { dev = 2.1; top = 22; sn = 0; bu = 0; devSold = false; }
-    if (t.devPct != null) { var lb = liveBal(t), dv = lb.filter(function (x) { return x.a === t.creator; })[0]; var anyTr = S.trades.some(function (x) { return x.tick === t.tick && x.tokens; }); dev = lb.length || anyTr ? (dv ? dv.pct : 0) : t.devPct; top = lb.slice(0, 10).reduce(function (a, x) { return a + x.pct; }, 0); if (!lb.length) top = anyTr ? 0 : Math.max(t.devPct, 0); top = top >= 10 ? Math.round(top) : +top.toFixed(1); sn = 0; bu = 0; devSold = !!(t.devPct > 0 && anyTr && !dv); }
+    if (t.live) { var L = t.lstat || {}; dev = L.dev || 0; top = L.top >= 10 ? Math.round(L.top) : +(L.top || 0).toFixed(1); sn = +(L.sn || 0).toFixed(1); bu = +(L.bu || 0).toFixed(1); devSold = !!L.devSold; }
+    else if (t.devPct != null) { var lb = liveBal(t), dv = lb.filter(function (x) { return x.a === t.creator; })[0]; var anyTr = S.trades.some(function (x) { return x.tick === t.tick && x.tokens; }); dev = lb.length || anyTr ? (dv ? dv.pct : 0) : t.devPct; top = lb.slice(0, 10).reduce(function (a, x) { return a + x.pct; }, 0); if (!lb.length) top = anyTr ? 0 : Math.max(t.devPct, 0); top = top >= 10 ? Math.round(top) : +top.toFixed(1); sn = 0; bu = 0; devSold = !!(t.devPct > 0 && anyTr && !dv); }
     return [
       { k: 'dev', lab: 'DEV', val: devSold ? 'SOLD' : dev.toFixed(1) + '%', lv: devSold ? 'r' : lv(dev, 3, 8), tip: devSold ? 'The creator already sold their tokens' : 'Share of supply the creator still holds' },
       { k: 'top', lab: 'TOP 10', val: top + '%', lv: lv(top, 30, 45), tip: 'Share of supply held by the 10 biggest wallets (excl. curve)' },
@@ -384,6 +386,7 @@
     }).join('') + '</div>';
   }
   function redFlags(t) {
+    if (t.live) { var lf = [], L = t.lstat || {}, tm = Math.max(t.buy, t.sell); if (tm >= 6) lf.push('High tax ' + tm + '%'); if (L.top > 48) lf.push('Top 10 hold ' + Math.round(L.top) + '%'); if (L.devSold) lf.push('Dev sold'); if (L.sn >= 12) lf.push('Snipers ' + L.sn.toFixed(0) + '%'); if (L.bu >= 9) lf.push('Bundles ' + L.bu.toFixed(0) + '%'); return lf; }
     var f = [], h = hash(t.tick), tmax = Math.max(t.buy, t.sell), top10 = 18 + (h % 50);
     if (tmax >= 6) f.push('High tax ' + tmax + '%');
     if (t.sell - t.buy >= 3) f.push('Sell tax ' + t.sell + '%');
@@ -397,7 +400,7 @@
     var tmax = Math.max(t.buy, t.sell), on = S.watch.indexOf(t.tick) !== -1, c = chg(t), done = t.prog >= 100, fr = freshness(t), fl = redFlags(t);
     var flags = fl.length ? '<div class="tc-flags bad" data-tip="' + esc(fl.join(' · ')) + '"><span class="fl-ic">!</span><span>' + esc(fl.slice(0, 2).join(' · ')) + (fl.length > 2 ? ' +' + (fl.length - 2) : '') + '</span></div>' :
       '<div class="tc-flags ok"><span class="fl-ic">✓</span><span>No red flags</span></div>';
-    return '<article class="tcard' + (S.newTick === t.tick ? ' is-new' : '') + ' ' + fr.cls + '" data-card="' + esc(t.tick) + '" data-act="open" data-arg="' + esc(t.tick) + '">' +
+    return '<article class="tcard' + (S.newTick === t.tick ? ' is-new' : '') + (t.live ? ' is-live' : '') + ' ' + fr.cls + '" data-card="' + esc(t.tick) + '" data-act="open" data-arg="' + esc(t.tick) + '">' +
       '<div class="tc-hero' + (t.banner ? ' has-ban' : '') + '"><div class="tch-bg' + (t.banner ? ' ban' : '') + '" aria-hidden="true">' + (t.banner ? '<img src="' + t.banner + '" alt="">' : avatarHTML(t, 240)) + '</div>' +
         '<div class="tc-age tch-age ' + fr.cls + '"><span class="ag-dot"></span><span class="ag-lab">' + fr.lab + '</span><b class="mono" data-t="' + t.born + '">' + ago(t.born) + '</b>' + (done ? '<span class="ag-grad">GRADUATED</span>' : '') + '</div>' +
         '<div class="tch-av">' + avatarHTML(t, 150) + '</div>' + '' + (opts.preview ? '' : '<button class="tch-star' + (on ? ' on' : '') + '" data-act="star" data-arg="' + esc(t.tick) + '" aria-label="Add to watchlist" aria-pressed="' + on + '">' + I.star(on) + '</button>') +
@@ -1694,6 +1697,8 @@
       '<span class="r"><button class="txb" data-act="wallet" data-arg="' + esc(tr.wallet) + '" aria-label="Open wallet details"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></button></span></div>';
   }
   function holdersOf(t) {
+    if (t.live && t.lh) { var cv = t.lh.filter(function (x) { return x.curve; }).reduce(function (a, x) { return a + x.pct; }, 0), tagOf = {}; S.trades.forEach(function (x) { if (x.tick === t.tick && x.side === 'buy') { var g = tagOf[x.wallet] || (tagOf[x.wallet] = { first: x.t }); g.first = Math.min(g.first, x.t); if (x.sniper) g.sn = 1; if (x.bundle) g.bu = 1; } });
+      return [{ a: 'curve', pct: cv || Math.max(0, 100 - t.lh.reduce(function (a, x) { return a + (x.curve ? 0 : x.pct); }, 0)), label: 'Bonding curve', kind: 'curve' }].concat(t.lh.filter(function (x) { return !x.curve; }).slice(0, 60).map(function (x) { var g = tagOf[x.wallet] || {}, tg = []; if (x.dev) tg.push('dev'); if (S.account && x.wallet === S.account) tg.push('you'); if (g.sn) tg.push('sniper'); if (g.bu) tg.push('bundle'); return { a: x.wallet, pct: x.pct, tags: tg, first: g.first || t.born }; })); }
     var rm = riskMetrics(t), devP = rm[0].val === 'SOLD' ? 0 : parseFloat(rm[0].val), top = parseFloat(rm[1].val), sn = parseFloat(rm[2].val), bu = parseFloat(rm[3].val);
     if (t.devPct != null) { var lb2 = liveBal(t); if (lb2.length) { var held = lb2.reduce(function (a, x) { return a + x.pct; }, 0), o3 = [{ a: 'curve', pct: Math.max(0, 100 - held), label: 'Bonding curve', kind: 'curve' }];
       lb2.slice(0, 40).forEach(function (x) { var tg = []; if (x.a === t.creator) tg.push('dev'); if (S.account && x.a === S.account) tg.push('you'); o3.push({ a: x.a, pct: x.pct, tags: tg, first: (S.trades.filter(function (q) { return q.tick === t.tick && q.wallet === x.a; }).pop() || {}).t || t.born }); }); return o3; } }
@@ -1751,6 +1756,7 @@
   var CMT = ['LFG', 'tax is fair, aping in', 'chart looks clean ngl', 'who is still holding?', '0% buy tax is the way', 'this mascot is elite', 'graduation soon?', 'dev is active in tg', 'bought the dip', 'diamond hands only', 'see you at Raydium', 'buy pressure is insane right now', 'just found this, looks fun', 'held since 5k mc', 'sell tax keeps the paper hands away', 'the pair choice is genius', 'curve almost full', 'lowkey the best meme on here'];
   function seedComments(t) {
     if (S.comments[t.tick]) return S.comments[t.tick];
+    if (t.live) return (S.comments[t.tick] = []);   // real coins: no made-up chatter
     var r = rng(hash(t.tick + 'c')), out = [];
     for (var i = 0; i < 9; i++) { var w = WALLETS[Math.floor(r() * WALLETS.length)]; out.push({ id: i, w: w.a, text: CMT[Math.floor(r() * CMT.length)], t: Date.now() - (i * 7 + r() * 6) * 60000, likes: Math.floor(r() * 30), liked: false, reply: i > 2 && r() < 0.3 ? i - 1 - Math.floor(r() * 2) : null }); }
     S.comments[t.tick] = out; return out;
@@ -2179,7 +2185,7 @@
         '<div style="padding-top:9px;border-top:1px solid var(--line)"><span class="muted">You receive ≈</span><span style="font-weight:800;font-size:15px">' + (q.isBuy ? fmtNum(q.out) + ' $' + id : q.out.toFixed(4) + ' SOL') + '</span></div></div>' +
       (trapLeft(t) > 0 ? trapBox(t, 'buy') : '') +
       '<button class="big-btn btn ' + (!S.account ? 'pri' : q.isBuy ? 'up-b' : 'down-b') + '" data-act="trade" data-arg="' + id + '">' + (!S.account ? 'Connect wallet to trade' : (q.isBuy ? 'Buy $' : 'Sell $') + id) + '</button>' +
-      '<span class="note">Wallet is real (devnet). Trades are simulated in this beta — nothing is sent on-chain.</span></section>';
+      '<span class="note">' + (t.live ? 'Real on-chain coin (devnet) — live data from treid indexer.' : 'Wallet is real (devnet). Trades are simulated in this beta — nothing is sent on-chain.') + '</span></section>';
     var posCard = pos ? '<section class="card-s panel poscard"><div style="display:flex;justify-content:space-between;align-items:center"><b>Your position</b><span style="display:flex;gap:10px">' + (t.creator && t.creator === S.account ? '<button class="link" style="min-height:0;font-size:12.5px;color:#FFB15C" data-act="burnOpen" data-arg="' + id + '">🔥 Burn</button>' : '') + '<button class="link" style="min-height:0;font-size:12.5px;color:var(--down)" data-act="sellall">Sell all</button></span></div>' +
       '<div class="pos-v"><span class="mono" style="font-size:22px;font-weight:700">' + pos.val.toFixed(4) + ' SOL</span><span class="chgpill ' + (pos.pnl >= 0 ? 'up' : 'down') + '">' + (pos.pnl >= 0 ? '+' : '') + pos.pct.toFixed(1) + '%</span></div>' +
       '<div class="muted mono" style="font-size:12px">' + fmtNum(pos.tok) + ' $' + id + ' · cost ' + pos.cost.toFixed(4) + ' SOL · PnL <span class="' + (pos.pnl >= 0 ? 'up' : 'down') + '">' + (pos.pnl >= 0 ? '+' : '') + pos.pnl.toFixed(4) + '</span></div></section>' : '';
@@ -2405,6 +2411,7 @@
   function splitOf(t) {
     if (!t || Math.max(t.buy || 0, t.sell || 0) <= 0) return null;
     if (t.split) return t.split;
+    if (t.live) return null;   // real coin: split not published on-chain yet — don't invent one
     var r = rng(hash(t.tick + 'split')), k = t.burn && !t.rewards ? 'deflation' : t.rewards ? 'community' : ['community', 'deflation', 'balanced', 'community'][Math.floor(r() * 4)], p = SPRE[k];
     if (r() < .3) { var h = 20 + Math.round(r() * 12) * 5, d = Math.min(50, 5 + Math.round(r() * 5) * 5); if (h + d > 95) h = 95 - d; t.split = { p: 'custom', h: h, b: 100 - h - d, d: d }; }
     else t.split = { p: k, h: p[2], b: p[3], d: p[4] };
@@ -2428,7 +2435,9 @@
     var bg = document.querySelector('[data-spbig]'); if (bg) bg.innerHTML = splitBar(sp, 'big');
   }
   function taxSplitPanel(t) {
-    var sp = splitOf(t), m = Math.max(t.buy, t.sell); if (!sp) return '<section class="card-s panel tsp-panel"><div class="tsp-h"><b>Fees on this coin</b><span class="tsp-p">plain coin · 0% tax</span></div><div class="tsp-rows" style="grid-template-columns:1fr 1fr"><div class="tsp-r" style="--c:#E6CB95"><em class="sp-ic">' + ICO.dev + '</em><span>Creator rewards</span><b class="mono">' + FEE.creatorPlain + '%</b><small class="mono">of every trade</small></div><div class="tsp-r" style="--c:#9a9aa2"><em class="sp-ic">' + ICO.lock + '</em><span>treid</span><b class="mono">' + (FEE.plain - FEE.creatorPlain) + '%</b><small class="mono">platform</small></div></div><small class="muted tsp-n">Buyers pay a ' + FEE.plain + '% treid fee per trade — half goes to the creator.</small></section>';
+    var sp = splitOf(t), m = Math.max(t.buy, t.sell);
+    if (!sp && t.live && m > 0) return '<section class="card-s panel tsp-panel"><div class="tsp-h"><b>Where the ' + m + '% tax goes</b><span class="tsp-p">' + ICO.lock + 'on-chain</span></div><small class="muted tsp-n">The ' + m + '% coin tax is held by the token itself (Token-2022) and collected by treid. The holders / burn / dev split for this coin isn\'t published yet — it will show here once the distributor is live. Plus a ' + FEE.taxed + '% treid fee per trade.</small></section>';
+    if (!sp) return '<section class="card-s panel tsp-panel"><div class="tsp-h"><b>Fees on this coin</b><span class="tsp-p">plain coin · 0% tax</span></div><div class="tsp-rows" style="grid-template-columns:1fr 1fr"><div class="tsp-r" style="--c:#E6CB95"><em class="sp-ic">' + ICO.dev + '</em><span>Creator rewards</span><b class="mono">' + FEE.creatorPlain + '%</b><small class="mono">of every trade</small></div><div class="tsp-r" style="--c:#9a9aa2"><em class="sp-ic">' + ICO.lock + '</em><span>treid</span><b class="mono">' + (FEE.plain - FEE.creatorPlain) + '%</b><small class="mono">platform</small></div></div><small class="muted tsp-n">Buyers pay a ' + FEE.plain + '% treid fee per trade — half goes to the creator.</small></section>';
     var pre = SPRE[sp.p], name = pre ? pre[1] : 'Custom';
     return '<section class="card-s panel tsp-panel"><div class="tsp-h"><b>Where the ' + m + '% tax goes</b><span class="tsp-p">' + ICO.lock + name + ' · locked</span></div>' + splitBar(sp, 'big') +
       '<div class="tsp-rows">' + ['h', 'b', 'd'].map(function (k) { var c0 = SPC[k]; return '<div class="tsp-r" style="--c:' + c0[0] + '"><em class="sp-ic">' + ICO[c0[1]] + '</em><span>' + c0[2] + '</span><b class="mono">' + sp[k] + '%</b><small class="mono">' + (m * sp[k] / 100).toFixed(2).replace(/\.?0+$/, '') + '% / trade</small></div>'; }).join('') + '</div>' +
@@ -2597,17 +2606,19 @@
   function q(sel) { return document.querySelectorAll(sel); }
   function attr(name, tick) { return '[' + name + '="' + (window.CSS && CSS.escape ? CSS.escape(tick) : tick) + '"]'; }
 
-  function applyTrade(t, side, sol, wallet, mine) {
+  function applyTrade(t, side, sol, wallet, mine, real) {
     var dir = side === 'buy' ? 1 : -1;
     var impact = Math.min(6, sol * 3 / Math.sqrt(Math.max(t.mcN, 4)));
-    t.mcN = Math.max(2, t.mcN * (1 + dir * impact / 100));
-    t.vol += sol * SOL_USD / 1000;
     var wasGrad = t.prog >= 100;
-    if (t.prog < 100) { t.prog = Math.max(0, Math.min(100, t.prog + dir * sol * 0.25)); t.mcN = Math.max(t.mcN * .985, Math.min(t.mcN * 1.015, curveMc(t.prog))); if (t.prog >= 100) t.mcN = Math.max(t.mcN, 69); }
-    if (side === 'buy' && Math.random() < 0.4) t.holders += 1;
+    if (real) { t.mcN = real.mc; t.prog = real.prog; t.vol += sol * SOL_USD / 1000; } else {
+    t.mcN = Math.max(2, t.mcN * (1 + dir * impact / 100));
+    t.vol += sol * SOL_USD / 1000; }
+    if (!real && t.prog < 100) { t.prog = Math.max(0, Math.min(100, t.prog + dir * sol * 0.25)); t.mcN = Math.max(t.mcN * .985, Math.min(t.mcN * 1.015, curveMc(t.prog))); if (t.prog >= 100) t.mcN = Math.max(t.mcN, 69); }
+    if (real) { if (real.holders != null) t.holders = real.holders; } else if (side === 'buy' && Math.random() < 0.4) t.holders += 1;
     t.hist.push(t.mcN); if (t.hist.length > 160) t.hist.shift(); athOf(t);
-    if (t.tk) { t.tk.push([Date.now(), t.mcN, sol]); if (t.tk.length > 5000) t.tk.splice(0, 500); }
+    if (t.tk) { t.tk.push([real ? real.ts : Date.now(), t.mcN, sol]); if (t.tk.length > 5000) t.tk.splice(0, 500); }
     var tr = { tick: t.tick, side: side, sol: sol, wallet: wallet || pickWallet(), t: Date.now(), tax: sol * effTax(t) / 100, mine: !!mine, price: price(t), sig: b58(64) }; tr.tokens = sol * SOL_USD / tr.price;
+    if (real) { tr.t = real.ts; tr.tokens = real.tokens; tr.tax = real.fee; tr.sig = real.sig; tr.sniper = real.sniper; tr.bundle = real.bundle; tr.real = true; tr.mine = !!(S.account && wallet === S.account); }
     S.trades.unshift(tr); if (S.trades.length > 400) { for (var ti = S.trades.length - 1; ti >= 0 && S.trades.length > 400; ti--) { var ox = S.trades[ti], ot = find(ox.tick); if (ox.mine || (ot && ot.creator && ox.wallet === ot.creator) || (ot && ot.devPct != null)) continue; S.trades.splice(ti, 1); } if (S.trades.length > 900) S.trades.pop(); }
     S.tradeCount++;
     paint(t, dir, tr);
@@ -2659,7 +2670,7 @@
 
   function tickMarket() {
     if (S.loading || document.visibilityState !== 'visible') return;
-    var a = all(), t = a[Math.floor(Math.pow(Math.random(), 1.6) * a.length)];
+    var a = all().filter(function (x) { return !x.live; }), t = a[Math.floor(Math.pow(Math.random(), 1.6) * a.length)];
     var momentum = chg(t) > 0 ? 0.56 : 0.5;
     var side = Math.random() < momentum ? 'buy' : 'sell';
     var sol = +(Math.pow(Math.random(), 2.2) * 5 + 0.03).toFixed(3);
@@ -2696,7 +2707,7 @@
   setInterval(function () { q('[data-t]').forEach(function (el) { el.textContent = ago(+el.getAttribute('data-t')); }); }, 5000);
 
   // ================= EVENTS =================
-  function openToken(tick) { S.cpan = 0; S.cys = 1; S.cyo = 0; var tA = S.archive[tick] && !all().some(function (x) { return x.tick === tick; }) ? S.archive[tick] : null, tfA = null;
+  function openToken(tick) { var lt0 = find(tick); if (lt0 && lt0.live) liveLoad(lt0); S.cpan = 0; S.cys = 1; S.cyo = 0; var tA = S.archive[tick] && !all().some(function (x) { return x.tick === tick; }) ? S.archive[tick] : null, tfA = null;
     if (tA && tA.span) { var best = TFS[0]; TFS.forEach(function (x) { if (tA.span / x[2] >= 40) best = x; }); tfA = best[0]; var bA = best[2]; S.czoom = Math.max(20, Math.min(120, Math.ceil(tA.span / bA) + 6)); S.cpan = Math.max(0, Math.floor(Date.now() / bA) - Math.floor((tA.born + tA.span) / bA) - 3); }
     set({ walletView: null, screen: 'token', tick: tick, side: 'buy', amount: '', tf: tfA || S.tf || '1M', tpTab: 'trades', palOpen: false, walletMenu: false }); window.scrollTo(0, 0); }
 
@@ -2880,6 +2891,7 @@
         if (!S.account) { set({ walletOpen: true }); break; }
         var t = find(arg), amt = parseFloat(String(S.amount).replace(',', '.')) || 0;
         if (!t) break;
+        if (t.live) { toast('On-chain buy & sell for real coins is coming in the next update'); break; }
         if (amt <= 0) { toast('Enter an amount first'); break; }
         if (typeof S.balance === 'number' && S.side === 'buy' && amt > S.balance) { toast('Not enough devnet SOL — balance ' + S.balance.toFixed(3)); break; }
         var qq = quoteFor(t), ps = S.pos[t.tick] = S.pos[t.tick] || { tok: 0, cost: 0 };
@@ -3528,5 +3540,60 @@
   }
 
   render();
+  // ================= LIVE CHAIN DATA (treid indexer) =================
+  // Real coins launched on treid come from the indexer API. Without an API the site runs as a pure demo.
+  // Set it with ?api=https://your-indexer (remembered), or window.TREID_API in index.html. ?api= (empty) clears it.
+  var API = (function () { var v = window.TREID_API || ''; try { var qp = new URLSearchParams(location.search); if (qp.has('api')) localStorage.setItem('dl.api', qp.get('api')); var ls = localStorage.getItem('dl.api'); if (ls !== null) v = ls; } catch (e) {} return (v || '').replace(/\/+$/, ''); })();
+  S.api = API; S.apiOk = false;
+  function apiGet(path) { return fetch(API + path, { cache: 'no-store' }).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); }); }
+  function liveStat(t, c) { t.lstat = { dev: c.dev_pct || 0, top: c.top10_pct || 0, sn: c.snipers_pct || 0, bu: c.bundles_pct || 0, devSold: !!c.dev_sold }; }
+  function liveTok(c) {
+    if (c.sol_usd) SOL_USD = c.sol_usd;
+    var t = S.live.filter(function (x) { return x.ca === c.mint; })[0];
+    if (!t) {
+      var tick = (c.symbol || 'COIN').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10) || 'COIN', base = tick, n = 2;
+      while (find(tick)) tick = base + n++;
+      var r = rng(hash(c.mint)), pk = function (a) { return a[Math.floor(r() * a.length)]; }, tax = Math.round((c.tax_bps || 0) / 100), mc = (c.mcap_usd || 0) / 1000 || 3;
+      t = { live: true, name: c.name || tick, tick: tick, spec: { kind: pk(A.KINDS), skin: pk(A.SKINS), bg: pk(A.BGS), eyes: pk(A.EYES), mouth: pk(A.MOUTHS), acc: pk(A.ACCS) },
+        buy: tax, sell: tax, split: null, pair: 'SOL', mcN: mc, mc0: mc, prog: c.curve_pct || 0, born: c.created_at || Date.now(), holders: c.holders || 0, soc: false, links: { demo: false }, rewards: false, burn: false,
+        ca: c.mint, creator: c.creator, vol: (c.vol_sol || 0) * SOL_USD / 1000, hist: [mc, mc], desc: '', pool: c.pool };
+      if (c.trap_bps) t.snipe = { on: true, start: Math.round(c.trap_bps / 100), dur: c.trap_secs || 30 };
+      S.live.push(t); S.live.sort(function (a, b) { return b.born - a.born; });
+    } else { t.mcN = (c.mcap_usd || 0) / 1000 || t.mcN; t.prog = c.curve_pct || t.prog; t.holders = c.holders != null ? c.holders : t.holders; t.vol = (c.vol_sol || 0) * SOL_USD / 1000; }
+    liveStat(t, c); if (c.uri && !t.img && !t._uri) { t._uri = 1; fetch(c.uri).then(function (r) { return r.json(); }).then(function (m) { if (m && m.image) { t.img = m.image; render(); } if (m && m.description) t.desc = m.description; }).catch(function () {}); }
+    return t;
+  }
+  function liveLoad(t) {
+    Promise.all([apiGet('/api/trades/' + t.ca), apiGet('/api/holders/' + t.ca).catch(function () { return null; }), apiGet('/api/coin/' + t.ca)]).then(function (res) {
+      var rows = res[0].slice().reverse(); liveTok(res[2]);
+      S.trades = S.trades.filter(function (x) { return x.tick !== t.tick; });
+      rows.forEach(function (x) { S.trades.push({ tick: t.tick, side: x.side, sol: x.sol, wallet: x.wallet, t: x.ts, tax: x.fee_sol, mine: !!(S.account && x.wallet === S.account), price: x.price_usd, sig: x.sig, tokens: x.tokens, sniper: x.sniper, bundle: x.bundle, real: true }); });
+      S.trades.sort(function (a, b) { return b.t - a.t; });
+      t.tk = rows.length ? [[t.born, rows[0].mcap_usd / 1000, 0]].concat(rows.map(function (x) { return [x.ts, x.mcap_usd / 1000, x.sol]; })) : [[t.born, t.mcN, 0], [Date.now(), t.mcN, 0]];
+      t.tk.push([Date.now(), t.mcN, 0]); t.hist = t.tk.slice(-160).map(function (x) { return x[1]; });
+      if (res[1]) t.lh = res[1];
+      if (S.screen === 'token' && S.tick === t.tick) render();
+    }).catch(function (e) { console.warn('[treid] live load failed', e); });
+  }
+  function liveTrade(x) {
+    var t = S.live.filter(function (y) { return y.ca === x.mint; })[0];
+    if (!t) { apiGet('/api/coin/' + x.mint).then(function (c) { if (c) { liveTok(c); render(); } }).catch(function () {}); return; }
+    if (S.trades.some(function (y) { return y.sig === x.sig; })) return;
+    applyTrade(t, x.side, x.sol, x.wallet, false, { mc: x.mcap_usd / 1000, prog: x.progress || t.prog, ts: x.ts, tokens: x.tokens, fee: x.fee_sol, sig: x.sig, sniper: x.sniper, bundle: x.bundle });
+    if (S.screen === 'token' && S.tick === t.tick) { clearTimeout(t._lr); t._lr = setTimeout(function () { liveLoad(t); }, 1500); }   // refresh holders/risk after the dust settles
+    else { clearTimeout(t._ls); t._ls = setTimeout(function () { apiGet('/api/coin/' + t.ca).then(function (c) { liveTok(c); var el = document.querySelector('.tcard[data-card="' + t.tick + '"]'); if (el && !el.matches(':hover')) el.outerHTML = card(t); }).catch(function () {}); }, 1500); }
+  }
+  function liveStart() {
+    if (!API) return;
+    apiGet('/api/coins').then(function (cs) {
+      S.apiOk = true; cs.filter(Boolean).forEach(liveTok); render();
+      var es = new EventSource(API + '/api/stream');
+      es.onmessage = function (m) { var ev; try { ev = JSON.parse(m.data); } catch (e) { return; } if (ev.type === 'trade') liveTrade(ev); else if (ev.type === 'coin') apiGet('/api/coin/' + ev.mint).then(function (c) { if (c) { var t = liveTok(c); toast('New on treid: ' + t.name + ' $' + t.tick, t); render(); } }).catch(function () {}); };
+      es.onerror = function () { S.apiOk = es.readyState === 1; };
+      es.onopen = function () { S.apiOk = true; apiGet('/api/coins').then(function (cs2) { cs2.filter(Boolean).forEach(liveTok); }).catch(function () {}); };
+    }).catch(function (e) { console.warn('[treid] indexer not reachable at', API, e); });
+  }
+  liveStart();
+
   setTimeout(function () { S.loading = false; render(); }, 850);
 })();

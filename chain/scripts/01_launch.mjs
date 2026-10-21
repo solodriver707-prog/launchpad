@@ -8,7 +8,7 @@ import { conn, key, send, ex, exa, sol, fund, state } from './common.mjs';
 
 const TAX_BPS = +(process.env.TAX_BPS || 300);       // coin tax (Token-2022 transfer fee), 3%
 const SNIPE_START_BPS = Math.max(5000, +(process.env.SNIPE || 5000)); // sniper trap starting fee 50%
-const PLATFORM_BPS = 100;                             // treid fee 1% after the trap
+const PLATFORM_BPS = TAX_BPS > 0 ? 50 : 100;          // treid fee after the trap: 1% on 0%-tax coins, 0.5% on taxed coins
 const TRAP_SECONDS = Math.max(30, +(process.env.TRAP || 30)); // mandatory minimum 30s
 const TRAP_STEPS = 3; // hybrid: 3 equal steps down (e.g. 50% → 34% → 17%), then normal fee
 
