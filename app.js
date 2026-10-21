@@ -1796,6 +1796,20 @@
     var out = []; all().forEach(function (t) { seedComments(t).forEach(function (c) { if (c.reply == null && !S.muted[c.w]) out.push({ c: c, t: t }); }); });
     return out.sort(function (a, b) { return b.c.t - a.c.t; }).slice(0, 40).map(function (x) { return commentHTML(x.c, x.t, false, { coinTag: true }); }).join('');
   }
+  S.railHidden = false; S.coPeekMute = false; try { S.railHidden = localStorage.getItem('dl.rail') === '0'; S.coPeekMute = localStorage.getItem('dl.copeek') === '0'; } catch (e) {}
+  function railOn() { return S.screen === 'home' && !S.coOpen && window.innerWidth >= 1500; }
+  function calloutRail() {
+    if (S.screen !== 'home' || S.coOpen) return '';
+    if (S.railHidden) return '<button class="co-rail-min" data-act="railShow" title="Show live callouts"><span class="tt-dot"></span><b class="mono" id="rail-n">' + (S.railNew || 0) + '</b><span>Callouts</span></button>';
+    var list = globalCallouts().slice(0, 25);
+    return '<aside class="co-rail" id="co-rail"><div class="cr-hd"><b>Live callouts</b><span class="tt-dot"></span><button class="iconbtn" data-act="railHide" aria-label="Collapse callouts" title="Collapse">⟩</button></div><div class="cr-list" id="rail-list">' + list.map(function (x) { return commentHTML(x.c, x.t, false, { coinTag: true }); }).join('') + '</div></aside>';
+  }
+  function coPeek(c, t) {
+    if (S.coPeekMute || S.coOpen || S.screen === 'token' || (railOn() && !S.railHidden) || document.hidden || document.querySelector('.hm-ov')) return; var now = Date.now(); if (now - (S.coPeekAt || 0) < 9000) return; S.coPeekAt = now;
+    var box = document.getElementById('toasts'); if (!box) return; var el = document.createElement('button'); el.className = 'toast co-peek'; el.setAttribute('data-act', 'coToggle');
+    el.innerHTML = '<span class="av" style="width:26px;height:26px">' + A.svg(walletSpec(c.w)) + '</span><span class="cp-t"><b>' + esc(coName(c.w)) + '</b> on <b>$' + esc(t.tick) + '</b><small>' + esc(c.text.length > 54 ? c.text.slice(0, 52) + '…' : c.text) + '</small></span><i class="cp-x" data-act="coPeekMute" title="Mute callout pop-ups">✕</i>';
+    box.appendChild(el); while (box.children.length > 4) box.removeChild(box.firstChild); setTimeout(function () { el.classList.add('out'); setTimeout(function () { el.remove(); }, 400); }, 4200);
+  }
   function calloutDrawer() {
     if (!S.coOpen) return '';
     var list = globalCallouts();
@@ -1814,6 +1828,7 @@
       while (tb2.children.length > 60) tb2.removeChild(tb2.lastChild); }
     var dl = document.getElementById('cd-list');
     if (dl && c.pos > 0 && c.reply == null && S.coF === 'all') { if (S.coPaused || dl.matches(':hover')) { S.coQueue++; var pb = document.querySelector('.cd-pause'); if (pb && S.coPaused) pb.textContent = '▶ Resume · ' + S.coQueue + ' new'; } else { dl.insertAdjacentHTML('afterbegin', commentHTML(c, t, true)); while (dl.children.length > 40) dl.removeChild(dl.lastChild); } }
+    if (c.reply == null && c.pos > 0) { var rl = document.getElementById('rail-list'); if (rl && rl.offsetParent === null) rl = null; if (rl) { var away = rl.scrollTop > 40, h0 = rl.scrollHeight; rl.insertAdjacentHTML('afterbegin', commentHTML(c, t, !away, { coinTag: true })); if (away) rl.scrollTop += rl.scrollHeight - h0; while (rl.children.length > 30) rl.removeChild(rl.lastChild); } else { var rn = document.getElementById('rail-n'); S.railNew = (S.railNew || 0) + 1; if (rn) rn.textContent = S.railNew; coPeek(c, t); } }
     var nb = document.getElementById('co-new'); if (nb && !S.coOpen) { nb.textContent = (+nb.textContent || 0) + 1; nb.style.display = ''; }
   }, 3500);
   setInterval(function () { var ch = false; Object.keys(S.cto).forEach(function (k) { var c = S.cto[k]; if (c.approved || c.demo) return; c.support += .15 + Math.random() * .6; if (c.support >= DR.ctoNeed) { c.approved = true; c.at = Date.now(); toast('🎉 $' + k + ' takeover approved by holders'); } ch = true; }); if (ch) { drSave(); if (S.screen === 'token' && S.cto[S.tick] && !document.querySelector('.hm-ov')) { var c0 = S.cto[S.tick], cp = document.querySelector('.cr-panel'), t = find(S.tick); if (c0.approved) render(); else if (cp && t) cp.outerHTML = crPanel(t); } } }, 6000);
@@ -2541,7 +2556,8 @@
     var ae = document.activeElement, fid = ae && ae.id, ss = null, se = null;
     try { if (fid && ae.selectionStart != null) { ss = ae.selectionStart; se = ae.selectionEnd; } } catch (e) {}
     var body = S.screen === 'token' ? tokenPage() : S.screen === 'create' ? createPage() : S.screen === 'leaders' ? leadersPage() : S.screen === 'watch' ? watchPage() : S.screen === 'burn' ? burnPage() : S.screen === 'trend' ? trendPage() : home();
-    document.getElementById('app').innerHTML = '<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="ccUp" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3DDC97" stop-opacity=".28"/><stop offset="1" stop-color="#3DDC97" stop-opacity="0"/></linearGradient><linearGradient id="ccDn" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F2708A" stop-opacity=".26"/><stop offset="1" stop-color="#F2708A" stop-opacity="0"/></linearGradient></defs></svg>' + tape() + header() + body + footer() + walletModal() + demoImgModal() + calloutDrawer() + palette() + walletDrawer() + holderMap() + burnModal() + ctoModal();
+    document.getElementById('app').innerHTML = '<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="ccUp" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3DDC97" stop-opacity=".28"/><stop offset="1" stop-color="#3DDC97" stop-opacity="0"/></linearGradient><linearGradient id="ccDn" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F2708A" stop-opacity=".26"/><stop offset="1" stop-color="#F2708A" stop-opacity="0"/></linearGradient></defs></svg>' + tape() + header() + body + footer() + walletModal() + demoImgModal() + calloutDrawer() + calloutRail() + palette() + walletDrawer() + holderMap() + burnModal() + ctoModal();
+    document.body.classList.toggle('has-rail', S.screen === 'home' && !S.coOpen && !S.railHidden); document.body.classList.toggle('has-rail-min', S.screen === 'home' && !S.coOpen && !!S.railHidden);
     if (fid) { var el = document.getElementById(fid); if (el) { el.focus({ preventScroll: true }); try { if (ss != null) el.setSelectionRange(ss, se); } catch (e) {} } }
     if (S.palOpen && !fid) { var p = document.getElementById('pal'); if (p) p.focus(); }
     if (S.screen === 'home' && !S.loading && firstCount) { firstCount = false; countUp(); }
@@ -2689,6 +2705,9 @@
     if (el.tagName === 'A' && act !== 'how') e.preventDefault();
     switch (act) {
       case 'bg': if (e.target === el) set({ walletOpen: false, palOpen: false, walletView: null }); break;
+      case 'railHide': S.railHidden = true; S.railNew = 0; try { localStorage.setItem('dl.rail', '0'); } catch (er) {} render(); break;
+      case 'railShow': S.railHidden = false; S.railNew = 0; try { localStorage.setItem('dl.rail', '1'); } catch (er) {} render(); break;
+      case 'coPeekMute': e.stopPropagation(); S.coPeekMute = true; try { localStorage.setItem('dl.copeek', '0'); } catch (er) {} var pk = el.closest('.co-peek'); if (pk) pk.remove(); toast('Callout pop-ups muted — open 🔥 Callouts anytime'); return;
       case 'palClose': set({ palOpen: false }); break;
       case 'home': set({ screen: 'home', palOpen: false }); window.scrollTo(0, 0); break;
       case 'create': set({ screen: 'create', palOpen: false }); window.scrollTo(0, 0); break;

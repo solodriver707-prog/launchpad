@@ -4216,3 +4216,26 @@ button.dh2-row{cursor:pointer;border-radius:10px}button.dh2-row:hover{background
 .s-web .socf-ic{background:radial-gradient(120% 120% at 30% 20%,#8B7CFF 0%,#5B5BF0 45%,#2E3BC9 100%);box-shadow:inset 0 1px 0 rgba(255,255,255,.25),0 6px 14px -6px rgba(91,91,240,.7)}
 .s-web .socf-ic svg{width:19px;height:19px}
 .socf.ok.s-web{border-color:rgba(139,124,255,.45);background:rgba(139,124,255,.06)}
+/* ===== live callouts rail (wide screens) ===== */
+.co-rail,.co-rail-min{display:none}
+@media (min-width:1500px){
+  body.has-rail main.wrap,body.has-rail .wrap.board,body.has-rail main{margin-right:360px}
+  body.has-rail footer{margin-right:340px}
+  .co-rail{display:flex;flex-direction:column;position:fixed;right:14px;top:96px;bottom:14px;width:330px;z-index:40;border-radius:18px;border:1px solid var(--line);background:rgba(14,14,16,.92);backdrop-filter:blur(12px);overflow:hidden;animation:railIn .35s cubic-bezier(.2,1.2,.4,1)}
+  @keyframes railIn{from{transform:translateX(30px);opacity:0}}
+  .cr-hd{display:flex;align-items:center;gap:8px;padding:12px 12px 10px 16px;border-bottom:1px solid var(--line)}
+  .cr-hd b{font-size:14px;font-weight:800}.cr-hd .iconbtn{margin-left:auto;width:30px;height:30px;font-size:14px}
+  .cr-list{flex:1;overflow-y:auto;scrollbar-width:thin}
+  .co-rail .co{padding:12px 14px}
+  .co-rail-min{display:flex;flex-direction:column;align-items:center;gap:6px;position:fixed;right:10px;top:50%;transform:translateY(-50%);z-index:40;padding:12px 8px;border-radius:14px;border:1px solid var(--line);background:rgba(14,14,16,.92);color:var(--soft);cursor:pointer;font:700 11px Manrope,sans-serif;writing-mode:vertical-rl}
+  .co-rail-min b{writing-mode:horizontal-tb;color:#3DDC97;font-size:12px}
+  .co-rail-min:hover{border-color:rgba(241,221,176,.4);color:#fff}
+}
+.co-peek{display:flex;align-items:center;gap:10px;max-width:360px;pointer-events:auto;cursor:pointer;text-align:left;border:1px solid rgba(255,255,255,.1);font-family:Manrope,sans-serif;color:var(--text);animation:peekIn .4s cubic-bezier(.2,1.4,.4,1)}
+.co-peek .av{border-radius:50%;flex:none}
+.cp-t{display:flex;flex-direction:column;gap:1px;min-width:0;font-size:12.5px}.cp-t b{font-weight:800}.cp-t small{font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cp-x{font-style:normal;color:var(--faint);font-size:11px;padding:4px;margin-left:4px}.cp-x:hover{color:#fff}
+.co-peek.out{opacity:0;transform:translateX(20px);transition:.35s}
+@keyframes peekIn{from{transform:translateX(30px);opacity:0}}
+.toast.co-peek{background:rgba(16,16,19,.96);color:var(--text);box-shadow:0 14px 34px -14px rgba(0,0,0,.8)}
+.cp-l{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.co-peek{min-width:240px}
