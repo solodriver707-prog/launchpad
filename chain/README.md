@@ -20,3 +20,22 @@ RPC=http://127.0.0.1:8899 node scripts/01_launch.mjs
 RPC=http://127.0.0.1:8899 node scripts/02_trade.mjs all
 ```
 Use `RPC=https://api.devnet.solana.com` for public devnet (needs devnet SOL in the treid wallet).
+
+## Indexer (`indexer/indexer.mjs`)
+Listens to the Meteora DBC program, keeps only coins launched from treid's configs (`PARTNER` = treid fee-claimer wallet), decodes the program's swap events for exact price / fee / curve progress, stores everything in SQLite (built into Node 22) and serves:
+
+| Endpoint | What |
+|---|---|
+| `GET /api/coins` | all treid coins with market cap, curve %, volume, traders, sniper % |
+| `GET /api/coin/:mint` | one coin |
+| `GET /api/trades/:mint` | last 200 trades (side, SOL, tokens, mcap, fee, sniper/bundle flags) |
+| `GET /api/candles/:mint?tf=1m` | candles 1m/5m/15m/1h/4h/1d |
+| `GET /api/holders/:mint` | holders with %, curve and dev marked |
+| `GET /api/stream` | live server-sent events for new coins and trades |
+
+Flags: **sniper** = bought within ~4 slots (~1.5 s) of launch; **bundle** = 2+ wallets buying in the same slot.
+
+```
+RPC=http://127.0.0.1:8899 PARTNER=<treid wallet> node indexer/indexer.mjs
+RPC=http://127.0.0.1:8899 NAME="Ice Cat" SYMBOL=ICE node scripts/03_simulate.mjs   # launch + 2 snipers + humans
+```

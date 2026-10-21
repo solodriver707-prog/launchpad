@@ -7,9 +7,9 @@ import { DynamicBondingCurveClient, buildCurveWithMarketCap, TokenType, TokenDec
 import { conn, key, send, ex, exa, sol, fund, state } from './common.mjs';
 
 const TAX_BPS = +(process.env.TAX_BPS || 300);       // coin tax (Token-2022 transfer fee), 3%
-const SNIPE_START_BPS = Math.max(5000, +(process.env.SNIPE || 5000)); // sniper trap: minimum 50%
+const SNIPE_START_BPS = +(process.env.SNIPE || 5000); // sniper trap starting fee 50%
 const PLATFORM_BPS = 100;                             // treid fee 1% after the trap
-const TRAP_SECONDS = Math.max(30, +(process.env.TRAP || 30)); // minimum 30s
+const TRAP_SECONDS = +(process.env.TRAP || 60);
 
 const treid = key('treid'), dev = key('dev'), buyer = key('buyer');
 const client = new DynamicBondingCurveClient(conn, 'confirmed');
@@ -35,7 +35,7 @@ const s1 = await send(tx1, [treid, cfg]);
 console.log('config', cfg.publicKey.toBase58(), ex(s1));
 
 const mint = Keypair.generate();
-const tx2 = await client.creator.createPool({ baseMint: mint.publicKey, config: cfg.publicKey, name: 'treid test', symbol: 'TTEST', uri: 'https://solodriver707-prog.github.io/launchpad/', payer: dev.publicKey, poolCreator: dev.publicKey });
+const tx2 = await client.creator.createPool({ baseMint: mint.publicKey, config: cfg.publicKey, name: process.env.NAME || 'treid test', symbol: process.env.SYMBOL || 'TTEST', uri: 'https://solodriver707-prog.github.io/launchpad/', payer: dev.publicKey, poolCreator: dev.publicKey });
 const s2 = await send(tx2, [dev, mint]);
 console.log('coin ', mint.publicKey.toBase58(), ex(s2));
 const st = state.load(); st.config = cfg.publicKey.toBase58(); st.mint = mint.publicKey.toBase58(); st.created = Date.now(); state.save(st);
