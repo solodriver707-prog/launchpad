@@ -135,5 +135,6 @@ await solPrice(); setInterval(solPrice, 60e3);
 setInterval(() => push({ type: 'ping', t: Date.now() }), 25e3);               // keeps proxies from closing the stream
 await backfill(); ready = true;
 conn.onLogs(new PublicKey(PARTNER), (l) => { if (!l.err) handle(l.signature).catch(e => console.log('err', e.message)); }, 'confirmed'); // new treid configs
-setInterval(() => { loadConfigs().catch(() => {}); for (const k of configs) syncAddress(k, 100).catch(() => {}); }, 20e3); // safety net if a websocket message is missed
+setInterval(() => { for (const k of configs) syncAddress(k, 100).catch(() => {}); }, 60e3);   // safety net if a websocket message is missed (cheap: 1 call per config)
+setInterval(() => loadConfigs().catch(() => {}), 15 * 60e3);                                  // full config rescan (getProgramAccounts is credit-heavy) — new configs are caught live via the PARTNER subscription
 console.log('watching', configs.size, 'treid configs (partner', PARTNER, ')');
