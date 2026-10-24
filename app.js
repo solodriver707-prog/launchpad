@@ -371,7 +371,7 @@
       '<button class="searchbtn" data-act="palette">' + I.search + '<span>Search tokens or paste CA</span><span class="kbd">Ctrl K</span></button>' +
       '<div class="hdr-right"><button class="wl-btn co-btn' + (S.coOpen ? ' on' : '') + '" data-act="coToggle" title="Hot callouts">🔥<span>Callouts</span><b class="mono" id="co-new" style="display:none">0</b></button><button class="wl-btn' + (S.screen === 'watch' ? ' on' : '') + '" data-act="watchPage" aria-label="Watchlist" data-tip="Your watchlist">' + I.star(S.watch.length > 0) + (S.watch.length ? '<b class="mono" id="wl-n">' + S.watch.length + '</b>' : '') + '</button><button class="btn pri" data-act="create">+ Launch token</button>' + right + '</div>' +
       '</div></header>' +
-      '<nav class="mnav" aria-label="Main">' + [['home', 'Board', '<path d="M3 11l9-7 9 7v9a1 1 0 01-1 1h-5v-6H9v6H4a1 1 0 01-1-1z"/>', S.screen === 'home'], ['trendList', 'Trending', '<path d="M3 17l6-6 4 4 8-8M15 7h6v6"/>', S.screen === 'trend'], ['leaders', 'Ranks', '<path d="M8 21V11M16 21V7M12 21V3M4 21h16"/>', S.screen === 'leaders'], ['create', 'Launch', '<path d="M12 5v14M5 12h14"/>', S.screen === 'create', 'pri'], ['coToggle', 'Callouts', '<path d="M21 12a8 8 0 01-11.6 7.1L4 21l1.9-5.4A8 8 0 1121 12z"/>', S.coOpen], ['burnPage', 'Burnery', '<path d="M12 22c4 0 7-3 7-7 0-3-2-5-3-7-1 2-2 3-3 3 0-3-1-6-4-9 0 4-4 6-4 12 0 5 3 8 7 8z"/>', S.screen === 'burn'], ['watchPage', 'Watchlist', '<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/>', S.screen === 'watch']].map(function (x) { return '<button class="' + (x[3] ? 'on ' : '') + (x[4] || '') + '" data-act="' + x[0] + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round">' + x[2] + '</svg><span>' + x[1] + '</span></button>'; }).join('') + '</nav>';
+      '<nav class="mnav" aria-label="Main">' + [['home', 'Board', '<path d="M3 11l9-7 9 7v9a1 1 0 01-1 1h-5v-6H9v6H4a1 1 0 01-1-1z"/>', S.screen === 'home'], ['trendList', 'Trending', '<path d="M3 17l6-6 4 4 8-8M15 7h6v6"/>', S.screen === 'trend'], ['leaders', 'Ranks', '<path d="M8 21V11M16 21V7M12 21V3M4 21h16"/>', S.screen === 'leaders'], ['create', 'Launch', '<path d="M12 5v14M5 12h14"/>', S.screen === 'create', 'pri'], ['coToggle', 'Callouts', '<path d="M21 12a8 8 0 01-11.6 7.1L4 21l1.9-5.4A8 8 0 1121 12z"/>', S.coOpen], ['burnPage', 'Burnery', '<path d="M12 22c4 0 7-3 7-7 0-3-2-5-3-7-1 2-2 3-3 3 0-3-1-6-4-9 0 4-4 6-4 12 0 5 3 8 7 8z"/>', S.screen === 'burn'], ['watchPage', 'Watchlist', '<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/>', S.screen === 'watch']].map(function (x) { return '<button class="' + (x[3] ? 'on ' : '') + (x[4] || '') + '" data-act="' + x[0] + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round">' + x[2] + '</svg><span>' + x[1] + '</span>' + (x[0] === 'coToggle' ? '<b class="mn-badge mono" id="mn-co"' + (S.mCo ? '' : ' style="display:none"') + '>' + (S.mCo || '') + '</b>' : '') + '</button>'; }).join('') + '</nav>';
   }
 
   function cardPts(t) {
@@ -1860,7 +1860,9 @@
     var list = globalCallouts().slice(0, 25);
     return '<aside class="co-rail" id="co-rail"><div class="cr-hd"><b>Live callouts</b><span class="tt-dot"></span><button class="iconbtn" data-act="railHide" aria-label="Collapse callouts" title="Collapse">⟩</button></div><div class="cr-list" id="rail-list">' + list.map(function (x) { return commentHTML(x.c, x.t, false, { coinTag: true }); }).join('') + '</div></aside>';
   }
+  var isMob = function () { return window.matchMedia && window.matchMedia('(max-width: 760px)').matches; };
   function coPeek(c, t) {
+    if (isMob()) { if (S.coOpen) return; S.mCo = (S.mCo || 0) + 1; var mb = document.getElementById('mn-co'); if (mb) { mb.textContent = S.mCo > 99 ? '99+' : S.mCo; mb.style.display = ''; } return; }
     if (S.coPeekMute || S.coOpen || S.screen === 'token' || (railOn() && !S.railHidden) || document.hidden || document.querySelector('.hm-ov')) return; var now = Date.now(); if (now - (S.coPeekAt || 0) < 9000) return; S.coPeekAt = now;
     var box = document.getElementById('toasts'); if (!box) return; var el = document.createElement('button'); el.className = 'toast co-peek'; el.setAttribute('data-act', 'coToggle');
     el.innerHTML = '<span class="av" style="width:26px;height:26px">' + A.svg(walletSpec(c.w)) + '</span><span class="cp-t"><span class="cp-l"><b>' + esc(coName(c.w)) + '</b> on <b>$' + esc(t.tick) + '</b></span><small>' + esc(c.text.length > 54 ? c.text.slice(0, 52) + '…' : c.text) + '</small></span><i class="cp-x" data-act="coPeekMute" title="Mute callout pop-ups">✕</i>';
@@ -2678,7 +2680,7 @@
     if (cardEl) { cardEl.classList.remove('shake', 'shake-s'); void cardEl.offsetWidth; cardEl.classList.add(side === 'buy' ? 'shake' : 'shake-s'); if (S.sort === 'bump' && S.screen === 'home' && !cardEl.matches(':hover')) { var gp = cardEl.parentNode; if (gp && gp.firstChild !== cardEl) gp.insertBefore(cardEl, gp.firstChild); } }
     machineTrade(t, tr);
     if (S.screen === 'home') raceUpdate(t, side, sol);
-    if (!wasGrad && t.prog >= 100) { machineGrad(t); toast('$' + t.tick + ' graduated to Raydium', t); if (S.screen === 'token' && S.tick === t.tick) confetti(); }
+    if (!wasGrad && t.prog >= 100) { machineGrad(t); if (!isMob() || (S.screen === 'token' && S.tick === t.tick)) toast('$' + t.tick + ' graduated to Raydium', t); if (S.screen === 'token' && S.tick === t.tick) confetti(); }
     return tr;
   }
 
@@ -2741,7 +2743,7 @@
     if (Math.random() < 0.5 || !S.trapSeen) { t.snipe = { on: true, start: pick([50, 80, 90]), dur: pick([20, 30, 45, 60]) }; S.trapSeen = true; }
     S.launched.unshift(t); if (S.launched.length > 20) S.launched.pop();
     var hl = document.getElementById('hlive-n'); if (hl) { hl.textContent = all().length; hl.classList.remove('tick'); void hl.offsetWidth; hl.classList.add('tick'); }
-    toast('New launch: ' + name + ' $' + tick, t);
+    if (!isMob()) toast('New launch: ' + name + ' $' + tick, t);
     machineLaunch(t);
     raceRefresh();
     var i2 = document.getElementById('i2-fresh'); if (i2) { i2.insertAdjacentHTML('afterbegin', i2Row(t)); i2.firstElementChild.classList.add('enter'); while (i2.children.length > 3) i2.removeChild(i2.lastChild); }
@@ -2911,7 +2913,7 @@
       case 'share': copy(location.href.split('#')[0] + '#' + (S.tick || ''), 'Link copied'); break;
       case 'sellpct': var tp0 = find(S.tick), ps0 = tp0 && S.pos[tp0.tick]; if (ps0) set({ side: 'sell', amount: (ps0.tok * (+arg) / 100).toFixed(0) }); break;
       case 'sellall': var tp1 = find(S.tick), ps1 = tp1 && S.pos[tp1.tick]; if (ps1) set({ side: 'sell', amount: String(Math.floor(ps1.tok)), sellAll: true }); break;
-      case 'coToggle': set({ coOpen: !S.coOpen, coQueue: 0 }); break;
+      case 'coToggle': S.mCo = 0; set({ coOpen: !S.coOpen, coQueue: 0 }); break;
       case 'coClose': set({ coOpen: false }); break;
       case 'coPause': S.coPaused = !S.coPaused; if (!S.coPaused) S.coQueue = 0; render(); break;
       case 'coFilter': S.coF = arg; render(); break;
@@ -3668,7 +3670,7 @@
     apiGet('/api/coins').then(function (cs) {
       S.apiOk = true; cs.filter(Boolean).forEach(liveTok); render();
       var es = new EventSource(API + '/api/stream');
-      es.onmessage = function (m) { var ev; try { ev = JSON.parse(m.data); } catch (e) { return; } if (ev.type === 'trade') liveTrade(ev); else if (ev.type === 'coin') apiGet('/api/coin/' + ev.mint).then(function (c) { if (c) { var known = S.live.some(function (x) { return x.ca === c.mint; }), t = liveTok(c); if (!known) toast('New on treid: ' + t.name + ' $' + t.tick, t); render(); } }).catch(function () {}); };
+      es.onmessage = function (m) { var ev; try { ev = JSON.parse(m.data); } catch (e) { return; } if (ev.type === 'trade') liveTrade(ev); else if (ev.type === 'coin') apiGet('/api/coin/' + ev.mint).then(function (c) { if (c) { var known = S.live.some(function (x) { return x.ca === c.mint; }), t = liveTok(c); if (!known && !isMob()) toast('New on treid: ' + t.name + ' $' + t.tick, t); render(); } }).catch(function () {}); };
       es.onerror = function () { S.apiOk = es.readyState === 1; };
       es.onopen = function () { S.apiOk = true; apiGet('/api/coins').then(function (cs2) { cs2.filter(Boolean).forEach(liveTok); }).catch(function () {}); };
     }).catch(function (e) { console.warn('[treid] indexer not reachable at', API, e); });
