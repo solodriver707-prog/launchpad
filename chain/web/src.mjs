@@ -1,7 +1,8 @@
 // treid browser chain module → bundled to chain.js (window.TreidChain). Builds real DBC transactions; the wallet only signs.
 import { Buffer } from 'buffer';
 if (!globalThis.Buffer) globalThis.Buffer = Buffer;
-import { Connection, Keypair, PublicKey, Transaction } from '@solana/web3.js';
+import { Connection, Keypair, PublicKey, Transaction, SystemProgram } from '@solana/web3.js';
+import { ed25519 } from '@noble/curves/ed25519';
 import { NATIVE_MINT } from '@solana/spl-token';
 import BN from 'bn.js';
 import { DynamicBondingCurveClient, buildCurveWithMarketCap, TokenType, TokenDecimal, TokenAuthorityOption, BaseFeeMode, CollectFeeMode,
@@ -36,15 +37,16 @@ async function finish(rpc, txs, payer, keypairs) {
   return { bytes: txs.map((t) => t.serialize({ requireAllSignatures: false, verifySignatures: false })), lastValidBlockHeight };
 }
 // create config + coin (+ optional dev first buy, never hit by the trap) — returns unsigned-by-wallet tx bytes
-export async function buildCreate({ rpc, payer, partner, name, symbol, uri, taxBps = 0, trapBps = 5000, trapSecs = 30, devBuySol = 0 }) {
-  payer = pk(payer); partner = pk(partner);
-  const cl = client(rpc), cfg = Keypair.generate(), mint = Keypair.generate(), curve = curveFor({ taxBps, trapBps, trapSecs });
-  const common = { payer, config: cfg.publicKey, feeClaimer: partner, leftoverReceiver: partner, quoteMint: NATIVE_MINT, ...curve,
+export async function buildCreate({ rpc, payer, partner, treasury, name, symbol, uri, taxBps = 0, trapBps = 5000, trapSecs = 30, devBuySol = 0, mintSecret = null, extraFeeSol = 0 }) {
+  payer = pk(payer); partner = pk(partner); treasury = treasury ? pk(treasury) : partner;
+  const cl = client(rpc), cfg = Keypair.generate(), mint = mintSecret ? Keypair.fromSecretKey(Uint8Array.from(mintSecret)) : Keypair.generate(), curve = curveFor({ taxBps, trapBps, trapSecs });
+  const common = { payer, config: cfg.publicKey, feeClaimer: partner, leftoverReceiver: treasury, quoteMint: NATIVE_MINT, ...curve,
     transferFeeParameters: taxBps > 0 ? { transferFeeBasisPoints: Math.min(RULES.maxTaxBps, taxBps), withheldAuthority: 0, migratedTransferFeeAuthorityOption: 0 } : null,
     preCreatePoolParam: { name: String(name).slice(0, 32), symbol: String(symbol).slice(0, 10), uri: String(uri).split('MINT'.repeat(11)).join(mint.publicKey.toBase58()).slice(0, 200), poolCreator: payer, baseMint: mint.publicKey } };
   let txs;
   if (devBuySol > 0) { const r = await cl.partner.createConfigAndPoolWithFirstBuy({ ...common, firstBuyParam: { buyer: payer, buyAmount: new BN(Math.round(devBuySol * 1e9)), minimumAmountOut: new BN(0), referralTokenAccount: null } }); txs = [r.createConfigTx, r.createPoolWithFirstBuyTx]; }
   else txs = [await cl.partner.createConfigAndPool(common)];
+  if (extraFeeSol > 0) txs[0].add(SystemProgram.transfer({ fromPubkey: payer, toPubkey: treasury, lamports: Math.round(extraFeeSol * 1e9) }));   // custom address fee
   const out = await finish(rpc, txs, payer, [cfg, mint]);
   return { ...out, uri: common.preCreatePoolParam.uri, mint: mint.publicKey.toBase58(), config: cfg.publicKey.toBase58(), pool: deriveDbcPoolAddress(NATIVE_MINT, mint.publicKey, cfg.publicKey).toBase58() };
 }
@@ -85,3 +87,33 @@ export async function sendAll({ rpc, signed, lastValidBlockHeight }) {
   return sigs;
 }
 export const version = 1;
+
+// ---- vanity mint addresses: multi-threaded grinder (web workers running this same bundle) ----
+const ALPH = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+export function suffixOk(suf) { return suf.split('').every((ch) => ALPH.includes(ch) || ALPH.includes(ch.toLowerCase()) || ALPH.includes(ch.toUpperCase())); }
+function matcher(suf, ignoreCase) {   // base58 suffix of k chars == (pubkey as big number) mod 58^k → check without full encoding
+  const k = suf.length, M = 58 ** k; let res = [0];
+  for (const ch of suf) { const vs = new Set([ch]); if (ignoreCase) { vs.add(ch.toLowerCase()); vs.add(ch.toUpperCase()); }
+    const ds = [...vs].map((c) => ALPH.indexOf(c)).filter((i) => i >= 0); const nx = []; for (const r of res) for (const d of ds) nx.push(r * 58 + d); res = nx; }
+  const set = new Set(res); return (pkb) => { let r = 0; for (let i = 0; i < pkb.length; i++) r = (r * 256 + pkb[i]) % M; return set.has(r); };
+}
+export function attemptsFor(suf, ignoreCase = true) { let n = 1; for (const ch of suf) { let v = 0; for (const c of new Set(ignoreCase ? [ch, ch.toLowerCase(), ch.toUpperCase()] : [ch])) if (ALPH.includes(c)) v++; n *= 58 / Math.max(1, v); } return Math.round(n); }
+function grindChunk(test, n) { const sk = new Uint8Array(32); for (let i = 0; i < n; i++) { crypto.getRandomValues(sk); const pub = ed25519.getPublicKey(sk); if (test(pub)) { const full = new Uint8Array(64); full.set(sk); full.set(pub, 32); return full; } } return null; }
+const SELF_URL = (typeof document !== 'undefined' && document.currentScript && document.currentScript.src) || '';
+const IS_WORKER = typeof window === 'undefined' && typeof self !== 'undefined' && typeof self.postMessage === 'function' && typeof importScripts === 'function';
+if (IS_WORKER) {
+  let stop = false;
+  self.onmessage = (e) => { if (e.data && e.data.stop) { stop = true; return; } if (!e.data || !e.data.suf) return; stop = false; const test = matcher(e.data.suf, e.data.ic !== false);
+    const loop = () => { if (stop) return; const hit = grindChunk(test, 400); if (hit) { self.postMessage({ hit: Array.from(hit) }); return; } self.postMessage({ n: 400 }); setTimeout(loop, 0); }; loop(); };
+}
+export function grind(suf, { ignoreCase = true, onProgress, threads } = {}) {
+  if (!suffixOk(suf)) return Promise.reject(new Error('Address endings can’t use 0, O, I or l'));
+  const n = Math.max(1, Math.min(8, threads || ((typeof navigator !== 'undefined' && navigator.hardwareConcurrency) || 2) - 1)), expected = attemptsFor(suf, ignoreCase);
+  let tried = 0, done = false; const ws = [];
+  return new Promise((resolve, reject) => {
+    const finish = (err, val) => { if (done) return; done = true; ws.forEach((w) => { try { w.postMessage({ stop: true }); w.terminate(); } catch (e) {} }); err ? reject(err) : resolve(val); };
+    let ok = false; try { for (let i = 0; i < n; i++) { const w = new Worker(SELF_URL); ws.push(w); w.onmessage = (e) => { if (e.data.hit) { const kp = Keypair.fromSecretKey(Uint8Array.from(e.data.hit)); finish(null, { secret: Array.from(kp.secretKey), address: kp.publicKey.toBase58(), tried }); } else { tried += e.data.n; onProgress && onProgress(tried, expected); } }; w.onerror = () => {}; w.postMessage({ suf, ic: ignoreCase }); } ok = ws.length > 0; } catch (e) { ok = false; }
+    if (!ok) { const test = matcher(suf, ignoreCase); const loop = () => { if (done) return; const hit = grindChunk(test, 300); tried += 300; onProgress && onProgress(tried, expected); if (hit) { const kp = Keypair.fromSecretKey(hit); finish(null, { secret: Array.from(kp.secretKey), address: kp.publicKey.toBase58(), tried }); } else setTimeout(loop, 0); }; loop(); }
+    grind.cancel = () => finish(new Error('cancelled'));
+  });
+}

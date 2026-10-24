@@ -4263,3 +4263,11 @@ button[disabled].big-btn{opacity:.7;cursor:progress}
   .mnav button{position:relative}
   .mn-badge{position:absolute;top:2px;left:calc(50% + 6px);min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:#F2708A;color:#fff;font-size:9.5px;line-height:16px;font-weight:700;text-align:center}
 }
+.grind-t{display:flex;align-items:center;gap:10px}
+.grind-t small{display:block;color:var(--mut,#8a857d);font-size:11px;margin-top:2px}
+.gr-sp{width:16px;height:16px;border-radius:50%;border:2px solid rgba(255,255,255,.2);border-top-color:#3DDC97;animation:grsp .8s linear infinite;flex:none}
+@keyframes grsp{to{transform:rotate(360deg)}}
+.tsp-paid{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;margin-top:10px;padding-top:10px;border-top:1px dashed rgba(255,255,255,.1);font-size:12px}
+.tsp-paid b{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#3DDC97;width:100%}
+.tsp-paid span{color:var(--soft,#cfc9bf)}
+.tsp-paid span{display:inline-flex;align-items:center;gap:5px}.tsp-paid .sp-ic{width:16px;height:16px;display:inline-flex}.tsp-paid .sp-ic svg{width:14px;height:14px}

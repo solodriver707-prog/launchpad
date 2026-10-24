@@ -7,10 +7,13 @@ import bs58 from 'bs58';
 const coder = new anchor.BorshEventCoder(DynamicBondingCurveIdl);
 import { DatabaseSync } from 'node:sqlite';
 import http from 'node:http';
+import { opsKeypair, startOps } from './ops.mjs';
 
 const RPC = process.env.RPC || 'http://127.0.0.1:8899';
 const WS = process.env.WS || RPC.replace('http', 'ws').replace(':8899', ':8900');
-const PARTNER = process.env.PARTNER;               // treid fee-claimer wallet: only coins from its configs are indexed
+const PARTNER = process.env.PARTNER;               // treid treasury / legacy fee-claimer wallet
+const OPS = opsKeypair(process.env.OPS_SECRET);   // optional hot ops wallet: fee claimer + tax authority of new coins
+const PARTNERS = [...new Set([PARTNER, OPS?.publicKey.toBase58()].filter(Boolean))];   // coins from configs of any of these are indexed
 const PORT = +(process.env.PORT || 8787);
 let SOL_USD = +(process.env.SOL_USD || 150);
 async function solPrice() { try { const r = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd'); const j = await r.json(); if (j?.solana?.usd) SOL_USD = j.solana.usd; } catch {} }
@@ -22,6 +25,7 @@ db.exec(`CREATE TABLE IF NOT EXISTS coins(mint TEXT PRIMARY KEY, pool TEXT, conf
 CREATE TABLE IF NOT EXISTS trades(sig TEXT PRIMARY KEY, mint TEXT, wallet TEXT, side TEXT, sol REAL, tokens REAL, price_usd REAL, mcap_usd REAL, slot INT, ts INT, sniper INT DEFAULT 0, bundle INT DEFAULT 0, fee_sol REAL DEFAULT 0, progress REAL DEFAULT 0);
 CREATE INDEX IF NOT EXISTS t_mint ON trades(mint, ts);
 CREATE TABLE IF NOT EXISTS seen(sig TEXT PRIMARY KEY);
+CREATE TABLE IF NOT EXISTS payouts(id INTEGER PRIMARY KEY AUTOINCREMENT, mint TEXT, ts INT, harvested REAL, burned REAL, dev REAL, holders REAL, n_holders INT, fees_sol REAL);
 CREATE TABLE IF NOT EXISTS meta(mint TEXT PRIMARY KEY, name TEXT, symbol TEXT, description TEXT, image TEXT, banner TEXT, at INT);`);
 for (const col of ['trap_bps INT DEFAULT 0', 'trap_secs INT DEFAULT 0', 'trap_steps INT DEFAULT 0']) { try { db.exec('ALTER TABLE coins ADD COLUMN ' + col); } catch {} }
 const q = (sql, ...a) => db.prepare(sql).all(...a), q1 = (sql, ...a) => db.prepare(sql).get(...a), run = (sql, ...a) => db.prepare(sql).run(...a);
@@ -29,7 +33,7 @@ let configs = new Set(); const watched = new Map();
 // treid configs = DBC configs whose fee claimer is the treid wallet. Each one is watched by address,
 // so we only ever fetch transactions that touch treid coins (never the whole DBC firehose).
 async function loadConfigs() {
-  if (!PARTNER) return; const cs = await dbc.state.getPoolConfigsByOwner(new PublicKey(PARTNER));
+  if (!PARTNERS.length) return; const cs = (await Promise.all(PARTNERS.map((w) => dbc.state.getPoolConfigsByOwner(new PublicKey(w))))).flat();
   for (const c of cs) { const k = c.publicKey.toBase58(); if (!configs.has(k)) { configs.add(k); watchConfig(k); } }
 }
 function watchConfig(k) {
@@ -114,7 +118,8 @@ function stats(mint) {
   const bal = q(`SELECT wallet, SUM(CASE WHEN side='buy' THEN tokens ELSE -tokens END) n FROM trades WHERE mint=? GROUP BY wallet HAVING n > 0.5 ORDER BY n DESC`, mint);
   const devBuy = q1(`SELECT 1 x FROM trades WHERE mint=? AND wallet=? AND side='buy' LIMIT 1`, mint, c.creator);
   const devN = bal.find(b => b.wallet === c.creator)?.n || 0, top10 = bal.slice(0, 10).reduce((s, b) => s + b.n, 0);
-  return { ...c, holders: bal.length, dev_pct: devN / SUPPLY * 100, dev_sold: !!devBuy && devN < 1, top10_pct: top10 / SUPPLY * 100, sol_usd: SOL_USD, mcap_usd: last?.mcap_usd || 0, curve_pct: last?.progress || 0, trades: agg.n, vol_sol: agg.vol || 0, buys: agg.buys || 0, sells: agg.sells || 0, traders: agg.traders, snipers_pct: (agg.snipeTok || 0) / SUPPLY * 100, bundles_pct: (agg.bundleTok || 0) / SUPPLY * 100 };
+  const po = OPS ? q1('SELECT COALESCE(SUM(burned),0) burned, COALESCE(SUM(holders),0) holders, COALESCE(SUM(dev),0) dev, COUNT(*) n FROM payouts WHERE mint=?', mint) : null;
+  return { ...c, tax_paid: po, holders: bal.length, dev_pct: devN / SUPPLY * 100, dev_sold: !!devBuy && devN < 1, top10_pct: top10 / SUPPLY * 100, sol_usd: SOL_USD, mcap_usd: last?.mcap_usd || 0, curve_pct: last?.progress || 0, trades: agg.n, vol_sol: agg.vol || 0, buys: agg.buys || 0, sells: agg.sells || 0, traders: agg.traders, snipers_pct: (agg.snipeTok || 0) / SUPPLY * 100, bundles_pct: (agg.bundleTok || 0) / SUPPLY * 100 };
 }
 http.createServer(async (req, res) => {
   const u = new URL(req.url, 'http://x'), p = u.pathname.split('/').filter(Boolean), J = (o) => { res.writeHead(200, { 'content-type': 'application/json', 'access-control-allow-origin': '*', 'cache-control': 'no-store' }); res.end(JSON.stringify(o)); };
@@ -131,12 +136,13 @@ http.createServer(async (req, res) => {
     return J({ name: m?.name || c?.name, symbol: m?.symbol || c?.symbol, description: m?.description || '', image: m?.image ? base + '/api/img/' + p[2] : null, banner: m?.banner ? base + '/api/img/' + p[2] + '?b=1' : null }); }
   if (p[1] === 'img' && p[2]) { const m = q1('SELECT image, banner FROM meta WHERE mint=?', p[2]), d = u.searchParams.get('b') ? m?.banner : m?.image; if (!d) { res.writeHead(404); return res.end(); }
     const [h, b64] = d.split(','); res.writeHead(200, { 'content-type': h.slice(5, h.indexOf(';')), 'access-control-allow-origin': '*', 'cache-control': 'public, max-age=86400' }); return res.end(Buffer.from(b64, 'base64')); }
-  if (!p.length || p[1] === 'health') return J({ ok: true, coins: q1('SELECT COUNT(*) n FROM coins').n, trades: q1('SELECT COUNT(*) n FROM trades').n, configs: configs.size, partner: PARTNER || null, sol_usd: SOL_USD, ready });
+  if (!p.length || p[1] === 'health') return J({ ok: true, coins: q1('SELECT COUNT(*) n FROM coins').n, trades: q1('SELECT COUNT(*) n FROM trades').n, configs: configs.size, partner: PARTNER || null, ops: OPS?.publicKey.toBase58() || null, sol_usd: SOL_USD, ready });
   try {
     if (p[1] === 'stream') { res.writeHead(200, { 'content-type': 'text/event-stream', 'access-control-allow-origin': '*', 'cache-control': 'no-cache' }); res.write(': hi\n\n'); clients.add(res); req.on('close', () => clients.delete(res)); return; }
     if (p[1] === 'coins') return J(q('SELECT mint FROM coins ORDER BY created_slot DESC').map(r => stats(r.mint)));
     if (p[1] === 'coin') return J(stats(p[2]));
     if (p[1] === 'trades') return J(q('SELECT * FROM trades WHERE mint=? ORDER BY ts DESC, slot DESC LIMIT 200', p[2]));
+    if (p[1] === 'payouts') return J(OPS ? q('SELECT * FROM payouts WHERE mint=? ORDER BY ts DESC LIMIT 50', p[2]) : []);
     if (p[1] === 'candles') return J(candles(p[2], u.searchParams.get('tf') || '1m'));
     if (p[1] === 'holders') return J(await holders(p[2]));
     res.writeHead(404, { 'access-control-allow-origin': '*' }); res.end('{}');
@@ -147,7 +153,8 @@ if (!PARTNER) { console.error('Set PARTNER=<treid fee-claimer wallet>'); process
 await solPrice(); setInterval(solPrice, 60e3);
 setInterval(() => push({ type: 'ping', t: Date.now() }), 25e3);               // keeps proxies from closing the stream
 await backfill(); ready = true;
-conn.onLogs(new PublicKey(PARTNER), (l) => { if (!l.err) handle(l.signature).catch(e => console.log('err', e.message)); }, 'confirmed'); // new treid configs
+for (const w of PARTNERS) conn.onLogs(new PublicKey(w), (l) => { if (!l.err) handle(l.signature).catch(e => console.log('err', e.message)); }, 'confirmed'); // new treid configs
 setInterval(() => { for (const k of configs) syncAddress(k, 100).catch(() => {}); }, 60e3);   // safety net if a websocket message is missed (cheap: 1 call per config)
 setInterval(() => loadConfigs().catch(() => {}), 15 * 60e3);                                  // full config rescan (getProgramAccounts is credit-heavy) — new configs are caught live via the PARTNER subscription
-console.log('watching', configs.size, 'treid configs (partner', PARTNER, ')');
+console.log('watching', configs.size, 'treid configs (partners', PARTNERS.join(', '), ')');
+if (OPS) { startOps({ conn, dbc, ops: OPS, treasury: PARTNER, q, q1, run, poolAuthority: deriveDbcPoolAuthority().toBase58(), everyMs: +(process.env.OPS_EVERY_MIN || 10) * 60e3 }); console.log('ops wallet', OPS.publicKey.toBase58(), '→ treasury', PARTNER); }

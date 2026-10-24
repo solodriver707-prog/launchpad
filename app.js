@@ -7,7 +7,8 @@
 
   // ================= CONFIG =================
   var RPC = (function () { var v = window.TREID_RPC || 'https://api.devnet.solana.com'; try { var q0 = new URLSearchParams(location.search); if (q0.has('rpc')) { if (q0.get('rpc')) localStorage.setItem('dl.rpc', q0.get('rpc')); else localStorage.removeItem('dl.rpc'); } var l0 = localStorage.getItem('dl.rpc'); if (l0) v = l0; } catch (e) {} return v; })();
-  var PARTNER = window.TREID_PARTNER || 'BzCPzoJmoRKV8Ha7dHpyePikjSDL9a9Y3LNKJQdjeaNX';   // treid fee wallet (fee claimer of every treid coin)
+  var TREASURY = window.TREID_TREASURY || 'BzCPzoJmoRKV8Ha7dHpyePikjSDL9a9Y3LNKJQdjeaNX';   // treid treasury (cold wallet)
+  var PARTNER = window.TREID_PARTNER || TREASURY;   // fee claimer of new coins — replaced by the indexer's ops wallet when it has one
   var CHAIN_ID = /mainnet/.test(RPC) ? 'solana:mainnet' : 'solana:devnet';
   var CLUSTER = 'devnet';
   var LS = { wallet: 'dl.lastWallet', watch: 'dl.watch', created: 'dl.created' };
@@ -21,7 +22,7 @@
   function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
   var B58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
   function b58(n) { var s = ''; for (var i = 0; i < n; i++) s += B58[Math.floor(Math.random() * 58)]; return s; }
-  function fakeCA(suf) { suf = suf || 'treid'; return b58(44 - suf.length) + suf; }
+  function fakeCA(suf) { suf = suf || 'trd'; return b58(44 - suf.length) + suf; }
   function short(a) { return a ? a.slice(0, 4) + '…' + a.slice(/treid$/.test(a) ? -5 : -4) : ''; }
   function taxBg(t) { return t === 0 ? 'var(--up)' : t <= 3 ? 'var(--yellow)' : t <= 6 ? 'var(--orange)' : 'var(--pink)'; }
   function fmtK(k) { if (!isFinite(k)) k = 0; var sg = k < 0 ? '-' : '', a = Math.abs(k); if (a >= 999.995) return sg + '$' + (a / 1000).toFixed(2) + 'M'; if (a >= 99.95) return sg + '$' + Math.round(a) + 'K'; return sg + '$' + a.toFixed(1) + 'K'; }
@@ -333,7 +334,7 @@
   function parseUri(uri) {
     var o = {}; try { var u = new URL(uri), g = function (k) { return u.searchParams.get(k); }, cc = g('c');
       if (cc && cc.length >= 6) { var d = cc.split('').map(function (ch) { return parseInt(ch, 36) || 0; }); o.spec = { kind: A.KINDS[d[0]] || A.KINDS[0], skin: A.SKINS[d[1]] || A.SKINS[0], bg: A.BGS[d[2]] || A.BGS[0], eyes: A.EYES[d[3]] || 'normal', mouth: A.MOUTHS[d[4]] || 'smile', acc: A.ACCS[d[5]] || 'none' }; }
-      if (g('s')) { var p3 = g('s').split('.').map(Number); if (p3.length === 3 && p3[0] + p3[1] + p3[2] === 100) o.split = { p: 'custom', h: p3[0], b: p3[1], d: p3[2] }; }
+      if (g('s')) { var p3 = g('s').split('.').map(Number); if (p3.length === 3 && p3[0] + p3[1] + p3[2] === 100) { o.split = { p: 'custom', h: p3[0], b: p3[1], d: p3[2] }; for (var pk0 in SPRE) if (SPRE[pk0][2] === p3[0] && SPRE[pk0][3] === p3[1] && SPRE[pk0][4] === p3[2]) o.split.p = pk0; } }
       ['x', 't', 'w'].forEach(function (k) { if (g(k)) o[k] = g(k); });
     } catch (e) {} return o;
   }
@@ -1896,7 +1897,16 @@
     var sol = isBuy ? amt : amt * px / SOL_USD, pct = effTax(t), tax = sol * pct / 100, fp = feeOf(t), fee = sol * fp / 100, net = sol - tax - fee;
     var impact = Math.min(25, net * 3 / Math.sqrt(Math.max(t.mcN, 4)));
     var outTok = isBuy ? net * SOL_USD / (px * (1 + impact / 200)) : 0, outSol = isBuy ? 0 : net * (1 - impact / 200);
-    return { isBuy: isBuy, amt: amt, sol: sol, pct: pct, tax: tax, fp: fp, fee: fee, impact: impact, out: isBuy ? outTok : outSol, min: (isBuy ? outTok : outSol) * (1 - S.slip / 100) };
+    var res = { isBuy: isBuy, amt: amt, sol: sol, pct: pct, tax: tax, fp: fp, fee: fee, impact: impact, out: isBuy ? outTok : outSol, min: (isBuy ? outTok : outSol) * (1 - S.slip / 100) };
+    if (t.live && t.pool && amt > 0) {   // real coins: exact on-chain quote (fetched in the background, panel re-renders when it lands)
+      var key = t.tick + '|' + S.side + '|' + amt + '|' + S.slip, L = S.lq && S.lq.k === key ? S.lq.r : null;
+      if (!L) { if (S.lqWant !== key) { S.lqWant = key; clearTimeout(S.lqT); S.lqT = setTimeout(function () { chainLib().then(function (T) { return T.quote({ rpc: RPC, pool: t.pool, side: isBuy ? 'buy' : 'sell', amount: amt, slippageBps: Math.round(S.slip * 100) }); }).then(function (r) { S.lq = { k: key, r: r }; if (S.lqWant === key && S.screen === 'token' && S.tick === t.tick) render(); }).catch(function () {}); }, 300); } res.pending = true; }
+      else { var ct = Math.max(t.buy, t.sell) / 100; res.pct = ct * 100; res.fee = L.feeSol; res.fp = sol > 0 ? L.feeSol / sol * 100 : 0;
+        if (isBuy) { res.out = L.out * (1 - ct); res.min = L.minOut; res.tax = sol * ct; }
+        else { res.out = L.out; res.min = L.minOut; res.tax = L.out * ct / Math.max(1e-9, 1 - ct); res.sol = L.out + L.feeSol; }
+        res.impact = 0; res.exact = true; }
+    }
+    return res;
   }
 
   // ================= WALLET PANEL (GMGN / Axiom style) =================
@@ -2400,16 +2410,16 @@
   }
   // ===== CONTRACT ADDRESS ENDING: free ...treid or paid custom =====
   var B58C = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
-  function vanFee(n) { return n <= 0 ? 0 : n <= 4 ? 0.1 : n === 5 ? 0.5 : 2; }
-  function vanEta(n) { return n <= 4 ? 'instant' : n === 5 ? '~10 sec' : '~5 min · queued'; }
-  function vanPrev(c) { var v = c.van || {}, suf = v.mode === 'custom' && v.suf ? v.suf : 'treid', pre = (c.vanPre || (c.vanPre = b58(44))).slice(0, 44 - suf.length); return '<span class="mono">' + pre.slice(0, 6) + '<i>' + pre.slice(6, 14) + '…</i></span><b class="mono">' + esc(suf) + '</b>'; }
+  function vanFee(n) { return n <= 0 ? 0 : n <= 3 ? 0.1 : 0.25; }
+  function vanEta(n) { return n <= 3 ? 'a few seconds' : '~1–3 min on this device'; }
+  function vanPrev(c) { var v = c.van || {}, suf = v.mode === 'custom' && v.suf ? v.suf : 'trd', pre = (c.vanPre || (c.vanPre = b58(44))).slice(0, 44 - suf.length); return '<span class="mono">' + pre.slice(0, 6) + '<i>' + pre.slice(6, 14) + '…</i></span><b class="mono">' + esc(suf) + '</b>'; }
   function vanityPicker(c) {
     var v = c.van || (c.van = { mode: 'treid', suf: '' }), n = (v.suf || '').length, cus = v.mode === 'custom';
     return '<div class="van"><div class="van-h"><b>Contract address</b><small>how your coin’s address ends</small></div>' +
-      '<div class="van-opts"><button class="van-o' + (cus ? '' : ' on') + '" data-act="vanMode" data-arg="treid"><span class="van-t">…<b>treid</b></span><span><b>treid ending</b><small>Instantly recognised as launched on treid</small></span><em class="van-free">FREE</em></button>' +
-      '<button class="van-o' + (cus ? ' on' : '') + '" data-act="vanMode" data-arg="custom"><span class="van-t">…<b>' + (cus && v.suf ? esc(v.suf) : 'MOON') + '</b></span><span><b>Custom ending</b><small>Your own letters, 3–6 characters</small></span><em class="van-paid">from 0.1 SOL</em></button></div>' +
-      (cus ? '<div class="van-cfg"><label class="van-in"><span>…</span><input id="van-suf" data-van maxlength="6" value="' + esc(v.suf || '') + '" placeholder="MOON" autocomplete="off" spellcheck="false"></label>' +
-        '<div class="van-tiers">' + [[3, '3–4 chars', 0.1, 'instant'], [5, '5 chars', 0.5, '~10 sec'], [6, '6 chars', 2, '~5 min']].map(function (x) { var on = n && (x[0] === 3 ? n <= 4 : n === x[0]); return '<span class="' + (on ? 'on' : '') + '"><b>' + x[1] + '</b><small class="mono">' + x[2] + ' SOL · ' + x[3] + '</small></span>'; }).join('') + '</div>' +
+      '<div class="van-opts"><button class="van-o' + (cus ? '' : ' on') + '" data-act="vanMode" data-arg="treid"><span class="van-t">…<b>trd</b></span><span><b>trd ending</b><small>Instantly recognised as launched on treid</small></span><em class="van-free">FREE</em></button>' +
+      '<button class="van-o' + (cus ? ' on' : '') + '" data-act="vanMode" data-arg="custom"><span class="van-t">…<b>' + (cus && v.suf ? esc(v.suf) : 'MOON') + '</b></span><span><b>Custom ending</b><small>Your own letters, 3–4 characters</small></span><em class="van-paid">from 0.1 SOL</em></button></div>' +
+      (cus ? '<div class="van-cfg"><label class="van-in"><span>…</span><input id="van-suf" data-van maxlength="4" value="' + esc(v.suf || '') + '" placeholder="MOON" autocomplete="off" spellcheck="false"></label>' +
+        '<div class="van-tiers">' + [[3, '3 chars', 0.1, 'seconds'], [4, '4 chars', 0.25, '~1–3 min']].map(function (x) { var on = n && n === x[0]; return '<span class="' + (on ? 'on' : '') + '"><b>' + x[1] + '</b><small class="mono">' + x[2] + ' SOL · ' + x[3] + '</small></span>'; }).join('') + '</div>' +
         '<small class="van-err" id="van-err"></small></div>' : '') +
       '<div class="van-prev"><small>Preview</small><div id="van-prev">' + vanPrev(c) + '</div>' + (cus && n >= 3 ? '<span class="van-fee mono" id="van-fee">+' + vanFee(n) + ' SOL · ' + vanEta(n) + '</span>' : cus ? '<span class="van-fee mono" id="van-fee">type at least 3 characters</span>' : '<span class="van-fee ok mono">free · instant</span>') + '</div></div>';
   }
@@ -2493,7 +2503,7 @@
     var pre = SPRE[sp.p], name = pre ? pre[1] : 'Custom';
     return '<section class="card-s panel tsp-panel"><div class="tsp-h"><b>Where the ' + m + '% tax goes</b><span class="tsp-p">' + ICO.lock + name + ' · locked</span></div>' + splitBar(sp, 'big') +
       '<div class="tsp-rows">' + ['h', 'b', 'd'].map(function (k) { var c0 = SPC[k]; return '<div class="tsp-r" style="--c:' + c0[0] + '"><em class="sp-ic">' + ICO[c0[1]] + '</em><span>' + c0[2] + '</span><b class="mono">' + sp[k] + '%</b><small class="mono">' + (m * sp[k] / 100).toFixed(2).replace(/\.?0+$/, '') + '% / trade</small></div>'; }).join('') + '</div>' +
-      '<small class="muted tsp-n">Plus a ' + FEE.taxed + '% treid fee per trade (total ' + (m + FEE.taxed) + '%). On a 1 SOL buy: ' + ['h', 'b', 'd'].map(function (k) { return (m / 100 * sp[k] / 100).toFixed(4).replace(/\.?0+$/, '') + ' SOL ' + SPC[k][2].toLowerCase(); }).join(' · ') + '</small></section>';
+      '<small class="muted tsp-n">Plus a ' + FEE.taxed + '% treid fee per trade (total ' + (m + FEE.taxed) + '%). On a 1 SOL buy: ' + ['h', 'b', 'd'].map(function (k) { return (m / 100 * sp[k] / 100).toFixed(4).replace(/\.?0+$/, '') + ' SOL ' + SPC[k][2].toLowerCase(); }).join(' · ') + '</small>' + (t.live && t.taxPaid && t.taxPaid.n ? '<div class="tsp-paid"><b>Paid out on-chain</b><span class="mono"><em class="sp-ic">' + ICO[SPC.b[1]] + '</em>' + fmtNum(t.taxPaid.burned) + ' burned</span><span class="mono"><em class="sp-ic">' + ICO[SPC.h[1]] + '</em>' + fmtNum(t.taxPaid.holders) + ' to holders</span><span class="mono"><em class="sp-ic">' + ICO[SPC.d[1]] + '</em>' + fmtNum(t.taxPaid.dev) + ' to dev</span></div>' : '') + '</section>';
   }
   function taxPicker(c) {
     var sn = c.snipe || (c.snipe = { on: true, start: 50, dur: 30 }); sn.on = true; if (sn.start < 50) sn.start = 50; if (sn.dur < 30) sn.dur = 30; var base = c.buy;
@@ -2978,20 +2988,25 @@
         if (!S.demoLaunch) {
           var tax0 = Math.max(c.buy, c.sell), sn0 = c.snipe || {}, cc0 = JSON.parse(JSON.stringify({ name: c.name.trim(), tick: c.tick, spec: c.spec, split: c.split, buy: c.buy, sell: c.sell, x: c.x, tg: c.tg, web: c.web, desc: c.desc, img: c.img, banner: c.banner, snipe: sn0, pair: c.pair }));
           if (typeof S.balance === 'number' && S.balance < dq2.sol + 0.03) { toast('You need about ' + (dq2.sol + 0.03).toFixed(2) + ' devnet SOL (coin creation ≈ 0.03 SOL' + (dq2.sol ? ' + your ' + dq2.sol + ' SOL buy' : '') + ')'); break; }
-          var mintRef = {};
-          chainRun('Launching $' + c.tick, function (T) {
-            return T.buildCreate({ rpc: RPC, payer: S.account, partner: PARTNER, name: cc0.name, symbol: cc0.tick, uri: coinUri('MINT'.repeat(11), cc0), taxBps: tax0 * 100, trapBps: Math.max(50, sn0.start || 50) * 100, trapSecs: Math.max(30, sn0.dur || 30), devBuySol: dq2.sol });
-          }).then(function (b) {
+          var vc1 = c.van && c.van.mode === 'custom' && (c.van.suf || '').length >= 3, suf1 = vc1 ? c.van.suf : 'trd', vf1 = vc1 ? vanFee(suf1.length) : 0, grindT = null;
+          if (typeof S.balance === 'number' && S.balance < dq2.sol + 0.03 + vf1) { toast('You need about ' + (dq2.sol + 0.03 + vf1).toFixed(2) + ' devnet SOL incl. the ' + vf1 + ' SOL address fee'); break; }
+          S.busy = 'Finding address …' + suf1; render();
+          var gBox = document.getElementById('toasts'), gEl = document.createElement('div'); gEl.className = 'toast grind-t'; gEl.innerHTML = '<span class="gr-sp"></span><span>Finding your address <b class="mono">…' + esc(suf1) + '</b> <small class="mono" id="gr-n"></small></span>'; if (gBox) gBox.appendChild(gEl);
+          var gStart = Date.now();
+          chainLib().then(function (T) { return T.grind(suf1, { onProgress: function (n, exp) { var el = document.getElementById('gr-n'); if (!el) return; var rate = n / Math.max(0.2, (Date.now() - gStart) / 1000), left = Math.max(0, (exp - n) / rate); el.textContent = fmtNum(n) + ' tried · ' + (left < 5 ? 'almost there' : '~' + (left < 90 ? Math.ceil(left) + 's' : Math.ceil(left / 60) + ' min') + ' left'); } }); })
+          .then(function (g) { gEl.remove(); S.busy = null; grindT = g; return chainRun('Launching $' + c.tick, function (T) {
+            return T.buildCreate({ rpc: RPC, payer: S.account, partner: PARTNER, treasury: TREASURY, mintSecret: g.secret, extraFeeSol: vf1, name: cc0.name, symbol: cc0.tick, uri: coinUri('MINT'.repeat(11), cc0), taxBps: tax0 * 100, trapBps: Math.max(50, sn0.start || 50) * 100, trapSecs: Math.max(30, sn0.dur || 30), devBuySol: dq2.sol });
+          }); }).then(function (b) {
             var coin = { mint: b.mint, pool: b.pool, config: b.config, creator: S.account, name: cc0.name, symbol: cc0.tick, uri: b.uri, tax_bps: tax0 * 100, trap_bps: Math.max(50, sn0.start || 50) * 100, trap_secs: Math.max(30, sn0.dur || 30), created_at: Date.now(), mcap_usd: 20 * SOL_USD, curve_pct: 0, holders: dq2.sol > 0 ? 1 : 0 };
             var nt2 = liveTok(coin); nt2.tick = cc0.tick; nt2.spec = cc0.spec; nt2.img = cc0.img; nt2.banner = cc0.banner || null; nt2.desc = (cc0.desc || '').trim(); nt2.split = tax0 > 0 && cc0.split ? { p: cc0.split.p, h: cc0.split.h, b: cc0.split.b, d: cc0.split.d } : null;
             if (cc0.x || cc0.tg || cc0.web) { nt2.soc = true; nt2.links = { demo: false, web: linkOf(cc0.web), x: cc0.x ? linkOf(/[\/.]/.test(cc0.x) ? cc0.x : 'x.com/' + cc0.x.replace(/^@/, '')) : null, tg: cc0.tg ? linkOf(/[\/.]/.test(cc0.tg) ? cc0.tg : 't.me/' + cc0.tg.replace(/^@/, '')) : null }; }
             if (API) fetch(API + '/api/meta', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mint: b.mint, name: cc0.name, symbol: cc0.tick, image: cc0.img || null, banner: cc0.banner || null, description: nt2.desc, uri: b.uri }) }).catch(function () {});
             S.c = { name: '', tick: '', desc: '', x: '', tg: '', web: '', pair: 'SOL', buy: 0, sell: 0, img: null, banner: null, devBuy: '', spec: { kind: pick(A.KINDS), skin: pick(A.SKINS), bg: pick(A.BGS), eyes: 'normal', mouth: 'smile', acc: 'none' } };
             openToken(nt2.tick); confetti(); toast('$' + nt2.tick + ' is live on-chain (devnet) ✓', nt2);
-          }).catch(function (e) { if (e && e.message !== 'busy') toast('Launch failed: ' + chainErr(e)); });
+          }).catch(function (e) { gEl.remove(); if (S.busy && /^Finding/.test(S.busy)) { S.busy = null; render(); } if (e && e.message !== 'busy') toast('Launch failed: ' + chainErr(e)); });
           break;
         }
-        var vc = c.van && c.van.mode === 'custom', vs = vc ? (c.van.suf || '') : 'treid', vf = vc ? vanFee(vs.length) : 0;
+        var vc = c.van && c.van.mode === 'custom', vs = vc ? (c.van.suf || '') : 'trd', vf = vc ? vanFee(vs.length) : 0;
         if (vc && vs.length < 3) { toast('Custom address ending needs at least 3 characters'); break; }
         if (vf && typeof S.balance === 'number' && dq2.sol + vf > S.balance) { toast('Not enough devnet SOL — need ' + (dq2.sol + vf).toFixed(2) + ' SOL incl. ' + vf + ' SOL address fee'); break; }
         var nt = { name: c.name.trim(), tick: c.tick, spec: c.spec, img: c.img, banner: c.banner || null, snipe: { on: true, start: Math.max(50, (c.snipe && c.snipe.start) || 50), dur: Math.max(30, (c.snipe && c.snipe.dur) || 30) }, buy: c.buy, sell: c.sell, split: c.buy > 0 && c.split ? { p: c.split.p, h: c.split.h, b: c.split.b, d: c.split.d } : null, pair: c.pair, mcN: 5, mc0: 5, prog: 1, born: Date.now(), holders: 1,
@@ -3013,12 +3028,12 @@
       var q = function (id, v) { var x = document.getElementById(id); if (x) x.textContent = v; }; q('bt-tok', fmtNum(Math.round(tok)) + ' $' + t.tick); q('bt-sup', (tok / 1e9 * 100).toFixed(3) + '%'); q('bt-usd', '$' + fmtNum(Math.round(tok * price(t))));
       var g = document.querySelector('.bt-go'); if (g) g.textContent = '🔥 Burn ' + S.burnPct + '% of my $' + t.tick; document.querySelectorAll('.bt-pre button').forEach(function (bb) { bb.classList.toggle('on', +bb.getAttribute('data-arg') === S.burnPct); }); return; }
     if (e.target.hasAttribute && e.target.hasAttribute('data-van')) {
-      var raw = e.target.value, clean = raw.split('').filter(function (ch) { return B58C.indexOf(ch) >= 0; }).join('').slice(0, 6), bad = raw.replace(/./g, function (ch) { return B58C.indexOf(ch) >= 0 ? '' : ch; });
+      var raw = e.target.value, clean = raw.split('').filter(function (ch) { return B58C.indexOf(ch) >= 0; }).join('').slice(0, 4), bad = raw.replace(/./g, function (ch) { return B58C.indexOf(ch) >= 0 ? '' : ch; });
       if (clean !== raw) e.target.value = clean; S.c.van.suf = clean; var n = clean.length;
       var er = document.getElementById('van-err'); if (er) er.textContent = bad ? 'Addresses can’t use 0, O, I, l or symbols' : '';
       var pv = document.getElementById('van-prev'); if (pv) pv.innerHTML = vanPrev(S.c);
       var fe = document.getElementById('van-fee'); if (fe) fe.textContent = n >= 3 ? '+' + vanFee(n) + ' SOL · ' + vanEta(n) : 'type at least 3 characters';
-      document.querySelectorAll('.van-tiers span').forEach(function (sp, i) { sp.classList.toggle('on', !!n && (i === 0 ? n >= 3 && n <= 4 : i === 1 ? n === 5 : n === 6)); });
+      document.querySelectorAll('.van-tiers span').forEach(function (sp, i) { sp.classList.toggle('on', n === 3 + i); });
       var vt = document.querySelector('.van-o.on .van-t b'); if (vt) vt.textContent = clean || 'MOON';
       return;
     }
@@ -3624,7 +3639,7 @@
   var API = (function () { var v = window.TREID_API || ''; try { var qp = new URLSearchParams(location.search); if (qp.has('api')) localStorage.setItem('dl.api', qp.get('api')); var ls = localStorage.getItem('dl.api'); if (ls !== null) v = ls; } catch (e) {} return (v || '').replace(/\/+$/, ''); })();
   S.api = API; S.apiOk = false;
   function apiGet(path) { return fetch(API + path, { cache: 'no-store' }).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); }); }
-  function liveStat(t, c) { t.lstat = { dev: c.dev_pct || 0, top: c.top10_pct || 0, sn: c.snipers_pct || 0, bu: c.bundles_pct || 0, devSold: !!c.dev_sold }; }
+  function liveStat(t, c) { if (c.tax_paid) t.taxPaid = c.tax_paid; t.lstat = { dev: c.dev_pct || 0, top: c.top10_pct || 0, sn: c.snipers_pct || 0, bu: c.bundles_pct || 0, devSold: !!c.dev_sold }; }
   function liveTok(c) {
     if (c.sol_usd) SOL_USD = c.sol_usd;
     var t = S.live.filter(function (x) { return x.ca === c.mint; })[0];
@@ -3667,6 +3682,7 @@
   }
   function liveStart() {
     if (!API) return;
+    apiGet('/api/health').then(function (h) { if (h && h.ops && !window.TREID_PARTNER) PARTNER = h.ops; }).catch(function () {});
     apiGet('/api/coins').then(function (cs) {
       S.apiOk = true; cs.filter(Boolean).forEach(liveTok); render();
       var es = new EventSource(API + '/api/stream');
