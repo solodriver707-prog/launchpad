@@ -21,7 +21,8 @@ const db = new DatabaseSync(process.env.DB || 'treid.db');
 db.exec(`CREATE TABLE IF NOT EXISTS coins(mint TEXT PRIMARY KEY, pool TEXT, config TEXT, creator TEXT, name TEXT, symbol TEXT, uri TEXT, tax_bps INT, created_slot INT, created_at INT);
 CREATE TABLE IF NOT EXISTS trades(sig TEXT PRIMARY KEY, mint TEXT, wallet TEXT, side TEXT, sol REAL, tokens REAL, price_usd REAL, mcap_usd REAL, slot INT, ts INT, sniper INT DEFAULT 0, bundle INT DEFAULT 0, fee_sol REAL DEFAULT 0, progress REAL DEFAULT 0);
 CREATE INDEX IF NOT EXISTS t_mint ON trades(mint, ts);
-CREATE TABLE IF NOT EXISTS seen(sig TEXT PRIMARY KEY);`);
+CREATE TABLE IF NOT EXISTS seen(sig TEXT PRIMARY KEY);
+CREATE TABLE IF NOT EXISTS meta(mint TEXT PRIMARY KEY, name TEXT, symbol TEXT, description TEXT, image TEXT, banner TEXT, at INT);`);
 for (const col of ['trap_bps INT DEFAULT 0', 'trap_secs INT DEFAULT 0', 'trap_steps INT DEFAULT 0']) { try { db.exec('ALTER TABLE coins ADD COLUMN ' + col); } catch {} }
 const q = (sql, ...a) => db.prepare(sql).all(...a), q1 = (sql, ...a) => db.prepare(sql).get(...a), run = (sql, ...a) => db.prepare(sql).run(...a);
 let configs = new Set(); const watched = new Map();
@@ -117,7 +118,19 @@ function stats(mint) {
 }
 http.createServer(async (req, res) => {
   const u = new URL(req.url, 'http://x'), p = u.pathname.split('/').filter(Boolean), J = (o) => { res.writeHead(200, { 'content-type': 'application/json', 'access-control-allow-origin': '*', 'cache-control': 'no-store' }); res.end(JSON.stringify(o)); };
-  if (req.method === 'OPTIONS') { res.writeHead(204, { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*' }); return res.end(); }
+  if (req.method === 'OPTIONS') { res.writeHead(204, { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'GET,POST' }); return res.end(); }
+  // coin metadata (image / description) posted by the site at launch — first write wins. TODO mainnet: pin to IPFS instead.
+  if (p[1] === 'meta' && req.method === 'POST') {
+    let body = ''; req.on('data', (d) => { body += d; if (body.length > 2.5e6) req.destroy(); });
+    req.on('end', () => { try { const m = JSON.parse(body); new PublicKey(m.mint); const img = (v) => (typeof v === 'string' && /^data:image\/(png|jpe?g|gif|webp|svg\+xml);base64,/.test(v) && v.length < 1.2e6 ? v : null);
+      run('INSERT OR IGNORE INTO meta VALUES(?,?,?,?,?,?,?)', m.mint, String(m.name || '').slice(0, 32), String(m.symbol || '').slice(0, 10), String(m.description || '').slice(0, 600), img(m.image), img(m.banner), Date.now()); J({ ok: true }); } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end('{"ok":false}'); } });
+    return;
+  }
+  if (p[1] === 'meta' && p[2]) { const m = q1('SELECT * FROM meta WHERE mint=?', p[2]), c = q1('SELECT name, symbol FROM coins WHERE mint=?', p[2]); if (!m && !c) { res.writeHead(404, { 'access-control-allow-origin': '*' }); return res.end('{}'); }
+    const base = (req.headers['x-forwarded-proto'] || 'http') + '://' + (req.headers['x-forwarded-host'] || req.headers.host);
+    return J({ name: m?.name || c?.name, symbol: m?.symbol || c?.symbol, description: m?.description || '', image: m?.image ? base + '/api/img/' + p[2] : null, banner: m?.banner ? base + '/api/img/' + p[2] + '?b=1' : null }); }
+  if (p[1] === 'img' && p[2]) { const m = q1('SELECT image, banner FROM meta WHERE mint=?', p[2]), d = u.searchParams.get('b') ? m?.banner : m?.image; if (!d) { res.writeHead(404); return res.end(); }
+    const [h, b64] = d.split(','); res.writeHead(200, { 'content-type': h.slice(5, h.indexOf(';')), 'access-control-allow-origin': '*', 'cache-control': 'public, max-age=86400' }); return res.end(Buffer.from(b64, 'base64')); }
   if (!p.length || p[1] === 'health') return J({ ok: true, coins: q1('SELECT COUNT(*) n FROM coins').n, trades: q1('SELECT COUNT(*) n FROM trades').n, configs: configs.size, partner: PARTNER || null, sol_usd: SOL_USD, ready });
   try {
     if (p[1] === 'stream') { res.writeHead(200, { 'content-type': 'text/event-stream', 'access-control-allow-origin': '*', 'cache-control': 'no-cache' }); res.write(': hi\n\n'); clients.add(res); req.on('close', () => clients.delete(res)); return; }

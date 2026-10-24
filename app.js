@@ -6,7 +6,9 @@
   var A = window.Avatars;
 
   // ================= CONFIG =================
-  var RPC = 'https://api.devnet.solana.com';
+  var RPC = (function () { var v = window.TREID_RPC || 'https://api.devnet.solana.com'; try { var q0 = new URLSearchParams(location.search); if (q0.has('rpc')) { if (q0.get('rpc')) localStorage.setItem('dl.rpc', q0.get('rpc')); else localStorage.removeItem('dl.rpc'); } var l0 = localStorage.getItem('dl.rpc'); if (l0) v = l0; } catch (e) {} return v; })();
+  var PARTNER = window.TREID_PARTNER || 'BzCPzoJmoRKV8Ha7dHpyePikjSDL9a9Y3LNKJQdjeaNX';   // treid fee wallet (fee claimer of every treid coin)
+  var CHAIN_ID = /mainnet/.test(RPC) ? 'solana:mainnet' : 'solana:devnet';
   var CLUSTER = 'devnet';
   var LS = { wallet: 'dl.lastWallet', watch: 'dl.watch', created: 'dl.created' };
   var SOL_USD = 150; // simulation constant
@@ -242,7 +244,7 @@
       var acc = accs.filter(function (a) { return (a.chains || []).some(function (c) { return String(c).indexOf('solana:') === 0; }); })[0] || accs[0];
       if (!acc) { set({ connecting: null }); if (!silent) toast('Wallet did not share an account'); return; }
       try { localStorage.setItem(LS.wallet, w.name); } catch (e) {}
-      set({ wallet: w, account: acc.address, connecting: null, walletOpen: false, balance: null });
+      S.walletAcc = acc; set({ wallet: w, account: acc.address, connecting: null, walletOpen: false, balance: null });
       listen(w); refreshBalance();
       if (!silent) toast(w.name + ' connected · ' + short(acc.address));
     }).catch(function (err) {
@@ -257,7 +259,7 @@
     off = ev.on('change', function (p) {
       if (!p || !p.accounts) return;
       if (!p.accounts[0]) { set({ wallet: null, account: null, balance: null }); toast('Wallet disconnected'); return; }
-      set({ account: p.accounts[0].address, balance: null }); refreshBalance();
+      S.walletAcc = p.accounts[0]; set({ account: p.accounts[0].address, balance: null }); refreshBalance();
     });
   }
   function disconnect() {
@@ -287,6 +289,54 @@
       .then(function () { set({ airdropping: false }); });
   }
   setInterval(function () { if (S.account && document.visibilityState === 'visible') refreshBalance(); }, 30000);
+  // ================= REAL CHAIN ACTIONS (create / buy / sell) =================
+  var chainP = null;
+  function chainLib() {
+    if (window.TreidChain) return Promise.resolve(window.TreidChain);
+    return chainP || (chainP = new Promise(function (res, rej) { var sc = document.createElement('script'); sc.src = 'chain.js?v=' + ((document.querySelector('script[src*="app.js"]') || {}).src || '').split('v=')[1]; sc.onload = function () { res(window.TreidChain); }; sc.onerror = function () { chainP = null; rej(new Error('Could not load chain module')); }; document.head.appendChild(sc); }));
+  }
+  function walletSign(list) {
+    var w = S.wallet, f = w && w.features && w.features['solana:signTransaction'];
+    if (!f) return Promise.reject(new Error('This wallet can\'t sign transactions here — try Phantom, Solflare or Backpack'));
+    return Promise.resolve(f.signTransaction.apply(f, list.map(function (b) { return { account: S.walletAcc, transaction: b, chain: CHAIN_ID }; }))).then(function (r) { return r.map(function (x) { return x.signedTransaction; }); });
+  }
+  function chainErr(e) {
+    var m = String((e && e.message) || e || 'Unknown error');
+    if (/reject|declin|cancel|denied/i.test(m)) return 'Cancelled in wallet';
+    if (/insufficient|0x1\b|lamports/i.test(m)) return 'Not enough devnet SOL';
+    if (/slippage|0x1771|ExceededSlippage/i.test(m)) return 'Price moved too much — raise slippage';
+    return m.length > 140 ? m.slice(0, 140) + '…' : m;
+  }
+  function chainRun(label, build) {
+    if (S.busy) { toast('Finish the current transaction first'); return Promise.reject(new Error('busy')); }
+    S.busy = label; render(); toast(label + ' — confirm in your wallet');
+    return chainLib().then(function (T) {
+      return build(T).then(function (b) { return walletSign(b.bytes).then(function (signed) { S.busy = 'Confirming on-chain…'; render(); return T.sendAll({ rpc: RPC, signed: signed, lastValidBlockHeight: b.lastValidBlockHeight }); }).then(function (sigs) { b.sigs = sigs; return b; }); });
+    }).then(function (b) { S.busy = null; render(); setTimeout(refreshBalance, 1500); return b; }, function (e) { S.busy = null; render(); throw e; });
+  }
+  function livePos(t) {   // real token balance + cost basis from the user's on-chain trades
+    if (!S.account || !t.live) return Promise.resolve(); var who = S.account;
+    return chainLib().then(function (T) { return T.tokenBalance({ rpc: RPC, owner: who, mint: t.ca }); }).then(function (bal) {
+      if (S.account !== who) return; var cost = 0; S.trades.forEach(function (x) { if (x.tick === t.tick && x.wallet === who) cost += x.side === 'buy' ? x.sol : -x.sol; });
+      if (bal > 0) S.pos[t.tick] = { tok: bal, cost: Math.max(0, cost) }; else delete S.pos[t.tick];
+      if (S.screen === 'token' && S.tick === t.tick) render();
+    }).catch(function () {});
+  }
+  // compact, permanent coin data inside the on-chain metadata URI (mascot, tax split, socials)
+  function coinUri(mint, c) {
+    var A0 = A, ix = function (arr, v) { return Math.max(0, arr.indexOf(v)).toString(36); }, sp = c.spec || {};
+    var q = 'c=' + ix(A0.KINDS, sp.kind) + ix(A0.SKINS, sp.skin) + ix(A0.BGS, sp.bg) + ix(A0.EYES, sp.eyes) + ix(A0.MOUTHS, sp.mouth) + ix(A0.ACCS, sp.acc);
+    if (c.buy > 0 && c.split) q += '&s=' + c.split.h + '.' + c.split.b + '.' + c.split.d;
+    var base = (API || 'https://treid.fun') + '/api/meta/' + mint + '?' + q, add = function (k, v) { v = String(v || '').replace(/^https?:\/\//, '').replace(/^@/, '').trim(); if (v && (base + '&' + k + '=' + encodeURIComponent(v)).length <= 200) base += '&' + k + '=' + encodeURIComponent(v); };
+    add('x', c.x); add('t', c.tg); add('w', c.web); return base;
+  }
+  function parseUri(uri) {
+    var o = {}; try { var u = new URL(uri), g = function (k) { return u.searchParams.get(k); }, cc = g('c');
+      if (cc && cc.length >= 6) { var d = cc.split('').map(function (ch) { return parseInt(ch, 36) || 0; }); o.spec = { kind: A.KINDS[d[0]] || A.KINDS[0], skin: A.SKINS[d[1]] || A.SKINS[0], bg: A.BGS[d[2]] || A.BGS[0], eyes: A.EYES[d[3]] || 'normal', mouth: A.MOUTHS[d[4]] || 'smile', acc: A.ACCS[d[5]] || 'none' }; }
+      if (g('s')) { var p3 = g('s').split('.').map(Number); if (p3.length === 3 && p3[0] + p3[1] + p3[2] === 100) o.split = { p: 'custom', h: p3[0], b: p3[1], d: p3[2] }; }
+      ['x', 't', 'w'].forEach(function (k) { if (g(k)) o[k] = g(k); });
+    } catch (e) {} return o;
+  }
 
   // ================= RENDER PIECES =================
   function balTxt() { return S.balance === null ? '…' : S.balance === 'err' ? '—' : S.balance.toFixed(3); }
@@ -2184,8 +2234,8 @@
         '<div><span class="muted">Min received (' + S.slip + '% slip)</span><span>' + (q.isBuy ? fmtNum(q.min) + ' $' + id : q.min.toFixed(4) + ' SOL') + '</span></div>' +
         '<div style="padding-top:9px;border-top:1px solid var(--line)"><span class="muted">You receive ≈</span><span style="font-weight:800;font-size:15px">' + (q.isBuy ? fmtNum(q.out) + ' $' + id : q.out.toFixed(4) + ' SOL') + '</span></div></div>' +
       (trapLeft(t) > 0 ? trapBox(t, 'buy') : '') +
-      '<button class="big-btn btn ' + (!S.account ? 'pri' : q.isBuy ? 'up-b' : 'down-b') + '" data-act="trade" data-arg="' + id + '">' + (!S.account ? 'Connect wallet to trade' : (q.isBuy ? 'Buy $' : 'Sell $') + id) + '</button>' +
-      '<span class="note">' + (t.live ? 'Real on-chain coin (devnet) — live data from treid indexer.' : 'Wallet is real (devnet). Trades are simulated in this beta — nothing is sent on-chain.') + '</span></section>';
+      '<button class="big-btn btn ' + (!S.account ? 'pri' : q.isBuy ? 'up-b' : 'down-b') + '" data-act="trade" data-arg="' + id + '"' + (S.busy ? ' disabled' : '') + '>' + (S.busy ? esc(S.busy) + '…' : !S.account ? 'Connect wallet to trade' : (q.isBuy ? 'Buy $' : 'Sell $') + id) + '</button>' +
+      '<span class="note">' + (t.live ? 'Real on-chain coin (devnet) — every buy and sell is signed by your wallet.' : 'Wallet is real (devnet). Trades are simulated in this beta — nothing is sent on-chain.') + '</span></section>';
     var posCard = pos ? '<section class="card-s panel poscard"><div style="display:flex;justify-content:space-between;align-items:center"><b>Your position</b><span style="display:flex;gap:10px">' + (t.creator && t.creator === S.account ? '<button class="link" style="min-height:0;font-size:12.5px;color:#FFB15C" data-act="burnOpen" data-arg="' + id + '">🔥 Burn</button>' : '') + '<button class="link" style="min-height:0;font-size:12.5px;color:var(--down)" data-act="sellall">Sell all</button></span></div>' +
       '<div class="pos-v"><span class="mono" style="font-size:22px;font-weight:700">' + pos.val.toFixed(4) + ' SOL</span><span class="chgpill ' + (pos.pnl >= 0 ? 'up' : 'down') + '">' + (pos.pnl >= 0 ? '+' : '') + pos.pct.toFixed(1) + '%</span></div>' +
       '<div class="muted mono" style="font-size:12px">' + fmtNum(pos.tok) + ' $' + id + ' · cost ' + pos.cost.toFixed(4) + ' SOL · PnL <span class="' + (pos.pnl >= 0 ? 'up' : 'down') + '">' + (pos.pnl >= 0 ? '+' : '') + pos.pnl.toFixed(4) + '</span></div></section>' : '';
@@ -2514,7 +2564,8 @@
           taxPicker(c) + (c.buy > 0 ? pairPicker(c) : '<div class="nopair"><span class="np-ic">' + coinHTML('SOL', 26) + '</span><span><b>No pair needed</b><small>With 0% tax there’s nothing to convert, so your coin is a plain token traded in SOL. Add a tax to pair it with stocks, gold, BTC or anything else.</small></span></div>') + splitPicker(c) + devBuyPicker(c) + vanityPicker(c) +
           '<div class="fsec"><i>3</i>Community</div>' +
           '<div class="socrow"><span class="soc-l">Socials <small>optional · shown as buttons on your coin</small></span><div class="socgrid">' + socField(c, 'x', 'X', '', 'Paste X link') + socField(c, 'tg', 'Telegram', '', 'Paste Telegram link') + socField(c, 'web', 'Website', '', 'Paste website link') + '</div></div>' +
-          '<button class="big-btn btn pri" data-act="launch">' + (S.account ? 'Launch token' : 'Connect wallet to launch') + '</button>' +
+          '<button class="big-btn btn pri" data-act="launch"' + (S.busy ? ' disabled' : '') + '>' + (S.busy ? esc(S.busy) + '…' : S.account ? 'Launch on-chain (devnet)' : 'Connect wallet to launch') + '</button>' +
+          (S.account ? '<button class="demo-l" data-act="demoLaunch">No devnet SOL? Try a demo launch instead</button>' : '') +
           '<span class="note">Beta: launching adds your token to this board (saved in your browser). On-chain launch via Raydium LaunchLab is coming next.</span>' +
         '</section>' +
         '<aside style="flex:1 1 320px;display:flex;flex-direction:column;gap:12px;position:sticky;top:90px"><span class="kicker">LIVE PREVIEW</span>' + card(preview, { preview: true }) +
@@ -2891,8 +2942,16 @@
         if (!S.account) { set({ walletOpen: true }); break; }
         var t = find(arg), amt = parseFloat(String(S.amount).replace(',', '.')) || 0;
         if (!t) break;
-        if (t.live) { toast('On-chain buy & sell for real coins is coming in the next update'); break; }
         if (amt <= 0) { toast('Enter an amount first'); break; }
+        if (t.live) {
+          var side0 = S.side, ps0 = S.pos[t.tick] || { tok: 0 };
+          if (side0 === 'buy' && typeof S.balance === 'number' && amt > S.balance - 0.003) { toast('Not enough devnet SOL — balance ' + S.balance.toFixed(3)); break; }
+          if (side0 === 'sell') { if (amt > ps0.tok) amt = ps0.tok; if (amt <= 0) { toast('You don\'t hold any $' + t.tick + ' yet — buy first'); break; } }
+          chainRun(side0 === 'buy' ? 'Buying $' + t.tick : 'Selling $' + t.tick, function (T) { return T.buildSwap({ rpc: RPC, owner: S.account, pool: t.pool, side: side0, amount: amt, slippageBps: Math.round(S.slip * 100) }); })
+            .then(function (b) { S.amount = ''; S.sellAll = false; if (side0 === 'buy') confettiSmall(); toast((side0 === 'buy' ? 'Bought ~' + fmtNum(b.quote.out * (1 - Math.max(t.buy, t.sell) / 100)) + ' $' + t.tick : 'Sold ' + fmtNum(amt) + ' $' + t.tick + ' for ~' + b.quote.out.toFixed(4) + ' SOL') + ' · on-chain ✓', t); setTimeout(function () { liveLoad(t); }, 1200); })
+            .catch(function (e) { if (e && e.message !== 'busy') toast(chainErr(e)); });
+          break;
+        }
         if (typeof S.balance === 'number' && S.side === 'buy' && amt > S.balance) { toast('Not enough devnet SOL — balance ' + S.balance.toFixed(3)); break; }
         var qq = quoteFor(t), ps = S.pos[t.tick] = S.pos[t.tick] || { tok: 0, cost: 0 };
         if (S.side === 'sell' && amt > ps.tok && amt - ps.tok < 1) amt = ps.tok;
@@ -2905,6 +2964,7 @@
         S.amount = ''; S.sellAll = false; render();
         if (S.side === 'buy') confettiSmall();
         toast((S.side === 'buy' ? 'Bought ' + fmtNum(qq.out) + ' $' + t.tick + ' for ' + amt + ' SOL' : 'Sold ' + fmtNum(amt) + ' $' + t.tick + ' for ' + qq.out.toFixed(4) + ' SOL') + ' · tax ' + trd.tax.toFixed(4) + ' (simulated)', t); break;
+      case 'demoLaunch': S.demoLaunch = true; document.querySelector('[data-act=launch]') && document.querySelector('[data-act=launch]').click(); S.demoLaunch = false; break;
       case 'launch':
         if (!S.account) { set({ walletOpen: true }); toast('Connect a wallet to launch'); break; }
         var c = S.c;
@@ -2913,6 +2973,22 @@
         var dq2 = devQuote(String(c.devBuy || '').replace(',', '.'));
         if (dq2.sol > 0 && typeof S.balance === 'number' && dq2.sol > S.balance) { toast('Not enough devnet SOL for a ' + dq2.sol + ' SOL buy — balance ' + S.balance.toFixed(3)); break; }
         if (find(c.tick)) { toast('$' + c.tick + ' is already taken'); break; }
+        if (!S.demoLaunch) {
+          var tax0 = Math.max(c.buy, c.sell), sn0 = c.snipe || {}, cc0 = JSON.parse(JSON.stringify({ name: c.name.trim(), tick: c.tick, spec: c.spec, split: c.split, buy: c.buy, sell: c.sell, x: c.x, tg: c.tg, web: c.web, desc: c.desc, img: c.img, banner: c.banner, snipe: sn0, pair: c.pair }));
+          if (typeof S.balance === 'number' && S.balance < dq2.sol + 0.03) { toast('You need about ' + (dq2.sol + 0.03).toFixed(2) + ' devnet SOL (coin creation ≈ 0.03 SOL' + (dq2.sol ? ' + your ' + dq2.sol + ' SOL buy' : '') + ')'); break; }
+          var mintRef = {};
+          chainRun('Launching $' + c.tick, function (T) {
+            return T.buildCreate({ rpc: RPC, payer: S.account, partner: PARTNER, name: cc0.name, symbol: cc0.tick, uri: coinUri('MINT'.repeat(11), cc0), taxBps: tax0 * 100, trapBps: Math.max(50, sn0.start || 50) * 100, trapSecs: Math.max(30, sn0.dur || 30), devBuySol: dq2.sol });
+          }).then(function (b) {
+            var coin = { mint: b.mint, pool: b.pool, config: b.config, creator: S.account, name: cc0.name, symbol: cc0.tick, uri: b.uri, tax_bps: tax0 * 100, trap_bps: Math.max(50, sn0.start || 50) * 100, trap_secs: Math.max(30, sn0.dur || 30), created_at: Date.now(), mcap_usd: 20 * SOL_USD, curve_pct: 0, holders: dq2.sol > 0 ? 1 : 0 };
+            var nt2 = liveTok(coin); nt2.tick = cc0.tick; nt2.spec = cc0.spec; nt2.img = cc0.img; nt2.banner = cc0.banner || null; nt2.desc = (cc0.desc || '').trim(); nt2.split = tax0 > 0 && cc0.split ? { p: cc0.split.p, h: cc0.split.h, b: cc0.split.b, d: cc0.split.d } : null;
+            if (cc0.x || cc0.tg || cc0.web) { nt2.soc = true; nt2.links = { demo: false, web: linkOf(cc0.web), x: cc0.x ? linkOf(/[\/.]/.test(cc0.x) ? cc0.x : 'x.com/' + cc0.x.replace(/^@/, '')) : null, tg: cc0.tg ? linkOf(/[\/.]/.test(cc0.tg) ? cc0.tg : 't.me/' + cc0.tg.replace(/^@/, '')) : null }; }
+            if (API) fetch(API + '/api/meta', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mint: b.mint, name: cc0.name, symbol: cc0.tick, image: cc0.img || null, banner: cc0.banner || null, description: nt2.desc, uri: b.uri }) }).catch(function () {});
+            S.c = { name: '', tick: '', desc: '', x: '', tg: '', web: '', pair: 'SOL', buy: 0, sell: 0, img: null, banner: null, devBuy: '', spec: { kind: pick(A.KINDS), skin: pick(A.SKINS), bg: pick(A.BGS), eyes: 'normal', mouth: 'smile', acc: 'none' } };
+            openToken(nt2.tick); confetti(); toast('$' + nt2.tick + ' is live on-chain (devnet) ✓', nt2);
+          }).catch(function (e) { if (e && e.message !== 'busy') toast('Launch failed: ' + chainErr(e)); });
+          break;
+        }
         var vc = c.van && c.van.mode === 'custom', vs = vc ? (c.van.suf || '') : 'treid', vf = vc ? vanFee(vs.length) : 0;
         if (vc && vs.length < 3) { toast('Custom address ending needs at least 3 characters'); break; }
         if (vf && typeof S.balance === 'number' && dq2.sol + vf > S.balance) { toast('Not enough devnet SOL — need ' + (dq2.sol + vf).toFixed(2) + ' SOL incl. ' + vf + ' SOL address fee'); break; }
@@ -3560,7 +3636,10 @@
       if (c.trap_bps) t.snipe = { on: true, start: Math.round(c.trap_bps / 100), dur: c.trap_secs || 30 };
       S.live.push(t); S.live.sort(function (a, b) { return b.born - a.born; });
     } else { t.mcN = (c.mcap_usd || 0) / 1000 || t.mcN; t.prog = c.curve_pct || t.prog; t.holders = c.holders != null ? c.holders : t.holders; t.vol = (c.vol_sol || 0) * SOL_USD / 1000; }
-    liveStat(t, c); if (c.uri && !t.img && !t._uri) { t._uri = 1; fetch(c.uri).then(function (r) { return r.json(); }).then(function (m) { if (m && m.image) { t.img = m.image; render(); } if (m && m.description) t.desc = m.description; }).catch(function () {}); }
+    liveStat(t, c);
+    if (c.uri && !t._uri) { t._uri = 1; var pu = parseUri(c.uri); if (pu.spec) t.spec = pu.spec; if (pu.split) t.split = pu.split;
+      if (pu.x || pu.t || pu.w) { t.soc = true; t.links = { demo: false, x: pu.x ? linkOf(/[\/.]/.test(pu.x) ? pu.x : 'x.com/' + pu.x) : null, tg: pu.t ? linkOf(/[\/.]/.test(pu.t) ? pu.t : 't.me/' + pu.t) : null, web: pu.w ? linkOf(pu.w) : null }; }
+      if (API) apiGet('/api/meta/' + c.mint).then(function (m) { var ch = false; if (m && m.image && !t.img) { t.img = m.image; ch = true; } if (m && m.description && !t.desc) { t.desc = m.description; ch = true; } if (m && m.banner && !t.banner) { t.banner = m.banner; ch = true; } if (ch) render(); }).catch(function () {}); }
     return t;
   }
   function liveLoad(t) {
@@ -3572,6 +3651,7 @@
       t.tk = rows.length ? [[t.born, rows[0].mcap_usd / 1000, 0]].concat(rows.map(function (x) { return [x.ts, x.mcap_usd / 1000, x.sol]; })) : [[t.born, t.mcN, 0], [Date.now(), t.mcN, 0]];
       t.tk.push([Date.now(), t.mcN, 0]); t.hist = t.tk.slice(-160).map(function (x) { return x[1]; });
       if (res[1]) t.lh = res[1];
+      livePos(t);
       if (S.screen === 'token' && S.tick === t.tick) render();
     }).catch(function (e) { console.warn('[treid] live load failed', e); });
   }
@@ -3588,7 +3668,7 @@
     apiGet('/api/coins').then(function (cs) {
       S.apiOk = true; cs.filter(Boolean).forEach(liveTok); render();
       var es = new EventSource(API + '/api/stream');
-      es.onmessage = function (m) { var ev; try { ev = JSON.parse(m.data); } catch (e) { return; } if (ev.type === 'trade') liveTrade(ev); else if (ev.type === 'coin') apiGet('/api/coin/' + ev.mint).then(function (c) { if (c) { var t = liveTok(c); toast('New on treid: ' + t.name + ' $' + t.tick, t); render(); } }).catch(function () {}); };
+      es.onmessage = function (m) { var ev; try { ev = JSON.parse(m.data); } catch (e) { return; } if (ev.type === 'trade') liveTrade(ev); else if (ev.type === 'coin') apiGet('/api/coin/' + ev.mint).then(function (c) { if (c) { var known = S.live.some(function (x) { return x.ca === c.mint; }), t = liveTok(c); if (!known) toast('New on treid: ' + t.name + ' $' + t.tick, t); render(); } }).catch(function () {}); };
       es.onerror = function () { S.apiOk = es.readyState === 1; };
       es.onopen = function () { S.apiOk = true; apiGet('/api/coins').then(function (cs2) { cs2.filter(Boolean).forEach(liveTok); }).catch(function () {}); };
     }).catch(function (e) { console.warn('[treid] indexer not reachable at', API, e); });
