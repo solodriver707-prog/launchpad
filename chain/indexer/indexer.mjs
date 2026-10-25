@@ -69,7 +69,7 @@ async function handle(sig) {
   const pre = tx.meta.preTokenBalances || [], post = tx.meta.postTokenBalances || [];
   const mints = [...new Set(post.map(b => b.mint).filter(x => x !== WSOL))];
   if (/Instruction: CreateConfig/.test(logs)) { await loadConfigs(); return; }
-  if (/Instruction: InitializeVirtualPoolWithToken2022|Instruction: InitializeVirtualPool/.test(logs)) { for (const mt of mints) await addCoin(mt, tx.slot, ts, signer); return; }
+  if (/Instruction: InitializeVirtualPoolWithToken2022|Instruction: InitializeVirtualPool/.test(logs)) { for (const mt of mints) await addCoin(mt, tx.slot, ts, signer); if (!/Instruction: Swap/.test(logs)) return; }   // pool + dev first buy can share one tx
   if (!/Instruction: Swap/.test(logs)) return;
   const evs = []; for (const g of tx.meta.innerInstructions || []) for (const ix of g.instructions) { if (keys[ix.programIdIndex].toBase58() !== DYNAMIC_BONDING_CURVE_PROGRAM_ID.toBase58()) continue; try { const e = coder.decode(Buffer.from(bs58.decode(ix.data)).subarray(8).toString('base64')); if (e) evs.push(e); } catch {} }
   const ev2 = evs.find(e => e.name === 'EvtSwap2'), ev3 = evs.find(e => e.name === 'EvtSwap3');
@@ -84,7 +84,7 @@ async function handle(sig) {
     const sq = ev2?.data.swap_result.next_sqrt_price || ev3?.data.next_sqrt_price;
     const price = sq ? Number(getPriceFromSqrtPrice(sq, 6, 9)) * SOL_USD : (tokens ? sol * SOL_USD / tokens : 0);
     const fee = ev2 ? Number(ev2.data.swap_result.trading_fee) / 1e9 : 0, prog = ev2 ? Number(ev2.data.quote_reserve_amount) / Number(ev2.data.migration_threshold) * 100 : 0;
-    const sniper = side === 'buy' && (coin.created_slot > 0 ? tx.slot - coin.created_slot <= 4 : ts - coin.created_at <= 2000) ? 1 : 0; // ~1.5s after launch: faster than a human can click
+    const sniper = side === 'buy' && signer !== coin.creator && (coin.created_slot > 0 ? tx.slot - coin.created_slot <= 4 : ts - coin.created_at <= 2000) ? 1 : 0; // ~1.5s after launch: faster than a human can click
     run('INSERT OR IGNORE INTO trades VALUES(?,?,?,?,?,?,?,?,?,?,?,0,?,?)', sig, mint, signer, side, sol, tokens, price, price * SUPPLY, tx.slot, ts, sniper, fee, Math.min(100, prog));
     const same = q('SELECT DISTINCT wallet FROM trades WHERE mint=? AND slot=? AND side=\'buy\'', mint, tx.slot);
     if (same.length >= 2) run('UPDATE trades SET bundle=1 WHERE mint=? AND slot=? AND side=\'buy\'', mint, tx.slot);
