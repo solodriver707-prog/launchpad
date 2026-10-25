@@ -4299,3 +4299,6 @@ button[disabled].big-btn{opacity:.7;cursor:progress}
 .more-btn .mono{font-size:11.5px;color:var(--mut,#8a857d);font-weight:500}
 .more-all{font-size:13px;color:var(--mut,#8a857d);text-decoration:underline;background:none;border:0;cursor:pointer}
 .more-all:hover{color:#fff}
+.route-wait{min-height:60vh;display:grid;place-content:center;justify-items:center;gap:10px;text-align:center}
+.route-wait .gr-sp{width:28px;height:28px;border-width:3px}
+.route-wait b{font-size:18px}

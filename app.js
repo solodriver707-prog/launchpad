@@ -2672,7 +2672,7 @@
   function applyRoute() {
     var h = decodeURIComponent((location.hash || '').replace(/^#\/?/, '')), parts = h.split('/');
     if (parts[0] === 'coin' && parts[1]) { var id = parts[1], t1 = find(id) || S.live.filter(function (x) { return x.ca === id; })[0];
-      if (t1) { if (S.screen !== 'token' || S.tick !== t1.tick) openToken(t1.tick); } else { S.pendingRoute = id; if (S.screen !== 'home') set({ screen: 'home' }); } return; }
+      if (t1) { if (S.screen !== 'token' || S.tick !== t1.tick) openToken(t1.tick); } else if (API) { S.pendingRoute = id; S.screen = 'pending'; setTimeout(function () { if (S.screen === 'pending') { S.pendingRoute = null; set({ screen: 'home' }); toast('Couldn\'t load that coin — the server may be waking up, try again'); } }, 45000); } else set({ screen: 'home' }); return; }
     for (var k in ROUTES) if (ROUTES[k] === parts[0]) { if (S.screen !== k) set({ screen: k, palOpen: false }); return; }
     if (S.screen !== 'home') set({ screen: 'home' });
   }
@@ -2680,7 +2680,7 @@
   function render() {
     var ae = document.activeElement, fid = ae && ae.id, ss = null, se = null;
     try { if (fid && ae.selectionStart != null) { ss = ae.selectionStart; se = ae.selectionEnd; } } catch (e) {}
-    var body = S.screen === 'token' ? tokenPage() : S.screen === 'create' ? createPage() : S.screen === 'leaders' ? leadersPage() : S.screen === 'watch' ? watchPage() : S.screen === 'burn' ? burnPage() : S.screen === 'trend' ? trendPage() : home();
+    var body = S.screen === 'pending' ? '<main class="wrap"><div class="route-wait"><span class="gr-sp"></span><b>Loading coin…</b><small class="muted">fetching live data from the chain</small></div></main>' : S.screen === 'token' ? tokenPage() : S.screen === 'create' ? createPage() : S.screen === 'leaders' ? leadersPage() : S.screen === 'watch' ? watchPage() : S.screen === 'burn' ? burnPage() : S.screen === 'trend' ? trendPage() : home();
     document.getElementById('app').innerHTML = '<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="ccUp" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3DDC97" stop-opacity=".28"/><stop offset="1" stop-color="#3DDC97" stop-opacity="0"/></linearGradient><linearGradient id="ccDn" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F2708A" stop-opacity=".26"/><stop offset="1" stop-color="#F2708A" stop-opacity="0"/></linearGradient></defs></svg>' + tape() + header() + body + footer() + walletModal() + demoImgModal() + calloutDrawer() + calloutRail() + palette() + walletDrawer() + holderMap() + burnModal() + ctoModal();
     document.body.classList.toggle('has-rail', S.screen === 'home' && !S.coOpen && !S.railHidden); document.body.classList.toggle('has-rail-min', S.screen === 'home' && !S.coOpen && !!S.railHidden);
     if (fid) { var el = document.getElementById(fid); if (el) { el.focus({ preventScroll: true }); try { if (ss != null) el.setSelectionRange(ss, se); } catch (e) {} } }
@@ -3737,7 +3737,7 @@
     apiGet('/api/health').then(function (h) { if (h && h.ops && !window.TREID_PARTNER) PARTNER = h.ops; }).catch(function () {});
     apiGet('/api/coins').then(function (cs) {
       S.apiOk = true; cs.filter(Boolean).forEach(liveTok); render();
-      if (S.pendingRoute) { var pr = S.pendingRoute, tp = S.live.filter(function (x) { return x.ca === pr; })[0]; S.pendingRoute = null; if (tp) { routeReady = false; openToken(tp.tick); routeReady = true; } }
+      if (S.pendingRoute) { var pr = S.pendingRoute, tp = S.live.filter(function (x) { return x.ca === pr; })[0]; S.pendingRoute = null; var rr = routeReady; routeReady = false; if (tp) openToken(tp.tick); else { set({ screen: 'home' }); toast('That coin wasn\'t found'); } routeReady = rr; }
       var es = new EventSource(API + '/api/stream');
       es.onmessage = function (m) { var ev; try { ev = JSON.parse(m.data); } catch (e) { return; } if (ev.type === 'trade') liveTrade(ev); else if (ev.type === 'coin') apiGet('/api/coin/' + ev.mint).then(function (c) { if (c) { var known = S.live.some(function (x) { return x.ca === c.mint; }), t = liveTok(c); if (!known && !isMob()) toast('New on treid: ' + t.name + ' $' + t.tick, t); render(); } }).catch(function () {}); };
       es.onerror = function () { S.apiOk = es.readyState === 1; };
@@ -3745,6 +3745,7 @@
     }).catch(function (e) { console.warn('[treid] indexer not reachable at', API, e); });
   }
   liveStart();
+  applyRoute(); render();   // same tick as the first paint → no flash of the board on refresh
 
-  setTimeout(function () { S.loading = false; applyRoute(); render(); routeReady = true; syncRoute(); }, 850);
+  setTimeout(function () { S.loading = false; render(); routeReady = true; syncRoute(); }, 850);
 })();
