@@ -1659,7 +1659,7 @@
     if (S.cys !== 1 || S.cyo) { var md0 = (mx + mn) / 2 + S.cyo * sp, h0 = sp / 2 * S.cys; mx = md0 + h0; mn = md0 - h0; sp = mx - mn; }
     var vmx = Math.max(.0001, Math.max.apply(null, cs.map(function (c) { return c.v; })));
     var fut = cs.fut || 0, slots = Math.max(cs.n || 0, cs.length + fut + (cs.pre || 0));
-    var cw = (W - 70) / slots, off0 = (cs.pre || 0) * cw, Y = function (v) { return top + (mx - v) / sp * ph; }, bw = Math.max(1.5, Math.min(40, cw * 0.86));   // candles nearly touch, like pump.fun / DexScreener
+    var cw = (W - 70) / slots, off0 = (cs.pre || 0) * cw, Y = function (v) { return top + (mx - v) / sp * ph; }, bw = Math.max(1.5, cw * 0.86);   // candles nearly touch, like pump.fun / DexScreener
     var g = '', pts = [], xl = '';
     for (var k = 1; k < 5; k++) g += '<line x1="0" x2="' + W + '" y1="' + (top + k * ph / 5) + '" y2="' + (top + k * ph / 5) + '" stroke="#18181A" vector-effect="non-scaling-stroke"/>';
     var every = Math.max(1, Math.round(slots / 7));

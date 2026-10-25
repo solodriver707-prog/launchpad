@@ -3223,7 +3223,7 @@ button.dh2-row{cursor:pointer;border-radius:10px}button.dh2-row:hover{background
 .cmark.cmco{box-shadow:0 0 0 1.5px #EDE9E1,0 3px 8px rgba(0,0,0,.6)}
 .cm-d,.cm-c{position:absolute;right:-6px;bottom:-5px;font-style:normal;font-size:8px;font-weight:900;line-height:1;padding:2px 3px;border-radius:5px;background:#FFD15C;color:#0A0A0B}
 .cm-c{background:none;font-size:10px;padding:0}
-.cm-tip{position:absolute;z-index:20;width:250px;padding:10px 12px;border-radius:14px;background:#141416;border:1px solid #2E2E33;box-shadow:0 20px 40px -10px rgba(0,0,0,.9);display:none;flex-direction:column;gap:8px;pointer-events:none;font-size:12px}
+.cm-tip{position:absolute;z-index:60;width:250px;padding:10px 12px;border-radius:14px;background:#141416;border:1px solid #2E2E33;box-shadow:0 20px 40px -10px rgba(0,0,0,.9);display:none;flex-direction:column;gap:8px;pointer-events:none;font-size:12px}
 .cm-tip.on{display:flex;animation:fcIn .18s ease-out}
 .ct-h{display:flex;align-items:center;gap:8px}.ct-h .av{border-radius:50%;overflow:hidden;flex:none}
 .ct-n{display:flex;flex-direction:column;flex:1;min-width:0}.ct-n b{font-size:13px}.ct-n small{font-size:10.5px;color:var(--muted)}
