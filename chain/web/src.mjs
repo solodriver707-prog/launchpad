@@ -123,3 +123,16 @@ export function cosign(signed, cosigners = []) {
     const need = new Set(tx.signatures.map((x) => x.publicKey.toBase58())); const mine = kps.filter((k) => need.has(k.publicKey.toBase58()));
     if (mine.length) tx.partialSign(...mine); return tx.serialize({ requireAllSignatures: true, verifySignatures: false }); });
 }
+
+// ---- creator rewards: read + claim the creator's share of trading fees (SOL) ----
+export async function creatorFees({ rpc, pool }) {
+  const vpw = await client(rpc).state.getPool(pk(pool)); const vp = vpw.poolState || vpw;
+  return { unclaimed: Number(vp.creatorQuoteFee.toString()) / 1e9, creator: vp.creator.toBase58(), partnerUnclaimed: Number(vp.partnerQuoteFee.toString()) / 1e9 };
+}
+export async function buildClaimCreator({ rpc, creator, pool }) {
+  creator = pk(creator); const vpw = await client(rpc).state.getPool(pk(pool)); const vp = vpw.poolState || vpw;
+  if (vp.creator.toBase58() !== creator.toBase58()) throw new Error('Only the coin creator can claim these rewards');
+  const amt = new BN(vp.creatorQuoteFee.toString()); if (amt.isZero()) throw new Error('Nothing to claim yet');
+  const tx = await client(rpc).creator.claimCreatorTradingFee({ creator, payer: creator, pool: pk(pool), maxBaseAmount: new BN(0), maxQuoteAmount: amt });
+  const out = await finish(rpc, [tx], creator, []); return { ...out, amount: Number(amt.toString()) / 1e9 };
+}

@@ -1646,7 +1646,7 @@
     }
     if (!out.length) { var c0 = tk[0][1]; out.push({ o: c0, h: c0, l: c0, c: c0, v: 0, t: endB * b, flat: true }); }
     // like a normal chart: minutes without trades get no candle — candles sit side by side (keep the live candle)
-    var dense = out.filter(function (c, i) { return !c.flat || i === out.length - 1; }); if (dense.length < out.length) { var n2 = Math.min(n, Math.max(14, dense.length + fut + 2)); dense.fut = fut; dense.n = n2; dense.pre = Math.max(0, n2 - dense.length - fut); return dense; }   // few candles → wider candles, not slivers
+    var dense = out.filter(function (c, i) { return !c.flat || i === out.length - 1; }); if (dense.length < out.length) { var n2 = Math.min(n, Math.max(40, dense.length + fut + 2)); dense.fut = fut; dense.n = n2; dense.pre = Math.max(0, n2 - dense.length - fut); return dense; }   // few candles → wider candles, not slivers
     out.fut = fut; out.pre = Math.min(pre, n - out.length - fut); out.n = n; return out;
   }
   function yLabel(v, step) { if (S.chartMode === 'price') return fmtPrice(v * 1000 / 1e9); if (step != null && step < 0.1 && v < 1000) return '$' + Math.round(v * 1000).toLocaleString('en-US'); return fmtK(v); }
@@ -1659,7 +1659,7 @@
     if (S.cys !== 1 || S.cyo) { var md0 = (mx + mn) / 2 + S.cyo * sp, h0 = sp / 2 * S.cys; mx = md0 + h0; mn = md0 - h0; sp = mx - mn; }
     var vmx = Math.max(.0001, Math.max.apply(null, cs.map(function (c) { return c.v; })));
     var fut = cs.fut || 0, slots = Math.max(cs.n || 0, cs.length + fut + (cs.pre || 0));
-    var cw = (W - 70) / slots, off0 = (cs.pre || 0) * cw, Y = function (v) { return top + (mx - v) / sp * ph; }, bw = Math.max(1.5, Math.min(60, cw * (cw > 30 ? 0.78 : 0.68)));
+    var cw = (W - 70) / slots, off0 = (cs.pre || 0) * cw, Y = function (v) { return top + (mx - v) / sp * ph; }, bw = Math.max(1.5, Math.min(40, cw * 0.86));   // candles nearly touch, like pump.fun / DexScreener
     var g = '', pts = [], xl = '';
     for (var k = 1; k < 5; k++) g += '<line x1="0" x2="' + W + '" y1="' + (top + k * ph / 5) + '" y2="' + (top + k * ph / 5) + '" stroke="#18181A" vector-effect="non-scaling-stroke"/>';
     var every = Math.max(1, Math.round(slots / 7));
@@ -2414,6 +2414,13 @@
   }
   function crBadge(t) { var d = devStatus(t); return d.state === 'out' ? '<span class="crb out" title="Dev is out — open for community takeover">DEV OUT</span>' : d.state === 'cto' ? '<span class="crb cto" title="Community takeover">CTO</span>' : d.state === 'inactive' ? '<span class="crb idle" title="Dev inactive for 48h+ — rewards frozen">DEV AWAY</span>' : ''; }
   function crPanel(t) {
+    if (t.live) {   // real coin: rewards are SOL sitting in the pool, the creator claims them straight to their wallet
+      var f = t.crFees, mine = !!(S.account && f && S.account === f.creator), u = f ? f.unclaimed : null, uTxt = u == null ? '…' : (u < 0.0001 && u > 0 ? '<0.0001' : u.toFixed(4)) + ' SOL';
+      return '<section class="card-s panel cr-panel s-g"><div class="cr-h"><b>Creator rewards</b><span class="cr-st g"><i></i>On-chain</span></div><small class="muted cr-sub">' + creatorCut(t) + '% of every trade goes to the creator</small>' +
+        '<div class="cr-money"><div><small>Unclaimed</small><b class="mono">' + uTxt + '</b></div><div><small>≈ USD</small><b class="mono">$' + (u ? (u * SOL_USD).toFixed(2) : '0') + '</b></div><div><small>Per trade</small><b class="mono">' + creatorCut(t) + '%</b></div></div>' +
+        (mine ? '<div class="cr-acts"><button class="btn pri" style="flex:1" data-act="liveClaim" data-arg="' + esc(t.tick) + '"' + (!u || u < 0.000001 || S.busy ? ' disabled' : '') + '>' + (S.busy && /Claim/.test(S.busy) ? esc(S.busy) + '…' : 'Claim ' + uTxt) + '</button></div>' : '') +
+        '<small class="muted" style="display:block;margin-top:10px;font-size:11.5px">' + (mine ? 'You’re the creator — claim any time, it goes straight to your wallet.' : 'Only the creator’s wallet can claim these.') + '</small></section>';
+    }
     var d = devStatus(t), id = esc(t.tick), now = Date.now(), dur = function (ms) { return durH(Math.max(1, ms / 60000)); };
     var st = { active: ['g', 'Active', 'Creator is around and earning'], inactive: ['y', 'Inactive', 'No dev activity for ' + dur(d.idle) + ' — rewards frozen'], out: ['r', 'Dev is out', d.why === 'sold' ? 'Dev sold ' + Math.round(d.sold) + '% of their bag' : 'Inactive for ' + dur(d.idle)], cto: ['b', 'Community takeover', d.cto ? 'Run by the community for ' + dur(now - d.cto.at) : ''] }[d.state];
     var idleBar = d.state === 'active' || d.state === 'inactive' ? '<div class="cr-meter"><div class="cr-ml"><small>Activity timer</small><small class="mono">' + (d.state === 'active' ? 'freezes in ' + dur(DR.inactive - d.idle) : 'dev out in ' + dur(DR.out - d.idle)) + '</small></div><span class="cr-bar"><i style="width:' + Math.min(100, d.idle / DR.out * 100).toFixed(1) + '%"></i><em style="left:' + (DR.inactive / DR.out * 100).toFixed(1) + '%" title="48h: freeze"></em></span><div class="cr-ticks"><small style="left:0">last seen</small><small style="left:' + (DR.inactive / DR.out * 100).toFixed(1) + '%;transform:translateX(-50%)">48h freeze</small><small style="right:0">7d out</small></div></div>' : '';
@@ -2998,6 +3005,11 @@
       case 'view': set({ view: arg }); break;
       case 'swipe': flyOut(arg); break;
       case 'mstep': for (var mi = 0; mi < MSTEPS.length; mi++) { if (MSTEPS[mi][0] === arg) { M.paused = 5000; mSetStep(mi); break; } } break;
+      case 'liveClaim': var tc = find(arg); if (!tc || !tc.live) break;
+        chainRun('Claiming rewards', function (T) { return T.buildClaimCreator({ rpc: RPC, creator: S.account, pool: tc.pool }); })
+          .then(function (b) { confettiSmall(); toast('Claimed ' + b.amount.toFixed(4) + ' SOL to your wallet ✓', tc); tc.crFees && (tc.crFees.unclaimed = 0); render(); setTimeout(function () { liveLoad(tc); }, 1500); })
+          .catch(function (e) { if (e && e.message !== 'busy') toast('Claim failed: ' + chainErr(e)); });
+        break;
       case 'showMore': S.shown = (S.shown || 12) + (window.matchMedia('(max-width: 760px)').matches ? 8 : 12); render(); break;
       case 'showAll': S.shown = 9999; render(); break;
       case 'mlaunch': newLaunch(); break;
@@ -3722,6 +3734,7 @@
       t.tk.push([Date.now(), t.mcN, 0]); t.hist = t.tk.slice(-160).map(function (x) { return x[1]; });
       if (res[1]) t.lh = res[1];
       livePos(t);
+      chainLib().then(function (T) { return T.creatorFees({ rpc: RPC, pool: t.pool }); }).then(function (f) { t.crFees = f; if (S.screen === 'token' && S.tick === t.tick) render(); }).catch(function () {});
       if (S.screen === 'token' && S.tick === t.tick) render();
     }).catch(function (e) { console.warn('[treid] live load failed', e); });
   }
