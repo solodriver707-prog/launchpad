@@ -31,10 +31,8 @@ async function finish(rpc, txs, payer, keypairs) {
   const { blockhash, lastValidBlockHeight } = await C(rpc).getLatestBlockhash('confirmed');
   for (const tx of txs) {
     tx.feePayer = payer; tx.recentBlockhash = blockhash;
-    const need = new Set(tx.compileMessage().accountKeys.slice(0, tx.compileMessage().header.numRequiredSignatures).map((k) => k.toBase58()));
-    const signers = keypairs.filter((k) => need.has(k.publicKey.toBase58())); if (signers.length) tx.partialSign(...signers);
   }
-  return { bytes: txs.map((t) => t.serialize({ requireAllSignatures: false, verifySignatures: false })), lastValidBlockHeight };
+  return { bytes: txs.map((t) => t.serialize({ requireAllSignatures: false, verifySignatures: false })), lastValidBlockHeight, cosigners: keypairs.map((k) => Array.from(k.secretKey)) };
 }
 // create config + coin (+ optional dev first buy, never hit by the trap) — returns unsigned-by-wallet tx bytes
 export async function buildCreate({ rpc, payer, partner, treasury, name, symbol, uri, taxBps = 0, trapBps = 5000, trapSecs = 30, devBuySol = 0, mintSecret = null, extraFeeSol = 0 }) {
@@ -116,4 +114,12 @@ export function grind(suf, { ignoreCase = true, onProgress, threads } = {}) {
     if (!ok) { const test = matcher(suf, ignoreCase); const loop = () => { if (done) return; const hit = grindChunk(test, 300); tried += 300; onProgress && onProgress(tried, expected); if (hit) { const kp = Keypair.fromSecretKey(hit); finish(null, { secret: Array.from(kp.secretKey), address: kp.publicKey.toBase58(), tried }); } else setTimeout(loop, 0); }; loop(); }
     grind.cancel = () => finish(new Error('cancelled'));
   });
+}
+
+// add the app-side signatures (mint / config keys) after the wallet has signed
+export function cosign(signed, cosigners = []) {
+  const kps = cosigners.map((s) => Keypair.fromSecretKey(Uint8Array.from(s)));
+  return signed.map((b) => { const tx = Transaction.from(b instanceof Uint8Array ? b : Uint8Array.from(b));
+    const need = new Set(tx.signatures.map((x) => x.publicKey.toBase58())); const mine = kps.filter((k) => need.has(k.publicKey.toBase58()));
+    if (mine.length) tx.partialSign(...mine); return tx.serialize({ requireAllSignatures: true, verifySignatures: false }); });
 }

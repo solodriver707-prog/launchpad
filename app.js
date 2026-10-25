@@ -312,7 +312,7 @@
     if (S.busy) { toast('Finish the current transaction first'); return Promise.reject(new Error('busy')); }
     S.busy = label; render(); toast(label + ' — confirm in your wallet');
     return chainLib().then(function (T) {
-      return build(T).then(function (b) { return walletSign(b.bytes).then(function (signed) { S.busy = 'Confirming on-chain…'; render(); return T.sendAll({ rpc: RPC, signed: signed, lastValidBlockHeight: b.lastValidBlockHeight }); }).then(function (sigs) { b.sigs = sigs; return b; }); });
+      return build(T).then(function (b) { return walletSign(b.bytes).then(function (signed) { S.busy = 'Confirming on-chain…'; render(); return T.sendAll({ rpc: RPC, signed: T.cosign(signed, b.cosigners), lastValidBlockHeight: b.lastValidBlockHeight }); }).then(function (sigs) { b.sigs = sigs; return b; }); });
     }).then(function (b) { S.busy = null; render(); setTimeout(refreshBalance, 1500); return b; }, function (e) { S.busy = null; render(); throw e; });
   }
   function livePos(t) {   // real token balance + cost basis from the user's on-chain trades
@@ -2993,7 +2993,7 @@
           S.busy = 'Finding address …' + suf1; render();
           var gBox = document.getElementById('toasts'), gEl = document.createElement('div'); gEl.className = 'toast grind-t'; gEl.innerHTML = '<span class="gr-sp"></span><span>Finding your address <b class="mono">…' + esc(suf1) + '</b> <small class="mono" id="gr-n"></small></span>'; if (gBox) gBox.appendChild(gEl);
           var gStart = Date.now();
-          chainLib().then(function (T) { return T.grind(suf1, { onProgress: function (n, exp) { var el = document.getElementById('gr-n'); if (!el) return; var rate = n / Math.max(0.2, (Date.now() - gStart) / 1000), left = Math.max(0, (exp - n) / rate); el.textContent = fmtNum(n) + ' tried · ' + (left < 5 ? 'almost there' : '~' + (left < 90 ? Math.ceil(left) + 's' : Math.ceil(left / 60) + ' min') + ' left'); } }); })
+          chainLib().then(function (T) { return T.grind(suf1, { onProgress: function (n, exp) { var el = document.getElementById('gr-n'); if (!el) return; var rate = n / Math.max(0.2, (Date.now() - gStart) / 1000), left = Math.max(0, (exp - n) / rate); el.textContent = fmtNum(n) + ' tried · ' + (n >= exp ? 'any moment now — it\'s luck' : left < 5 ? 'almost there' : '~' + (left < 90 ? Math.ceil(left) + 's' : Math.ceil(left / 60) + ' min') + ' left'); } }); })
           .then(function (g) { gEl.remove(); S.busy = null; grindT = g; return chainRun('Launching $' + c.tick, function (T) {
             return T.buildCreate({ rpc: RPC, payer: S.account, partner: PARTNER, treasury: TREASURY, mintSecret: g.secret, extraFeeSol: vf1, name: cc0.name, symbol: cc0.tick, uri: coinUri('MINT'.repeat(11), cc0), taxBps: tax0 * 100, trapBps: Math.max(50, sn0.start || 50) * 100, trapSecs: Math.max(30, sn0.dur || 30), devBuySol: dq2.sol });
           }); }).then(function (b) {
