@@ -1741,7 +1741,7 @@
     return '<div class="trc-rows">' +
       row('(−) Bought', usd(o.bU), 'down', fmtNum(o.bT), o.bN + ' txn' + (o.bN === 1 ? '' : 's')) +
       row('(+) Sold', usd(o.sU), 'up', fmtNum(o.sT), o.sN + ' txn' + (o.sN === 1 ? '' : 's')) +
-      row('(=) PnL', (o.pnl < 0 ? '−' : o.pnl > 0 ? '+' : '') + usd(Math.abs(o.pnl)), o.pnl > 0 ? 'up' : o.pnl < 0 ? 'down' : '') +
+      row('(=) PnL', usd(Math.abs(o.pnl)), o.pnl > 0 ? 'up' : o.pnl < 0 ? 'down' : '') +
       '<div class="trc-r"><span class="trc-l">Unrealized</span><b class="trc-v mono">' + usd(o.unreal) + '</b><span class="trc-u"><small class="mono">' + fmtNum(o.held) + ' <i>of</i> ' + fmtNum(o.bT) + '</small><span class="trc-bar"><i style="width:' + pct.toFixed(1) + '%"></i></span></span></div></div>' +
       '<div class="trc-who"><span class="trc-ic" style="--tc:' + T[2] + '">' + tierSVG(T[2], o.tier) + '</span><span class="trc-wi"><span class="trc-nm"><b class="mono">' + (me ? 'You' : w && w.n ? '@' + esc(w.n) : esc(addr.slice(0, 6) + '…' + addr.slice(-4))) + '</b>' + (dev ? '<span class="bdg dev">DEV</span>' : '') + (me && !dev ? '<span class="bdg you">YOU</span>' : '') + '</span><small><b style="color:' + T[2] + '">' + T[1] + '</b> · ' + T[3] + '</small><small>' + (o.first ? 'Holder since ' + ago(o.first) : 'No buys on this coin yet') + '</small></span></div>';
   }
