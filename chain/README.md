@@ -55,3 +55,13 @@ The indexer rebuilds its database from chain on every start (no disk needed). It
 ### Site ↔ indexer
 Real coins appear on the board with an **ON-CHAIN** badge: real market cap, curve %, holders, trades,
 chart, sniper/bundle flags and dev %. Demo coins keep running beside them. On-chain buy/sell from the site is next.
+
+## Creator rewards escrow (rules enforced)
+New coins hand the pool's *creator* role to the treid ops wallet in the launch transaction, so the ops wallet claims the
+creator fee share and applies the rules every cycle (`indexer/rewards.mjs`):
+- active creator → paid automatically
+- 48h no activity → paused; rewards buy back & burn the coin; "I'm still here" (free wallet signature) resumes
+- 7d inactive or sold ≥70% of peak bag → creator out: 50% buyback & burn, 50% takeover fund; the creator's tax share is burned
+- fund not used by a takeover within 14 days → treid grants (treasury)
+Every action carries an on-chain memo `treid:<kind>:<mint>:<lamports>`; the ledger is rebuilt from chain on every start.
+API: `GET /api/creator/:mint`, `POST /api/ping`.

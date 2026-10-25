@@ -8,6 +8,7 @@ const coder = new anchor.BorshEventCoder(DynamicBondingCurveIdl);
 import { DatabaseSync } from 'node:sqlite';
 import http from 'node:http';
 import { opsKeypair, startOps } from './ops.mjs';
+import { startRewards } from './rewards.mjs';
 
 const RPC = process.env.RPC || 'http://127.0.0.1:8899';
 const WS = process.env.WS || RPC.replace('http', 'ws').replace(':8899', ':8900');
@@ -42,7 +43,7 @@ CREATE TABLE IF NOT EXISTS payouts(id INTEGER PRIMARY KEY AUTOINCREMENT, mint TE
 CREATE TABLE IF NOT EXISTS meta(mint TEXT PRIMARY KEY, name TEXT, symbol TEXT, description TEXT, image TEXT, banner TEXT, at INT);`);
 for (const col of ['trap_bps INT DEFAULT 0', 'trap_secs INT DEFAULT 0', 'trap_steps INT DEFAULT 0']) { try { db.exec('ALTER TABLE coins ADD COLUMN ' + col); } catch {} }
 const q = (sql, ...a) => db.prepare(sql).all(...a), q1 = (sql, ...a) => db.prepare(sql).get(...a), run = (sql, ...a) => db.prepare(sql).run(...a);
-let configs = new Set(); const watched = new Map();
+let configs = new Set(); const watched = new Map(); const escCache = new Map(); let REW = null;
 // treid configs = DBC configs whose fee claimer is the treid wallet. Each one is watched by address,
 // so we only ever fetch transactions that touch treid coins (never the whole DBC firehose).
 async function loadConfigs() {
@@ -165,6 +166,16 @@ http.createServer(async (req, res) => {
     if (p[1] === 'coins') return J(q('SELECT mint FROM coins ORDER BY created_slot DESC').map(r => stats(r.mint)));
     if (p[1] === 'coin') return J(stats(p[2]));
     if (p[1] === 'trades') return J(q('SELECT * FROM trades WHERE mint=? ORDER BY ts DESC, slot DESC LIMIT 200', p[2]));
+    if (p[1] === 'creator' && p[2]) {   // creator rewards escrow status for a coin
+      const c = q1('SELECT * FROM coins WHERE mint=?', p[2]); if (!c) return J(null);
+      const k = 'esc:' + c.mint; let esc = escCache.get(k);
+      if (!esc || Date.now() - esc.at > 60e3) { const vp = (await dbc.state.getPool(new PublicKey(c.pool)).catch(() => null))?.poolState; esc = { at: Date.now(), on: !!(OPS && vp && vp.creator.toBase58() === OPS.publicKey.toBase58()), pending: vp ? Number(vp.creatorQuoteFee.toString()) / 1e9 : 0 }; escCache.set(k, esc); }
+      if (!esc.on || !REW) return J({ escrow: false, dev: c.creator });
+      const st = REW.state(c), L = (x) => x / 1e9;
+      return J({ escrow: true, dev: c.creator, state: st.state, why: st.why, idleMs: st.idle, lastActive: st.last, soldPct: st.sold, pendingSol: esc.pending, paidSol: L(st.paid), buybackSol: L(st.buyback), burnedTokens: st.burnedTokens / 1e6, fundSol: L(st.fund), grantedSol: L(st.granted), fundEndsAt: st.fundEndsAt, rules: { freezeH: 48, outD: 7, soldOut: 70, fundD: 14 }, log: REW.logFor(c.mint) });
+    }
+    if (p[1] === 'ping' && req.method === 'POST') { let body = ''; req.on('data', (d) => { body += d; if (body.length > 4000) req.destroy(); });
+      req.on('end', async () => { try { if (!REW) throw new Error('rewards escrow not enabled'); J(await REW.ping(JSON.parse(body))); } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: e.message })); } }); return; }
     if (p[1] === 'payouts') return J(OPS ? q('SELECT * FROM payouts WHERE mint=? ORDER BY ts DESC LIMIT 50', p[2]) : []);
     if (p[1] === 'candles') return J(candles(p[2], u.searchParams.get('tf') || '1m'));
     if (p[1] === 'holders') return J(await holders(p[2]));
@@ -180,4 +191,5 @@ for (const w of PARTNERS) conn.onLogs(new PublicKey(w), (l) => { if (!l.err) han
 setInterval(() => { for (const k of configs) syncAddress(k, 100).catch(() => {}); }, 60e3);   // safety net if a websocket message is missed (cheap: 1 call per config)
 setInterval(() => loadConfigs().catch(() => {}), 15 * 60e3);                                  // full config rescan (getProgramAccounts is credit-heavy) — new configs are caught live via the PARTNER subscription
 console.log('watching', configs.size, 'treid configs (partners', PARTNERS.join(', '), ')');
-if (OPS) { startOps({ conn, dbc, ops: OPS, treasury: PARTNER, q, q1, run, poolAuthority: deriveDbcPoolAuthority().toBase58(), everyMs: +(process.env.OPS_EVERY_MIN || 10) * 60e3 }); console.log('ops wallet', OPS.publicKey.toBase58(), '→ treasury', PARTNER); }
+if (OPS) { REW = startRewards({ conn, dbc, ops: OPS, treasury: PARTNER, q, q1, run }); REW.rebuild().catch((e) => console.log('rewards rebuild err', e.message)).then(() => { setTimeout(() => REW.cycle(), 45e3); setInterval(() => REW.cycle(), +(process.env.OPS_EVERY_MIN || 10) * 60e3); });
+  startOps({ conn, dbc, ops: OPS, treasury: PARTNER, q, q1, run, devState: (c) => REW.state(c).state, liabilities: () => q1(`SELECT COALESCE(SUM(CASE WHEN kind='fund' THEN lamports WHEN kind IN ('grant','cto') THEN -lamports ELSE 0 END),0) s FROM rlog`).s, poolAuthority: deriveDbcPoolAuthority().toBase58(), everyMs: +(process.env.OPS_EVERY_MIN || 10) * 60e3 }); console.log('ops wallet', OPS.publicKey.toBase58(), '→ treasury', PARTNER); }

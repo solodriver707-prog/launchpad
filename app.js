@@ -2414,6 +2414,20 @@
   }
   function crBadge(t) { var d = devStatus(t); return d.state === 'out' ? '<span class="crb out" title="Dev is out — open for community takeover">DEV OUT</span>' : d.state === 'cto' ? '<span class="crb cto" title="Community takeover">CTO</span>' : d.state === 'inactive' ? '<span class="crb idle" title="Dev inactive for 48h+ — rewards frozen">DEV AWAY</span>' : ''; }
   function crPanel(t) {
+    if (t.live && t.esc && t.esc.escrow) { var E = t.esc, mineE = !!(S.account && S.account === E.dev), solf = function (v) { return (v > 0 && v < 0.0001 ? '<0.0001' : (+v).toFixed(4)) + ' SOL'; }, durE = function (ms) { return durH(Math.max(1, ms / 60000)); };
+      var stE = { active: ['g', 'Active', 'Paid to the creator automatically, every cycle'], frozen: ['y', 'Paused', 'No creator activity for ' + durE(E.idleMs) + ' — rewards now buy back & burn $' + esc(t.tick)], out: ['r', 'Creator is out', E.why === 'sold' || E.soldPct >= 70 ? 'Creator sold ' + Math.round(E.soldPct) + '% of their bag' : 'Creator inactive for ' + durE(E.idleMs)] }[E.state] || ['g', 'Active', ''];
+      var tiles = E.state === 'out' ? [['Bought back & burned', solf(E.buybackSol)], ['Takeover fund', solf(E.fundSol)], [E.fundEndsAt && E.fundEndsAt > Date.now() ? 'Fund window' : 'Sent to grants', E.fundEndsAt && E.fundEndsAt > Date.now() ? durE(E.fundEndsAt - Date.now()) + ' left' : solf(E.grantedSol)]]
+        : [['Paid to creator', solf(E.paidSol)], ['Next payout', solf(E.pendingSol)], ['Bought back & burned', solf(E.buybackSol)]];
+      var meterE = E.state !== 'out' ? '<div class="cr-meter"><div class="cr-ml"><small>Activity timer</small><small class="mono">' + (E.state === 'active' ? 'pauses in ' + durE(48 * 36e5 - E.idleMs) : 'creator out in ' + durE(7 * 864e5 - E.idleMs)) + '</small></div><span class="cr-bar"><i style="width:' + Math.min(100, E.idleMs / (7 * 864e5) * 100).toFixed(1) + '%"></i><em style="left:' + (48 / 168 * 100).toFixed(1) + '%" title="48h: paused"></em></span><div class="cr-ml"><small class="muted">last seen ' + ago(E.lastActive) + ' ago</small><small class="muted">48h pause · 7d out</small></div></div>' +
+        '<div class="cr-meter"><div class="cr-ml"><small>Creator sold of peak bag</small><small class="mono ' + (E.soldPct >= 70 ? 'down' : E.soldPct >= 40 ? 'warn' : '') + '">' + Math.round(E.soldPct) + '%</small></div><span class="cr-bar sold"><i style="width:' + Math.min(100, E.soldPct) + '%"></i><em style="left:70%" title="70%: creator out"></em></span></div>' : '';
+      var KN = { pay: 'Paid to creator', buyback: 'Buyback', burntok: 'Burned', fund: 'To takeover fund', grant: 'To treid grants', ping: 'Creator checked in', out: 'Creator out', claim: 'Collected fees' };
+      var logE = (E.log || []).filter(function (x) { return x.kind !== 'claim'; }).slice(0, 5).map(function (x) { return '<a class="cr-log" target="_blank" rel="noopener" href="https://solscan.io/tx/' + esc(x.sig) + (CHAIN_ID === 'solana:devnet' ? '?cluster=devnet' : '') + '"><span>' + KN[x.kind] + '</span><b class="mono">' + (x.kind === 'burntok' ? fmtNum(x.lamports / 1e6) + ' $' + esc(t.tick) : x.lamports ? (x.lamports / 1e9).toFixed(4) + ' SOL' : '') + '</b><small class="muted">' + ago(x.ts) + '</small></a>'; }).join('');
+      return '<section class="card-s panel cr-panel s-' + stE[0] + '"><div class="cr-h"><b>Creator rewards</b><span class="cr-st ' + stE[0] + '"><i></i>' + stE[1] + '</span></div><small class="muted cr-sub">' + stE[2] + '</small>' +
+        '<div class="cr-money">' + tiles.map(function (m) { return '<div><small>' + m[0] + '</small><b class="mono">' + m[1] + '</b></div>'; }).join('') + '</div>' + meterE +
+        (mineE && E.state !== 'out' ? '<div class="cr-acts"><button class="btn sec" style="flex:1" data-act="devHere" data-arg="' + esc(t.tick) + '">✋ I’m still here</button></div>' : '') +
+        (logE ? '<div class="cr-logs">' + logE + '</div>' : '') +
+        '<details class="cr-rules"><summary>How the rules work</summary><ul><li>Active creator → their share (' + creatorCut(t) + '% of every trade) is <b>paid automatically</b>.</li><li><b>48h</b> with no creator activity → payouts pause; rewards meanwhile <b>buy back & burn</b> the coin. “I’m still here” (a free wallet signature) resumes payouts.</li><li><b>7 days</b> inactive, or creator sells <b>70%+</b> of their peak bag → creator is out: <b>50%</b> buys back & burns the coin, <b>50%</b> goes to a takeover fund.</li><li>No community takeover within <b>14 days</b> → the fund goes to <b>treid grants</b> for good new projects.</li><li>Every step is an on-chain transaction — tap any line above to verify.</li></ul></details></section>';
+    }
     if (t.live) {   // real coin: rewards are SOL sitting in the pool, the creator claims them straight to their wallet
       var f = t.crFees, mine = !!(S.account && f && S.account === f.creator), u = f ? f.unclaimed : null, uTxt = u == null ? '…' : (u < 0.0001 && u > 0 ? '<0.0001' : u.toFixed(4)) + ' SOL';
       return '<section class="card-s panel cr-panel s-g"><div class="cr-h"><b>Creator rewards</b><span class="cr-st g"><i></i>On-chain</span></div><small class="muted cr-sub">' + creatorCut(t) + '% of every trade goes to the creator</small>' +
@@ -3005,6 +3019,13 @@
       case 'view': set({ view: arg }); break;
       case 'swipe': flyOut(arg); break;
       case 'mstep': for (var mi = 0; mi < MSTEPS.length; mi++) { if (MSTEPS[mi][0] === arg) { M.paused = 5000; mSetStep(mi); break; } } break;
+      case 'devHere': var th = find(arg); if (!th || !S.wallet) break; var fsm = S.wallet.features['solana:signMessage'];
+        if (!fsm) { toast('This wallet can’t sign messages — try Phantom or Solflare'); break; }
+        var tsH = Date.now(), msgH = 'treid: I\'m still here \u2014 ' + th.ca + ' \u2014 ' + tsH;   // must match indexer/rewards.mjs pingMessage
+        Promise.resolve(fsm.signMessage({ account: S.walletAcc, message: new TextEncoder().encode(msgH) })).then(function (r) { var sg = (Array.isArray(r) ? r[0] : r).signature; return chainLib().then(function (T) { return fetch(API + '/api/ping', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mint: th.ca, wallet: S.account, ts: tsH, sig: T.b58(sg) }) }).then(function (x) { return x.json(); }); }); })
+          .then(function (j) { if (!j || !j.ok) throw new Error((j && j.error) || 'check-in failed'); toast('Checked in ✓ — your activity timer is reset', th); setTimeout(function () { liveLoad(th); }, 2500); })
+          .catch(function (e) { toast(chainErr(e)); });
+        break;
       case 'liveClaim': var tc = find(arg); if (!tc || !tc.live) break;
         chainRun('Claiming rewards', function (T) { return T.buildClaimCreator({ rpc: RPC, creator: S.account, pool: tc.pool }); })
           .then(function (b) { confettiSmall(); toast('Claimed ' + b.amount.toFixed(4) + ' SOL to your wallet ✓', tc); tc.crFees && (tc.crFees.unclaimed = 0); render(); setTimeout(function () { liveLoad(tc); }, 1500); })
@@ -3060,7 +3081,7 @@
           .then(function (g) { gEl.remove(); grindT = g; S.busy = 'Saving logo…'; render();
             var up = API ? Promise.race([fetch(API + '/api/upload', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: cc0.name, symbol: cc0.tick, description: (cc0.desc || '').trim(), image: cc0.img || null, banner: cc0.banner || null, x: cc0.x, tg: cc0.tg, web: cc0.web }) }).then(function (r) { return r.json(); }), new Promise(function (r) { setTimeout(function () { r({}); }, 25000); })]).catch(function () { return {}; }) : Promise.resolve({});
             return up; }).then(function (up) { S.busy = null; var g = grindT; return chainRun('Launching $' + c.tick, function (T) {
-            return T.buildCreate({ rpc: RPC, payer: S.account, partner: PARTNER, treasury: TREASURY, mintSecret: g.secret, extraFeeSol: vf1, name: cc0.name, symbol: cc0.tick, uri: coinUri('MINT'.repeat(11), cc0, up && up.uri), taxBps: tax0 * 100, trapBps: Math.max(50, sn0.start || 50) * 100, trapSecs: Math.max(30, sn0.dur || 30), devBuySol: dq2.sol });
+            return T.buildCreate({ rpc: RPC, payer: S.account, partner: PARTNER, treasury: TREASURY, mintSecret: g.secret, extraFeeSol: vf1, escrow: S.escrowWallet || null, name: cc0.name, symbol: cc0.tick, uri: coinUri('MINT'.repeat(11), cc0, up && up.uri), taxBps: tax0 * 100, trapBps: Math.max(50, sn0.start || 50) * 100, trapSecs: Math.max(30, sn0.dur || 30), devBuySol: dq2.sol });
           }); }).then(function (b) {
             var coin = { mint: b.mint, pool: b.pool, config: b.config, creator: S.account, name: cc0.name, symbol: cc0.tick, uri: b.uri, tax_bps: tax0 * 100, trap_bps: Math.max(50, sn0.start || 50) * 100, trap_secs: Math.max(30, sn0.dur || 30), created_at: Date.now(), mcap_usd: 20 * SOL_USD, curve_pct: 0, holders: dq2.sol > 0 ? 1 : 0 };
             var nt2 = liveTok(coin); nt2.tick = cc0.tick; nt2.spec = cc0.spec; nt2.img = cc0.img; nt2.banner = cc0.banner || null; nt2.desc = (cc0.desc || '').trim(); nt2.split = tax0 > 0 && cc0.split ? { p: cc0.split.p, h: cc0.split.h, b: cc0.split.b, d: cc0.split.d } : null;
@@ -3735,6 +3756,7 @@
       if (res[1]) t.lh = res[1];
       livePos(t);
       chainLib().then(function (T) { return T.creatorFees({ rpc: RPC, pool: t.pool }); }).then(function (f) { t.crFees = f; if (S.screen === 'token' && S.tick === t.tick) render(); }).catch(function () {});
+      apiGet('/api/creator/' + t.ca).then(function (e) { t.esc = e; if (S.screen === 'token' && S.tick === t.tick) render(); }).catch(function () {});
       if (S.screen === 'token' && S.tick === t.tick) render();
     }).catch(function (e) { console.warn('[treid] live load failed', e); });
   }
@@ -3748,7 +3770,7 @@
   }
   function liveStart() {
     if (!API) return;
-    apiGet('/api/health').then(function (h) { if (h && h.ops && !window.TREID_PARTNER) PARTNER = h.ops; }).catch(function () {});
+    apiGet('/api/health').then(function (h) { if (h && h.ops && !window.TREID_PARTNER) { PARTNER = h.ops; S.escrowWallet = h.ops; } }).catch(function () {});
     apiGet('/api/coins').then(function (cs) {
       S.apiOk = true; cs.filter(Boolean).forEach(liveTok); render();
       if (S.pendingRoute) { var pr = S.pendingRoute, tp = S.live.filter(function (x) { return x.ca === pr; })[0]; S.pendingRoute = null; var rr = routeReady; routeReady = false; if (tp) openToken(tp.tick); else { set({ screen: 'home' }); toast('That coin wasn\'t found'); } routeReady = rr; }

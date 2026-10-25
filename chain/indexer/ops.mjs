@@ -5,6 +5,7 @@ import { TOKEN_2022_PROGRAM_ID, unpackAccount, getTransferFeeAmount, withdrawWit
   getAssociatedTokenAddressSync, createAssociatedTokenAccountIdempotentInstruction, createTransferCheckedInstruction, createBurnCheckedInstruction, getAccount } from '@solana/spl-token';
 import bs58 from 'bs58';
 import BN from 'bn.js';
+import { withLock } from './lock.mjs';
 
 import { createHash } from 'node:crypto';
 // OPS_SECRET can be a keypair (JSON array / base58) or any random string (e.g. Render's generateValue) → used as a seed
@@ -17,7 +18,7 @@ export function opsKeypair(secret) {
 const DEC = 6, SUPPLY = 1e9, MIN_HARVEST = 50_000 * 10 ** DEC;   // don't bother below 0.005% of supply
 const parseSplit = (uri) => { try { const s = new URL(uri).searchParams.get('s'); if (s) { const p = s.split('.').map(Number); if (p.length === 3 && p[0] + p[1] + p[2] === 100) return { h: p[0], b: p[1], d: p[2] }; } } catch {} return { h: 70, b: 20, d: 10 }; };
 
-export function startOps({ conn, dbc, ops, treasury, q, q1, run, poolAuthority, log = console.log, everyMs = 10 * 60e3 }) {
+export function startOps({ conn, dbc, ops, treasury, q, q1, run, poolAuthority, log = console.log, everyMs = 10 * 60e3, liabilities = () => 0, devState = () => 'active' }) {
   run(`CREATE TABLE IF NOT EXISTS payouts(id INTEGER PRIMARY KEY AUTOINCREMENT, mint TEXT, ts INT, harvested REAL, burned REAL, dev REAL, holders REAL, n_holders INT, fees_sol REAL)`);
   const send = (ixs) => sendAndConfirmTransaction(conn, new Transaction().add(...ixs), [ops], { commitment: 'confirmed' });
   let busy = false;
@@ -44,7 +45,9 @@ export function startOps({ conn, dbc, ops, treasury, q, q1, run, poolAuthority, 
     const got = (await getAccount(conn, opsAta, 'confirmed', TOKEN_2022_PROGRAM_ID)).amount - before; if (got <= 0n) return null;
     const sp = parseSplit(c.uri), burnAmt = got * BigInt(sp.b) / 100n, devAmt = got * BigInt(sp.d) / 100n, holdAmt = got - burnAmt - devAmt;
     if (burnAmt > 0n) await send([createBurnCheckedInstruction(opsAta, mint, ops.publicKey, burnAmt, DEC, [], TOKEN_2022_PROGRAM_ID)]);
-    if (devAmt > 0n) { const devAta = getAssociatedTokenAddressSync(mint, new PublicKey(c.creator), false, TOKEN_2022_PROGRAM_ID);
+    let devBurn = false; try { devBurn = devState(c) !== 'active'; } catch {}
+    if (devAmt > 0n && devBurn) await send([createBurnCheckedInstruction(opsAta, mint, ops.publicKey, devAmt, DEC, [], TOKEN_2022_PROGRAM_ID)]);   // creator paused / out → their tax share is burned
+    if (devAmt > 0n && !devBurn) { const devAta = getAssociatedTokenAddressSync(mint, new PublicKey(c.creator), false, TOKEN_2022_PROGRAM_ID);
       await send([createAssociatedTokenAccountIdempotentInstruction(ops.publicKey, devAta, new PublicKey(c.creator), mint, TOKEN_2022_PROGRAM_ID), createTransferCheckedInstruction(opsAta, mint, devAta, ops.publicKey, devAmt, DEC, [], TOKEN_2022_PROGRAM_ID)]); }
     // holders: pro-rata to every real holder (not the curve vault, not ops, not the dev who already got the dev share)
     const skip = new Set([poolAuthority, ops.publicKey.toBase58(), c.creator]);
@@ -57,12 +60,12 @@ export function startOps({ conn, dbc, ops, treasury, q, q1, run, poolAuthority, 
     }
     const left = holdAmt - paid; if (left > 0n) await send([createBurnCheckedInstruction(opsAta, mint, ops.publicKey, left, DEC, [], TOKEN_2022_PROGRAM_ID)]);   // nobody to pay → burn it
     const f = (x) => Number(x) / 10 ** DEC;
-    run('INSERT INTO payouts(mint,ts,harvested,burned,dev,holders,n_holders,fees_sol) VALUES(?,?,?,?,?,?,?,0)', c.mint, Date.now(), f(got), f(burnAmt + left), f(devAmt), f(paid), n);
-    log('ops   tax', c.symbol, 'harvested', f(got).toFixed(0), 'burn', f(burnAmt + left).toFixed(0), 'dev', f(devAmt).toFixed(0), 'holders', f(paid).toFixed(0), 'to', n);
+    run('INSERT INTO payouts(mint,ts,harvested,burned,dev,holders,n_holders,fees_sol) VALUES(?,?,?,?,?,?,?,0)', c.mint, Date.now(), f(got), f(burnAmt + left + (devBurn ? devAmt : 0n)), f(devBurn ? 0n : devAmt), f(paid), n);
+    log('ops   tax', c.symbol, 'harvested', f(got).toFixed(0), 'burn', f(burnAmt + left + (devBurn ? devAmt : 0n)).toFixed(0), 'dev', (devBurn ? 'burned (creator not active)' : f(devAmt).toFixed(0)), 'holders', f(paid).toFixed(0), 'to', n);
     return { got: f(got) };
   }
   async function sweep() {
-    const bal = await conn.getBalance(ops.publicKey), keep = 0.2e9;
+    const bal = await conn.getBalance(ops.publicKey), keep = 0.2e9 + liabilities();   // never sweep takeover funds held for communities
     if (treasury && bal > keep + 0.1e9) { const amt = bal - keep; await send([SystemProgram.transfer({ fromPubkey: ops.publicKey, toPubkey: new PublicKey(treasury), lamports: amt })]); log('ops   swept', (amt / 1e9).toFixed(4), 'SOL to treasury'); }
   }
   async function cycle() {
@@ -72,6 +75,6 @@ export function startOps({ conn, dbc, ops, treasury, q, q1, run, poolAuthority, 
       await sweep();
     } catch (e) { log('ops   cycle err', e.message); } finally { busy = false; }
   }
-  setTimeout(cycle, 30e3); setInterval(cycle, everyMs);
+  const locked = () => withLock(cycle); setTimeout(locked, 30e3); setInterval(locked, everyMs);
   return { cycle };
 }

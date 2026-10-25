@@ -3,10 +3,12 @@ import { Buffer } from 'buffer';
 if (!globalThis.Buffer) globalThis.Buffer = Buffer;
 import { Connection, Keypair, PublicKey, Transaction, SystemProgram } from '@solana/web3.js';
 import { ed25519 } from '@noble/curves/ed25519';
+import bs58lib from 'bs58';
+const bs58enc = (b) => (bs58lib.default || bs58lib).encode(b instanceof Uint8Array ? b : Uint8Array.from(b));
 import { NATIVE_MINT } from '@solana/spl-token';
 import BN from 'bn.js';
 import { DynamicBondingCurveClient, buildCurveWithMarketCap, TokenType, TokenDecimal, TokenAuthorityOption, BaseFeeMode, CollectFeeMode,
-  MigrationOption, MigrationFeeOption, MigratedCollectFeeMode, DammV2DynamicFeeMode, ActivationType, deriveDbcPoolAddress, SwapMode, getCurrentPoint } from '@meteora-ag/dynamic-bonding-curve-sdk';
+  MigrationOption, MigrationFeeOption, MigratedCollectFeeMode, DammV2DynamicFeeMode, ActivationType, deriveDbcPoolAddress, deriveDammV1MigrationMetadataAddress, SwapMode, getCurrentPoint } from '@meteora-ag/dynamic-bonding-curve-sdk';
 
 // ---- treid rules (must match chain/scripts/01_launch.mjs) ----
 export const RULES = { minTrapBps: 5000, minTrapSecs: 30, trapSteps: 3, feePlainBps: 100, feeTaxedBps: 50, maxTaxBps: 1000, creatorFeePct: 50, mc0Sol: 20, mc1Sol: 60, supply: 1e9, decimals: 6 };
@@ -35,7 +37,7 @@ async function finish(rpc, txs, payer, keypairs) {
   return { bytes: txs.map((t) => t.serialize({ requireAllSignatures: false, verifySignatures: false })), lastValidBlockHeight, cosigners: keypairs.map((k) => Array.from(k.secretKey)) };
 }
 // create config + coin (+ optional dev first buy, never hit by the trap) — returns unsigned-by-wallet tx bytes
-export async function buildCreate({ rpc, payer, partner, treasury, name, symbol, uri, taxBps = 0, trapBps = 5000, trapSecs = 30, devBuySol = 0, mintSecret = null, extraFeeSol = 0 }) {
+export async function buildCreate({ rpc, payer, partner, treasury, name, symbol, uri, taxBps = 0, trapBps = 5000, trapSecs = 30, devBuySol = 0, mintSecret = null, extraFeeSol = 0, escrow = null }) {
   payer = pk(payer); partner = pk(partner); treasury = treasury ? pk(treasury) : partner;
   const cl = client(rpc), cfg = Keypair.generate(), mint = mintSecret ? Keypair.fromSecretKey(Uint8Array.from(mintSecret)) : Keypair.generate(), curve = curveFor({ taxBps, trapBps, trapSecs });
   const common = { payer, config: cfg.publicKey, feeClaimer: partner, leftoverReceiver: treasury, quoteMint: NATIVE_MINT, ...curve,
@@ -44,6 +46,11 @@ export async function buildCreate({ rpc, payer, partner, treasury, name, symbol,
   let txs;
   if (devBuySol > 0) { const r = await cl.partner.createConfigAndPoolWithFirstBuy({ ...common, firstBuyParam: { buyer: payer, buyAmount: new BN(Math.round(devBuySol * 1e9)), minimumAmountOut: new BN(0), referralTokenAccount: null } }); txs = [r.createConfigTx, r.createPoolWithFirstBuyTx]; }
   else txs = [await cl.partner.createConfigAndPool(common)];
+  // treid rewards escrow: hand the pool's creator role (creator fee claims) to the treid ops wallet in the same tx — the dev stays the real creator off-chain
+  if (escrow) { const poolPk = deriveDbcPoolAddress(NATIVE_MINT, mint.publicKey, cfg.publicKey), tp = await cl.creator.program.methods.transferPoolCreator().accountsPartial({ virtualPool: poolPk, newCreator: pk(escrow), config: cfg.publicKey, creator: payer }).remainingAccounts([{ isSigner: false, isWritable: false, pubkey: deriveDammV1MigrationMetadataAddress(poolPk) }]).transaction();   // pool doesn't exist yet → build the ix directly
+    const last = txs[txs.length - 1], trial = new Transaction().add(...last.instructions, ...tp.instructions); trial.feePayer = payer; trial.recentBlockhash = '11111111111111111111111111111111';
+    let fits = true; try { fits = trial.serialize({ requireAllSignatures: false, verifySignatures: false }).length <= 1232; } catch { fits = false; }
+    if (fits) last.add(...tp.instructions); else txs.push(new Transaction().add(...tp.instructions)); }
   if (extraFeeSol > 0) txs[0].add(SystemProgram.transfer({ fromPubkey: payer, toPubkey: treasury, lamports: Math.round(extraFeeSol * 1e9) }));   // custom address fee
   const out = await finish(rpc, txs, payer, [cfg, mint]);
   return { ...out, uri: common.preCreatePoolParam.uri, mint: mint.publicKey.toBase58(), config: cfg.publicKey.toBase58(), pool: deriveDbcPoolAddress(NATIVE_MINT, mint.publicKey, cfg.publicKey).toBase58() };
@@ -136,3 +143,4 @@ export async function buildClaimCreator({ rpc, creator, pool }) {
   const tx = await client(rpc).creator.claimCreatorTradingFee({ creator, payer: creator, pool: pk(pool), maxBaseAmount: new BN(0), maxQuoteAmount: amt });
   const out = await finish(rpc, [tx], creator, []); return { ...out, amount: Number(amt.toString()) / 1e9 };
 }
+export const b58 = (bytes) => bs58enc(bytes);
