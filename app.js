@@ -184,7 +184,7 @@
     S.trades.sort(function (a, b) { return b.t - a.t; });
   })(); S.seedN = S.trades.length;
 
-  function set(p) { for (var k in p) S[k] = p[k]; render(); }
+  function set(p) { for (var k in p) S[k] = p[k]; render(); syncRoute(); }
   function setC(p) { for (var k in p) S.c[k] = p[k]; render(); }
 
   // ================= TOASTS + CONFETTI =================
@@ -2665,6 +2665,18 @@
 
   // ================= RENDER =================
   var firstCount = true;
+  // ================= URL ROUTING (refresh / share / back button keep your place) =================
+  var ROUTES = { create: 'create', burn: 'burnery', leaders: 'leaderboard', trend: 'trending', watch: 'watchlist' }, routeReady = false;
+  function routeOf() { if (S.screen === 'token' && S.tick) { var t0 = find(S.tick); return '#/coin/' + encodeURIComponent(t0 && t0.live ? t0.ca : S.tick); } return ROUTES[S.screen] ? '#/' + ROUTES[S.screen] : ''; }
+  function syncRoute() { if (!routeReady) return; var r = routeOf(), cur = location.hash || ''; if (cur === r) return; try { history.pushState(null, '', r || (location.pathname + location.search)); } catch (e) {} }
+  function applyRoute() {
+    var h = decodeURIComponent((location.hash || '').replace(/^#\/?/, '')), parts = h.split('/');
+    if (parts[0] === 'coin' && parts[1]) { var id = parts[1], t1 = find(id) || S.live.filter(function (x) { return x.ca === id; })[0];
+      if (t1) { if (S.screen !== 'token' || S.tick !== t1.tick) openToken(t1.tick); } else { S.pendingRoute = id; if (S.screen !== 'home') set({ screen: 'home' }); } return; }
+    for (var k in ROUTES) if (ROUTES[k] === parts[0]) { if (S.screen !== k) set({ screen: k, palOpen: false }); return; }
+    if (S.screen !== 'home') set({ screen: 'home' });
+  }
+  window.addEventListener('popstate', function () { routeReady = false; applyRoute(); routeReady = true; });
   function render() {
     var ae = document.activeElement, fid = ae && ae.id, ss = null, se = null;
     try { if (fid && ae.selectionStart != null) { ss = ae.selectionStart; se = ae.selectionEnd; } } catch (e) {}
@@ -3725,6 +3737,7 @@
     apiGet('/api/health').then(function (h) { if (h && h.ops && !window.TREID_PARTNER) PARTNER = h.ops; }).catch(function () {});
     apiGet('/api/coins').then(function (cs) {
       S.apiOk = true; cs.filter(Boolean).forEach(liveTok); render();
+      if (S.pendingRoute) { var pr = S.pendingRoute, tp = S.live.filter(function (x) { return x.ca === pr; })[0]; S.pendingRoute = null; if (tp) { routeReady = false; openToken(tp.tick); routeReady = true; } }
       var es = new EventSource(API + '/api/stream');
       es.onmessage = function (m) { var ev; try { ev = JSON.parse(m.data); } catch (e) { return; } if (ev.type === 'trade') liveTrade(ev); else if (ev.type === 'coin') apiGet('/api/coin/' + ev.mint).then(function (c) { if (c) { var known = S.live.some(function (x) { return x.ca === c.mint; }), t = liveTok(c); if (!known && !isMob()) toast('New on treid: ' + t.name + ' $' + t.tick, t); render(); } }).catch(function () {}); };
       es.onerror = function () { S.apiOk = es.readyState === 1; };
@@ -3733,5 +3746,5 @@
   }
   liveStart();
 
-  setTimeout(function () { S.loading = false; render(); }, 850);
+  setTimeout(function () { S.loading = false; applyRoute(); render(); routeReady = true; syncRoute(); }, 850);
 })();
