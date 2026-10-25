@@ -1643,9 +1643,11 @@
       out.push({ o: o, h: h2, l: l2, c: c, v: v, t: bt, flat: !any }); prevC = c;
     }
     if (!out.length) { var c0 = tk[0][1]; out.push({ o: c0, h: c0, l: c0, c: c0, v: 0, t: endB * b, flat: true }); }
+    // like a normal chart: minutes without trades get no candle — candles sit side by side (keep the live candle)
+    var dense = out.filter(function (c, i) { return !c.flat || i === out.length - 1; }); if (dense.length < out.length) { var n2 = Math.min(n, Math.max(14, dense.length + fut + 2)); dense.fut = fut; dense.n = n2; dense.pre = Math.max(0, n2 - dense.length - fut); return dense; }   // few candles → wider candles, not slivers
     out.fut = fut; out.pre = Math.min(pre, n - out.length - fut); out.n = n; return out;
   }
-  function yLabel(v) { return S.chartMode === 'price' ? fmtPrice(v * 1000 / 1e9) : fmtK(v); }
+  function yLabel(v, step) { if (S.chartMode === 'price') return fmtPrice(v * 1000 / 1e9); if (step != null && step < 0.1 && v < 1000) return '$' + Math.round(v * 1000).toLocaleString('en-US'); return fmtK(v); }
   function tLabel(ms) { var d = new Date(ms), p = function (x) { return (x < 10 ? '0' : '') + x; }; return tfMs() >= 864e5 ? (d.getMonth() + 1) + '/' + d.getDate() : p(d.getHours()) + ':' + p(d.getMinutes()); }
   function chartSVG(t) {
     var cs = candles(t), W = 1000, H = 400, top = 16, vh = S.cvol ? 64 : 0, bot = 22, ph = H - vh - top - bot - 8, yfree = S.cys !== 1 || !!S.cyo;
@@ -1678,7 +1680,7 @@
     var marks = '';
     if (S.cmarks || S.ccall) { var b = tfMs(), t0 = cs[0].t, tEnd = cs[cs.length - 1].t + b;
       seedDevTrades(t); var stack = {}; S.cmarkData = [];
-      var place = function (ts, side) { var idx = Math.floor((ts - t0) / b), c = cs[idx]; if (!c) return null; var n = stack[idx] = (stack[idx] || 0) + 1; if (n > 6) return null; var yy = Y(c.h) - 16 - (n - 1) * 22; if (yy < 40) yy = Y(c.l) + 16 + (n - 1) * 22; return { x: off0 + idx * cw + cw / 2, y: yy }; };
+      var byT = {}; cs.forEach(function (c, i) { byT[c.t] = i; }); var place = function (ts, side) { var idx = byT[Math.floor(ts / b) * b]; if (idx == null) return null; var c = cs[idx]; if (!c) return null; var n = stack[idx] = (stack[idx] || 0) + 1; if (n > 6) return null; var yy = Y(c.h) - 16 - (n - 1) * 22; if (yy < 40) yy = Y(c.l) + 16 + (n - 1) * 22; return { x: off0 + idx * cw + cw / 2, y: yy }; };
       if (S.cmarks) S.trades.filter(function (tr) { return tr.tick === t.tick && (tr.mine || tr.sol >= 1 || tr.wallet === devOf(t)) && tr.t >= t0 && tr.t < tEnd; }).slice(0, 70).forEach(function (tr) {
         var p0 = place(tr.t); if (!p0) return; var buy = tr.side === 'buy', k = S.cmarkData.push({ k: 'tr', d: tr }) - 1, dev = tr.wallet === devOf(t);
         if (p0.y < top - 6 || p0.y > top + ph + 6) return;
@@ -1692,10 +1694,10 @@
     S.chartPts = pts; S.chartW = W; S.chartH = H; S.chartOff = off0; S.chartCw = cw;
     var last = cs[cs.length - 1], ly = Math.max(2, Math.min(H - bot - 2, Y(last.c))), lcol = last.c >= last.o ? '#3DDC97' : '#F2708A';
     if (fut) { var bms = tfMs(), lastT = cs[cs.length - 1].t; for (var fi = 1; fi <= fut; fi++) { var ii = cs.length - 1 + fi; if (((cs.pre || 0) + ii) % every === 0) { var fx = off0 + ii * cw + cw / 2; if (fx < W - 70) xl += '<span class="xlab fut" style="left:' + (fx / W * 100).toFixed(2) + '%">' + tLabel(lastT + fi * bms) + '</span>'; } } }
-    var labels = '', NL = yfree ? 7 : 4; for (var j = 0; j <= NL; j++) { var v = mx - j * sp / NL; if (v < 0 && !yfree) continue; labels += '<span class="ylab" style="top:' + ((top + j * ph / NL) / H * 100).toFixed(2) + '%">' + yLabel(v) + '</span>'; }
+    var labels = '', NL = yfree ? 7 : 4; S.cStep = sp / NL; for (var j = 0; j <= NL; j++) { var v = mx - j * sp / NL; if (v < 0 && !yfree) continue; labels += '<span class="ylab" style="top:' + ((top + j * ph / NL) / H * 100).toFixed(2) + '%">' + yLabel(v, sp / NL) + '</span>'; }
     return '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" role="img" aria-label="Price chart"><defs><clipPath id="pclip"><rect x="0" y="0" width="' + W + '" height="' + (yfree ? H - bot : top + ph + 4) + '"/></clipPath></defs>' + g + vol + '<g clip-path="url(#pclip)">' + area + body + ma + '</g>' +
       '<line x1="0" x2="' + W + '" y1="' + ly.toFixed(1) + '" y2="' + ly.toFixed(1) + '" stroke="' + lcol + '" stroke-opacity=".55" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"/></svg>' + labels + xl + marks +
-      (S.cpan > 0 ? '' : '<span class="lastlab" style="top:' + (ly / H * 100).toFixed(2) + '%;background:' + lcol + '">' + yLabel(last.c) + '</span>') +
+      (S.cpan > 0 ? '' : '<span class="lastlab" style="top:' + (ly / H * 100).toFixed(2) + '%;background:' + lcol + '">' + yLabel(last.c, S.cStep) + '</span>') +
       (S.cpan > 0 ? '<button class="c-live" data-act="cnow">Back to now →</button>' : '') +
       '<div class="yhit" title="Drag to scale · double-click to auto-fit"></div><button class="c-auto' + (yfree ? '' : ' on') + '" data-act="cauto" title="Auto-fit price scale">A</button>' +
       '<div class="cm-tip" id="cmtip"></div><div class="xh" id="xh"></div><div class="yh" id="yh"></div><div class="xh-dot" id="xhd" style="background:#fff"></div><div class="xh-tip" id="xht"></div>' +
@@ -3120,7 +3122,7 @@
       xh.style.display = d.style.display = tip.style.display = yh.style.display = 'block';
       xh.style.left = px + 'px'; d.style.left = px + 'px'; d.style.top = py + 'px'; yh.style.top = (e.clientY - rb.top) + 'px';
       var ch = (p.v - p.o) / p.o * 100;
-      tip.innerHTML = '<span class="muted">' + tLabel(p.t) + '</span> O <b>' + yLabel(p.o) + '</b> H <b class="up">' + yLabel(p.h) + '</b> L <b class="down">' + yLabel(p.l) + '</b> C <b>' + yLabel(p.v) + '</b> <b class="' + (ch >= 0 ? 'up' : 'down') + '">' + (ch >= 0 ? '+' : '') + ch.toFixed(2) + '%</b> <span class="muted">Vol</span> <b>' + p.vol.toFixed(2) + ' SOL</b>';
+      tip.innerHTML = '<span class="muted">' + tLabel(p.t) + '</span> O <b>' + yLabel(p.o, S.cStep) + '</b> H <b class="up">' + yLabel(p.h, S.cStep) + '</b> L <b class="down">' + yLabel(p.l, S.cStep) + '</b> C <b>' + yLabel(p.v, S.cStep) + '</b> <b class="' + (ch >= 0 ? 'up' : 'down') + '">' + (ch >= 0 ? '+' : '') + ch.toFixed(2) + '%</b> <span class="muted">Vol</span> <b>' + p.vol.toFixed(2) + ' SOL</b>';
       tip.style.left = Math.min(rb.width - tip.offsetWidth - 4, Math.max(4, px + 12)) + 'px';
     }
   });
