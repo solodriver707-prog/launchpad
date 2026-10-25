@@ -1722,6 +1722,36 @@
   function devOf(t) { return t.creator || (t._dev = t._dev || WALLETS[hash(t.tick) % WALLETS.length].a); }
   function walletSpec(addr) { var w = WMAP[addr]; if (w) return w.sp; var h = hash(addr || 'x'); return { kind: A.KINDS[h % A.KINDS.length], skin: A.SKINS[(h >> 3) % A.SKINS.length], bg: A.BGS[(h >> 6) % A.BGS.length], eyes: A.EYES[(h >> 9) % A.EYES.length], mouth: A.MOUTHS[(h >> 12) % A.MOUTHS.length], acc: A.ACCS[(h >> 15) % A.ACCS.length] }; }
   function walletName(addr) { var w = WMAP[addr]; return S.account && addr === S.account ? 'You' : w && w.n ? '@' + w.n : short(addr); }
+  // ---- trader hover card (DexScreener-style): bought / sold / PnL / unrealized for one wallet on this coin ----
+  var TIERS = [[100, 'Shrimp', '#FF9A8B', 'under $100 bought or sold'], [1000, 'Fish', '#7FB6FF', '$100–$1k bought or sold'], [10000, 'Dolphin', '#5AC8E8', '$1k–$10k bought or sold'], [Infinity, 'Whale', '#B794FF', '$10k+ bought or sold']];
+  function tierSVG(c, k) { var sc = [0.7, 0.85, 1, 1.15][k]; return '<svg viewBox="0 0 32 32" width="' + Math.round(26 * sc) + '" height="' + Math.round(26 * sc) + '"><path fill="' + c + '" d="M4 17c3-6 9-9 15-8 3 .5 5 2 7 4l3-3v12l-3-3c-2 2-4 3.5-7 4-6 1-12-2-15-6z"/><circle cx="21" cy="15" r="1.4" fill="#0b0b0d"/></svg>'; }
+  function traderStats(t, addr) {
+    var o = { bU: 0, bT: 0, bN: 0, sU: 0, sT: 0, sN: 0, first: 0 }, px = price(t);
+    S.trades.forEach(function (x) { if (x.tick !== t.tick || x.wallet !== addr) return; var tok = x.tokens || (x.sol * SOL_USD / (x.price || px)), usd = x.sol * SOL_USD;
+      if (x.side === 'buy') { o.bU += usd; o.bT += tok; o.bN++; if (!o.first || x.t < o.first) o.first = x.t; } else { o.sU += usd; o.sT += tok; o.sN++; } });
+    var held = Math.max(0, o.bT - o.sT); if (t.live && t.lh) { var h = t.lh.filter(function (q) { return q.wallet === addr; })[0]; held = h ? h.pct / 100 * 1e9 : 0; } else if (S.account === addr && S.pos[t.tick]) held = S.pos[t.tick].tok;
+    o.held = held; o.unreal = held * px; o.pnl = o.sU - o.bU; var vol = o.bU + o.sU; o.tier = 0; while (vol >= TIERS[o.tier][0]) o.tier++; return o;
+  }
+  function traderCard(t, addr) {
+    var o = traderStats(t, addr), T = TIERS[o.tier], usd = function (v) { return '$' + (v >= 1000 ? fmtNum(Math.round(v)) : v.toFixed(v < 10 ? 2 : 0)); };
+    var pct = o.bT > 0 ? Math.min(100, o.held / o.bT * 100) : 0, w = WMAP[addr], me = S.account && addr === S.account, dev = addr === devOf(t);
+    return '<div class="tc-rows"><div><span class="muted">(−) Bought:</span><b class="down mono">' + usd(o.bU) + '</b><span class="mono">' + fmtNum(o.bT) + '</span><small class="muted mono">' + o.bN + ' txns</small></div>' +
+      '<div><span class="muted">(+) Sold:</span><b class="up mono">' + usd(o.sU) + '</b><span class="mono">' + fmtNum(o.sT) + '</span><small class="muted mono">' + o.sN + ' txns</small></div>' +
+      '<div><span class="muted">(=) PnL:</span><b class="mono ' + (o.pnl >= 0 ? 'up' : 'down') + '">' + (o.pnl < 0 ? '-' : '') + usd(Math.abs(o.pnl)) + '</b></div>' +
+      '<div><span class="muted">Unrealized:</span><b class="mono">' + usd(o.unreal) + '</b><span class="tc-bar"><i style="width:' + pct.toFixed(1) + '%"></i></span><small class="muted mono">' + fmtNum(o.held) + ' of ' + fmtNum(o.bT) + '</small></div></div>' +
+      '<div class="tc-who">' + tierSVG(T[2], o.tier) + '<span><b class="mono">' + (me ? 'You' : w && w.n ? '@' + esc(w.n) : esc(addr.slice(0, 6) + '…' + addr.slice(-4))) + (dev ? ' <span class="bdg dev">DEV</span>' : '') + '</b><small>' + T[1] + ': ' + T[3] + '</small><small>' + (o.first ? 'Holder since: ' + ago(o.first) : 'No buys on this coin yet') + '</small></span></div>';
+  }
+  var tcEl = null, tcFor = null;
+  document.addEventListener('mouseover', function (e) {
+    var m = e.target.closest && e.target.closest('.mk-cell .maker');
+    if (!m) { if (tcEl && !(e.target.closest && e.target.closest('.trader-card'))) { tcEl.remove(); tcEl = null; tcFor = null; } return; }
+    if (S.screen !== 'token' || window.matchMedia('(max-width: 760px)').matches) return;
+    var addr = m.getAttribute('data-arg'), t = find(S.tick); if (!t || tcFor === m) return;
+    if (tcEl) tcEl.remove(); tcFor = m; tcEl = document.createElement('div'); tcEl.className = 'trader-card'; tcEl.innerHTML = traderCard(t, addr); document.body.appendChild(tcEl);
+    var r = m.getBoundingClientRect(), cw = tcEl.offsetWidth, ch = tcEl.offsetHeight, x = Math.min(window.innerWidth - cw - 12, r.right + 10), y = Math.max(8, Math.min(window.innerHeight - ch - 8, r.top - ch / 2 + r.height / 2));
+    tcEl.style.left = x + 'px'; tcEl.style.top = y + 'px';
+  });
+  document.addEventListener('scroll', function () { if (tcEl) { tcEl.remove(); tcEl = null; tcFor = null; } }, true);
   function makerHTML(addr, t) {
     var w = WMAP[addr], me = S.account && addr === S.account, dev = addr === devOf(t);
     var av = '<span class="av" style="width:20px;height:20px">' + A.svg(walletSpec(addr)) + '</span>';
@@ -1746,7 +1776,7 @@
       '<span class="ty">' + (buy ? 'Buy' : 'Sell') + (tr.sol >= 2 ? ' <span class="bdg whale2" title="Whale">' + I.gem + '</span>' : '') + '</span>' +
       '<span class="r">$' + (usd >= 1000 ? (usd / 1000).toFixed(2) + 'K' : usd.toFixed(2)) + '</span>' +
       '<span class="r">' + tr.sol.toFixed(3) + '</span><span class="r">' + fmtNum(tok) + '</span><span class="r">' + fmtPrice(px) + '</span>' +
-      '<span>' + makerHTML(tr.wallet, t) + '</span>' +
+      '<span class="mk-cell">' + makerHTML(tr.wallet, t) + '<button class="mk-f' + (S.tpMaker === tr.wallet ? ' on' : '') + '" data-act="maker" data-arg="' + (S.tpMaker === tr.wallet ? '' : esc(tr.wallet)) + '" title="' + (S.tpMaker === tr.wallet ? 'Show all wallets' : 'Only this wallet\'s trades') + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg></button></span>' +
       '<span class="r"><button class="txb" data-act="wallet" data-arg="' + esc(tr.wallet) + '" aria-label="Open wallet details"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></button></span></div>';
   }
   function holdersOf(t) {
