@@ -1,6 +1,6 @@
 // treid indexer: listens to Meteora DBC, stores treid coins + trades in SQLite, serves a JSON API + live stream
 import { Connection, PublicKey } from '@solana/web3.js';
-import { TOKEN_2022_PROGRAM_ID, getTokenMetadata, unpackAccount, getTransferFeeConfig, getMint } from '@solana/spl-token';
+import { TOKEN_2022_PROGRAM_ID, getTokenMetadata, unpackAccount, getTransferFeeConfig, getMint, getExtensionTypes, ExtensionType } from '@solana/spl-token';
 import { DynamicBondingCurveClient, DYNAMIC_BONDING_CURVE_PROGRAM_ID, deriveDbcPoolAuthority, DynamicBondingCurveIdl, getPriceFromSqrtPrice } from '@meteora-ag/dynamic-bonding-curve-sdk';
 import anchor from '@coral-xyz/anchor';
 import bs58 from 'bs58';
@@ -35,7 +35,8 @@ async function solPrice() { try { const r = await fetch('https://api.coingecko.c
 const SUPPLY = 1e9, WSOL = 'So11111111111111111111111111111111111111112';
 const QUOTE_OVERRIDE = (() => { try { return JSON.parse(process.env.QUOTE_USD || '{}'); } catch { return {}; } })();   // {"<mint>": 1} for devnet test tokens
 const qPrice = new Map();
-function quoteUsd(mint, symbol) { if (!mint || mint === WSOL) return SOL_USD; if (QUOTE_OVERRIDE[mint] != null) return +QUOTE_OVERRIDE[mint]; const p = qPrice.get(mint); if (p) return p; return /usd/i.test(symbol || '') ? 1 : 0; }
+const STABLE = new Set(['EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB', '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU']);   // USDC, USDT, devnet USDC — never guessed from a name
+function quoteUsd(mint, symbol) { if (!mint || mint === WSOL) return SOL_USD; if (QUOTE_OVERRIDE[mint] != null) return +QUOTE_OVERRIDE[mint]; const p = qPrice.get(mint); if (p) return p; return STABLE.has(mint) ? 1 : 0; }
 async function quotePrices() {
   const ms = q('SELECT DISTINCT quote_mint m FROM coins WHERE quote_mint IS NOT NULL AND quote_mint != ?', WSOL).map((r) => r.m).filter((m) => QUOTE_OVERRIDE[m] == null); if (!ms.length) return;
   try { const r = await fetch('https://lite-api.jup.ag/price/v3?ids=' + ms.join(',')); const j = await r.json(); for (const m of ms) if (j?.[m]?.usdPrice) qPrice.set(m, +j[m].usdPrice); } catch {}
@@ -71,12 +72,23 @@ async function verifyBurn(sig) {   // a user's burn of a treid coin, checked on-
   throw new Error('no treid tokens burned in this transaction');
 }   // curve migration threshold per coin (pair-token units)
 const q = (sql, ...a) => db.prepare(sql).all(...a), q1 = (sql, ...a) => db.prepare(sql).get(...a), run = (sql, ...a) => db.prepare(sql).run(...a);
-let configs = new Set(); const watched = new Map(); const escCache = new Map(); let REW = null;
+let configs = new Set(), lastCfgScan = 0; const watched = new Map(); const escCache = new Map(); let REW = null;
 // treid configs = DBC configs whose fee claimer is the treid wallet. Each one is watched by address,
 // so we only ever fetch transactions that touch treid coins (never the whole DBC firehose).
+// a config only counts as treid if it matches what the treid site creates: fixed 1e9 supply, 6 decimals, Token-2022, no vesting,
+// all LP permanently locked, immutable token, normal fee scheduler, tax ≤10% with the withheld tax under partner control
+function treidConfig(cf) {
+  try { const n = (x) => Number(x?.toString?.() ?? x), bf = cf.poolFees.baseFee, lv = cf.lockedVestingConfig;
+    return PARTNERS.includes(cf.feeClaimer.toBase58()) && cf.leftoverReceiver.toBase58() === PARTNER && n(cf.tokenType) === 1 && n(cf.tokenDecimal) === 6
+      && cf.preMigrationTokenSupply.toString() === '1000000000000000' && cf.postMigrationTokenSupply.toString() === '1000000000000000' && n(cf.fixedTokenSupplyFlag) === 1
+      && n(cf.tokenUpdateAuthority) === 1 && ['amountPerPeriod', 'cliffUnlockAmount', 'numberOfPeriod'].every((k) => n(lv[k]) === 0)
+      && n(cf.creatorLiquidityPercentage) === 0 && n(cf.partnerLiquidityPercentage) === 0 && n(cf.creatorPermanentLockedLiquidityPercentage) + n(cf.partnerPermanentLockedLiquidityPercentage) === 100
+      && !n(cf.creatorLiquidityVestingInfo?.isInitialized) && !n(cf.partnerLiquidityVestingInfo?.isInitialized) && n(bf.baseFeeMode) <= 1 && !n(cf.poolFees.dynamicFee?.initialized)
+      && n(cf.transferFeeBasisPoints) <= 1000 && (!n(cf.transferFeeFlag) || (n(cf.transferFeeWithheldAuthority) === 0 && n(cf.migratedTransferFeeAuthorityOption) === 0)) && n(cf.creatorTradingFeePercentage) === 50;
+  } catch { return false; } }
 async function loadConfigs() {
   if (!PARTNERS.length) return; const cs = (await Promise.all(PARTNERS.map((w) => dbc.state.getPoolConfigsByOwner(new PublicKey(w))))).flat();
-  for (const c of cs) { const k = c.publicKey.toBase58(); if (!configs.has(k)) { configs.add(k); watchConfig(k); } }
+  for (const c of cs) { const k = c.publicKey.toBase58(); if (!configs.has(k) && treidConfig(c.account)) { if (configs.size >= 5000) break; configs.add(k); watchConfig(k); } }
 }
 function watchConfig(k) {
   if (watched.has(k)) return;
@@ -89,7 +101,7 @@ async function syncAddress(addr, limit = 1000) {   // fetch history (oldest firs
     if (fresh.length < page.length || page.length < Math.min(limit, 1000) || all.length >= limit) break; before = page[page.length - 1].signature; }
   for (const x of all.reverse()) await handle(x.signature).catch(e => console.log('err', e.message));
 }
-const clients = new Set(); const push = (ev) => { const s = `data: ${JSON.stringify(ev)}\n\n`; for (const c of clients) c.write(s); };
+const clients = new Set(); const push = (ev) => { const s = `data: ${JSON.stringify(ev)}\n\n`; for (const c of clients) { if (c.writableLength > 256e3) { clients.delete(c); try { c.destroy(); } catch {} continue; } c.write(s); } };   // slow readers are dropped, never buffered forever
 let CO = null;   // callouts (started below, once the helpers exist)
 
 async function addCoin(mint, slot, ts, creator) {
@@ -108,11 +120,15 @@ async function addCoin(mint, slot, ts, creator) {
   if (qm !== WSOL) { const qa = await conn.getAccountInfo(new PublicKey(qm)).catch(() => null); const qprog = qa?.owner?.equals(TOKEN_2022_PROGRAM_ID) ? TOKEN_2022_PROGRAM_ID : undefined; const qmi = await getMint(conn, new PublicKey(qm), 'confirmed', qprog).catch(() => null); if (qmi) qd = qmi.decimals;
     if (!qs) { const qmd = qprog ? await getTokenMetadata(conn, new PublicKey(qm), 'confirmed', TOKEN_2022_PROGRAM_ID).catch(() => null) : null; qs = qmd?.symbol || qm.slice(0, 4); } }
   const m = await getMint(conn, new PublicKey(mint), 'confirmed', TOKEN_2022_PROGRAM_ID).catch(() => null); const tf = m && getTransferFeeConfig(m);
+  // the coin itself: 6 decimals, nobody can mint or freeze, and only the extensions treid uses (no hooks, delegates or other surprises)
+  const OKX = new Set([ExtensionType.TransferFeeConfig, ExtensionType.MetadataPointer, ExtensionType.TokenMetadata]);
+  if (!m || m.decimals !== 6 || m.mintAuthority || m.freezeAuthority || getExtensionTypes(m.tlvData).some((e) => !OKX.has(e))) { console.log('skip  non-standard coin', mint); return false; }
+  if (qm !== WSOL) { const qa = await conn.getAccountInfo(new PublicKey(qm)).catch(() => null); if (qa?.owner?.equals(TOKEN_2022_PROGRAM_ID)) { const qmi = await getMint(conn, new PublicKey(qm), 'confirmed', TOKEN_2022_PROGRAM_ID).catch(() => null); const QOK = new Set([ExtensionType.MetadataPointer, ExtensionType.TokenMetadata, ExtensionType.ImmutableOwner]); if (!qmi || getExtensionTypes(qmi.tlvData).some((e) => !QOK.has(e))) { console.log('skip  pair token not allowed', mint); return false; } } }
   const ins = run('INSERT OR IGNORE INTO coins(mint,pool,config,creator,name,symbol,uri,tax_bps,created_slot,created_at,trap_bps,trap_secs,trap_steps,quote_mint,quote_dec,quote_symbol) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', mint, ps.publicKey.toBase58(), cfg, creator || pst.creator.toBase58(), md?.name || '', md?.symbol || '', md?.uri || '', tf ? tf.newerTransferFee.transferFeeBasisPoints : 0, creator ? slot : 0, creator || !cf || Number(cf.activationType) !== 1 ? ts : Number(pst.activationPoint) * 1000, trap.bps, trap.secs, trap.steps, qm, qd, qs || 'SOL');
   if (ins.changes) { push({ type: 'coin', mint, name: md?.name, symbol: md?.symbol }); console.log('coin  ', md?.symbol, mint); } return true;
 }
 // pool creations, read from the DBC instruction itself (accounts: 2 = creator, 3 = base_mint) — never from fee payer / logs / balances
-const INIT_DISC = DynamicBondingCurveIdl.instructions.filter((i) => /^initialize_virtual_pool/.test(i.name)).map((i) => Buffer.from(i.discriminator).toString('hex'));
+const INIT_DISC = DynamicBondingCurveIdl.instructions.filter((i) => /^initialize_virtual_pool/.test(i.name) && !/transfer_hook/.test(i.name)).map((i) => Buffer.from(i.discriminator).toString('hex'));
 function poolInits(tx) {
   const msg = tx.transaction.message, keys = msg.getAccountKeys ? msg.getAccountKeys({ accountKeysFromLookups: tx.meta.loadedAddresses }) : null, key = (i) => (keys ? keys.get(i) : msg.accountKeys[i]).toBase58(), DBC = DYNAMIC_BONDING_CURVE_PROGRAM_ID.toBase58(), out = [];
   const check = (pid, accts, data) => { if (key(pid) !== DBC || !data || data.length < 8) return; if (!INIT_DISC.includes(Buffer.from(data.subarray(0, 8)).toString('hex'))) return; out.push({ creator: key(accts[2]), mint: key(accts[3]) }); };
@@ -129,7 +145,7 @@ async function handle(sig) {
   const pre = tx.meta.preTokenBalances || [], post = tx.meta.postTokenBalances || [];
   const quoteSet = new Set(q('SELECT DISTINCT quote_mint m FROM coins').map((r) => r.m)); quoteSet.add(WSOL);
   const mints = [...new Set(post.map(b => b.mint).filter(x => !quoteSet.has(x) || q1('SELECT 1 FROM coins WHERE mint=?', x)))];
-  if (/Instruction: CreateConfig/.test(logs)) { await loadConfigs(); return; }
+  if (/Instruction: CreateConfig/.test(logs)) { if (Date.now() - lastCfgScan > 120e3) { lastCfgScan = Date.now(); await loadConfigs(); } return; }   // log text can be faked → at most one config scan per 2 min
   const inits = poolInits(tx); if (inits.length) { for (const it of inits) await addCoin(it.mint, tx.slot, ts, it.creator); if (!/Instruction: Swap/.test(logs)) return; }   // pool + dev first buy can share one tx
   if (!/Instruction: Swap/.test(logs)) return;
   const evs = []; for (const g of tx.meta.innerInstructions || []) for (const ix of g.instructions) { if (keys[ix.programIdIndex].toBase58() !== DYNAMIC_BONDING_CURVE_PROGRAM_ID.toBase58()) continue; try { const e = coder.decode(Buffer.from(bs58.decode(ix.data)).subarray(8).toString('base64')); if (e) evs.push(e); } catch {} }
@@ -196,7 +212,11 @@ function stats(mint) {
   const po = OPS && REW ? q1(`SELECT COALESCE(SUM(CASE WHEN kind='taxburn' THEN lamports END),0)/1e6 burned, COALESCE(SUM(CASE WHEN kind='taxhold' THEN lamports END),0)/1e6 holders, COALESCE(SUM(CASE WHEN kind='taxdev' THEN lamports END),0)/1e6 dev, COUNT(CASE WHEN kind='taxhold' THEN 1 END) n FROM rlog WHERE mint=? AND kind IN ('taxburn','taxdev','taxhold')`, mint) : null;   // from on-chain receipts → survives restarts
   return { ...c, tax_paid: po, reserve: last?.reserve || 0, grad_target: gradTarget.get(mint) || 0, quote_usd: quoteUsd(c.quote_mint, c.quote_symbol), vol_usd: agg.volusd || 0, holders: real ? real.length : bal.length, dev_pct: devN / SUPPLY * 100, dev_sold: !!devBuy && devN < 1, top10_pct: top10 / SUPPLY * 100, sol_usd: SOL_USD, mcap_usd: last?.mcap_usd || 0, curve_pct: last?.progress || 0, trades: agg.n, vol_sol: agg.vol || 0, buys: agg.buys || 0, sells: agg.sells || 0, traders: agg.traders, snipers_pct: (agg.snipeTok || 0) / SUPPLY * 100, bundles_pct: (agg.bundleTok || 0) / SUPPLY * 100 };
 }
-http.createServer(async (req, res) => {
+process.on('unhandledRejection', (e) => console.log('unhandled', String(e?.message || e).slice(0, 200)));   // one bad request or RPC hiccup must never kill the server
+process.on('uncaughtException', (e) => console.log('uncaught', String(e?.message || e).slice(0, 200)));
+const sseByIp = new Map();
+http.createServer((req, res) => { handleReq(req, res).catch((e) => { console.log('req err', String(e?.message || e).slice(0, 160)); try { if (!res.headersSent) res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end('{"ok":false}'); } catch {} }); }).listen(PORT, () => console.log('API on :' + PORT));
+async function handleReq(req, res) {
   const u = new URL(req.url, 'http://x'), p = u.pathname.split('/').filter(Boolean), J = (o) => { res.writeHead(200, { 'content-type': 'application/json', 'access-control-allow-origin': '*', 'cache-control': 'no-store' }); res.end(JSON.stringify(o)); };
   if (req.method === 'OPTIONS') { res.writeHead(204, { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'GET,POST' }); return res.end(); }
   // coin metadata (image / description) posted by the site at launch — first write wins. TODO mainnet: pin to IPFS instead.
@@ -225,7 +245,9 @@ http.createServer(async (req, res) => {
     const [h, b64] = d.split(','); res.writeHead(200, { 'content-type': h.slice(5, h.indexOf(';')), 'access-control-allow-origin': '*', 'cache-control': 'public, max-age=86400' }); return res.end(Buffer.from(b64, 'base64')); }
   if (!p.length || p[1] === 'health') return J({ ok: true, coins: q1('SELECT COUNT(*) n FROM coins').n, trades: q1('SELECT COUNT(*) n FROM trades').n, configs: configs.size, partner: PARTNER || null, ops: OPS?.publicKey.toBase58() || null, ipfs: !!PINATA_JWT, sol_usd: SOL_USD, ready });
   try {
-    if (p[1] === 'stream') { res.writeHead(200, { 'content-type': 'text/event-stream', 'access-control-allow-origin': '*', 'cache-control': 'no-cache' }); res.write(': hi\n\n'); clients.add(res); req.on('close', () => clients.delete(res)); return; }
+    if (p[1] === 'stream') { const ipx = ip(req), nIp = sseByIp.get(ipx) || 0; if (clients.size >= 3000 || nIp >= 6) { res.writeHead(429, { 'access-control-allow-origin': '*' }); return res.end(); }
+      sseByIp.set(ipx, nIp + 1); req.on('close', () => { const v = (sseByIp.get(ipx) || 1) - 1; if (v > 0) sseByIp.set(ipx, v); else sseByIp.delete(ipx); });
+      res.writeHead(200, { 'content-type': 'text/event-stream', 'access-control-allow-origin': '*', 'cache-control': 'no-cache' }); res.write(': hi\n\n'); clients.add(res); req.on('close', () => clients.delete(res)); return; }
     if (p[1] === 'qprice') { const m = String(u.searchParams.get('mint') || ''); if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(m)) return J({ usd: 0 });   // pair-token price for the Create page
       let usd = quoteUsd(m, KNOWN_Q[m]), symbol = KNOWN_Q[m] || null, name = null, icon = null;
       try { const r = await fetch('https://lite-api.jup.ag/tokens/v2/search?query=' + m); const j = await r.json(); const t = Array.isArray(j) ? j.find((x) => x.id === m) : null; if (t) { symbol = symbol || t.symbol; name = t.name; icon = t.icon || null; if (!QUOTE_OVERRIDE[m] && t.usdPrice) { usd = +t.usdPrice; qPrice.set(m, usd); } } } catch {}
@@ -241,6 +263,7 @@ http.createServer(async (req, res) => {
       const st = REW.state(c), L = (x) => x / 10 ** (c.quote_dec ?? 9), apps = st.era === 'out' ? await REW.applications(c).catch(() => []) : [];
       return J({ escrow: true, dev: c.creator, era: st.era, creator: st.creator, cto: st.cto ? { lead: st.cto.lead, at: st.cto.at, fundSol: L(st.cto.fund), paidSol: L(st.cto.paid), vestedSol: L(st.cto.vested) } : null, apps, state: st.state, why: st.why, idleMs: st.idle, lastActive: st.last, soldPct: st.sold, quote: c.quote_symbol || 'SOL', quoteUsd: quoteUsd(c.quote_mint, c.quote_symbol), pendingSol: Math.max(0, esc.pending - L(st.fund)), paidSol: L(st.paid), buybackSol: L(st.buyback), burnedTokens: st.burnedTokens / 1e6, fundSol: L(st.fund), grantedSol: L(st.granted), platformSol: L(st.granted), fundEndsAt: st.fundEndsAt, rules: { freezeH: 48, outD: 7, soldOut: 70, applyPct: 1, supportPct: 10 }, log: REW.logFor(c.mint) });
     }
+    if (['cto', 'claim', 'ping'].includes(p[1]) && req.method === 'POST' && !rate('act|' + ip(req), 30, 36e5)) { res.writeHead(429, { 'access-control-allow-origin': '*' }); return res.end('{"ok":false,"error":"too many requests — try again later"}'); }
     if (p[1] === 'cto' && (p[2] === 'apply' || p[2] === 'vote') && req.method === 'POST') { let body = ''; req.on('data', (d) => { body += d; if (body.length > 6000) req.destroy(); });
       req.on('end', async () => { try { if (!REW) throw new Error('rewards escrow not enabled'); const b = JSON.parse(body); J(p[2] === 'apply' ? await REW.ctoApply(b) : await REW.ctoVote(b)); } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: e.message })); } }); return; }
     if (p[1] === 'callout' && req.method === 'POST') { let body = ''; req.on('data', (d) => { body += d; if (body.length > 3000) req.destroy(); });
@@ -278,7 +301,7 @@ http.createServer(async (req, res) => {
     if (p[1] === 'holders') { const h = hCache.get(p[2]); if (h?.list && Date.now() - h.ts < 15e3) return J(h.list); if (!q1('SELECT 1 FROM coins WHERE mint=?', p[2])) return J([]); if (!inflight.has(p[2])) inflight.set(p[2], holders(p[2]).finally(() => inflight.delete(p[2]))); const l = await inflight.get(p[2]); hCache.set(p[2], { ts: Date.now(), list: l }); return J(l); }
     res.writeHead(404, { 'access-control-allow-origin': '*' }); res.end('{}');
   } catch (e) { res.writeHead(500, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ error: e.message })); }
-}).listen(PORT, () => console.log('API on :' + PORT));
+}
 let ready = false;
 if (!PARTNER) { console.error('Set PARTNER=<treid fee-claimer wallet>'); process.exit(1); }
 CO = startCallouts({ q, q1, run, push, rate, pinJSON, pinataJwt: PINATA_JWT, gateway: PINATA_GW,

@@ -7,8 +7,8 @@
 //   era "out": 50% buyback & burn, 50% treid platform (no community fund — nothing to farm) · holders can elect a new lead:
 //     applicant holds ≥1% · supporters (incl. applicant) hold ≥10% of supply → CTO; the lead earns future rewards under the same rules
 // Every action carries an on-chain memo "treid:<kind>:<mint>:<lamports>[:<extra>]" → the ledger is rebuilt from chain on start.
-import { PublicKey, Transaction, TransactionInstruction, sendAndConfirmTransaction } from '@solana/web3.js';
-import { TOKEN_2022_PROGRAM_ID, getAssociatedTokenAddressSync, getAccount, createBurnCheckedInstruction } from '@solana/spl-token';
+import { PublicKey, Transaction, TransactionInstruction, SystemProgram, sendAndConfirmTransaction } from '@solana/web3.js';
+import { TOKEN_2022_PROGRAM_ID, NATIVE_MINT, getAssociatedTokenAddressSync, getAccount, createBurnCheckedInstruction, createTransferCheckedInstruction } from '@solana/spl-token';
 import { SwapMode, getCurrentPoint } from '@meteora-ag/dynamic-bonding-curve-sdk';
 import { ed25519 } from '@noble/curves/ed25519';
 import bs58 from 'bs58';
@@ -22,7 +22,7 @@ export const pingMessage = (mint, ts) => `treid: I'm still here — ${mint} — 
 export const claimMessage = (mint, ts) => `treid: claim — ${mint} — ${ts}`;
 export const applyMessage = (mint, ts, plan) => `treid: lead takeover — ${mint} — ${ts}\n${plan}`;
 export const voteMessage = (mint, applicant, ts) => `treid: support takeover by ${applicant} — ${mint} — ${ts}`;
-const PAY_USD = 1, PAY_DAILY_USD = 0.1, MIN_ACTION_USD = 0.2;   // auto-pay from $1 (or ≥$0.10 once a day); buybacks from $0.20
+const PAY_USD = 1, PAY_DAILY_USD = 1, MIN_ACTION_USD = 0.5, MIN_CLAIM_USD = 1;   // payouts from $1 (a payout must be worth far more than its network fee); buybacks from $0.50
 const cleanPlan = (p) => String(p || '').replace(/["\\\n\r]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 240);
 
 export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, quoteUsd = () => 150, log = console.log }) {
@@ -98,8 +98,15 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, q
     if (got > 0n) await stamp(c.mint, 'burntok', Number(got), null, [createBurnCheckedInstruction(ata, mint, ops.publicKey, got, 6, [], TOKEN_2022_PROGRAM_ID)]);
     log('rewards buyback', c.symbol, (lamports / 10 ** (c.quote_dec ?? 9)).toFixed(4), c.quote_symbol || 'SOL', '→ burned', (Number(got) / 1e6).toFixed(0), 'tokens');
   }
-  async function payFromPool(c, lamports, receiver, kind) {   // straight pool → receiver, the SOL never touches the ops wallet
-    const tx = await dbc.creator.claimCreatorTradingFeeToReceiver({ creator: ops.publicKey, payer: ops.publicKey, pool: new PublicKey(c.pool), maxBaseAmount: new BN(0), maxQuoteAmount: new BN(lamports), receiver: new PublicKey(receiver) });
+  async function payFromPool(c, lamports, receiver, kind) {
+    // claim into ops and pass the exact amount on in the SAME transaction: ops gets back any temporary account rent and never opens accounts for receivers
+    const QM = new PublicKey(c.quote_mint || NATIVE_MINT.toBase58()), rcv = new PublicKey(receiver), isSol = QM.equals(NATIVE_MINT);
+    const cl = await dbc.creator.claimCreatorTradingFee({ creator: ops.publicKey, payer: ops.publicKey, pool: new PublicKey(c.pool), maxBaseAmount: new BN(0), maxQuoteAmount: new BN(lamports) });
+    const tx = new Transaction().add(...cl.instructions);
+    if (isSol) tx.add(SystemProgram.transfer({ fromPubkey: ops.publicKey, toPubkey: rcv, lamports }));
+    else { const qprog = (await conn.getAccountInfo(QM)).owner, dst = getAssociatedTokenAddressSync(QM, rcv, true, qprog), src = getAssociatedTokenAddressSync(QM, ops.publicKey, false, qprog);
+      if (!(await conn.getAccountInfo(dst))) throw new Error(`receiver has no ${c.quote_symbol || 'pair token'} account yet — add ${c.quote_symbol || 'it'} to the wallet first`);
+      tx.add(createTransferCheckedInstruction(src, QM, dst, ops.publicKey, BigInt(lamports), c.quote_dec ?? 6, [], qprog)); }
     tx.add(memo(`treid:${kind}:${c.mint}:${lamports}:${receiver}`)); const s = await sendAndConfirmTransaction(conn, tx, [ops], { commitment: 'confirmed' }); record(s, [{ mint: c.mint, kind, lamports, extra: receiver }]);
     log('rewards', kind, c.symbol, (lamports / 10 ** (c.quote_dec ?? 9)).toFixed(4), c.quote_symbol || 'SOL', 'pool →', receiver.slice(0, 6)); return s;
   }
@@ -144,11 +151,12 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, q
     // takeover window over with no takeover → the fund goes to the treid platform
     if (s2.era === 'out' && s2.fund > 0 && Date.now() > s2.fundEndsAt) await payFromPool(c, s2.fund, treasury, 'grant');
   }
-  const cycle = () => withLock(async () => { for (const c of q('SELECT * FROM coins')) { try { await cycleCoin(c); } catch (e) { log('rewards err', c.symbol, e.message.slice(0, 140)); } } });
+  let cycQueued = false; const cycle = () => { if (cycQueued) return; cycQueued = true; return withLock(async () => { for (const c of q('SELECT * FROM coins')) { try { await cycleCoin(c); } catch (e) { log('rewards err', c.symbol, e.message.slice(0, 140)); } } }).finally(() => { cycQueued = false; }); };
   const coin = (mint) => { const c = q1('SELECT * FROM coins WHERE mint=?', mint); if (!c) throw new Error('unknown coin'); return c; };
   async function ping({ mint, wallet, ts, sig }) {
     const c = coin(mint), st = state(c); fresh(ts); if (!verify(pingMessage(mint, ts), sig, wallet)) throw new Error('bad signature'); guard('ping', wallet, sig);
     if (st.era === 'out' || st.state === 'out') throw new Error('creator is already out'); if (wallet !== st.creator) throw new Error('only the current creator can check in');
+    const lastP = q1(`SELECT MAX(ts) t FROM rlog WHERE mint=? AND kind='ping'`, mint).t || 0; if (st.state === 'active' && Date.now() - lastP < 12 * 36e5) return { ok: true, already: true };   // an on-chain check-in at most every 12h while active
     await withLock(() => stamp(mint, 'ping', 0, wallet)); return { ok: true };
   }
   async function claimNow({ mint, wallet, ts, sig }) {
@@ -156,23 +164,24 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, q
     return withLock(async () => { const st = state(c); if (wallet !== st.creator) throw new Error('only the current creator can claim');
       if (st.state !== 'active') throw new Error(st.state === 'frozen' ? 'payouts are paused — tap “I’m still here” first' : 'creator is out');
       const vp = (await dbc.state.getPool(new PublicKey(c.pool))).poolState, free = Math.max(0, Number(vp.creatorQuoteFee.toString()) - st.fund);
-      if (free < units(c, 0.01)) throw new Error('nothing to claim yet'); const s = await payFromPool(c, free, wallet, 'pay'); return { ok: true, sol: free / 10 ** (c.quote_dec ?? 9), quote: c.quote_symbol || 'SOL', sig: s }; });
+      if (free < units(c, MIN_CLAIM_USD)) throw new Error('claims start at $1 — keep building fees'); const s = await payFromPool(c, free, wallet, 'pay'); return { ok: true, sol: free / 10 ** (c.quote_dec ?? 9), quote: c.quote_symbol || 'SOL', sig: s }; });
   }
   async function ctoApply({ mint, wallet, ts, sig, plan }) {
     const c = coin(mint), p = cleanPlan(plan); fresh(ts); if (p.length < 10) throw new Error('write a short plan (10+ characters)');
     if (!verify(applyMessage(mint, ts, String(plan || '').slice(0, 240)), sig, wallet) && !verify(applyMessage(mint, ts, p), sig, wallet)) throw new Error('bad signature'); guard('apply', wallet, sig);
     if (q1(`SELECT 1 FROM rlog WHERE mint=? AND kind='ctoapply' AND ts>=? AND extra LIKE ?`, mint, era(c).start || 0, wallet + '|%')) throw new Error('you already applied');
     if (state(c).era !== 'out') throw new Error('takeovers open only when the creator is out'); if (pastLeads(c).has(wallet)) throw new Error('this wallet can’t lead this coin');
-    balCache.delete(mint); const own = (await bals(mint)).get(wallet) || 0; if (own / SUPPLY * 100 < RULES.ctoApplyPct) throw new Error(`you need at least ${RULES.ctoApplyPct}% of the supply to apply`);
+    const own = (await bals(mint)).get(wallet) || 0; if (own / SUPPLY * 100 < RULES.ctoApplyPct) throw new Error(`you need at least ${RULES.ctoApplyPct}% of the supply to apply`);
     await withLock(() => stamp(mint, 'ctoapply', 0, wallet + '|' + p)); return { ok: true };
   }
   async function ctoVote({ mint, applicant, wallet, ts, sig }) {
     const c = coin(mint); fresh(ts); if (!verify(voteMessage(mint, applicant, ts), sig, wallet)) throw new Error('bad signature'); guard('vote', wallet, sig);
     const prev = q1(`SELECT extra, ts FROM rlog WHERE mint=? AND kind='ctovote' AND ts>=? AND extra LIKE ? ORDER BY ts DESC LIMIT 1`, mint, era(c).start || 0, wallet + '|%'); if (prev && prev.extra === wallet + '|' + applicant) return { ok: true, approved: false, already: true };
     if (prev && Date.now() - prev.ts < 6 * 36e5) throw new Error('you can change your vote once every 6 hours');
-    const sp = (stampsPerCoin.get(mint) || []).filter((t) => Date.now() - t < 36e5); if (sp.length >= 30) throw new Error('too many votes on this coin right now — try again later'); sp.push(Date.now()); stampsPerCoin.set(mint, sp);
+
     if (state(c).era !== 'out') throw new Error('no takeover vote is open'); if (pastLeads(c).has(wallet)) throw new Error('this wallet can’t vote here');
-    balCache.delete(mint); if (!((await bals(mint)).get(wallet) > 0)) throw new Error('only holders can support a takeover');
+    if (!((await bals(mint)).get(wallet) > 0)) throw new Error('only holders can support a takeover');
+    const sp = (stampsPerCoin.get(mint) || []).filter((t) => Date.now() - t < 36e5); if (sp.length >= 30) throw new Error('too many votes on this coin right now — try again later'); sp.push(Date.now()); stampsPerCoin.set(mint, sp);
     await withLock(() => stamp(mint, 'ctovote', 0, wallet + '|' + applicant)); return { ok: true, approved: false };   // approval happens in the cycle, after the voting window, with balances re-checked
   }
   return { rebuild, cycle, state, era, applications, ping, claimNow, ctoApply, ctoVote, logFor: (mint) => q(`SELECT sig, kind, lamports, ts, extra FROM rlog WHERE mint=? AND kind NOT IN ('ctovote','ctoapply') ORDER BY ts DESC LIMIT 30`, mint) };

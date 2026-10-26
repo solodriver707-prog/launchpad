@@ -38,8 +38,9 @@ export function startOps({ conn, dbc, ops, treasury, q, q1, run, quoteUsd = () =
   async function taxCycle(c) {
     const mint = new PublicKey(c.mint), opsAta = getAssociatedTokenAddressSync(mint, ops.publicKey, false, TOKEN_2022_PROGRAM_ID);
     const accs = (await conn.getProgramAccounts(TOKEN_2022_PROGRAM_ID, { filters: [{ memcmp: { offset: 0, bytes: c.mint } }] })).map((a) => unpackAccount(a.pubkey, a.account, TOKEN_2022_PROGRAM_ID));
-    const withheld = accs.filter((a) => (getTransferFeeAmount(a)?.withheldAmount || 0n) > 0n), totalW = withheld.reduce((s, a) => s + getTransferFeeAmount(a).withheldAmount, 0n);
-    if (totalW < BigInt(MIN_HARVEST)) return null;
+    const wa = (a) => getTransferFeeAmount(a)?.withheldAmount || 0n, withheld = accs.filter((a) => wa(a) > 0n).sort((x, y) => (wa(y) > wa(x) ? 1 : -1)).slice(0, 200), totalW = withheld.reduce((s, a) => s + wa(a), 0n);   // biggest 200 per cycle
+    const px = q1('SELECT price_usd FROM trades WHERE mint=? ORDER BY ts DESC LIMIT 1', c.mint)?.price_usd || 0;
+    if (totalW < BigInt(MIN_HARVEST) || Number(totalW) / 10 ** DEC * px < 1) return null;   // only harvest when it's worth at least $1
     await send([createAssociatedTokenAccountIdempotentInstruction(ops.publicKey, opsAta, ops.publicKey, mint, TOKEN_2022_PROGRAM_ID)]);
     const before = (await getAccount(conn, opsAta, 'confirmed', TOKEN_2022_PROGRAM_ID)).amount;
     for (let i = 0; i < withheld.length; i += 20) await withdrawWithheldTokensFromAccounts(conn, ops, mint, opsAta, ops, [], withheld.slice(i, i + 20).map((a) => a.address), { commitment: 'confirmed' }, TOKEN_2022_PROGRAM_ID);
@@ -49,13 +50,14 @@ export function startOps({ conn, dbc, ops, treasury, q, q1, run, quoteUsd = () =
     let devBurn = false, devTo = c.creator; try { const ds = devState(c); devBurn = ds.era === 'out' || ds.state !== 'active'; devTo = ds.creator || c.creator; } catch {}   // CTO lead gets the tax share while in charge
     if (devAmt > 0n && devBurn) await send([createBurnCheckedInstruction(opsAta, mint, ops.publicKey, devAmt, DEC, [], TOKEN_2022_PROGRAM_ID)]);   // creator paused / out → their tax share is burned
     if (devAmt > 0n && !devBurn) { const devAta = getAssociatedTokenAddressSync(mint, new PublicKey(devTo), false, TOKEN_2022_PROGRAM_ID);
-      await send([createAssociatedTokenAccountIdempotentInstruction(ops.publicKey, devAta, new PublicKey(devTo), mint, TOKEN_2022_PROGRAM_ID), createTransferCheckedInstruction(opsAta, mint, devAta, ops.publicKey, devAmt, DEC, [], TOKEN_2022_PROGRAM_ID)]); }
+      if (await conn.getAccountInfo(devAta)) await send([createTransferCheckedInstruction(opsAta, mint, devAta, ops.publicKey, devAmt, DEC, [], TOKEN_2022_PROGRAM_ID)]);   // ops never pays rent to open accounts for others
+      else { devBurn = true; await send([createBurnCheckedInstruction(opsAta, mint, ops.publicKey, devAmt, DEC, [], TOKEN_2022_PROGRAM_ID)]); } }
     // holders: pro-rata to every real holder (not the curve vault, not ops, not the dev who already got the dev share)
     const skip = new Set([poolAuthority, ops.publicKey.toBase58(), c.creator, devTo]);
-    const hs = accs.filter((a) => a.amount > 0n && !skip.has(a.owner.toBase58()) && PublicKey.isOnCurve(a.owner.toBytes())), held = hs.reduce((s, a) => s + a.amount, 0n);   // PDAs (pool vaults after migration, programs) are not holders
+    const hs = accs.filter((a) => a.amount > 0n && !skip.has(a.owner.toBase58()) && PublicKey.isOnCurve(a.owner.toBytes())).sort((x, y) => (y.amount > x.amount ? 1 : -1)).slice(0, 200), held = hs.reduce((s, a) => s + a.amount, 0n);   // top 200 holders per cycle   // PDAs (pool vaults after migration, programs) are not holders
     let paid = 0n, n = 0;
     if (holdAmt > 0n && held > 0n) {
-      const shares = hs.map((a) => ({ to: a.address, amt: holdAmt * a.amount / held })).filter((x) => x.amt >= 1000n);   // skip dust
+      const minAmt = px > 0 ? BigInt(Math.ceil(0.05 / px * 10 ** DEC)) : 1000n, shares = hs.map((a) => ({ to: a.address, amt: holdAmt * a.amount / held })).filter((x) => x.amt >= minAmt);   // a share must be worth ≥ $0.05 (else it's burned below)
       const ix = (x) => createTransferCheckedInstruction(opsAta, mint, x.to, ops.publicKey, x.amt, DEC, [], TOKEN_2022_PROGRAM_ID);
       for (let i = 0; i < shares.length; i += 8) { const batch = shares.slice(i, i + 8);
         try { await send(batch.map(ix)); paid += batch.reduce((s, x) => s + x.amt, 0n); n += batch.length; }
@@ -82,6 +84,6 @@ export function startOps({ conn, dbc, ops, treasury, q, q1, run, quoteUsd = () =
       await sweep();
     } catch (e) { log('ops   cycle err', e.message); } finally { busy = false; }
   }
-  const locked = () => withLock(cycle); setTimeout(locked, 30e3); setInterval(locked, everyMs);
+  let queued = false; const locked = () => { if (queued) return; queued = true; withLock(cycle).finally(() => { queued = false; }); }; setTimeout(locked, 30e3); setInterval(locked, everyMs);   // never pile up cycles
   return { cycle };
 }
