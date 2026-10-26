@@ -21,7 +21,8 @@ export function startCallouts({ q, q1, run, push, rate, coinStats, pinJSON, pina
     const c = { mint, wallet, ts, sig, reply, text }; if (!verify(c)) throw new Error('bad signature');
     if (q1('SELECT 1 FROM callouts WHERE sig=?', sig)) throw new Error('already posted');
     if (!rate('co|' + wallet, 1, 15e3) || !rate('coh|' + wallet, 40, 36e5) || !rate('coip|' + ipAddr, 120, 36e5)) throw new Error('slow down — too many callouts');
-    const s = await coinStats(mint, wallet);   // market cap now + the poster's bag value (shown as "holding $X" and used for the callers board)
+    const s = await coinStats(mint, wallet);
+    if (!s.allowed) throw new Error('only holders or traders of this coin can post callouts');   // market cap now + the poster's bag value (shown as "holding $X" and used for the callers board)
     const r = run('INSERT INTO callouts(mint,wallet,text,ts,sig,reply,mc,pos) VALUES(?,?,?,?,?,?,?,?)', mint, wallet, text, ts, sig, reply, s.mc, s.pos);   // ts = the signed time, so a restored copy still verifies
     const out = row(q1('SELECT * FROM callouts WHERE id=?', r.lastInsertRowid)); push({ type: 'callout', ...out }); backupSoon(); return { ok: true, callout: out };
   }

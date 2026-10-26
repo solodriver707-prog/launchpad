@@ -40,7 +40,7 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, q
   const guard = (kind, wallet, sig) => { const now = Date.now(); for (const [k, t] of usedSig) if (now - t > 5 * 60e3) usedSig.delete(k);
     if (usedSig.has(sig)) throw new Error('this signature was already used'); const k = kind + '|' + wallet; if (now - (lastAct.get(k) || 0) < 30e3) throw new Error('slow down — try again in a few seconds');
     usedSig.set(sig, now); lastAct.set(k, now); };
-  const VOTE_WINDOW = 24 * 36e5;   // a takeover can only be approved after its application has been open this long (balances re-checked then)
+  const VOTE_WINDOW = 24 * 36e5, held = new Map(), stampsPerCoin = new Map();   // held: since when an application has continuously had enough support (resets on restart = safer)   // a takeover can only be approved after its application has been open this long (balances re-checked then)
 
   async function rebuild() {   // ledger = the ops wallet's own memo history
     let before, n = 0;
@@ -121,7 +121,10 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, q
   }
   async function tryApprove(c) {
     const st = state(c); if (st.era !== 'out') return null;
-    balCache.delete(c.mint); const best = (await applications(c)).find((a) => a.eligible && a.supportPct >= RULES.ctoSupportPct && Date.now() - a.at >= VOTE_WINDOW); if (!best) return null;
+    balCache.delete(c.mint); const apps = await applications(c), now = Date.now();
+    // support must hold at or above the bar at EVERY cycle check for 24h in a row (a buy-hold-sell around one check doesn't count)
+    for (const a of apps) { const k = c.mint + '|' + a.wallet, o = held.get(k); if (a.eligible && a.supportPct >= RULES.ctoSupportPct) { if (!o) held.set(k, now); } else held.delete(k); }
+    const best = apps.find((a) => held.has(c.mint + '|' + a.wallet) && now - held.get(c.mint + '|' + a.wallet) >= VOTE_WINDOW); if (!best) return null;
     await stamp(c.mint, 'cto', Math.max(0, st.fund), best.wallet); log('rewards CTO approved', c.symbol, '→', best.wallet.slice(0, 6), (best.supportPct).toFixed(1) + '%'); return best;
   }
   async function cycleCoin(c) {
@@ -165,7 +168,9 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, q
   }
   async function ctoVote({ mint, applicant, wallet, ts, sig }) {
     const c = coin(mint); fresh(ts); if (!verify(voteMessage(mint, applicant, ts), sig, wallet)) throw new Error('bad signature'); guard('vote', wallet, sig);
-    const prev = q1(`SELECT extra FROM rlog WHERE mint=? AND kind='ctovote' AND ts>=? AND extra LIKE ? ORDER BY ts DESC LIMIT 1`, mint, era(c).start || 0, wallet + '|%'); if (prev && prev.extra === wallet + '|' + applicant) return { ok: true, approved: false, already: true };
+    const prev = q1(`SELECT extra, ts FROM rlog WHERE mint=? AND kind='ctovote' AND ts>=? AND extra LIKE ? ORDER BY ts DESC LIMIT 1`, mint, era(c).start || 0, wallet + '|%'); if (prev && prev.extra === wallet + '|' + applicant) return { ok: true, approved: false, already: true };
+    if (prev && Date.now() - prev.ts < 6 * 36e5) throw new Error('you can change your vote once every 6 hours');
+    const sp = (stampsPerCoin.get(mint) || []).filter((t) => Date.now() - t < 36e5); if (sp.length >= 30) throw new Error('too many votes on this coin right now — try again later'); sp.push(Date.now()); stampsPerCoin.set(mint, sp);
     if (state(c).era !== 'out') throw new Error('no takeover vote is open'); if (pastLeads(c).has(wallet)) throw new Error('this wallet can’t vote here');
     balCache.delete(mint); if (!((await bals(mint)).get(wallet) > 0)) throw new Error('only holders can support a takeover');
     await withLock(() => stamp(mint, 'ctovote', 0, wallet + '|' + applicant)); return { ok: true, approved: false };   // approval happens in the cycle, after the voting window, with balances re-checked

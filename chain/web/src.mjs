@@ -1,7 +1,7 @@
 // treid browser chain module → bundled to chain.js (window.TreidChain). Builds real DBC transactions; the wallet only signs.
 import { Buffer } from 'buffer';
 if (!globalThis.Buffer) globalThis.Buffer = Buffer;
-import { Connection, Keypair, PublicKey, Transaction, SystemProgram, TransactionInstruction } from '@solana/web3.js';
+import { Connection, Keypair, PublicKey, Transaction, SystemProgram, TransactionInstruction, VersionedTransaction } from '@solana/web3.js';
 import { ed25519 } from '@noble/curves/ed25519';
 import bs58lib from 'bs58';
 const bs58enc = (b) => (bs58lib.default || bs58lib).encode(b instanceof Uint8Array ? b : Uint8Array.from(b));
@@ -153,6 +153,14 @@ export function cosign(signed, cosigners = []) {
 export async function creatorFees({ rpc, pool }) {
   const vpw = await client(rpc).state.getPool(pk(pool)); const vp = vpw.poolState || vpw, cfg = await client(rpc).state.getPoolConfig(vp.config), qi = await quoteInfo({ rpc, mint: cfg.quoteMint.toBase58() }), D = 10 ** qi.decimals;
   return { quoteMint: qi.mint, unclaimed: Number(vp.creatorQuoteFee.toString()) / D, creator: vp.creator.toBase58(), partnerUnclaimed: Number(vp.partnerQuoteFee.toString()) / D };
+}
+// sanity-check a swap transaction from Jupiter's API before the wallet signs it: user pays, only known programs are called
+const JUP_OK = new Set(['JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4', 'ComputeBudget111111111111111111111111111111', 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA', 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb', 'ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL', '11111111111111111111111111111111']);
+export function checkSwapTx(bytes, owner) {
+  const tx = VersionedTransaction.deserialize(Uint8Array.from(bytes)), keys = tx.message.staticAccountKeys;
+  if (!keys.length || keys[0].toBase58() !== owner) throw new Error('Swap transaction is not paid by your wallet — refusing to sign');
+  for (const ix of tx.message.compiledInstructions) { const p = keys[ix.programIdIndex]; if (!p || !JUP_OK.has(p.toBase58())) throw new Error('Swap calls an unexpected program — refusing to sign'); }
+  return true;
 }
 // burn your own tokens of a treid coin (permanent) — with a memo so it's recognisable on-chain
 export async function buildBurn({ rpc, owner, mint, amount }) {

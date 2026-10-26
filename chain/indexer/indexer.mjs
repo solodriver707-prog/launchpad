@@ -63,11 +63,11 @@ async function verifyBurn(sig) {   // a user's burn of a treid coin, checked on-
   let tx = null; for (let i = 0; i < 6 && !tx; i++) { tx = await conn.getTransaction(sig, { maxSupportedTransactionVersion: 0, commitment: 'confirmed' }).catch(() => null); if (!tx) await new Promise((r) => setTimeout(r, 1500)); }
   if (!tx || tx.meta.err) throw new Error('transaction not found');
   const keys = tx.transaction.message.getAccountKeys ? tx.transaction.message.getAccountKeys().staticAccountKeys : tx.transaction.message.accountKeys, signer = keys[0].toBase58();
-  if (!(tx.meta.logMessages || []).some((l) => /Instruction: BurnChecked|Instruction: Burn\b/.test(l))) throw new Error('not a burn');
-  const pre = tx.meta.preTokenBalances || [], post = tx.meta.postTokenBalances || [];
-  for (const b of pre) { const c = q1('SELECT mint FROM coins WHERE mint=?', b.mint); if (!c || b.owner !== signer) continue;
-    const a = post.find((x) => x.accountIndex === b.accountIndex), d = (Number(b.uiTokenAmount.amount) - Number(a ? a.uiTokenAmount.amount : 0)) / 1e6;
-    if (d > 0) { run('INSERT OR IGNORE INTO uburn VALUES(?,?,?,?,?)', sig, b.mint, signer, d, (tx.blockTime || Date.now() / 1000) * 1000); supplyC.delete(b.mint); push({ type: 'burn', mint: b.mint, tok: d, wallet: signer, sig }); return { ok: true, tok: d }; } }
+  // decode the Token-2022 Burn (8) / BurnChecked (15) instructions themselves: accounts [token account, mint, authority], amount = u64 LE
+  const msg = tx.transaction.message, mk = msg.getAccountKeys ? msg.getAccountKeys({ accountKeysFromLookups: tx.meta.loadedAddresses }) : null, key = (i) => (mk ? mk.get(i) : msg.accountKeys[i]).toBase58(), T22 = TOKEN_2022_PROGRAM_ID.toBase58(), by = new Map();
+  for (const ix of msg.compiledInstructions || []) { if (key(ix.programIdIndex) !== T22) continue; const d = Buffer.from(ix.data); if (!(d[0] === 8 || d[0] === 15) || d.length < 9) continue;
+    const mint = key(ix.accountKeyIndexes[1]), auth = key(ix.accountKeyIndexes[2]); if (auth !== signer || !q1('SELECT 1 FROM coins WHERE mint=?', mint)) continue; by.set(mint, (by.get(mint) || 0) + Number(d.readBigUInt64LE(1)) / 1e6); }
+  for (const [mint, tok] of by) { if (tok <= 0) continue; run('INSERT OR IGNORE INTO uburn VALUES(?,?,?,?,?)', sig, mint, signer, tok, (tx.blockTime || Date.now() / 1000) * 1000); supplyC.delete(mint); push({ type: 'burn', mint, tok, wallet: signer, sig }); return { ok: true, tok }; }
   throw new Error('no treid tokens burned in this transaction');
 }   // curve migration threshold per coin (pair-token units)
 const q = (sql, ...a) => db.prepare(sql).all(...a), q1 = (sql, ...a) => db.prepare(sql).get(...a), run = (sql, ...a) => db.prepare(sql).run(...a);
@@ -133,9 +133,10 @@ async function handle(sig) {
   const inits = poolInits(tx); if (inits.length) { for (const it of inits) await addCoin(it.mint, tx.slot, ts, it.creator); if (!/Instruction: Swap/.test(logs)) return; }   // pool + dev first buy can share one tx
   if (!/Instruction: Swap/.test(logs)) return;
   const evs = []; for (const g of tx.meta.innerInstructions || []) for (const ix of g.instructions) { if (keys[ix.programIdIndex].toBase58() !== DYNAMIC_BONDING_CURVE_PROGRAM_ID.toBase58()) continue; try { const e = coder.decode(Buffer.from(bs58.decode(ix.data)).subarray(8).toString('base64')); if (e) evs.push(e); } catch {} }
-  const ev2 = evs.find(e => e.name === 'EvtSwap2'), ev3 = evs.find(e => e.name === 'EvtSwap3');
+  const swapEv = (pool) => evs.find((e) => (e.name === 'EvtSwap2' || e.name === 'EvtSwap3') && e.data.pool?.toBase58() === pool);   // real swaps only: the DBC program's own event for THIS pool (log text can be faked by a memo)
   for (const mint of mints) {
     const coin = q1('SELECT * FROM coins WHERE mint=?', mint) || (await addCoin(mint, tx.slot, ts) && q1('SELECT * FROM coins WHERE mint=?', mint)); if (!coin) continue;
+    const evp = swapEv(coin.pool); if (!evp) continue; const ev2 = evp.name === 'EvtSwap2' ? evp : null, ev3 = evp.name === 'EvtSwap3' ? evp : null;
     const amt = (arr, owner, mt) => arr.filter(b => b.owner === owner && b.mint === mt).reduce((s, b) => s + Number(b.uiTokenAmount.amount), 0);
     const tokDelta = (amt(post, signer, mint) - amt(pre, signer, mint)) / 1e6;
     const auth = deriveDbcPoolAuthority().toBase58();
@@ -175,11 +176,14 @@ async function holders(mint) {
     .sort((x, y) => y.pct - x.pct);
 }
 // real on-chain balances (transfers, tax payouts and burns included) — cached, refreshed in the background
-const hCache = new Map(), inflight = new Map();
+const hCache = new Map(), inflight = new Map(), lbCache = new Map();
+function holdersCached(mint) { const h = hCache.get(mint); if (h?.list && Date.now() - h.ts < 30e3) return Promise.resolve(h.list); if (!inflight.has(mint)) inflight.set(mint, holders(mint).then((l) => { hCache.set(mint, { ts: Date.now(), list: l }); return l; }).finally(() => inflight.delete(mint))); return inflight.get(mint); }
 // simple in-memory rate limiter (per key, n hits per window)
-const hits = new Map(); function rate(k, n, ms) { const now = Date.now(), a = (hits.get(k) || []).filter((t) => now - t < ms); if (a.length >= n) { hits.set(k, a); return false; } a.push(now); hits.set(k, a); if (hits.size > 50000) hits.clear(); return true; }
-const ip = (req) => String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
-function liveHolders(mint) { const h = hCache.get(mint); if (!h || Date.now() - h.ts > 30e3) { if (!h?.busy) { const e = h || { ts: 0, list: null }; e.busy = true; hCache.set(mint, e); holders(mint).then((l) => { hCache.set(mint, { ts: Date.now(), list: l }); }).catch(() => { e.busy = false; }); } } return h?.list || null; }
+const hits = new Map(); function rate(k, n, ms) { const now = Date.now(), a = (hits.get(k) || []).filter((t) => now - t < ms); if (a.length >= n) { hits.set(k, a); return false; } a.push(now); hits.set(k, a);
+  if (hits.size > 50000) for (const [key, v] of hits) if (now - v[v.length - 1] > 36e5) hits.delete(key);   // evict by age, never wipe all limits
+  return true; }
+const ip = (req) => { const x = String(req.headers['x-forwarded-for'] || '').split(',').map((v) => v.trim()).filter(Boolean); return x.length ? x[x.length - 1] : String(req.socket.remoteAddress || ''); };   // rightmost = added by Render's proxy; the left ones are client-controlled
+function liveHolders(mint) { const h = hCache.get(mint); if (!h || Date.now() - h.ts > 120e3) { if (!h?.busy) { const e = h || { ts: 0, list: null }; e.busy = true; hCache.set(mint, e); holders(mint).then((l) => { hCache.set(mint, { ts: Date.now(), list: l }); }).catch(() => { e.busy = false; }); } } return h?.list || null; }
 function stats(mint) {
   const c = q1('SELECT * FROM coins WHERE mint=?', mint); if (!c) return null;
   const last = q1('SELECT mcap_usd, progress, reserve FROM trades WHERE mint=? ORDER BY ts DESC, slot DESC LIMIT 1', mint);
@@ -242,8 +246,10 @@ http.createServer(async (req, res) => {
     if (p[1] === 'callout' && req.method === 'POST') { let body = ''; req.on('data', (d) => { body += d; if (body.length > 3000) req.destroy(); });
       req.on('end', async () => { try { J(await CO.post(JSON.parse(body), ip(req))); } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: e.message })); } }); return; }
     if (p[1] === 'callouts') return J(CO.list(u.searchParams.get('mint') || null));
+    if (p[1] === 'burned' && req.method === 'POST' && !rate('burn|' + ip(req), 30, 36e5)) { res.writeHead(429, { 'access-control-allow-origin': '*' }); return res.end('{"ok":false,"error":"too many requests"}'); }
     if (p[1] === 'burned' && req.method === 'POST') { let body = ''; req.on('data', (d) => { body += d; if (body.length > 1000) req.destroy(); });
       req.on('end', async () => { try { J(await verifyBurn(String(JSON.parse(body).sig || ''))); } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: e.message })); } }); return; }
+    if (p[1] === 'leaderboard' && lbCache.has(u.searchParams.get('per') || 'all') && Date.now() - lbCache.get(u.searchParams.get('per') || 'all').ts < 60e3) return J(lbCache.get(u.searchParams.get('per') || 'all').v);
     if (p[1] === 'leaderboard') { const pm = { '24h': 864e5, '7d': 6048e5 }[u.searchParams.get('per')] || 1e13, since = Date.now() - pm;
       const px = new Map(q('SELECT t.mint, t.price_usd p FROM trades t JOIN (SELECT mint, MAX(ts) m FROM trades GROUP BY mint) l ON l.mint=t.mint AND l.m=t.ts').map((r) => [r.mint, r.p]));
       const skip = new Set([OPS?.publicKey.toBase58(), PARTNER].filter(Boolean)), W = new Map();
@@ -256,7 +262,7 @@ http.createServer(async (req, res) => {
         e.launches++; if ((st.prog || 0) >= 100) e.grads++; if ((st.ath || 0) > e.best) { e.best = st.ath || 0; e.bestMint = c.mint; } try { if (REW && REW.state(c).era === 'out') e.left++; } catch {} D.set(c.creator, e); }
       const devs = [...D.values()].sort((a, b) => (b.grads * 3 + Math.log10(b.best + 1) * 4 - b.left * 5) - (a.grads * 3 + Math.log10(a.best + 1) * 4 - a.left * 5)).slice(0, 100);
       const hall = coinsAll.map((c) => ({ mint: c.mint, ath: q1('SELECT MAX(mcap_usd) a FROM trades WHERE mint=?', c.mint).a || 0 })).filter((x) => x.ath > 0).sort((a, b) => b.ath - a.ath).slice(0, 50);
-      return J({ traders, devs, hall }); }
+      const lv = { traders, devs, hall }; lbCache.set(u.searchParams.get('per') || 'all', { ts: Date.now(), v: lv }); return J(lv); }
     if (p[1] === 'burns') { const coins = q('SELECT mint, creator FROM coins'), out = [];
       for (const c of coins) { const burned = await burnedOf(c.mint); if (burned < 1) continue;
         const r = REW ? q1(`SELECT COALESCE(SUM(CASE WHEN kind='taxburn' THEN lamports END),0)/1e6 tax, COALESCE(SUM(CASE WHEN kind='burntok' THEN lamports END),0)/1e6 bb FROM rlog WHERE mint=?`, c.mint) : { tax: 0, bb: 0 };
@@ -277,8 +283,8 @@ let ready = false;
 if (!PARTNER) { console.error('Set PARTNER=<treid fee-claimer wallet>'); process.exit(1); }
 CO = startCallouts({ q, q1, run, push, rate, pinJSON, pinataJwt: PINATA_JWT, gateway: PINATA_GW,
   coinStats: async (mint, wallet) => { const last = q1('SELECT mcap_usd, price_usd FROM trades WHERE mint=? ORDER BY ts DESC, slot DESC LIMIT 1', mint) || {}; let pos = 0;
-    try { const hs = hCache.get(mint)?.list || await holders(mint); const h = hs.find((x) => x.wallet === wallet && !x.curve); if (h) pos = h.pct / 100 * SUPPLY * (last.price_usd || 0); } catch {}
-    return { mc: last.mcap_usd || 0, pos }; } });
+    let held = false; try { const hs = await holdersCached(mint); const h = hs.find((x) => x.wallet === wallet && !x.curve); if (h) { held = true; pos = h.pct / 100 * SUPPLY * (last.price_usd || 0); } } catch {}
+    const traded = !!q1('SELECT 1 FROM trades WHERE mint=? AND wallet=? LIMIT 1', mint, wallet); return { mc: last.mcap_usd || 0, pos, allowed: held || traded }; } });
 CO.restore();
 await solPrice(); setInterval(solPrice, 60e3); setInterval(() => quotePrices().catch(() => {}), 60e3);
 setInterval(() => push({ type: 'ping', t: Date.now() }), 25e3);               // keeps proxies from closing the stream
