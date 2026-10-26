@@ -3,7 +3,7 @@
 //   · partner fees → claimed straight to the treasury once they're worth ≥ $1
 //   · coin tax → harvested once it's worth ≥ $5 (at most hourly per coin), split holders / burn / dev, receipts on-chain
 //   · spare SOL → swept to the treasury (never what's owed to creators mid-payout)
-import { Keypair, PublicKey, TransactionInstruction, SystemProgram } from '@solana/web3.js';
+import { Keypair, PublicKey, TransactionInstruction, SystemProgram, VersionedTransaction, TransactionMessage } from '@solana/web3.js';
 import { TOKEN_2022_PROGRAM_ID, unpackAccount, getTransferFeeAmount, getMint, getTransferFeeConfig, getAssociatedTokenAddressSync, createAssociatedTokenAccountIdempotentInstruction,
   createTransferCheckedInstruction, createBurnCheckedInstruction, createCloseAccountInstruction, createWithdrawWithheldTokensFromAccountsInstruction, createWithdrawWithheldTokensFromMintInstruction, getAccount } from '@solana/spl-token';
 import bs58 from 'bs58';
@@ -12,7 +12,7 @@ import { createHash } from 'node:crypto';
 import { withLock } from './lock.mjs';
 import { SwapMode, getCurrentPoint, deriveDammV2PoolAddress, DAMM_V2_MIGRATION_FEE_ADDRESS } from '@meteora-ag/dynamic-bonding-curve-sdk';
 import { CpAmm } from '@meteora-ag/cp-amm-sdk';
-import { sendTx, getTxRetry } from './txutil.mjs';
+import { sendTx, getTxRetry, fetchT } from './txutil.mjs';
 
 // OPS_SECRET: a real keypair (JSON array or base58). A plain string is accepted ONLY off mainnet (seeded key, for dev/test).
 export function opsKeypair(secret, { mainnet = false } = {}) {
@@ -24,17 +24,48 @@ export function opsKeypair(secret, { mainnet = false } = {}) {
 }
 const MEMO = new PublicKey('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr'), memoIx = (t) => new TransactionInstruction({ keys: [], programId: MEMO, data: Buffer.from(t) });
 const WSOL = 'So11111111111111111111111111111111111111112', START = Date.now() - 7 * 864e5;   // after a restart: re-check fees of coins traded in the last week
+// what a reward swap delivered to ops: SOL = lamport change + the fee ops paid; a token = ops' balance change in that mint
+function rwOut(t, owner, rw) {
+  if (rw === 'So11111111111111111111111111111111111111112') { const keys = t.transaction.message.staticAccountKeys || t.transaction.message.accountKeys, i = keys.findIndex((k) => k.equals(owner)); return i < 0 ? 0 : Math.max(0, t.meta.postBalances[i] - t.meta.preBalances[i] + (i === 0 ? t.meta.fee : 0)); }
+  const tb = (arr) => (arr || []).filter((b) => b.mint === rw && b.owner === owner.toBase58()).reduce((a, b) => a + Number(b.uiTokenAmount.amount), 0);
+  return Math.max(0, tb(t.meta.postTokenBalances) - tb(t.meta.preTokenBalances));
+}
+export { rwOut };
 const DEC = 6, HARVEST_USD = 5, SHARE_USD = 0.05, FEE_USD = 1, MAX_ACCTS = 200;
-const parseSplit = (uri) => { let pair = false; try { const u = new URL(uri), s = u.searchParams.get('s'); pair = u.searchParams.get('r') === 'p';   // r=p: holders are paid in the pair token
-    if (s) { const p = s.split('.').map(Number); if (p.length === 3 && p.every((x) => Number.isInteger(x) && x >= 0 && x <= 100) && p[0] + p[1] + p[2] === 100) return { h: p[0], b: p[1], d: p[2], pair }; } } catch {} return { h: 70, b: 20, d: 10, pair }; };
+const parseSplit = (uri) => { let pair = false, rw = null; try { const u = new URL(uri), s = u.searchParams.get('s'), r = u.searchParams.get('r') || ''; pair = r === 'p';   // r=p: holders paid in the pair token · r=<mint>: in that token
+    if (/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(r)) rw = r;
+    if (s) { const p = s.split('.').map(Number); if (p.length === 3 && p.every((x) => Number.isInteger(x) && x >= 0 && x <= 100) && p[0] + p[1] + p[2] === 100) return { h: p[0], b: p[1], d: p[2], pair, rw }; } } catch {} return { h: 70, b: 20, d: 10, pair, rw }; };
 
-export function startOps({ conn, dbc, ops, treasury, q, q1, run, quoteUsd = () => 150, poolAuthority, log = console.log, everyMs = 10 * 60e3, liabilities = () => 0, devState = (c) => ({ state: 'active', creator: c.creator }), ready = () => true }) {
+export function startOps({ conn, dbc, ops, treasury, q, q1, run, mainnet = false, rewardOk = async () => false, quoteUsd = () => 150, poolAuthority, log = console.log, everyMs = 10 * 60e3, liabilities = () => 0, devState = (c) => ({ state: 'active', creator: c.creator }), ready = () => true }) {
   const send = (ixs) => sendTx(conn, ixs, [ops]), amm = new CpAmm(conn), DAMM_CFG = DAMM_V2_MIGRATION_FEE_ADDRESS[6];
   const rec = (sig, i, mint, kind, amt, extra = null) => { try { run('INSERT OR IGNORE INTO rlog(sig,i,mint,kind,lamports,ts,extra) VALUES(?,?,?,?,?,?,?)', sig, i, mint, kind, Number(amt), Date.now(), extra); } catch {} };
   const qmOf = (c) => new PublicKey(c.quote_mint || WSOL), isSol = (c) => !c.quote_mint || c.quote_mint === WSOL;
   // pair-token payouts: quote that was bought for holders but not yet paid out (from the on-chain receipts → survives restarts)
-  const pendingQ = (mint) => { const r = q1(`SELECT COALESCE(SUM(CASE WHEN kind='taxswap' THEN lamports ELSE 0 END),0) - COALESCE(SUM(CASE WHEN kind='taxholdq' THEN lamports ELSE 0 END),0) p FROM rlog WHERE mint=? AND kind IN ('taxswap','taxholdq')`, mint); return Math.max(0, r?.p || 0); };
-  const pendingSol = () => q(`SELECT DISTINCT mint FROM rlog WHERE kind='taxswap'`).reduce((a, r) => { const c = q1('SELECT quote_mint FROM coins WHERE mint=?', r.mint); return a + (c && (!c.quote_mint || c.quote_mint === WSOL) ? pendingQ(r.mint) : 0); }, 0);
+  const pendingQ = (mint) => pendingPair(mint);
+  const sumK = (mint, kind) => q1('SELECT COALESCE(SUM(lamports),0) s FROM rlog WHERE mint=? AND kind=?', mint, kind)?.s || 0;
+  const pendingPair = (mint) => Math.max(0, sumK(mint, 'taxswap') - sumK(mint, 'taxholdq') - sumK(mint, 'taxconv'));
+  const pendingRw = (mint) => Math.max(0, sumK(mint, 'taxrw') - sumK(mint, 'taxholdr'));
+  const pendingSol = () => q(`SELECT DISTINCT mint FROM rlog WHERE kind IN ('taxswap','taxrw')`).reduce((a, r) => { const c = q1('SELECT quote_mint, uri FROM coins WHERE mint=?', r.mint); if (!c) return a;
+    return a + ((!c.quote_mint || c.quote_mint === WSOL) ? pendingPair(r.mint) : 0) + (parseSplit(c.uri).rw === WSOL ? pendingRw(r.mint) : 0); }, 0);
+  // a third reward token: the pair-token proceeds are swapped through Jupiter (mainnet), with our receipt memo inside the same transaction
+  async function convertTo(c, rw) {
+    if (!mainnet) throw new Error('reward-token swaps need Jupiter (mainnet)'); if (!(await rewardOk(rw))) throw new Error('reward token not allowed');
+    const amt = pendingPair(c.mint), inM = qmOf(c).toBase58(); if (amt <= 0) return 0;
+    const qr = await (await fetchT(`https://lite-api.jup.ag/swap/v1/quote?inputMint=${inM}&outputMint=${rw}&amount=${amt}&slippageBps=300&maxAccounts=40`)).json();
+    if (!qr?.outAmount || qr.outputMint !== rw || qr.inputMint !== inM || String(qr.inAmount) !== String(amt)) throw new Error('no route');
+    const sw = await (await fetchT('https://lite-api.jup.ag/swap/v1/swap', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ quoteResponse: qr, userPublicKey: ops.publicKey.toBase58(), wrapAndUnwrapSol: true, dynamicComputeUnitLimit: true }) })).json();
+    const vt = VersionedTransaction.deserialize(Buffer.from(sw.swapTransaction, 'base64')); if (!vt.message.staticAccountKeys[0].equals(ops.publicKey)) throw new Error('route not paid by ops');
+    const luts = (await Promise.all(vt.message.addressTableLookups.map((l) => conn.getAddressLookupTable(l.accountKey)))).map((r) => r.value);
+    const msg = TransactionMessage.decompile(vt.message, { addressLookupTableAccounts: luts }); msg.instructions.push(memoIx(`treid:taxconv:${c.mint}:${amt}:${rw}`));
+    const vt2 = new VersionedTransaction(msg.compileToV0Message(luts)); vt2.sign([ops]);
+    // never sign away more SOL than the swap itself can need (the route comes from an outside API)
+    const pre = await conn.getBalance(ops.publicKey), sim = await conn.simulateTransaction(vt2, { sigVerify: false, accounts: { encoding: 'base64', addresses: [ops.publicKey.toBase58()] } });
+    if (sim.value.err) throw new Error('route simulation failed'); const post = sim.value.accounts?.[0]?.lamports ?? 0, maxLoss = (inM === WSOL ? amt : 0) + 0.01e9; if (pre - post > maxLoss) throw new Error('route would spend too much SOL — refused');
+    const sig = await conn.sendRawTransaction(vt2.serialize(), { maxRetries: 3 }); await conn.confirmTransaction({ signature: sig, blockhash: msg.recentBlockhash, lastValidBlockHeight: sw.lastValidBlockHeight }, 'confirmed');
+    const t = await getTxRetry(conn, sig); if (!t || t.meta.err) throw new Error('reward swap failed');
+    const out = rwOut(t, ops.publicKey, rw); rec(sig, 0, c.mint, 'taxconv', amt, rw); rec(sig, 1, c.mint, 'taxrw', out, rw);
+    log('ops   swapped', amt, c.quote_symbol || 'SOL', 'units →', out, 'of', rw.slice(0, 6), '(holder reward)', c.symbol); return out;
+  }
   // sell the holders' share of the tax for the pair token, on the coin's own pool; returns exactly what left the pool's quote vault
   async function sellForQuote(c, amt) {
     const mint = new PublicKey(c.mint), vpw = await dbc.state.getPool(new PublicKey(c.pool)), vp = vpw.poolState || vpw, slip = 300 + (c.tax_bps || 0);
@@ -55,9 +86,11 @@ export function startOps({ conn, dbc, ops, treasury, q, q1, run, quoteUsd = () =
     rec(sg, 0, c.mint, 'taxswap', out, vault.toBase58()); return out;
   }
   // pay pending pair-token rewards pro rata to the holder list (SOL straight to wallets; tokens only into accounts that already exist)
-  async function payQuote(c, hs, px) {
-    let left = BigInt(pendingQ(c.mint)); if (left <= 0n || !hs.length) return { paid: 0n, n: 0 };
-    const QM = qmOf(c), sol = isSol(c), qprog = sol ? null : (await conn.getAccountInfo(QM)).owner, qd = c.quote_dec ?? 9, qusd = quoteUsd(c) || 0;
+  async function payQuote(c, hs, px, rw = null) {   // rw: pay the third reward token instead of the pair token
+    let left = BigInt(rw ? pendingRw(c.mint) : pendingQ(c.mint)); if (left <= 0n || !hs.length) return { paid: 0n, n: 0 };
+    const QM = rw ? new PublicKey(rw) : qmOf(c), sol = QM.equals(new PublicKey(WSOL)), qai = sol ? null : await conn.getAccountInfo(QM), qprog = qai ? qai.owner : null;
+    const qd = sol ? 9 : rw ? (await getMint(conn, QM, 'confirmed', qprog)).decimals : (c.quote_dec ?? 9);
+    const qusd = rw ? (quoteUsd(c) || 0) * (sumK(c.mint, 'taxconv') / 10 ** (c.quote_dec ?? 9)) / Math.max(1e-18, sumK(c.mint, 'taxrw') / 10 ** qd) : (quoteUsd(c) || 0);   // reward price = what we paid for it
     let elig = hs.map((h) => ({ ...h, dst: sol ? h.owner : getAssociatedTokenAddressSync(QM, h.owner, true, qprog) }));
     if (!sol) { const ok = []; for (let i = 0; i < elig.length; i += 100) { const infos = await conn.getMultipleAccountsInfo(elig.slice(i, i + 100).map((h) => h.dst)); infos.forEach((ai, j) => { if (ai) ok.push(elig[i + j]); }); } elig = ok; }
     const tot = elig.reduce((a, h) => a + h.total, 0n); if (tot <= 0n) return { paid: 0n, n: 0 };
@@ -65,11 +98,11 @@ export function startOps({ conn, dbc, ops, treasury, q, q1, run, quoteUsd = () =
     const shares = elig.map((h) => ({ to: h.dst, amt: left * h.total / tot })).filter((x) => x.amt >= minAmt);
     const ix = (x) => (sol ? SystemProgram.transfer({ fromPubkey: ops.publicKey, toPubkey: x.to, lamports: x.amt }) : createTransferCheckedInstruction(src, QM, x.to, ops.publicKey, x.amt, qd, [], qprog));
     let paid = 0n, n = 0;
-    const batchSend = async (b) => { const amt = b.reduce((a, x) => a + x.amt, 0n), sg = await send([...b.map(ix), memoIx(`treid:taxholdq:${c.mint}:${amt}:${b.length}`)]); rec(sg, 0, c.mint, 'taxholdq', amt, String(b.length)); paid += amt; n += b.length; };
+    const kind = rw ? 'taxholdr' : 'taxholdq', batchSend = async (b) => { const amt = b.reduce((a, x) => a + x.amt, 0n), sg = await send([...b.map(ix), memoIx(`treid:${kind}:${c.mint}:${amt}:${b.length}`)]); rec(sg, 0, c.mint, kind, amt, String(b.length)); paid += amt; n += b.length; };
     for (let i = 0; i < shares.length; i += 16) { const b = shares.slice(i, i + 16);
       try { await batchSend(b); } catch (e) { if (e.unconfirmed) { log('ops   pair payout unconfirmed — stopping, next round pays the rest', c.symbol); break; }
         for (const x of b) { try { await batchSend([x]); } catch (e2) { if (e2.unconfirmed) return { paid, n }; } } } }   // a share that can't be paid (e.g. empty wallet) waits for the next round
-    log('ops   holders paid', (Number(paid) / 10 ** qd).toFixed(6), c.quote_symbol || 'SOL', 'to', n, c.symbol); return { paid, n };
+    log('ops   holders paid', (Number(paid) / 10 ** qd).toFixed(6), rw ? rw.slice(0, 6) : (c.quote_symbol || 'SOL'), 'to', n, c.symbol); return { paid, n };
   }
   const lastTradeTs = (mint) => q1('SELECT MAX(ts) t FROM trades WHERE mint=?', mint)?.t || 0;
   const lastPx = (mint) => q1('SELECT price_usd FROM trades WHERE mint=? ORDER BY ts DESC LIMIT 1', mint)?.price_usd || 0;
@@ -114,17 +147,21 @@ export function startOps({ conn, dbc, ops, treasury, q, q1, run, quoteUsd = () =
     if (inMint > 0n) await send([createWithdrawWithheldTokensFromMintInstruction(mint, opsAta, ops.publicKey, [], TOKEN_2022_PROGRAM_ID)]);
     const got = (await getAccount(conn, opsAta, 'confirmed', TOKEN_2022_PROGRAM_ID)).amount; if (got <= 0n) return null;   // the WHOLE balance: harvest + anything stranded earlier
     const f0 = (x) => (Number(x) / 10 ** DEC).toFixed(0), sp = parseSplit(c.uri);
-    if (sp.pair && pendingQ(c.mint) > 0) await payQuote(c, await holderList(c), px).catch(() => {});   // leftovers from an earlier round first
+    const rwT = sp.rw && sp.rw !== qmOf(c).toBase58() ? sp.rw : null, inPair = sp.pair || !!sp.rw;   // rwT: a third token (not the pair)
+    if (inPair && (pendingQ(c.mint) > 0 || (rwT && pendingRw(c.mint) > 0))) { const hl = await holderList(c);   // leftovers from an earlier round first
+      if (rwT && pendingRw(c.mint) > 0) await payQuote(c, hl, px, rwT).catch(() => {}); if (!rwT && pendingQ(c.mint) > 0) await payQuote(c, hl, px).catch(() => {}); }
     const burnAmt = got * BigInt(sp.b) / 100n, devAmt = got * BigInt(sp.d) / 100n, holdAmt = got - burnAmt - devAmt;
     let devBurn = false, devTo = c.creator; try { const ds = devState(c); devBurn = ds.era === 'out' || ds.state !== 'active'; devTo = ds.creator || c.creator; } catch {}
     if (devAmt > 0n && !devBurn) { const devAta = getAssociatedTokenAddressSync(mint, new PublicKey(devTo), false, TOKEN_2022_PROGRAM_ID); if (!(await conn.getAccountInfo(devAta))) devBurn = true;   // ops never opens accounts for others
       else await send([createTransferCheckedInstruction(opsAta, mint, devAta, ops.publicKey, devAmt, DEC, [], TOKEN_2022_PROGRAM_ID)]); }
     const hs = holdersOf(accs, new Set([poolAuthority, ops.publicKey.toBase58(), c.creator, devTo])), held = hs.reduce((s, a) => s + a.total, 0n), minAmt = BigInt(Math.ceil(SHARE_USD / px * 10 ** DEC));
     let paid = 0n, n = 0, aborted = false, inQuote = false;
-    if (sp.pair && holdAmt > 0n && held > 0n) {   // holders chose the pair token: sell their share on the coin's pool, then pay it out
+    if (inPair && holdAmt > 0n && held > 0n) {   // holders chose the pair token: sell their share on the coin's pool, then pay it out
       try { const out = await sellForQuote(c, holdAmt); inQuote = true; log('ops   sold', f0(holdAmt), 'tokens for', (Number(out) / 10 ** (c.quote_dec ?? 9)).toFixed(6), c.quote_symbol || 'SOL', '(holders)', c.symbol); }
       catch (e) { log('ops   pair sale failed — paying holders in the coin this round', c.symbol, e.message.slice(0, 80)); } }
-    if (inQuote) { const r = await payQuote(c, hs, px).catch((e) => { log('ops   pair payout later', c.symbol, e.message.slice(0, 80)); return { paid: 0n, n: 0 }; }); n = r.n; }
+    if (inQuote) { let viaRw = false;
+      if (rwT) { try { await convertTo(c, rwT); viaRw = true; } catch (e) { log('ops   reward swap failed — paying holders in', c.quote_symbol || 'SOL', 'this round', c.symbol, e.message.slice(0, 80)); } }
+      const r = await payQuote(c, hs, px, viaRw ? rwT : null).catch((e) => { log('ops   pair payout later', c.symbol, e.message.slice(0, 80)); return { paid: 0n, n: 0 }; }); n = r.n; }
     else if (holdAmt > 0n && held > 0n) {
       const shares = hs.map((a) => ({ to: a.to, amt: holdAmt * a.total / held })).filter((x) => x.amt >= minAmt), ix = (x) => createTransferCheckedInstruction(opsAta, mint, x.to, ops.publicKey, x.amt, DEC, [], TOKEN_2022_PROGRAM_ID);
       for (let i = 0; i < shares.length; i += 16) { const batch = shares.slice(i, i + 16);   // 16 transfers per tx (fits the size limit with the compute budget)

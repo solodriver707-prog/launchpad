@@ -338,23 +338,55 @@
   function coinUri(mint, c, ipfsUri) {
     var A0 = A, ix = function (arr, v) { return Math.max(0, arr.indexOf(v)).toString(36); }, sp = c.spec || {};
     var q = 'c=' + ix(A0.KINDS, sp.kind) + ix(A0.SKINS, sp.skin) + ix(A0.BGS, sp.bg) + ix(A0.EYES, sp.eyes) + ix(A0.MOUTHS, sp.mouth) + ix(A0.ACCS, sp.acc);
-    if (c.buy > 0 && c.split) q += '&s=' + c.split.h + '.' + c.split.b + '.' + c.split.d + (c.rw === 'pair' && c.split.h > 0 ? '&r=p' : '');
+    if (c.buy > 0 && c.split) q += '&s=' + c.split.h + '.' + c.split.b + '.' + c.split.d + (rwUri(c) && c.split.h > 0 ? '&r=' + rwUri(c) : '');
     var base = (ipfsUri ? ipfsUri : (API || 'https://treid.fun') + '/api/meta/' + mint) + '?' + q, add = function (k, v) { v = String(v || '').replace(/^https?:\/\//, '').replace(/^@/, '').trim(); if (v && (base + '&' + k + '=' + encodeURIComponent(v)).length <= 200) base += '&' + k + '=' + encodeURIComponent(v); };
     add('x', c.x); add('t', c.tg); add('w', c.web); return base;
   }
-  function rewardPick(c) {   // holders' share paid in the coin itself (recommended) or in the pair token
-    if (!(c.split && c.split.h > 0)) return ''; var tk = '$' + (c.tick || 'COIN'), qs = qOf(c).sym, rw = c.rw === 'pair' ? 'pair' : 'coin';
-    var o = function (k, ttl, tag, sub) { return '<button class="rpp-o rwp-o' + (rw === k ? ' on' : '') + '" data-act="rwPick" data-arg="' + k + '"><span><b>' + esc(ttl) + (tag ? ' <em class="rwp-tag">' + tag + '</em>' : '') + '</b><small>' + sub + '</small></span></button>'; };
-    return '<div class="rwp"><div class="spk-h"><b>Holders get paid in</b><span class="spk-lock">' + ICO.lock + 'Locked forever at launch</span></div><div class="rwp-opts">' +
-      o('coin', tk, '★ Recommended', 'Their bags grow. Nothing is sold, so payouts never push your price down.') +
-      o('pair', qs, '', 'Each payout first sells the tax for ' + esc(qs) + ' — real ' + esc(qs) + ' for holders, but every payout is a sell on your chart.') + '</div>' +
-      (rw === 'pair' ? '<small class="spk-note">Tip: coins that pay holders in their own token keep steadier charts — most strong communities choose ' + esc(tk) + '.</small>' : '') + '</div>';
+  // ===== HOLDER REWARDS: paid in the coin itself (recommended) or any verified token =====
+  S.rwq = ''; S.rwBusy = null; S.rwErr = '';
+  function rwOf(c) { return c && c.rw && c.rw.mint ? c.rw : null; }   // null = the coin itself
+  function rwUri(c) { var r = rwOf(c); return r ? (r.mint === qOf(c).mint ? 'p' : r.mint) : ''; }
+  function tokDrop(list, act, q) {
+    return (list || []).map(function (t) { var k = qReg(t.symbol, t.mint, t.icon, t.name); return '<button class="cpp-it" data-act="' + act + '" data-arg="' + esc(t.mint) + '">' + coinHTML(k, 26) + '<span><b>' + esc(t.symbol || k) + ' <em class="rwp-v">✓</em></b><small>' + esc(t.name || '') + ' · ' + esc(short(t.mint)) + '</small></span></button>'; }).join('') ||
+      (isCA(q) ? '<button class="cpp-it ca" data-act="' + act + '" data-arg="' + esc(q) + '"><span class="coin" style="width:26px;height:26px;background:#3A3A3D;font-size:12px">?</span><span><b>Use this contract</b><small class="mono">' + esc(short(q)) + '</small></span></button>' : '<div class="muted cpp-none">No verified token found — try the ticker or paste the contract address.</div>');
+  }
+  function tokSearch(q, dropId, act) {   // name / ticker search through the server (verified tokens only), results drawn without re-rendering the page
+    clearTimeout(S.tsT); var el = function () { return document.getElementById(dropId); };
+    if (q.length < 2) { if (el()) el().style.display = 'none'; return; }
+    S.tsT = setTimeout(function () { (API ? apiGet('/api/tsearch?q=' + encodeURIComponent(q)) : Promise.resolve([])).catch(function () { return []; }).then(function (list) { var d = el(); if (!d) return; d.innerHTML = tokDrop(list, act, q); d.style.display = 'flex'; }); }, 250);
+  }
+  function rwSelect(mint) {
+    if (mint === 'coin') { setC({ rw: 'coin' }); S.rwErr = ''; return; }
+    if (mint === WSOL || mint === USDC_MINT) { var kk = mint === WSOL ? 'SOL' : 'USDC'; S.c.rw = { mint: mint, sym: kk, key: kk }; S.rwq = ''; S.rwErr = ''; render(); return; }
+    if (mint === qOf(S.c).mint) { var q0 = qOf(S.c); S.c.rw = { mint: mint, sym: q0.sym, key: q0.key }; S.rwq = ''; S.rwErr = ''; render(); return; }
+    S.rwBusy = mint; S.rwErr = ''; render();
+    Promise.all([chainLib().then(function (T) { return T.quoteInfo({ rpc: RPC, mint: mint }); }), API ? apiGet('/api/qprice?mint=' + mint).catch(function () { return {}; }) : Promise.resolve({})]).then(function (r) {
+      var qi = r[0], pr = r[1] || {}; if (S.rwBusy !== mint) return; S.rwBusy = null;
+      if (!qi.ok) { S.rwErr = qi.reason || 'This token can’t be paid out'; render(); return; }
+      if (!pr.verified) { S.rwErr = 'Only verified tokens can be holder rewards (so holders never get a fake).'; render(); return; }
+      var k = qReg(pr.symbol, mint, pr.icon, pr.name); S.c.rw = { mint: mint, sym: pr.symbol || k, key: k, warn: qi.warn || null }; S.rwq = ''; render();
+    }).catch(function (e) { S.rwBusy = null; S.rwErr = 'Couldn’t check this token: ' + chainErr(e); render(); });
+  }
+  function rewardPick(c) {
+    if (!(c.split && c.split.h > 0)) return '';
+    var tk = '$' + (c.tick || 'COIN'), r = rwOf(c), q = qOf(c), chips = [[WSOL, 'SOL'], [USDC_MINT, 'USDC']];
+    if (q.mint !== WSOL && q.mint !== USDC_MINT) chips.push([q.mint, q.key]);
+    if (r && !chips.some(function (x) { return x[0] === r.mint; })) chips.push([r.mint, r.key]);
+    var own = '<button class="cpp-q rwp-own' + (!r ? ' on' : '') + '" data-act="rwPick" data-arg="coin"><span class="rwp-star">★</span>' + esc(tk) + '<em class="rwp-tag">Recommended</em></button>';
+    var sel = r ? coinHTML(r.key, 30) + '<span><b>' + esc(r.sym) + '</b><small>sold from the tax, then paid out</small></span>' : '<span class="rwp-star big">★</span><span><b>' + esc(tk) + '</b><small>your own coin · nothing is sold</small></span>';
+    return '<div class="field cpp rwp"><div class="spk-h"><b>Holders get paid in</b><span class="spk-lock">' + ICO.lock + 'Locked forever at launch</span></div>' +
+      '<div class="cpp-row"><div class="cpp-sel' + (!r ? ' rwp-sel-own' : '') + '">' + sel + '</div>' +
+      '<div class="cpp-s">' + I.search + '<input data-rwq value="' + esc(S.rwq) + '" placeholder="Search name, ticker or paste contract address" autocomplete="off" spellcheck="false"><div class="cpp-drop" id="rw-drop" style="display:none"></div></div></div>' +
+      '<div class="cpp-quick drag-scroll">' + own + chips.map(function (x) { return '<button class="cpp-q' + (r && r.mint === x[0] ? ' on' : '') + '" data-act="rwPick" data-arg="' + esc(x[0]) + '">' + coinHTML(x[1], 20) + esc(x[1]) + '</button>'; }).join('') + '</div>' +
+      (S.rwBusy ? '<small class="rpp-st">Checking token…</small>' : S.rwErr ? '<small class="rpp-st bad">' + esc(S.rwErr) + '</small>' : r && r.warn ? '<small class="rpp-st warn">⚠ ' + esc(r.warn) + '</small>' : '') +
+      '<small class="spk-note">' + (!r ? '<b>' + esc(tk) + '</b> is the strongest choice: holders’ bags grow and nothing is ever sold, so payouts never push your price down.'
+        : 'Each payout first sells the tax for ' + esc(r.sym) + ' — that sale shows on your chart. Coins that pay in their own token keep steadier charts; most strong communities choose ' + esc(tk) + '.') + '</small></div>';
   }
   function parseUri(uri) {
     var o = {}; try { var u = new URL(uri), g = function (k) { return u.searchParams.get(k); }, cc = g('c');
       if (cc && cc.length >= 6) { var d = cc.split('').map(function (ch) { return parseInt(ch, 36) || 0; }); o.spec = { kind: A.KINDS[d[0]] || A.KINDS[0], skin: A.SKINS[d[1]] || A.SKINS[0], bg: A.BGS[d[2]] || A.BGS[0], eyes: A.EYES[d[3]] || 'normal', mouth: A.MOUTHS[d[4]] || 'smile', acc: A.ACCS[d[5]] || 'none' }; }
       if (g('s')) { var p3 = g('s').split('.').map(Number); if (p3.length === 3 && p3[0] + p3[1] + p3[2] === 100) { o.split = { p: 'custom', h: p3[0], b: p3[1], d: p3[2] }; for (var pk0 in SPRE) if (SPRE[pk0][2] === p3[0] && SPRE[pk0][3] === p3[1] && SPRE[pk0][4] === p3[2]) o.split.p = pk0; } }
-      if (g('r') === 'p') o.rw = 'pair';
+      if (g('r') === 'p') o.rw = 'pair'; else if (isCA(g('r') || '')) o.rw = { mint: g('r') };
       ['x', 't', 'w'].forEach(function (k) { if (g(k)) o[k] = g(k); });
     } catch (e) {} return o;
   }
@@ -2658,7 +2690,7 @@
   }
   function splitBar(sp, cls) { return '<span class="spbar ' + (cls || '') + '">' + ['h', 'b', 'd'].filter(function (k) { return sp[k] > 0; }).map(function (k) { return '<i style="flex:' + sp[k] + ';background:' + SPC[k][3] + '"></i>'; }).join('') + '</span>'; }
   function splitTip(t) { var sp = splitOf(t), m = Math.max(t.buy, t.sell); return sp ? 'Tax ' + m + '% → ' + sp.h + '% holders (paid in ' + rwSym(t) + ') · ' + sp.b + '% burn · ' + sp.d + '% dev (locked)' : 'No tax — plain coin'; }
-  function rwSym(t) { return t.rw === 'pair' ? (t.live ? qSymT(t) : (t.pair || 'SOL')) : '$' + t.tick; }
+  function rwSym(t) { if (t.rw === 'pair') return t.live ? qSymT(t) : (t.pair || 'SOL'); if (t.rw && t.rw.mint) { var m = t.rw.mint; if (m === WSOL) return 'SOL'; if (m === USDC_MINT) return 'USDC'; for (var k in PAIR_INFO) if (PAIR_INFO[k].ca === m) return k; return short(m); } return '$' + t.tick; }
   function splitPicker(c) {
     var base = c.buy; if (base <= 0) return '<div class="spk off fee0"><div class="spk-h"><b>Your creator rewards</b><span class="spk-lock">' + ICO.lock + 'automatic</span></div><div class="fee-big"><b class="mono">' + FEE.creatorPlain + '%</b><span>of every trade on your coin goes to you</span></div><small>Plain coins pay a ' + FEE.plain + '% trading fee per trade: ' + FEE.creatorPlain + '% to you, ' + FEE.treidPlain + '% to treid, ' + FEE.dexPlain + '% to Meteora (the on-chain DEX). Add a tax to also earn from your own tax split — the trading fee then drops to ' + FEE.taxed + '% (' + FEE.creatorTaxed + '% still yours).</small></div>';
     var sp = c.split || (c.split = { p: 'community', h: 70, b: 20, d: 10 });
@@ -2680,9 +2712,9 @@
     if (!sp) return '<section class="card-s panel tsp-panel"><div class="tsp-h"><b>Fees on this coin</b><span class="tsp-p">plain coin · 0% tax</span></div><div class="tsp-rows" style="grid-template-columns:1fr 1fr 1fr"><div class="tsp-r" style="--c:#E6CB95"><em class="sp-ic">' + ICO.dev + '</em><span>Creator rewards</span><b class="mono">' + FEE.creatorPlain + '%</b><small class="mono">of every trade</small></div><div class="tsp-r" style="--c:#9a9aa2"><em class="sp-ic">' + ICO.lock + '</em><span>treid</span><b class="mono">' + FEE.treidPlain + '%</b><small class="mono">platform</small></div><div class="tsp-r" style="--c:#7FB6FF"><em class="sp-ic">' + ICO.lock + '</em><span>Meteora</span><b class="mono">' + FEE.dexPlain + '%</b><small class="mono">DEX protocol</small></div></div><small class="muted tsp-n">Buyers pay a ' + FEE.plain + '% trading fee per trade, split automatically on-chain.</small></section>';
     var pre = SPRE[sp.p], name = pre ? pre[1] : 'Custom';
     return '<section class="card-s panel tsp-panel"><div class="tsp-h"><b>Where the ' + m + '% tax goes</b><span class="tsp-p">' + ICO.lock + name + ' · locked</span></div>' + splitBar(sp, 'big') +
-      (sp.h > 0 ? '<small class="muted tsp-n">Holders are paid in <b>' + esc(rwSym(t)) + '</b>' + (t.rw === 'pair' ? ' — the tax is sold for it before each payout.' : ' — nothing is sold.') + '</small>' : '') +
+      (sp.h > 0 ? '<small class="muted tsp-n">Holders are paid in <b>' + esc(rwSym(t)) + '</b>' + (t.rw && t.rw !== 'coin' ? ' — the tax is sold for it before each payout.' : ' — nothing is sold.') + '</small>' : '') +
       '<div class="tsp-rows">' + ['h', 'b', 'd'].map(function (k) { var c0 = SPC[k]; return '<div class="tsp-r" style="--c:' + c0[0] + '"><em class="sp-ic">' + ICO[c0[1]] + '</em><span>' + c0[2] + '</span><b class="mono">' + sp[k] + '%</b><small class="mono">' + (m * sp[k] / 100).toFixed(2).replace(/\.?0+$/, '') + '% / trade</small></div>'; }).join('') + '</div>' +
-      '<small class="muted tsp-n">Plus a ' + FEE.taxed + '% trading fee (' + FEE.creatorTaxed + '% creator · ' + FEE.treidTaxed + '% treid · ' + FEE.dexTaxed + '% Meteora), total ' + (m + FEE.taxed) + '% per trade. On a 1 SOL buy: ' + ['h', 'b', 'd'].map(function (k) { return (m / 100 * sp[k] / 100).toFixed(4).replace(/\.?0+$/, '') + ' SOL ' + SPC[k][2].toLowerCase(); }).join(' · ') + '</small>' + (t.live && t.taxPaid && t.taxPaid.n ? '<div class="tsp-paid"><b>Paid out on-chain</b><span class="mono"><em class="sp-ic">' + ICO[SPC.b[1]] + '</em>' + fmtNum(t.taxPaid.burned) + ' burned</span><span class="mono"><em class="sp-ic">' + ICO[SPC.h[1]] + '</em>' + (t.rw === 'pair' ? (+t.taxPaid.holders_q || 0).toFixed(4).replace(/\.?0+$/, '') + ' ' + esc(rwSym(t)) : fmtNum(t.taxPaid.holders)) + ' to holders</span><span class="mono"><em class="sp-ic">' + ICO[SPC.d[1]] + '</em>' + fmtNum(t.taxPaid.dev) + ' to dev</span></div>' : '') + '</section>';
+      '<small class="muted tsp-n">Plus a ' + FEE.taxed + '% trading fee (' + FEE.creatorTaxed + '% creator · ' + FEE.treidTaxed + '% treid · ' + FEE.dexTaxed + '% Meteora), total ' + (m + FEE.taxed) + '% per trade. On a 1 SOL buy: ' + ['h', 'b', 'd'].map(function (k) { return (m / 100 * sp[k] / 100).toFixed(4).replace(/\.?0+$/, '') + ' SOL ' + SPC[k][2].toLowerCase(); }).join(' · ') + '</small>' + (t.live && t.taxPaid && t.taxPaid.n ? '<div class="tsp-paid"><b>Paid out on-chain</b><span class="mono"><em class="sp-ic">' + ICO[SPC.b[1]] + '</em>' + fmtNum(t.taxPaid.burned) + ' burned</span><span class="mono"><em class="sp-ic">' + ICO[SPC.h[1]] + '</em>' + (t.rw && t.rw !== 'coin' ? (+t.taxPaid.holders_q || 0).toFixed(4).replace(/\.?0+$/, '') + ' ' + esc(rwSym(t)) : fmtNum(t.taxPaid.holders)) + ' to holders</span><span class="mono"><em class="sp-ic">' + ICO[SPC.d[1]] + '</em>' + fmtNum(t.taxPaid.dev) + ' to dev</span></div>' : '') + '</section>';
   }
   function taxPicker(c) {
     var sn = c.snipe || (c.snipe = { on: true, start: 50, dur: 30 }); sn.on = true; if (sn.start < 50) sn.start = 50; if (sn.dur < 30) sn.dur = 30; var base = c.buy;
@@ -2742,7 +2774,7 @@
       if (!qi.ok) { S.qErr = qi.reason || 'This token can’t be used as a pair'; render(); return; }
       if (!(pr.usd > 0)) { S.qErr = 'No market price found for this token, so a fair starting price can’t be set. Pick a token that trades on Jupiter.'; render(); return; }
       var k = qReg(pr.symbol, mint, pr.icon, pr.name);
-      S.c.q = { mint: mint, sym: pr.symbol || k, dec: qi.decimals, usd: pr.usd, warn: qi.warn || null, key: k }; S.c.pair = k; S.cpq = ''; S.c.devBuy = ''; render();
+      S.c.q = { mint: mint, sym: pr.symbol || k, dec: qi.decimals, usd: pr.usd, warn: qi.warn || null, key: k }; S.c.pair = k; S.cpq = ''; S.c.devBuy = ''; render();   // the holder-reward choice stays as picked
     }).catch(function (e) { S.qBusy = null; S.qErr = 'Couldn’t check this token: ' + chainErr(e); render(); });
   }
   function realPairPicker(c) {
@@ -2750,7 +2782,7 @@
     return '<div class="field rpp"><div class="lbl"><b>Buyers pay with</b> <span class="muted" style="font-weight:500;font-size:12px">· the token your coin trades against</span></div>' +
       '<div class="rpp-opts">' + [[WSOL, 'SOL', 'Solana'], [USDC_MINT, 'USDC', 'USD Coin']].map(function (o) { return '<button class="rpp-o' + (cur === o[0] ? ' on' : '') + '" data-act="qpick" data-arg="' + o[0] + '">' + coinHTML(o[1], 26) + '<span><b>' + o[1] + '</b><small>' + o[2] + '</small></span></button>'; }).join('') +
         (custom ? '<button class="rpp-o on" data-act="qpick" data-arg="' + esc(cur) + '">' + coinHTML(q.key, 26) + '<span><b>' + esc(q.sym) + '</b><small class="mono">' + esc(short(cur)) + '</small></span></button>' : '') + '</div>' +
-      '<div class="rpp-s">' + I.search + '<input id="c-qmint" data-qmint value="' + esc(S.cpq) + '" placeholder="Or paste any Solana token address" autocomplete="off" spellcheck="false"></div>' +
+      '<div class="rpp-s">' + I.search + '<input id="c-qmint" data-qmint value="' + esc(S.cpq) + '" placeholder="Search name, ticker or paste contract address" autocomplete="off" spellcheck="false"><div class="cpp-drop" id="q-drop" style="display:none"></div></div>' +
       (S.qBusy ? '<small class="rpp-st">Checking token…</small>' : S.qErr ? '<small class="rpp-st bad">' + esc(S.qErr) + '</small>' : q.warn ? '<small class="rpp-st warn">⚠ ' + esc(q.warn) + '</small>' : '') +
       '<small class="rpp-note">Buyers pay in <b>' + esc(q.sym) + '</b>. Price, trading fees and your creator rewards are all in ' + esc(q.sym) + (q.sol ? '' : ' · 1 ' + esc(q.sym) + ' ≈ $' + usdTxt(q.usd)) + '.</small></div>';
   }
@@ -3102,7 +3134,7 @@
       case 'ctax': setC(+arg > 0 ? { buy: +arg, sell: +arg } : { buy: 0, sell: 0 }); break;
       case 'qpick': qSelect(arg); break;
       case 'vanMode': S.c.van = S.c.van || { mode: 'treid', suf: '' }; S.c.van.mode = arg; render(); setTimeout(function () { var vi = document.getElementById('van-suf'); if (vi) vi.focus(); }, 30); break;
-      case 'rwPick': setC({ rw: arg === 'pair' ? 'pair' : 'coin' }); break;
+      case 'rwPick': S.rwq = ''; rwSelect(arg); break;
       case 'spPre': var sp1 = S.c.split || {}; if (arg === 'custom') setC({ split: { p: 'custom', h: sp1.h || 70, b: sp1.b || 20, d: sp1.d || 10 } }); else { var pp = SPRE[arg]; setC({ split: { p: arg, h: pp[2], b: pp[3], d: pp[4] } }); } break;
       case 'snipeStart': var sn1 = S.c.snipe; sn1.start = +arg; setC({ snipe: sn1 }); break;
       case 'snipeDur': var sn2 = S.c.snipe; sn2.dur = +arg; setC({ snipe: sn2 }); break;
@@ -3273,7 +3305,7 @@
         if (dq2.isSol && dq2.sol > 0 && typeof S.balance === 'number' && dq2.sol > S.balance) { toast('Not enough ' + NET + 'SOL for a ' + dq2.sol + ' SOL buy — balance ' + S.balance.toFixed(3)); break; }
         if (find(c.tick)) { toast('$' + c.tick + ' is already taken'); break; }
         if (!S.demoLaunch) {
-          var tax0 = Math.max(c.buy, c.sell), sn0 = c.snipe || {}, cc0 = JSON.parse(JSON.stringify({ name: c.name.trim(), tick: c.tick, spec: c.spec, split: c.split, rw: c.rw || 'coin', buy: c.buy, sell: c.sell, x: c.x, tg: c.tg, web: c.web, desc: c.desc, img: c.img, banner: c.banner, snipe: sn0, pair: c.pair, q: c.q || null }));
+          var tax0 = Math.max(c.buy, c.sell), sn0 = c.snipe || {}, cc0 = JSON.parse(JSON.stringify({ name: c.name.trim(), tick: c.tick, spec: c.spec, split: c.split, rw: rwOf(c) ? { mint: rwOf(c).mint } : 'coin', buy: c.buy, sell: c.sell, x: c.x, tg: c.tg, web: c.web, desc: c.desc, img: c.img, banner: c.banner, snipe: sn0, pair: c.pair, q: c.q || null }));
           var solB = dq2.isSol ? dq2.sol : 0, qq1 = qOf(c);
           if (typeof S.balance === 'number' && S.balance < solB + 0.03) { toast('You need about ' + (solB + 0.03).toFixed(2) + ' ' + NET + 'SOL (coin creation ≈ 0.03 SOL' + (solB ? ' + your ' + solB + ' SOL buy' : '') + ')'); break; }
           var vc1 = c.van && c.van.mode === 'custom' && (c.van.suf || '').length >= 3, suf1 = vc1 ? c.van.suf : 'trd', vf1 = vc1 ? vanFee(suf1.length) : 0, grindT = null;
@@ -3300,7 +3332,7 @@
         var vc = c.van && c.van.mode === 'custom', vs = vc ? (c.van.suf || '') : 'trd', vf = vc ? vanFee(vs.length) : 0;
         if (vc && vs.length < 3) { toast('Custom address ending needs at least 3 characters'); break; }
         if (vf && typeof S.balance === 'number' && dq2.sol + vf > S.balance) { toast('Not enough ' + NET + 'SOL — need ' + (dq2.sol + vf).toFixed(2) + ' SOL incl. ' + vf + ' SOL address fee'); break; }
-        var nt = { name: c.name.trim(), tick: c.tick, spec: c.spec, img: c.img, banner: c.banner || null, snipe: { on: true, start: Math.max(50, (c.snipe && c.snipe.start) || 50), dur: Math.max(30, (c.snipe && c.snipe.dur) || 30) }, buy: c.buy, sell: c.sell, split: c.buy > 0 && c.split ? { p: c.split.p, h: c.split.h, b: c.split.b, d: c.split.d } : null, rw: c.rw || 'coin', pair: c.pair, mcN: 5, mc0: 5, prog: 1, born: Date.now(), holders: 1,
+        var nt = { name: c.name.trim(), tick: c.tick, spec: c.spec, img: c.img, banner: c.banner || null, snipe: { on: true, start: Math.max(50, (c.snipe && c.snipe.start) || 50), dur: Math.max(30, (c.snipe && c.snipe.dur) || 30) }, buy: c.buy, sell: c.sell, split: c.buy > 0 && c.split ? { p: c.split.p, h: c.split.h, b: c.split.b, d: c.split.d } : null, rw: rwOf(c) ? (rwOf(c).mint === qOf(c).mint ? 'pair' : { mint: rwOf(c).mint }) : 'coin', pair: c.pair, mcN: 5, mc0: 5, prog: 1, born: Date.now(), holders: 1,
           soc: !!(c.x || c.tg || c.web), links: { web: linkOf(c.web), x: c.x ? linkOf(/[\/.]/.test(c.x) ? c.x : 'x.com/' + c.x.replace(/^@/, '')) : null, tg: c.tg ? linkOf(/[\/.]/.test(c.tg) ? c.tg : 't.me/' + c.tg.replace(/^@/, '')) : null, demo: false }, rewards: false, burn: false, ca: fakeCA(vs), vanity: vc ? vs : null, vol: 0, hist: [5, 5], desc: c.desc.trim(), creator: S.account };
         if (vf && typeof S.balance === 'number') S.balance = Math.max(0, S.balance - vf);
         nt.devPct = +dq2.pct.toFixed(2);
@@ -3318,7 +3350,8 @@
     if (e.target.hasAttribute && e.target.hasAttribute('data-burnpct')) { S.burnPct = +e.target.value; var t = find(S.burnTick), pos = t && position(t); if (!pos) return; var tok = pos.tok * S.burnPct / 100;
       var q = function (id, v) { var x = document.getElementById(id); if (x) x.textContent = v; }; q('bt-tok', fmtNum(Math.round(tok)) + ' $' + t.tick); q('bt-sup', (tok / 1e9 * 100).toFixed(3) + '%'); q('bt-usd', '$' + fmtNum(Math.round(tok * price(t))));
       var g = document.querySelector('.bt-go'); if (g) g.textContent = '🔥 Burn ' + S.burnPct + '% of my $' + t.tick; document.querySelectorAll('.bt-pre button').forEach(function (bb) { bb.classList.toggle('on', +bb.getAttribute('data-arg') === S.burnPct); }); return; }
-    if (e.target.hasAttribute && e.target.hasAttribute('data-qmint')) { S.cpq = e.target.value.trim(); if (isCA(S.cpq) && S.qBusy !== S.cpq && qOf(S.c).mint !== S.cpq) qSelect(S.cpq); return; }
+    if (e.target.hasAttribute && e.target.hasAttribute('data-qmint')) { S.cpq = e.target.value.trim(); if (isCA(S.cpq) && S.qBusy !== S.cpq && qOf(S.c).mint !== S.cpq) qSelect(S.cpq); else if (!isCA(S.cpq)) tokSearch(S.cpq, 'q-drop', 'qpick'); return; }
+    if (e.target.hasAttribute && e.target.hasAttribute('data-rwq')) { S.rwq = e.target.value.trim(); tokSearch(S.rwq, 'rw-drop', 'rwPick'); return; }
     if (e.target.hasAttribute && e.target.hasAttribute('data-van')) {
       var raw = e.target.value, clean = raw.split('').filter(function (ch) { return B58C.indexOf(ch) >= 0; }).join('').slice(0, 4), bad = raw.replace(/./g, function (ch) { return B58C.indexOf(ch) >= 0 ? '' : ch; });
       if (clean !== raw) e.target.value = clean; S.c.van.suf = clean; var n = clean.length;

@@ -19,6 +19,7 @@ import bs58 from 'bs58';
 import BN from 'bn.js';
 import { withLock } from './lock.mjs';
 import { sendTx, getTxRetry } from './txutil.mjs';
+import { rwOut } from './ops.mjs';
 
 export const RULES = { idleFreezeMs: 48 * 3600e3, idleOutMs: 7 * 864e5, soldOut: 70, ctoApplyPct: 1, ctoSupportPct: 10, ctoHoldMs: 24 * 36e5 };
 const SUPPLY = 1e9, MEMO = new PublicKey('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr');
@@ -63,6 +64,7 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, q
         for (const it of items) if (it.kind === 'taxswap' && it.extra) {   // pair-token sale for holders: the receipt is what left the pool's quote vault
           const vi = [...Array(keys ? keys.length : msg.accountKeys.length).keys()].find((i) => key(i)?.toBase58() === it.extra), bal = (arr) => Number((arr || []).find((b) => b.accountIndex === vi)?.uiTokenAmount.amount || 0);
           it.lamports = vi == null ? 0 : Math.max(0, bal(t.meta.preTokenBalances) - bal(t.meta.postTokenBalances)); }
+        for (const it of [...items]) if (it.kind === 'taxconv' && it.extra) items.push({ kind: 'taxrw', mint: it.mint, lamports: rwOut(t, ops.publicKey, it.extra), extra: it.extra });   // what that reward swap delivered
         items.forEach((it, i) => run('INSERT OR IGNORE INTO rlog(sig,i,mint,kind,lamports,ts,extra) VALUES(?,?,?,?,?,?,?)', x.signature, i, it.mint, it.kind, it.lamports, (x.blockTime || 0) * 1000, it.extra)); n += items.length; }
       if (page.length < 1000) break; before = page[page.length - 1].signature; }
     READY = true; log('rewards ledger rebuilt:', n, 'entries');

@@ -4339,3 +4339,7 @@ button[disabled].big-btn{opacity:.7;cursor:progress}
 
 .rwp{margin-top:12px;display:flex;flex-direction:column;gap:8px}.rwp-opts{display:grid;grid-template-columns:1fr 1fr;gap:8px}@media(max-width:560px){.rwp-opts{grid-template-columns:1fr}}
 .rwp-o{align-items:flex-start;padding:10px 12px}.rwp-o small{line-height:1.4}.rwp-tag{font-style:normal;font-size:10.5px;font-weight:700;color:var(--gold);margin-left:4px;letter-spacing:.02em}
+.rwp-own{color:var(--ivory)!important;border-color:rgba(255,209,92,.45)!important;background:rgba(255,209,92,.08)!important}.rwp-own.on{box-shadow:0 0 0 1px var(--gold) inset;background:rgba(255,209,92,.16)!important}
+.rwp-star{color:var(--gold);font-weight:800;margin-right:2px}.rwp-star.big{display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:rgba(255,209,92,.14);font-size:15px}
+.rwp-sel-own{border-color:rgba(255,209,92,.6)!important;background:rgba(255,209,92,.08)!important}.rwp-v{font-style:normal;color:#3DDC97;font-size:11px}
+.rwp .cpp-quick{margin-top:8px}
