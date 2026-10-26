@@ -21,3 +21,12 @@ services:
         value: "10"
       - key: SOL_USD      # fallback SOL price if the live price can't be fetched
         value: "150"
+# Mainnet: switch `plan: free` to `plan: starter` and uncomment the disk + DB lines below.
+# The database is only a cache (coins, trades, rewards and tax receipts all rebuild from the chain),
+# a disk just makes restarts instant instead of re-reading the whole history.
+#   disk:
+#     name: treid-data
+#     mountPath: /data
+#     sizeGB: 1
+#   (add env var)  - key: DB
+#                    value: /data/treid.db

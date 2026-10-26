@@ -1,6 +1,6 @@
 // treid ops wallet (hot): fee claimer + Token-2022 withheld authority of every new treid coin.
 // Every cycle: claim trading fees, harvest the coin tax, split it (holders / burn / dev) and sweep spare SOL to the treasury.
-import { Keypair, PublicKey, Transaction, SystemProgram, sendAndConfirmTransaction } from '@solana/web3.js';
+import { Keypair, PublicKey, Transaction, TransactionInstruction, SystemProgram, sendAndConfirmTransaction } from '@solana/web3.js';
 import { TOKEN_2022_PROGRAM_ID, unpackAccount, getTransferFeeAmount, withdrawWithheldTokensFromAccounts, withdrawWithheldTokensFromMint, harvestWithheldTokensToMint,
   getAssociatedTokenAddressSync, createAssociatedTokenAccountIdempotentInstruction, createTransferCheckedInstruction, createBurnCheckedInstruction, getAccount } from '@solana/spl-token';
 import bs58 from 'bs58';
@@ -15,6 +15,7 @@ export function opsKeypair(secret) {
   try { const b = bs58.decode(s); if (b.length === 64) return Keypair.fromSecretKey(b); } catch {}
   return Keypair.fromSeed(createHash('sha256').update('treid-ops:' + s).digest());
 }
+const MEMO = new PublicKey('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr'), memoIx = (t) => new TransactionInstruction({ keys: [], programId: MEMO, data: Buffer.from(t) });
 const DEC = 6, SUPPLY = 1e9, MIN_HARVEST = 50_000 * 10 ** DEC;   // don't bother below 0.005% of supply
 const parseSplit = (uri) => { try { const s = new URL(uri).searchParams.get('s'); if (s) { const p = s.split('.').map(Number); if (p.length === 3 && p[0] + p[1] + p[2] === 100) return { h: p[0], b: p[1], d: p[2] }; } } catch {} return { h: 70, b: 20, d: 10 }; };
 
@@ -59,7 +60,11 @@ export function startOps({ conn, dbc, ops, treasury, q, q1, run, quoteUsd = () =
         await send(batch.map((x) => createTransferCheckedInstruction(opsAta, mint, x.to, ops.publicKey, x.amt, DEC, [], TOKEN_2022_PROGRAM_ID))); paid += batch.reduce((s, x) => s + x.amt, 0n); n += batch.length; }
     }
     const left = holdAmt - paid; if (left > 0n) await send([createBurnCheckedInstruction(opsAta, mint, ops.publicKey, left, DEC, [], TOKEN_2022_PROGRAM_ID)]);   // nobody to pay → burn it
-    const f = (x) => Number(x) / 10 ** DEC;
+    const f = (x) => Number(x) / 10 ** DEC, burnTot = burnAmt + left + (devBurn ? devAmt : 0n), devPaid = devBurn ? 0n : devAmt;
+    // permanent on-chain receipt of this cycle → the payout history survives any server restart (rebuilt from the ops wallet's memos)
+    const items = [['taxburn', burnTot, null], ['taxdev', devPaid, devBurn ? null : devTo], ['taxhold', paid, String(n)]];
+    try { const sg = await send(items.map(([k, a, x]) => memoIx(`treid:${k}:${c.mint}:${a}` + (x ? ':' + x : ''))));
+      items.forEach(([k, a, x], i) => { try { run('INSERT OR IGNORE INTO rlog(sig,i,mint,kind,lamports,ts,extra) VALUES(?,?,?,?,?,?,?)', sg, i, c.mint, k, Number(a), Date.now(), x); } catch {} }); } catch (e) { log('ops   receipt err', e.message.slice(0, 100)); }
     run('INSERT INTO payouts(mint,ts,harvested,burned,dev,holders,n_holders,fees_sol) VALUES(?,?,?,?,?,?,?,0)', c.mint, Date.now(), f(got), f(burnAmt + left + (devBurn ? devAmt : 0n)), f(devBurn ? 0n : devAmt), f(paid), n);
     log('ops   tax', c.symbol, 'harvested', f(got).toFixed(0), 'burn', f(burnAmt + left + (devBurn ? devAmt : 0n)).toFixed(0), 'dev', (devBurn ? 'burned (creator not active)' : f(devAmt).toFixed(0)), 'holders', f(paid).toFixed(0), 'to', n);
     return { got: f(got) };

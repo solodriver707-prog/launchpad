@@ -154,7 +154,7 @@ function stats(mint) {
   const lh = liveHolders(mint), real = lh ? lh.filter((h) => !h.curve) : null;
   const devN = real ? (real.find((h) => h.wallet === c.creator)?.pct || 0) / 100 * SUPPLY : bal.find(b => b.wallet === c.creator)?.n || 0;
   const top10 = Math.min(SUPPLY, real ? real.slice(0, 10).reduce((s, h) => s + h.pct / 100 * SUPPLY, 0) : bal.slice(0, 10).reduce((s, b) => s + b.n, 0));
-  const po = OPS ? q1('SELECT COALESCE(SUM(burned),0) burned, COALESCE(SUM(holders),0) holders, COALESCE(SUM(dev),0) dev, COUNT(*) n FROM payouts WHERE mint=?', mint) : null;
+  const po = OPS && REW ? q1(`SELECT COALESCE(SUM(CASE WHEN kind='taxburn' THEN lamports END),0)/1e6 burned, COALESCE(SUM(CASE WHEN kind='taxhold' THEN lamports END),0)/1e6 holders, COALESCE(SUM(CASE WHEN kind='taxdev' THEN lamports END),0)/1e6 dev, COUNT(CASE WHEN kind='taxhold' THEN 1 END) n FROM rlog WHERE mint=? AND kind IN ('taxburn','taxdev','taxhold')`, mint) : null;   // from on-chain receipts → survives restarts
   return { ...c, tax_paid: po, reserve: last?.reserve || 0, grad_target: gradTarget.get(mint) || 0, quote_usd: quoteUsd(c.quote_mint, c.quote_symbol), vol_usd: agg.volusd || 0, holders: real ? real.length : bal.length, dev_pct: devN / SUPPLY * 100, dev_sold: !!devBuy && devN < 1, top10_pct: top10 / SUPPLY * 100, sol_usd: SOL_USD, mcap_usd: last?.mcap_usd || 0, curve_pct: last?.progress || 0, trades: agg.n, vol_sol: agg.vol || 0, buys: agg.buys || 0, sells: agg.sells || 0, traders: agg.traders, snipers_pct: (agg.snipeTok || 0) / SUPPLY * 100, bundles_pct: (agg.bundleTok || 0) / SUPPLY * 100 };
 }
 http.createServer(async (req, res) => {
@@ -206,7 +206,7 @@ http.createServer(async (req, res) => {
       req.on('end', async () => { try { if (!REW) throw new Error('rewards escrow not enabled'); J(await REW.claimNow(JSON.parse(body))); } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: e.message })); } }); return; }
     if (p[1] === 'ping' && req.method === 'POST') { let body = ''; req.on('data', (d) => { body += d; if (body.length > 4000) req.destroy(); });
       req.on('end', async () => { try { if (!REW) throw new Error('rewards escrow not enabled'); J(await REW.ping(JSON.parse(body))); } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: e.message })); } }); return; }
-    if (p[1] === 'payouts') return J(OPS ? q('SELECT * FROM payouts WHERE mint=? ORDER BY ts DESC LIMIT 50', p[2]) : []);
+    if (p[1] === 'payouts') return J(OPS && REW ? q(`SELECT sig, MAX(ts) ts, SUM(lamports)/1e6 harvested, SUM(CASE WHEN kind='taxburn' THEN lamports ELSE 0 END)/1e6 burned, SUM(CASE WHEN kind='taxdev' THEN lamports ELSE 0 END)/1e6 dev, SUM(CASE WHEN kind='taxhold' THEN lamports ELSE 0 END)/1e6 holders, MAX(CASE WHEN kind='taxhold' THEN CAST(extra AS INT) END) n_holders FROM rlog WHERE mint=? AND kind IN ('taxburn','taxdev','taxhold') GROUP BY sig ORDER BY ts DESC LIMIT 50`, p[2]) : []);
     if (p[1] === 'candles') return J(candles(p[2], u.searchParams.get('tf') || '1m'));
     if (p[1] === 'holders') { const l = await holders(p[2]); hCache.set(p[2], { ts: Date.now(), list: l }); return J(l); }
     res.writeHead(404, { 'access-control-allow-origin': '*' }); res.end('{}');
