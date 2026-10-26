@@ -61,8 +61,8 @@ New coins hand the pool's *creator* role to the treid ops wallet in the launch t
 fees stay in the Meteora pool and every claim goes straight to its destination (`indexer/rewards.mjs`):
 - active creator → paid pool→creator automatically (≥0.01 SOL, or daily), or on demand (`POST /api/claim`, signed message)
 - 48h no activity → paused; rewards buy back & burn the coin; "I'm still here" (free wallet signature) resumes
-- 7d inactive or sold ≥70% of peak bag → creator out: 50% buyback & burn (claim + swap in one tx), 50% takeover fund kept inside the pool; the creator's tax share is burned
-- fund not used by a takeover within 14 days → treid platform (treasury), and the 50% share of later fees too
+- 7d inactive or sold ≥70% of peak bag → creator out: 50% buyback & burn (claim + swap in one tx), 50% treid platform; the creator's tax share is burned
+- 50% of later fees goes to the treid platform (no community fund)
 Every action carries an on-chain memo `treid:<kind>:<mint>:<lamports>`; the ledger is rebuilt from chain on every start.
 API: `GET /api/creator/:mint`, `POST /api/ping`.
 
@@ -70,4 +70,4 @@ API: `GET /api/creator/:mint`, `POST /api/ping`.
 When the creator is out, a holder with ≥1% of supply applies with a short plan (`POST /api/cto/apply`, signed message);
 holders support with a free signature (`POST /api/cto/vote`). Support = current on-chain balances of the applicant + supporters
 (old creator and past leads excluded, sellers drop out automatically). At ≥10% of supply the takeover is approved: the lead
-receives future rewards under the same rules and the takeover fund vests to them over 30 days, paid straight from the pool.
+receives all future rewards under the same rules, paid straight from the pool. (No community fund — nothing to farm.)

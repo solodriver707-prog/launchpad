@@ -4,9 +4,8 @@
 //   era "dev" / "cto" (a creator wallet is in charge):
 //     active → paid pool→creator automatically (≥0.01 SOL or daily) or on demand
 //     48h idle → paused, rewards buy back & burn the coin · 7d idle or sold ≥70% of peak bag → out
-//   era "out": 50% buyback & burn, 50% takeover fund kept in the pool · holders can elect a new lead:
-//     applicant holds ≥1% · supporters (incl. applicant) hold ≥10% of supply → CTO; fund vests to the lead over 30 days
-//     no takeover within 14 days → fund (and the 50% of later fees) goes to the treid platform
+//   era "out": 50% buyback & burn, 50% treid platform (no community fund — nothing to farm) · holders can elect a new lead:
+//     applicant holds ≥1% · supporters (incl. applicant) hold ≥10% of supply → CTO; the lead earns future rewards under the same rules
 // Every action carries an on-chain memo "treid:<kind>:<mint>:<lamports>[:<extra>]" → the ledger is rebuilt from chain on start.
 import { PublicKey, Transaction, TransactionInstruction, sendAndConfirmTransaction } from '@solana/web3.js';
 import { TOKEN_2022_PROGRAM_ID, getAssociatedTokenAddressSync, getAccount, createBurnCheckedInstruction } from '@solana/spl-token';
@@ -64,7 +63,7 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, l
   // state is derived from trades + memos, never stored → identical after any restart
   function state(c) {
     const e = era(c), fund = sum(c.mint, 'fund') - sum(c.mint, 'grant') - sum(c.mint, 'ctopay');   // reserved INSIDE the pool
-    const base = { era: e.type, creator: e.wallet || null, fund, paid: sum(c.mint, 'pay'), buyback: sum(c.mint, 'buyback'), burnedTokens: sum(c.mint, 'burntok'), granted: sum(c.mint, 'grant'), lastPay: lastOf(c.mint, 'pay')?.ts || 0 };
+    const base = { era: e.type, creator: e.wallet || null, fund, paid: sum(c.mint, 'pay'), buyback: sum(c.mint, 'buyback'), burnedTokens: sum(c.mint, 'burntok'), granted: sum(c.mint, 'grant') + sum(c.mint, 'platform'), lastPay: lastOf(c.mint, 'pay')?.ts || 0 };
     if (e.type === 'out') return { ...base, state: 'out', outAt: e.start, fundEndsAt: e.start + RULES.fundDays * 864e5, idle: 0, sold: 0, last: e.start };
     const a = activity(c, e.wallet, e.start); let st = 'active', why = null;
     if (a.sold >= RULES.soldOut) { st = 'out'; why = 'sold'; } else if (a.idle >= RULES.idleOutMs) { st = 'out'; why = 'idle'; } else if (a.idle >= RULES.idleFreezeMs) st = 'frozen';
@@ -118,7 +117,7 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, l
     const inPool = Number(vp.creatorQuoteFee.toString()), free = Math.max(0, inPool - st.fund);
     if (st.era !== 'out' && st.state === 'active') { if (free >= PAY_MIN || (free >= PAY_DAILY_MIN && Date.now() - st.lastPay > 864e5)) await payFromPool(c, free, st.creator, 'pay'); }
     else if (st.era !== 'out' && st.state === 'frozen') { if (free >= 2e6) await buybackBurn(c, free); }
-    else if (st.era === 'out' && free >= 2e6) { const half = Math.floor(free / 2); await buybackBurn(c, half); await stamp(c.mint, 'fund', free - half); }
+    else if (st.era === 'out' && free >= 2e6) { const half = Math.floor(free / 2); await buybackBurn(c, half); await payFromPool(c, free - half, treasury, 'platform'); }
     // CTO lead: fund vests over 30 days, paid from the pool (only while the lead is in good standing)
     const s2 = state(c);
     if (s2.cto && s2.state === 'active' && s2.cto.owed >= 1e6) await payFromPool(c, Math.min(s2.cto.owed, s2.fund), s2.cto.lead, 'ctopay');
