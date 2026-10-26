@@ -3,7 +3,7 @@
 // every claim goes straight to its destination.
 //   era "dev" / "cto" (a creator wallet is in charge):
 //     active → paid pool→creator automatically (≥0.01 SOL or daily) or on demand
-//     48h idle → paused, rewards buy back & burn the coin · 7d idle or sold ≥70% of peak bag → out
+//     48h idle → paused, rewards buy back & burn the coin · 7d idle or ≥70% of peak bag gone (sold, transferred away, or both) → out
 //   era "out": 50% buyback & burn, 50% treid platform (no community fund — nothing to farm) · holders can elect a new lead:
 //     applicant holds ≥1% · supporters (incl. applicant) hold ≥10% of supply → CTO; the lead earns future rewards under the same rules
 // Every action carries an on-chain memo "treid:<kind>:<mint>:<lamports>[:<extra>]" → the ledger is rebuilt from chain on start.
@@ -22,10 +22,12 @@ export const pingMessage = (mint, ts) => `treid: I'm still here — ${mint} — 
 export const claimMessage = (mint, ts) => `treid: claim — ${mint} — ${ts}`;
 export const applyMessage = (mint, ts, plan) => `treid: lead takeover — ${mint} — ${ts}\n${plan}`;
 export const voteMessage = (mint, applicant, ts) => `treid: support takeover by ${applicant} — ${mint} — ${ts}`;
-const PAY_MIN = 1e7, PAY_DAILY_MIN = 1e6;   // auto-pay at 0.01 SOL, or anything ≥0.001 SOL once a day
+const PAY_USD = 1, PAY_DAILY_USD = 0.1, MIN_ACTION_USD = 0.2;   // auto-pay from $1 (or ≥$0.10 once a day); buybacks from $0.20
 const cleanPlan = (p) => String(p || '').replace(/["\\\n\r]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 240);
 
-export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, log = console.log }) {
+export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, quoteUsd = () => 150, log = console.log }) {
+  // amounts are in the pair token's base units; thresholds are in USD so they mean the same for SOL, USDC, gold…
+  const units = (c, usd) => { const p = quoteUsd(c) || 0, d = 10 ** (c.quote_dec ?? 9); return p > 0 ? Math.ceil(usd / p * d) : Infinity; };
   run(`CREATE TABLE IF NOT EXISTS rlog(sig TEXT, i INT, mint TEXT, kind TEXT, lamports INT, ts INT, PRIMARY KEY(sig, i))`);
   try { run('ALTER TABLE rlog ADD COLUMN extra TEXT'); } catch {}
   const send = (ixs) => sendAndConfirmTransaction(conn, new Transaction().add(...ixs), [ops], { commitment: 'confirmed' });
@@ -52,11 +54,15 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, l
     if (out) return { type: 'out', start: out.ts };
     return { type: 'dev', wallet: c.creator, start: c.created_at || 0 };
   }
+  // live on-chain balances (sold OR transferred away both count) — refreshed each cycle
+  const balNow = new Map(), peakSeen = new Map();
   function activity(c, wallet, since) {
     const tr = q('SELECT side, tokens, ts FROM trades WHERE mint=? AND wallet=? ORDER BY ts, slot', c.mint, wallet);
     let bal = 0, peak = null, lastTrade = 0;   // peak = biggest bag held since this era started (starting from the bag held at that moment)
     for (const x of tr) { if (x.ts >= since && peak === null) peak = bal; bal = Math.max(0, bal + (x.side === 'buy' ? x.tokens : -x.tokens)); if (x.ts >= since) { lastTrade = x.ts; peak = Math.max(peak, bal); } }
     if (peak === null) peak = bal;
+    const k = c.mint + '|' + wallet + '|' + since, cur = balNow.has(c.mint + '|' + wallet) ? balNow.get(c.mint + '|' + wallet) : bal;   // real wallet balance: sells + transfers out
+    peak = Math.max(peak, cur, peakSeen.get(k) || 0); peakSeen.set(k, peak); bal = cur;
     const lastPing = q1(`SELECT MAX(ts) t FROM rlog WHERE mint=? AND kind='ping' AND ts>=? AND (extra IS NULL OR extra=?)`, c.mint, since, wallet).t || 0, last = Math.max(since, lastTrade, lastPing);
     return { bal, peak, sold: peak > 0 ? (peak - bal) / peak * 100 : 0, last, idle: Date.now() - last };
   }
@@ -81,12 +87,12 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, l
     const s1 = await sendAndConfirmTransaction(conn, full, [ops], { commitment: 'confirmed' }); record(s1, [{ mint: c.mint, kind: 'buyback', lamports }]);
     const got = (await getAccount(conn, ata, 'confirmed', TOKEN_2022_PROGRAM_ID)).amount;   // under the ops lock this ATA only holds bought-back tokens
     if (got > 0n) await stamp(c.mint, 'burntok', Number(got), null, [createBurnCheckedInstruction(ata, mint, ops.publicKey, got, 6, [], TOKEN_2022_PROGRAM_ID)]);
-    log('rewards buyback', c.symbol, (lamports / 1e9).toFixed(4), 'SOL → burned', (Number(got) / 1e6).toFixed(0), 'tokens');
+    log('rewards buyback', c.symbol, (lamports / 10 ** (c.quote_dec ?? 9)).toFixed(4), c.quote_symbol || 'SOL', '→ burned', (Number(got) / 1e6).toFixed(0), 'tokens');
   }
   async function payFromPool(c, lamports, receiver, kind) {   // straight pool → receiver, the SOL never touches the ops wallet
     const tx = await dbc.creator.claimCreatorTradingFeeToReceiver({ creator: ops.publicKey, payer: ops.publicKey, pool: new PublicKey(c.pool), maxBaseAmount: new BN(0), maxQuoteAmount: new BN(lamports), receiver: new PublicKey(receiver) });
     tx.add(memo(`treid:${kind}:${c.mint}:${lamports}:${receiver}`)); const s = await sendAndConfirmTransaction(conn, tx, [ops], { commitment: 'confirmed' }); record(s, [{ mint: c.mint, kind, lamports, extra: receiver }]);
-    log('rewards', kind, c.symbol, (lamports / 1e9).toFixed(4), 'SOL pool →', receiver.slice(0, 6)); return s;
+    log('rewards', kind, c.symbol, (lamports / 10 ** (c.quote_dec ?? 9)).toFixed(4), c.quote_symbol || 'SOL', 'pool →', receiver.slice(0, 6)); return s;
   }
   // ---- community takeover ----
   let balCache = new Map();
@@ -111,16 +117,18 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, l
   }
   async function cycleCoin(c) {
     const vp = (await dbc.state.getPool(new PublicKey(c.pool)))?.poolState; if (!vp || vp.creator.toBase58() !== ops.publicKey.toBase58()) return;
+    try { const e = era(c); if (e.wallet) { balCache.delete(c.mint); const m = await bals(c.mint); balNow.set(c.mint + '|' + e.wallet, m.get(e.wallet) || 0); } } catch {}
     let st = state(c);
     if (st.era !== 'out' && st.state === 'out') { await stamp(c.mint, 'out', 0, st.creator); log('rewards creator out', c.symbol, st.why); balCache.delete(c.mint); st = state(c); }
     if (st.era === 'out') { if (await tryApprove(c)) st = state(c); }
     const inPool = Number(vp.creatorQuoteFee.toString()), free = Math.max(0, inPool - st.fund);
-    if (st.era !== 'out' && st.state === 'active') { if (free >= PAY_MIN || (free >= PAY_DAILY_MIN && Date.now() - st.lastPay > 864e5)) await payFromPool(c, free, st.creator, 'pay'); }
-    else if (st.era !== 'out' && st.state === 'frozen') { if (free >= 2e6) await buybackBurn(c, free); }
-    else if (st.era === 'out' && free >= 2e6) { const half = Math.floor(free / 2); await buybackBurn(c, half); await payFromPool(c, free - half, treasury, 'platform'); }
+    const minA = units(c, MIN_ACTION_USD);
+    if (st.era !== 'out' && st.state === 'active') { if (free >= units(c, PAY_USD) || (free >= units(c, PAY_DAILY_USD) && Date.now() - st.lastPay > 864e5)) await payFromPool(c, free, st.creator, 'pay'); }
+    else if (st.era !== 'out' && st.state === 'frozen') { if (free >= minA) await buybackBurn(c, free); }
+    else if (st.era === 'out' && free >= minA) { const half = Math.floor(free / 2); await buybackBurn(c, half); await payFromPool(c, free - half, treasury, 'platform'); }
     // CTO lead: fund vests over 30 days, paid from the pool (only while the lead is in good standing)
     const s2 = state(c);
-    if (s2.cto && s2.state === 'active' && s2.cto.owed >= 1e6) await payFromPool(c, Math.min(s2.cto.owed, s2.fund), s2.cto.lead, 'ctopay');
+    if (s2.cto && s2.state === 'active' && s2.cto.owed >= minA) await payFromPool(c, Math.min(s2.cto.owed, s2.fund), s2.cto.lead, 'ctopay');
     // takeover window over with no takeover → the fund goes to the treid platform
     if (s2.era === 'out' && s2.fund > 0 && Date.now() > s2.fundEndsAt) await payFromPool(c, s2.fund, treasury, 'grant');
   }
@@ -136,7 +144,7 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, l
     return withLock(async () => { const st = state(c); if (wallet !== st.creator) throw new Error('only the current creator can claim');
       if (st.state !== 'active') throw new Error(st.state === 'frozen' ? 'payouts are paused — tap “I’m still here” first' : 'creator is out');
       const vp = (await dbc.state.getPool(new PublicKey(c.pool))).poolState, free = Math.max(0, Number(vp.creatorQuoteFee.toString()) - st.fund);
-      if (free < 1e5) throw new Error('nothing to claim yet'); const s = await payFromPool(c, free, wallet, 'pay'); return { ok: true, sol: free / 1e9, sig: s }; });
+      if (free < units(c, 0.01)) throw new Error('nothing to claim yet'); const s = await payFromPool(c, free, wallet, 'pay'); return { ok: true, sol: free / 10 ** (c.quote_dec ?? 9), quote: c.quote_symbol || 'SOL', sig: s }; });
   }
   async function ctoApply({ mint, wallet, ts, sig, plan }) {
     const c = coin(mint), p = cleanPlan(plan); fresh(ts); if (p.length < 10) throw new Error('write a short plan (10+ characters)');

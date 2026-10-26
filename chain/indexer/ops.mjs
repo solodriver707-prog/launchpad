@@ -18,7 +18,7 @@ export function opsKeypair(secret) {
 const DEC = 6, SUPPLY = 1e9, MIN_HARVEST = 50_000 * 10 ** DEC;   // don't bother below 0.005% of supply
 const parseSplit = (uri) => { try { const s = new URL(uri).searchParams.get('s'); if (s) { const p = s.split('.').map(Number); if (p.length === 3 && p[0] + p[1] + p[2] === 100) return { h: p[0], b: p[1], d: p[2] }; } } catch {} return { h: 70, b: 20, d: 10 }; };
 
-export function startOps({ conn, dbc, ops, treasury, q, q1, run, poolAuthority, log = console.log, everyMs = 10 * 60e3, liabilities = () => 0, devState = (c) => ({ state: 'active', creator: c.creator }) }) {
+export function startOps({ conn, dbc, ops, treasury, q, q1, run, quoteUsd = () => 150, poolAuthority, log = console.log, everyMs = 10 * 60e3, liabilities = () => 0, devState = (c) => ({ state: 'active', creator: c.creator }) }) {
   run(`CREATE TABLE IF NOT EXISTS payouts(id INTEGER PRIMARY KEY AUTOINCREMENT, mint TEXT, ts INT, harvested REAL, burned REAL, dev REAL, holders REAL, n_holders INT, fees_sol REAL)`);
   const send = (ixs) => sendAndConfirmTransaction(conn, new Transaction().add(...ixs), [ops], { commitment: 'confirmed' });
   let busy = false;
@@ -27,9 +27,9 @@ export function startOps({ conn, dbc, ops, treasury, q, q1, run, poolAuthority, 
     for (const c of q('SELECT * FROM coins')) {
       try { const vp = (await dbc.state.getPool(new PublicKey(c.pool)))?.poolState; if (!vp) continue;
         const cfg = await dbc.state.getPoolConfig(vp.config); if (cfg.feeClaimer.toBase58() !== ops.publicKey.toBase58()) continue;
-        const fee = Number(vp.partnerQuoteFee.toString()) / 1e9; if (fee < 0.005) continue;
-        const tx = await dbc.partner.claimPartnerTradingFee({ pool: new PublicKey(c.pool), feeClaimer: ops.publicKey, payer: ops.publicKey, maxBaseAmount: new BN(0), maxQuoteAmount: new BN(vp.partnerQuoteFee.toString()) });
-        await sendAndConfirmTransaction(conn, tx, [ops], { commitment: 'confirmed' }); total += fee; log('ops   claimed', fee.toFixed(4), 'SOL from', c.symbol);
+        const fee = Number(vp.partnerQuoteFee.toString()) / 10 ** (c.quote_dec ?? 9); if (fee * (quoteUsd(c) || 0) < 0.5) continue;   // claim from $0.50
+        const tx = await dbc.partner.claimPartnerTradingFeeToReceiver({ pool: new PublicKey(c.pool), feeClaimer: ops.publicKey, payer: ops.publicKey, maxBaseAmount: new BN(0), maxQuoteAmount: new BN(vp.partnerQuoteFee.toString()), receiver: new PublicKey(treasury) });   // straight to the treasury, any pair token
+        await sendAndConfirmTransaction(conn, tx, [ops], { commitment: 'confirmed' }); total += fee; log('ops   claimed', fee.toFixed(4), c.quote_symbol || 'SOL', 'from', c.symbol, '→ treasury');
       } catch (e) { log('ops   claim err', c.symbol, e.message.slice(0, 120)); }
     }
     return total;
