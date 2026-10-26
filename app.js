@@ -2574,6 +2574,22 @@
   // ---- preview demo coins with your own images (stored only in this browser) ----
   var DIMG = {}; try { DIMG = JSON.parse(localStorage.getItem('dl.demoimgs') || '{}'); } catch (e) {}
   BASE.forEach(function (t) { if (DIMG[t.tick]) t.img = DIMG[t.tick]; });
+  // ===== TERMS & RISKS (plain-language draft — must be reviewed by a lawyer before mainnet) =====
+  function termsModal() {
+    if (!S.termsOpen) return '';
+    var sec = function (h, b) { return '<section><h3>' + h + '</h3>' + b + '</section>'; };
+    return '<div class="overlay" data-act="termsClose"><div class="terms card-s" data-stop><div class="terms-h"><b>Terms &amp; risks</b><button class="iconbtn" data-act="termsClose" aria-label="Close">✕</button></div>' +
+      '<div class="terms-draft">Draft · last updated ' + new Date(1793030000000).toISOString().slice(0, 10) + ' · plain-language summary, not yet reviewed by a lawyer</div><div class="terms-b">' +
+      sec('What treid is', '<p>treid is a website that helps you create and trade tokens on the Solana blockchain. Coins and trades run on Meteora’s public bonding-curve program. treid builds the transactions; <b>your wallet signs every one of them</b>. We never hold your wallet keys.</p>') +
+      sec('The big risk', '<p>Memecoins are extremely risky. Prices can go to zero in minutes. Anyone can launch a coin, including people who intend to sell on buyers. <b>Only use money you can afford to lose completely.</b> Nothing on treid is investment, financial, legal or tax advice.</p>') +
+      sec('What our checks can and can’t do', '<p>Risk labels (dev bag, top holders, snipers, bundles, tax, authorities) show what is visible on-chain at that moment. They can be wrong or incomplete and are not a guarantee. The creator-rewards rules (pause after 48h, out after 7 days or 70% sold/moved) cover the creator’s launch wallet only — a creator can hold or trade from other wallets.</p>') +
+      sec('Fees', '<p>Every trade pays a trading fee (1%, or 0.5% on coins with a tax), split between the coin’s creator, treid and Meteora. Coins with a tax also charge that tax on transfers; how it is used (holders, burn, creator) is fixed at launch and shown on the coin. Network fees are paid to Solana. Fees are not refundable.</p>') +
+      sec('Creator rewards and takeovers', '<p>Creator rewards stay in the Meteora pool until paid out. treid runs an automated wallet that pays them under the published rules, buys back &amp; burns, and runs community takeovers. Rules can change for new coins; existing coins keep the rules they launched with.</p>') +
+      sec('Your responsibilities', '<p>You must be of legal age and allowed to use crypto services where you live. Don’t use treid for anything illegal, to manipulate markets, impersonate others, or launch coins that infringe someone’s rights. You are responsible for your own taxes. We may hide coins, callouts or content from the treid website that break these rules — we cannot change anything on the blockchain itself.</p>') +
+      sec('No guarantees', '<p>treid is provided “as is”. Software, blockchains, wallets and third parties (Meteora, Jupiter, RPC providers, IPFS) can fail or be attacked. To the extent the law allows, treid is not liable for losses from trading, bugs, outages or third-party services.</p>') +
+      sec('Callouts and content', '<p>Callouts are posted by users and signed by their wallets. They are opinions, not advice, and may be wrong or promotional. Coin names, images and descriptions are provided by creators.</p>') +
+      '</div></div></div>';
+  }
   function demoImgModal() {
     if (!S.demoImgOpen) return '';
     var n = Object.keys(DIMG).length;
@@ -2797,7 +2813,7 @@
   function footer() {
     return '<footer><div class="wrap foot"><span style="display:flex;align-items:center;gap:8px"><span style="width:22px;height:22px;display:inline-block">' + LOGO + '</span><b style="color:var(--soft)">treid<span class="muted" style="font-weight:600">.fun</span></b></span>' +
       '<span>' + (DEMO ? 'Demo · market data on this page is simulated · wallet connects to Solana ' + CLUSTER : 'Beta on Solana ' + CLUSTER + ' · every coin and trade here is real and on-chain') + '</span>' +
-      '<span style="margin-left:auto;display:flex;gap:16px"><a href="#machine" data-act="how">How it works</a><a href="#" data-act="social">X</a><a href="#" data-act="social">Telegram</a><a href="#" data-act="social">Terms</a></span></div></footer>';
+      '<span style="margin-left:auto;display:flex;gap:16px"><a href="#machine" data-act="how">How it works</a><a href="#" data-act="social">X</a><a href="#" data-act="social">Telegram</a><a href="#" data-act="terms">Terms &amp; risks</a></span></div></footer>';
   }
 
   // ================= RENDER =================
@@ -2818,7 +2834,7 @@
     var ae = document.activeElement, fid = ae && ae.id, ss = null, se = null;
     try { if (fid && ae.selectionStart != null) { ss = ae.selectionStart; se = ae.selectionEnd; } } catch (e) {}
     var body = S.screen === 'pending' ? '<main class="wrap"><div class="route-wait"><span class="gr-sp"></span><b>Loading coin…</b><small class="muted">fetching live data from the chain</small></div></main>' : S.screen === 'token' ? tokenPage() : S.screen === 'create' ? createPage() : S.screen === 'leaders' ? leadersPage() : S.screen === 'watch' ? watchPage() : S.screen === 'burn' ? burnPage() : S.screen === 'trend' ? trendPage() : home();
-    document.getElementById('app').innerHTML = (RPC_DEV || API_DEV ? '<div class="devbar">⚠ Developer mode — custom ' + [RPC_DEV ? 'RPC' : '', API_DEV ? 'server' : ''].filter(Boolean).join(' + ') + ' (this tab only)</div>' : '') + '<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="ccUp" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3DDC97" stop-opacity=".28"/><stop offset="1" stop-color="#3DDC97" stop-opacity="0"/></linearGradient><linearGradient id="ccDn" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F2708A" stop-opacity=".26"/><stop offset="1" stop-color="#F2708A" stop-opacity="0"/></linearGradient></defs></svg>' + tape() + header() + body + footer() + walletModal() + demoImgModal() + calloutDrawer() + calloutRail() + palette() + walletDrawer() + holderMap() + burnModal() + ctoModal();
+    document.getElementById('app').innerHTML = (RPC_DEV || API_DEV ? '<div class="devbar">⚠ Developer mode — custom ' + [RPC_DEV ? 'RPC' : '', API_DEV ? 'server' : ''].filter(Boolean).join(' + ') + ' (this tab only)</div>' : '') + '<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="ccUp" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3DDC97" stop-opacity=".28"/><stop offset="1" stop-color="#3DDC97" stop-opacity="0"/></linearGradient><linearGradient id="ccDn" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F2708A" stop-opacity=".26"/><stop offset="1" stop-color="#F2708A" stop-opacity="0"/></linearGradient></defs></svg>' + tape() + header() + body + footer() + walletModal() + demoImgModal() + termsModal() + calloutDrawer() + calloutRail() + palette() + walletDrawer() + holderMap() + burnModal() + ctoModal();
     document.body.classList.toggle('has-rail', S.screen === 'home' && !S.coOpen && !S.railHidden); document.body.classList.toggle('has-rail-min', S.screen === 'home' && !S.coOpen && !!S.railHidden);
     if (fid) { var el = document.getElementById(fid); if (el) { el.focus({ preventScroll: true }); try { if (ss != null) el.setSelectionRange(ss, se); } catch (e) {} } }
     if (S.palOpen && !fid) { var p = document.getElementById('pal'); if (p) p.focus(); }
@@ -3029,6 +3045,8 @@
         S.burnOpen = false; S._bnAgg = null; toast('🔥 Burned ' + fmtNum(Math.round(tok)) + ' $' + t.tick + ' — gone forever'); if (S.screen === 'burn') { render(); setTimeout(function () { var fl = document.getElementById('bn-fly'); if (fl) { var r = fl.getBoundingClientRect(); bnImpact(b, r.width / 2, r.height * .74); } }, 400); } else render(); })(); break;
       case 'hmapClose': if (el.classList.contains('hm-ov') && e.target.closest('[data-stop]')) break; set({ hmap: null }); break;
       case 'side': set({ side: arg }); break;
+      case 'terms': e.preventDefault && e.preventDefault(); set({ termsOpen: true }); break;
+      case 'termsClose': if (e.target.closest('[data-stop]') && !e.target.closest('.iconbtn')) break; set({ termsOpen: false }); break;
       case 'paySol': S.amount = ''; set({ paySol: arg === '1' }); break;
       case 'preset': if (arg === 'reset') { set({ amount: '' }); break; } set({ pctAmt: 0, amount: arg === 'max' ? Math.max(0, S.balance - 0.01).toFixed(3) : arg }); break;
       case 'openWallet': set({ walletOpen: true }); break;
