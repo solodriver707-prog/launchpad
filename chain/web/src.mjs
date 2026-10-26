@@ -35,8 +35,8 @@ export function curveFor({ taxBps = 0, trapBps = 5000, trapSecs = 30, quoteDecim
 // ---- pair (quote) tokens ----
 const qCache = {};
 const ALLOWED_EXT = new Set([ExtensionType.MetadataPointer, ExtensionType.TokenMetadata, ExtensionType.ImmutableOwner]);
-export async function quoteInfo({ rpc, mint }) {
-  const k = rpc + mint; if (qCache[k]) return qCache[k];
+export async function quoteInfo({ rpc, mint, reward = false }) {   // reward: only checks that holders can be paid in it (plain transfers)
+  const k = rpc + mint + (reward ? '|r' : ''); if (qCache[k]) return qCache[k];
   const m = pk(mint); if (m.equals(NATIVE_MINT)) return (qCache[k] = { mint: NATIVE_MINT.toBase58(), decimals: 9, program: 'spl', native: true, ok: true });
   const ai = await C(rpc).getAccountInfo(m); if (!ai) return { mint: m.toBase58(), ok: false, reason: 'No token found at this address on this network' };
   const is22 = ai.owner.equals(TOKEN_2022_PROGRAM_ID); if (!is22 && !ai.owner.equals(TOKEN_PROGRAM_ID)) return { mint: m.toBase58(), ok: false, reason: 'This address is not a token mint' };
@@ -45,6 +45,9 @@ export async function quoteInfo({ rpc, mint }) {
   if (is22) { const ext = getExtensionTypes(mi.tlvData); const tf = getTransferFeeConfig(mi);
     if (tf && (tf.newerTransferFee.transferFeeBasisPoints > 0 || tf.olderTransferFee.transferFeeBasisPoints > 0)) return { ...out, ok: false, reason: 'Tokens with a transfer tax can’t be used as a pair' };
     const bad = ext.filter((e) => !ALLOWED_EXT.has(e) && e !== ExtensionType.TransferFeeConfig);
+    if (reward) { if (bad.includes(ExtensionType.TransferHook) || bad.includes(ExtensionType.NonTransferable)) return { ...out, ok: false, reason: 'This token can’t be sent to holders' };
+      const w = []; if (bad.includes(ExtensionType.PermanentDelegate)) w.push('its issuer can move tokens from any account'); if (bad.includes(ExtensionType.PausableConfig)) w.push('its issuer can pause transfers (payouts would wait)');
+      if (w.length) out.warn = [out.warn, w.join('; ')].filter(Boolean).join(' · '); return (qCache[k] = out); }
     if (bad.includes(ExtensionType.TransferHook)) return { ...out, ok: false, reason: 'Tokens with a transfer hook can’t be used as a pair' };
     if (bad.length) { const [b] = PublicKey.findProgramAddressSync([Buffer.from('token_badge'), m.toBuffer()], DBC_PROGRAM), bi = await C(rpc).getAccountInfo(b);   // Meteora's approval (e.g. tokenized stocks)
       if (!bi || !bi.owner.equals(DBC_PROGRAM)) return { ...out, ok: false, reason: 'This token type needs approval from Meteora first — not supported yet' };

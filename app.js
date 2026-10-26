@@ -343,7 +343,22 @@
     add('x', c.x); add('t', c.tg); add('w', c.web); return base;
   }
   // ===== HOLDER REWARDS: paid in the coin itself (recommended) or any verified token =====
-  S.rwq = ''; S.rwBusy = null; S.rwErr = '';
+  S.rwq = ''; S.rwBusy = null; S.rwErr = ''; S.rwTab = 'memes';
+  var RW_TABS = [['memes', 'Memes'], ['crypto', 'Crypto'], ['stocks', 'Stocks'], ['fx', 'Stablecoins']];
+  var RW_PRE = {   // [label, search symbol, logo]
+    memes: [['BONK', 'BONK', 'memes/bonk.webp'], ['WIF', 'WIF', 'memes/wif.webp'], ['POPCAT', 'POPCAT', 'memes/popcat.webp'], ['MEW', 'MEW', 'memes/mew.webp'], ['BOME', 'BOME', 'memes/bome.webp'], ['PNUT', 'Pnut', 'memes/pnut.webp'], ['GOAT', 'GOAT', 'memes/goat.webp'], ['FARTCOIN', 'Fartcoin', 'memes/fartcoin.webp'], ['MOODENG', 'MOODENG', 'memes/moodeng.webp'], ['CHILLGUY', 'CHILLGUY', 'memes/chillguy.webp'], ['GIGA', 'GIGA', 'memes/giga.webp'], ['PONKE', 'PONKE', 'memes/ponke.webp'], ['MICHI', 'michi', 'memes/michi.webp'], ['MYRO', 'MYRO', 'memes/myro.webp'], ['SLERF', 'SLERF', 'memes/slerf.webp'], ['RETARDIO', 'RETARDIO', 'memes/retardio.webp']],
+    crypto: [['SOL', 'SOL', 'icons/sol.svg'], ['BTC', 'cbBTC', 'icons/btc.svg'], ['ETH', 'ETH', 'icons/eth.svg'], ['JUP', 'JUP', null], ['RAY', 'RAY', 'icons/ray.svg'], ['PYTH', 'PYTH', null], ['JTO', 'JTO', null], ['LINK', 'LINK', 'icons/link.svg']],
+    stocks: [['SPYx', 'SPYx', null], ['NVDAx', 'NVDAx', null], ['TSLAx', 'TSLAx', null], ['AAPLx', 'AAPLx', null], ['MSFTx', 'MSFTx', null], ['GOOGLx', 'GOOGLx', null], ['METAx', 'METAx', null], ['AMZNx', 'AMZNx', null]],
+    fx: [['USDC', 'USDC', 'icons/usdc.svg'], ['USDT', 'USDT', 'icons/usdt.svg'], ['EURC', 'EURC', 'icons/eur.svg'], ['PYUSD', 'PYUSD', null]] };
+  function preIcon(p, size) { return p[2] ? '<img class="coin rwp-ic" src="' + p[2] + '" alt="" style="width:' + size + 'px;height:' + size + 'px">' : '<span class="coin rwp-ic" style="width:' + size + 'px;height:' + size + 'px;background:#2E2E33;font-size:' + Math.round(size * .42) + 'px">' + esc(p[0].slice(0, 2)) + '</span>'; }
+  function rwPreset(sym) {   // a shortcut chip: find the real verified token with exactly this symbol, then check it like any other
+    if (sym === 'SOL') return rwSelect(WSOL); if (sym === 'USDC') return rwSelect(USDC_MINT);
+    if (!API) { S.rwErr = 'Token search needs the treid server'; render(); return; }
+    S.rwBusy = sym; S.rwErr = ''; render();
+    apiGet('/api/tsearch?q=' + encodeURIComponent(sym)).then(function (list) { var t = (list || []).filter(function (x) { return String(x.symbol).toLowerCase() === sym.toLowerCase(); })[0];
+      if (S.rwBusy !== sym) return; S.rwBusy = null; if (!t) { S.rwErr = 'Couldn’t find verified ' + sym + ' right now — try the search'; render(); return; } qReg(t.symbol, t.mint, t.icon, t.name); rwSelect(t.mint); })
+      .catch(function () { S.rwBusy = null; S.rwErr = 'Token search is unavailable — try again'; render(); });
+  }
   function rwOf(c) { return c && c.rw && c.rw.mint ? c.rw : null; }   // null = the coin itself
   function rwUri(c) { var r = rwOf(c); return r ? (r.mint === qOf(c).mint ? 'p' : r.mint) : ''; }
   function tokDrop(list, act, q) {
@@ -360,8 +375,9 @@
     if (mint === WSOL || mint === USDC_MINT) { var kk = mint === WSOL ? 'SOL' : 'USDC'; S.c.rw = { mint: mint, sym: kk, key: kk }; S.rwq = ''; S.rwErr = ''; render(); return; }
     if (mint === qOf(S.c).mint) { var q0 = qOf(S.c); S.c.rw = { mint: mint, sym: q0.sym, key: q0.key }; S.rwq = ''; S.rwErr = ''; render(); return; }
     S.rwBusy = mint; S.rwErr = ''; render();
-    Promise.all([chainLib().then(function (T) { return T.quoteInfo({ rpc: RPC, mint: mint }); }), API ? apiGet('/api/qprice?mint=' + mint).catch(function () { return {}; }) : Promise.resolve({})]).then(function (r) {
+    Promise.all([chainLib().then(function (T) { return T.quoteInfo({ rpc: RPC, mint: mint, reward: true }); }), API ? apiGet('/api/qprice?mint=' + mint).catch(function () { return {}; }) : Promise.resolve({})]).then(function (r) {
       var qi = r[0], pr = r[1] || {}; if (S.rwBusy !== mint) return; S.rwBusy = null;
+      if (!qi.ok && CHAIN_ID === 'solana:devnet' && pr.verified && /No token found/.test(qi.reason || '')) qi = { ok: true, warn: 'Test network: holders get SOL here — ' + (pr.symbol || 'this token') + ' payouts start on mainnet' };
       if (!qi.ok) { S.rwErr = qi.reason || 'This token can’t be paid out'; render(); return; }
       if (!pr.verified) { S.rwErr = 'Only verified tokens can be holder rewards (so holders never get a fake).'; render(); return; }
       var k = qReg(pr.symbol, mint, pr.icon, pr.name); S.c.rw = { mint: mint, sym: pr.symbol || k, key: k, warn: qi.warn || null }; S.rwq = ''; render();
@@ -372,14 +388,19 @@
     var tk = '$' + (c.tick || 'COIN'), r = rwOf(c), q = qOf(c), chips = [[WSOL, 'SOL'], [USDC_MINT, 'USDC']];
     if (q.mint !== WSOL && q.mint !== USDC_MINT) chips.push([q.mint, q.key]);
     if (r && !chips.some(function (x) { return x[0] === r.mint; })) chips.push([r.mint, r.key]);
-    var own = '<button class="cpp-q rwp-own' + (!r ? ' on' : '') + '" data-act="rwPick" data-arg="coin"><span class="rwp-star">★</span>' + esc(tk) + '<em class="rwp-tag">Recommended</em></button>';
-    var sel = r ? coinHTML(r.key, 30) + '<span><b>' + esc(r.sym) + '</b><small>sold from the tax, then paid out</small></span>' : '<span class="rwp-star big">★</span><span><b>' + esc(tk) + '</b><small>your own coin · nothing is sold</small></span>';
+    var me = { tick: c.tick || 'TICKER', name: c.name || 'Your token', spec: c.spec, img: c.img };
+    var own = '<button class="cpp-q rwp-own' + (!r ? ' on' : '') + '" data-act="rwPick" data-arg="coin">' + avatarHTML(me, 20) + esc(tk) + '<em class="rwp-tag">★ Best for holders</em></button>';
+    var sel = r ? coinHTML(r.key, 30) + '<span><b>' + esc(r.sym) + '</b><small>sold from the tax, then paid out</small></span>' : avatarHTML(me, 30) + '<span><b>' + esc(tk) + '</b><small>your own coin · nothing is sold</small></span>';
+    var pre = RW_PRE[S.rwTab] || [], isOn = function (p) { return r && (String(r.sym).toLowerCase() === p[1].toLowerCase() || (p[0] === 'SOL' && r.mint === WSOL) || (p[0] === 'USDC' && r.mint === USDC_MINT)); };
+    var tabs = '<div class="cpp-tabs">' + RW_TABS.map(function (x) { return '<button class="' + (S.rwTab === x[0] ? 'on' : '') + '" data-act="rwTab" data-arg="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div>';
+    var preChips = pre.map(function (p) { return '<button class="cpp-q' + (isOn(p) ? ' on' : '') + '" data-act="rwPre" data-arg="' + esc(p[1]) + '">' + preIcon(p, 20) + '$' + esc(p[0]) + '</button>'; }).join('');
     return '<div class="field cpp rwp"><div class="spk-h"><b>Holders get paid in</b><span class="spk-lock">' + ICO.lock + 'Locked forever at launch</span></div>' +
       '<div class="cpp-row"><div class="cpp-sel' + (!r ? ' rwp-sel-own' : '') + '">' + sel + '</div>' +
       '<div class="cpp-s">' + I.search + '<input data-rwq value="' + esc(S.rwq) + '" placeholder="Search name, ticker or paste contract address" autocomplete="off" spellcheck="false"><div class="cpp-drop" id="rw-drop" style="display:none"></div></div></div>' +
-      '<div class="cpp-quick drag-scroll">' + own + chips.map(function (x) { return '<button class="cpp-q' + (r && r.mint === x[0] ? ' on' : '') + '" data-act="rwPick" data-arg="' + esc(x[0]) + '">' + coinHTML(x[1], 20) + esc(x[1]) + '</button>'; }).join('') + '</div>' +
+      '<div class="cpp-quick drag-scroll rwp-first">' + own + (q.mint !== WSOL && q.mint !== USDC_MINT ? '<button class="cpp-q' + (r && r.mint === q.mint ? ' on' : '') + '" data-act="rwPick" data-arg="' + esc(q.mint) + '">' + coinHTML(q.key, 20) + esc(q.sym) + ' <small class="muted">pair</small></button>' : '') + '</div>' +
+      tabs + '<div class="cpp-quick drag-scroll">' + preChips + '</div>' +
       (S.rwBusy ? '<small class="rpp-st">Checking token…</small>' : S.rwErr ? '<small class="rpp-st bad">' + esc(S.rwErr) + '</small>' : r && r.warn ? '<small class="rpp-st warn">⚠ ' + esc(r.warn) + '</small>' : '') +
-      '<small class="spk-note">' + (!r ? '<b>' + esc(tk) + '</b> is the strongest choice: holders’ bags grow and nothing is ever sold, so payouts never push your price down.'
+      '<small class="spk-note">' + (!r ? 'Paying holders in <b>' + esc(tk) + '</b> is the strongest choice: their bags grow and nothing is ever sold, so payouts never push your price down.'
         : 'Each payout first sells the tax for ' + esc(r.sym) + ' — that sale shows on your chart. Coins that pay in their own token keep steadier charts; most strong communities choose ' + esc(tk) + '.') + '</small></div>';
   }
   function parseUri(uri) {
@@ -2800,7 +2821,7 @@
   function createPage() {
     var c = S.c, sp = c.spec, tmax = Math.max(c.buy, c.sell);
     var dq = devQuote(String(c.devBuy || '').replace(',', '.'));
-    var preview = { devPct: +dq.pct.toFixed(2), name: c.name || 'Your token', tick: c.tick || 'TICKER', spec: sp, img: c.img, banner: c.banner, buy: c.buy, sell: c.sell, split: c.buy > 0 ? c.split : null, pair: c.pair, mcN: 5, mc0: 5, prog: 1, born: Date.now(), holders: 1, vol: 0, ca: 'preview', hist: [5, 5.1, 5, 5.2, 5.4], rewards: false, burn: false };
+    var preview = { devPct: +dq.pct.toFixed(2), name: c.name || 'Your token', tick: c.tick || 'TICKER', spec: sp, img: c.img, banner: c.banner, buy: c.buy, sell: c.sell, split: c.buy > 0 ? c.split : null, pair: c.pair, mcN: 5, mc0: 5, prog: 1, born: Date.now(), holders: 1, vol: 0, ca: 'preview', hist: [5, 5.1, 5, 5.2, 5.4], rewards: false, burn: false, rw: rwOf(c) ? (rwOf(c).mint === qOf(c).mint ? 'pair' : { mint: rwOf(c).mint }) : 'coin' };
     function opts(key, list) { return '<div class="optrow">' + list.map(function (v) { return '<button class="opt' + (sp[key] === v ? ' on' : '') + '" data-act="spec" data-k="' + key + '" data-arg="' + v + '">' + v + '</button>'; }).join('') + '</div>'; }
     function sws(key, list) { return '<div class="optrow">' + list.map(function (v) { return '<button class="sw' + (sp[key] === v ? ' on' : '') + '" style="background:' + v + '" data-act="spec" data-k="' + key + '" data-arg="' + v + '" aria-label="Colour ' + v + '"></button>'; }).join('') + '</div>'; }
     return '<main class="wrap" style="padding-top:22px;max-width:1240px">' +
@@ -2828,6 +2849,7 @@
         '<aside style="flex:1 1 320px;display:flex;flex-direction:column;gap:12px;position:sticky;top:90px"><span class="kicker">LIVE PREVIEW</span>' + card(preview, { preview: true }) +
           '<div class="card-s panel pv-sum"><div class="pv-row">' + avatarHTML(preview, 52) + '<div><b>At launch</b><small class="muted">what buyers will see</small></div></div>' +
             '<div class="pv-grid"><div><small>You hold</small><b class="mono" style="color:' + (dq.pct < 3 ? '#3DDC97' : dq.pct < 8 ? '#FFD15C' : '#F2708A') + '">' + dq.pct.toFixed(2) + '%</b></div><div><small>Snipers</small><b class="mono up">0%</b></div><div><small>Bundles</small><b class="mono up">0%</b></div><div><small>Tax</small><b class="mono">' + tmax + '%</b></div></div>' +
+            (c.buy > 0 && c.split && c.split.h > 0 ? '<div class="pv-rw">' + (rwOf(c) ? coinHTML(rwOf(c).key, 18) : avatarHTML(preview, 18)) + '<span>Holders get <b>' + c.split.h + '%</b> of the tax, paid in <b>' + esc(rwOf(c) ? rwOf(c).sym : '$' + preview.tick) + '</b></span></div>' : '') +
             (c.snipe ? '<div class="pv-trap">🪤 Sniper trap: ' + [0, 1, 2].map(function (i) { return trapStepFee(c.snipe.start, tmax, i) + '%'; }).join(' → ') + ' → ' + tmax + '% over ' + (c.snipe.dur < 60 ? c.snipe.dur + 's' : c.snipe.dur / 60 + 'm') + '</div>' : '') + '</div></aside>' +
       '</div></main>';
   }
@@ -3135,6 +3157,8 @@
       case 'qpick': qSelect(arg); break;
       case 'vanMode': S.c.van = S.c.van || { mode: 'treid', suf: '' }; S.c.van.mode = arg; render(); setTimeout(function () { var vi = document.getElementById('van-suf'); if (vi) vi.focus(); }, 30); break;
       case 'rwPick': S.rwq = ''; rwSelect(arg); break;
+      case 'rwPre': S.rwq = ''; rwPreset(arg); break;
+      case 'rwTab': S.rwTab = arg; render(); break;
       case 'spPre': var sp1 = S.c.split || {}; if (arg === 'custom') setC({ split: { p: 'custom', h: sp1.h || 70, b: sp1.b || 20, d: sp1.d || 10 } }); else { var pp = SPRE[arg]; setC({ split: { p: arg, h: pp[2], b: pp[3], d: pp[4] } }); } break;
       case 'snipeStart': var sn1 = S.c.snipe; sn1.start = +arg; setC({ snipe: sn1 }); break;
       case 'snipeDur': var sn2 = S.c.snipe; sn2.dur = +arg; setC({ snipe: sn2 }); break;

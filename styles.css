@@ -4343,3 +4343,5 @@ button[disabled].big-btn{opacity:.7;cursor:progress}
 .rwp-star{color:var(--gold);font-weight:800;margin-right:2px}.rwp-star.big{display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:rgba(255,209,92,.14);font-size:15px}
 .rwp-sel-own{border-color:rgba(255,209,92,.6)!important;background:rgba(255,209,92,.08)!important}.rwp-v{font-style:normal;color:#3DDC97;font-size:11px}
 .rwp .cpp-quick{margin-top:8px}
+.rwp-ic{object-fit:cover;border-radius:50%;display:inline-grid;place-items:center;color:#ddd;font-weight:700;flex:none}.rwp-first{margin-top:8px}.rwp .cpp-tabs{margin-top:10px}
+.pv-rw{display:flex;align-items:center;gap:8px;margin-top:10px;padding:8px 10px;border-radius:10px;background:rgba(255,209,92,.06);border:1px solid rgba(255,209,92,.25);font-size:12.5px}
