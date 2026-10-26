@@ -62,6 +62,6 @@ fees stay in the Meteora pool and every claim goes straight to its destination (
 - active creator → paid pool→creator automatically (≥0.01 SOL, or daily), or on demand (`POST /api/claim`, signed message)
 - 48h no activity → paused; rewards buy back & burn the coin; "I'm still here" (free wallet signature) resumes
 - 7d inactive or sold ≥70% of peak bag → creator out: 50% buyback & burn (claim + swap in one tx), 50% takeover fund kept inside the pool; the creator's tax share is burned
-- fund not used by a takeover within 14 days → treid grants (treasury)
+- fund not used by a takeover within 14 days → treid platform (treasury), and the 50% share of later fees too
 Every action carries an on-chain memo `treid:<kind>:<mint>:<lamports>`; the ledger is rebuilt from chain on every start.
 API: `GET /api/creator/:mint`, `POST /api/ping`.

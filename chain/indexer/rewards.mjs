@@ -1,7 +1,7 @@
 // treid creator-rewards escrow. The ops wallet is the pool "creator" of new coins, so it claims the creator fee share and
 // applies the rules WITHOUT holding the money: fees stay in the Meteora pool and are claimed straight to their destination.
 // active dev → paid pool→dev automatically (≥0.01 SOL, or daily) or on demand · 48h idle → paused (missed rewards → buyback & burn of the coin)
-// · 7d idle or sold ≥70% of peak bag → dev out: 50% buyback & burn, 50% takeover fund · fund unclaimed after 14d → treid grants.
+// · 7d idle or sold ≥70% of peak bag → dev out: 50% buyback & burn, 50% takeover fund · fund unclaimed after 14d → treid platform revenue (treasury).
 // Every action carries an on-chain memo ("treid:<kind>:<mint>:<lamports>") so the ledger can be rebuilt from chain after a restart.
 import { PublicKey, Transaction, TransactionInstruction, SystemProgram, sendAndConfirmTransaction } from '@solana/web3.js';
 import { TOKEN_2022_PROGRAM_ID, getAssociatedTokenAddressSync, getAccount, createBurnCheckedInstruction } from '@solana/spl-token';
