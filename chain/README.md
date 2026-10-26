@@ -65,3 +65,9 @@ fees stay in the Meteora pool and every claim goes straight to its destination (
 - fund not used by a takeover within 14 days → treid platform (treasury), and the 50% share of later fees too
 Every action carries an on-chain memo `treid:<kind>:<mint>:<lamports>`; the ledger is rebuilt from chain on every start.
 API: `GET /api/creator/:mint`, `POST /api/ping`.
+
+### Community takeover (CTO)
+When the creator is out, a holder with ≥1% of supply applies with a short plan (`POST /api/cto/apply`, signed message);
+holders support with a free signature (`POST /api/cto/vote`). Support = current on-chain balances of the applicant + supporters
+(old creator and past leads excluded, sellers drop out automatically). At ≥10% of supply the takeover is approved: the lead
+receives future rewards under the same rules and the takeover fund vests to them over 30 days, paid straight from the pool.

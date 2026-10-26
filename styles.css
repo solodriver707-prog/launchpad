@@ -4305,3 +4305,12 @@ button[disabled].big-btn{opacity:.7;cursor:progress}
 .cr-logs{display:grid;gap:2px;margin-top:12px;padding-top:10px;border-top:1px dashed rgba(255,255,255,.08)}
 .cr-log{display:grid;grid-template-columns:1fr auto 64px;gap:10px;align-items:center;padding:5px 6px;border-radius:8px;font-size:12px;color:var(--soft,#cfc9bf);text-decoration:none}
 .cr-log:hover{background:rgba(255,255,255,.04)}.cr-log small{text-align:right;font-size:11px}
+/* community takeover */
+.cto-box{margin-top:14px;padding:12px;border-radius:14px;background:rgba(127,182,255,.05);border:1px solid rgba(127,182,255,.18);display:grid;gap:10px}
+.cto-h{display:grid;gap:4px}.cto-h b{font-size:13.5px}.cto-h small{font-size:11.5px;line-height:1.45}
+.cto-app{display:grid;gap:6px;padding:10px;border-radius:12px;background:rgba(0,0,0,.25);border:1px solid #232327}
+.cto-ah{display:flex;align-items:center;gap:8px}.cto-ah small{margin-left:auto;font-size:11px}
+.cto-app p{margin:0;font-size:12.5px;color:var(--soft,#cfc9bf);line-height:1.45}
+.cto-vote,.cto-apply{width:100%}.cto-none,.cto-need{font-size:12px;margin:0}
+.cto-form{display:grid;gap:8px}.cto-form textarea{width:100%;min-height:72px;resize:vertical;border-radius:10px;border:1px solid #2a2a2f;background:#0d0d10;color:var(--text,#eee);padding:10px;font:inherit;font-size:13px}
+.cr-st.b{color:#7FB6FF;background:rgba(127,182,255,.12)}.cr-st.b i{background:#7FB6FF}.cr-panel.s-b{border-color:rgba(127,182,255,.25)}

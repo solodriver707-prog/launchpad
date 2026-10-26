@@ -18,7 +18,7 @@ export function opsKeypair(secret) {
 const DEC = 6, SUPPLY = 1e9, MIN_HARVEST = 50_000 * 10 ** DEC;   // don't bother below 0.005% of supply
 const parseSplit = (uri) => { try { const s = new URL(uri).searchParams.get('s'); if (s) { const p = s.split('.').map(Number); if (p.length === 3 && p[0] + p[1] + p[2] === 100) return { h: p[0], b: p[1], d: p[2] }; } } catch {} return { h: 70, b: 20, d: 10 }; };
 
-export function startOps({ conn, dbc, ops, treasury, q, q1, run, poolAuthority, log = console.log, everyMs = 10 * 60e3, liabilities = () => 0, devState = () => 'active' }) {
+export function startOps({ conn, dbc, ops, treasury, q, q1, run, poolAuthority, log = console.log, everyMs = 10 * 60e3, liabilities = () => 0, devState = (c) => ({ state: 'active', creator: c.creator }) }) {
   run(`CREATE TABLE IF NOT EXISTS payouts(id INTEGER PRIMARY KEY AUTOINCREMENT, mint TEXT, ts INT, harvested REAL, burned REAL, dev REAL, holders REAL, n_holders INT, fees_sol REAL)`);
   const send = (ixs) => sendAndConfirmTransaction(conn, new Transaction().add(...ixs), [ops], { commitment: 'confirmed' });
   let busy = false;
@@ -45,12 +45,12 @@ export function startOps({ conn, dbc, ops, treasury, q, q1, run, poolAuthority, 
     const got = (await getAccount(conn, opsAta, 'confirmed', TOKEN_2022_PROGRAM_ID)).amount - before; if (got <= 0n) return null;
     const sp = parseSplit(c.uri), burnAmt = got * BigInt(sp.b) / 100n, devAmt = got * BigInt(sp.d) / 100n, holdAmt = got - burnAmt - devAmt;
     if (burnAmt > 0n) await send([createBurnCheckedInstruction(opsAta, mint, ops.publicKey, burnAmt, DEC, [], TOKEN_2022_PROGRAM_ID)]);
-    let devBurn = false; try { devBurn = devState(c) !== 'active'; } catch {}
+    let devBurn = false, devTo = c.creator; try { const ds = devState(c); devBurn = ds.era === 'out' || ds.state !== 'active'; devTo = ds.creator || c.creator; } catch {}   // CTO lead gets the tax share while in charge
     if (devAmt > 0n && devBurn) await send([createBurnCheckedInstruction(opsAta, mint, ops.publicKey, devAmt, DEC, [], TOKEN_2022_PROGRAM_ID)]);   // creator paused / out → their tax share is burned
-    if (devAmt > 0n && !devBurn) { const devAta = getAssociatedTokenAddressSync(mint, new PublicKey(c.creator), false, TOKEN_2022_PROGRAM_ID);
-      await send([createAssociatedTokenAccountIdempotentInstruction(ops.publicKey, devAta, new PublicKey(c.creator), mint, TOKEN_2022_PROGRAM_ID), createTransferCheckedInstruction(opsAta, mint, devAta, ops.publicKey, devAmt, DEC, [], TOKEN_2022_PROGRAM_ID)]); }
+    if (devAmt > 0n && !devBurn) { const devAta = getAssociatedTokenAddressSync(mint, new PublicKey(devTo), false, TOKEN_2022_PROGRAM_ID);
+      await send([createAssociatedTokenAccountIdempotentInstruction(ops.publicKey, devAta, new PublicKey(devTo), mint, TOKEN_2022_PROGRAM_ID), createTransferCheckedInstruction(opsAta, mint, devAta, ops.publicKey, devAmt, DEC, [], TOKEN_2022_PROGRAM_ID)]); }
     // holders: pro-rata to every real holder (not the curve vault, not ops, not the dev who already got the dev share)
-    const skip = new Set([poolAuthority, ops.publicKey.toBase58(), c.creator]);
+    const skip = new Set([poolAuthority, ops.publicKey.toBase58(), c.creator, devTo]);
     const hs = accs.filter((a) => a.amount > 0n && !skip.has(a.owner.toBase58())), held = hs.reduce((s, a) => s + a.amount, 0n);
     let paid = 0n, n = 0;
     if (holdAmt > 0n && held > 0n) {
