@@ -4336,3 +4336,6 @@ button[disabled].big-btn{opacity:.7;cursor:progress}
 .terms-h{display:flex;justify-content:space-between;align-items:center;padding:16px 18px;border-bottom:1px solid var(--line,#2A2A2E)}.terms-h b{font-size:18px}
 .terms-draft{margin:12px 18px 0;padding:8px 12px;border-radius:10px;background:rgba(255,209,92,.08);border:1px solid rgba(255,209,92,.3);color:#FFD15C;font-size:12.5px}
 .terms-b{overflow:auto;padding:6px 18px 20px}.terms-b h3{font-size:14.5px;margin:16px 0 6px}.terms-b p{font-size:13.5px;line-height:1.6;color:var(--muted,#B8B8BE);margin:0}.terms-b b{color:var(--ivory,#fff)}
+
+.rwp{margin-top:12px;display:flex;flex-direction:column;gap:8px}.rwp-opts{display:grid;grid-template-columns:1fr 1fr;gap:8px}@media(max-width:560px){.rwp-opts{grid-template-columns:1fr}}
+.rwp-o{align-items:flex-start;padding:10px 12px}.rwp-o small{line-height:1.4}.rwp-tag{font-style:normal;font-size:10.5px;font-weight:700;color:var(--gold);margin-left:4px;letter-spacing:.02em}

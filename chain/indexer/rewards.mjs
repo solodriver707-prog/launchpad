@@ -60,6 +60,9 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, q
         const msg = t.transaction.message, keys = msg.getAccountKeys ? msg.getAccountKeys({ accountKeysFromLookups: t.meta.loadedAddresses }) : null, key = (i) => (keys ? keys.get(i) : msg.accountKeys[i]);
         if (!key(0) || !key(0).equals(ops.publicKey)) continue;   // only transactions PAID BY ops
         const items = (msg.compiledInstructions || []).filter((ix) => key(ix.programIdIndex)?.equals(MEMO)).map((ix) => Buffer.from(ix.data).toString('utf8')).filter((m) => m.startsWith('treid:')).map((m) => { const p = m.split(':'); return { kind: p[1], mint: p[2], lamports: +p[3] || 0, extra: p.length > 4 ? p.slice(4).join(':') : null }; });
+        for (const it of items) if (it.kind === 'taxswap' && it.extra) {   // pair-token sale for holders: the receipt is what left the pool's quote vault
+          const vi = [...Array(keys ? keys.length : msg.accountKeys.length).keys()].find((i) => key(i)?.toBase58() === it.extra), bal = (arr) => Number((arr || []).find((b) => b.accountIndex === vi)?.uiTokenAmount.amount || 0);
+          it.lamports = vi == null ? 0 : Math.max(0, bal(t.meta.preTokenBalances) - bal(t.meta.postTokenBalances)); }
         items.forEach((it, i) => run('INSERT OR IGNORE INTO rlog(sig,i,mint,kind,lamports,ts,extra) VALUES(?,?,?,?,?,?,?)', x.signature, i, it.mint, it.kind, it.lamports, (x.blockTime || 0) * 1000, it.extra)); n += items.length; }
       if (page.length < 1000) break; before = page[page.length - 1].signature; }
     READY = true; log('rewards ledger rebuilt:', n, 'entries');

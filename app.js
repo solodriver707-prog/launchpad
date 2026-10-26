@@ -338,14 +338,23 @@
   function coinUri(mint, c, ipfsUri) {
     var A0 = A, ix = function (arr, v) { return Math.max(0, arr.indexOf(v)).toString(36); }, sp = c.spec || {};
     var q = 'c=' + ix(A0.KINDS, sp.kind) + ix(A0.SKINS, sp.skin) + ix(A0.BGS, sp.bg) + ix(A0.EYES, sp.eyes) + ix(A0.MOUTHS, sp.mouth) + ix(A0.ACCS, sp.acc);
-    if (c.buy > 0 && c.split) q += '&s=' + c.split.h + '.' + c.split.b + '.' + c.split.d;
+    if (c.buy > 0 && c.split) q += '&s=' + c.split.h + '.' + c.split.b + '.' + c.split.d + (c.rw === 'pair' && c.split.h > 0 ? '&r=p' : '');
     var base = (ipfsUri ? ipfsUri : (API || 'https://treid.fun') + '/api/meta/' + mint) + '?' + q, add = function (k, v) { v = String(v || '').replace(/^https?:\/\//, '').replace(/^@/, '').trim(); if (v && (base + '&' + k + '=' + encodeURIComponent(v)).length <= 200) base += '&' + k + '=' + encodeURIComponent(v); };
     add('x', c.x); add('t', c.tg); add('w', c.web); return base;
+  }
+  function rewardPick(c) {   // holders' share paid in the coin itself (recommended) or in the pair token
+    if (!(c.split && c.split.h > 0)) return ''; var tk = '$' + (c.tick || 'COIN'), qs = qOf(c).sym, rw = c.rw === 'pair' ? 'pair' : 'coin';
+    var o = function (k, ttl, tag, sub) { return '<button class="rpp-o rwp-o' + (rw === k ? ' on' : '') + '" data-act="rwPick" data-arg="' + k + '"><span><b>' + esc(ttl) + (tag ? ' <em class="rwp-tag">' + tag + '</em>' : '') + '</b><small>' + sub + '</small></span></button>'; };
+    return '<div class="rwp"><div class="spk-h"><b>Holders get paid in</b><span class="spk-lock">' + ICO.lock + 'Locked forever at launch</span></div><div class="rwp-opts">' +
+      o('coin', tk, '★ Recommended', 'Their bags grow. Nothing is sold, so payouts never push your price down.') +
+      o('pair', qs, '', 'Each payout first sells the tax for ' + esc(qs) + ' — real ' + esc(qs) + ' for holders, but every payout is a sell on your chart.') + '</div>' +
+      (rw === 'pair' ? '<small class="spk-note">Tip: coins that pay holders in their own token keep steadier charts — most strong communities choose ' + esc(tk) + '.</small>' : '') + '</div>';
   }
   function parseUri(uri) {
     var o = {}; try { var u = new URL(uri), g = function (k) { return u.searchParams.get(k); }, cc = g('c');
       if (cc && cc.length >= 6) { var d = cc.split('').map(function (ch) { return parseInt(ch, 36) || 0; }); o.spec = { kind: A.KINDS[d[0]] || A.KINDS[0], skin: A.SKINS[d[1]] || A.SKINS[0], bg: A.BGS[d[2]] || A.BGS[0], eyes: A.EYES[d[3]] || 'normal', mouth: A.MOUTHS[d[4]] || 'smile', acc: A.ACCS[d[5]] || 'none' }; }
       if (g('s')) { var p3 = g('s').split('.').map(Number); if (p3.length === 3 && p3[0] + p3[1] + p3[2] === 100) { o.split = { p: 'custom', h: p3[0], b: p3[1], d: p3[2] }; for (var pk0 in SPRE) if (SPRE[pk0][2] === p3[0] && SPRE[pk0][3] === p3[1] && SPRE[pk0][4] === p3[2]) o.split.p = pk0; } }
+      if (g('r') === 'p') o.rw = 'pair';
       ['x', 't', 'w'].forEach(function (k) { if (g(k)) o[k] = g(k); });
     } catch (e) {} return o;
   }
@@ -2648,7 +2657,8 @@
     return t.split;
   }
   function splitBar(sp, cls) { return '<span class="spbar ' + (cls || '') + '">' + ['h', 'b', 'd'].filter(function (k) { return sp[k] > 0; }).map(function (k) { return '<i style="flex:' + sp[k] + ';background:' + SPC[k][3] + '"></i>'; }).join('') + '</span>'; }
-  function splitTip(t) { var sp = splitOf(t), m = Math.max(t.buy, t.sell); return sp ? 'Tax ' + m + '% → ' + sp.h + '% holders · ' + sp.b + '% burn · ' + sp.d + '% dev (locked)' : 'No tax — plain coin'; }
+  function splitTip(t) { var sp = splitOf(t), m = Math.max(t.buy, t.sell); return sp ? 'Tax ' + m + '% → ' + sp.h + '% holders (paid in ' + rwSym(t) + ') · ' + sp.b + '% burn · ' + sp.d + '% dev (locked)' : 'No tax — plain coin'; }
+  function rwSym(t) { return t.rw === 'pair' ? (t.live ? qSymT(t) : (t.pair || 'SOL')) : '$' + t.tick; }
   function splitPicker(c) {
     var base = c.buy; if (base <= 0) return '<div class="spk off fee0"><div class="spk-h"><b>Your creator rewards</b><span class="spk-lock">' + ICO.lock + 'automatic</span></div><div class="fee-big"><b class="mono">' + FEE.creatorPlain + '%</b><span>of every trade on your coin goes to you</span></div><small>Plain coins pay a ' + FEE.plain + '% trading fee per trade: ' + FEE.creatorPlain + '% to you, ' + FEE.treidPlain + '% to treid, ' + FEE.dexPlain + '% to Meteora (the on-chain DEX). Add a tax to also earn from your own tax split — the trading fee then drops to ' + FEE.taxed + '% (' + FEE.creatorTaxed + '% still yours).</small></div>';
     var sp = c.split || (c.split = { p: 'community', h: 70, b: 20, d: 10 });
@@ -2657,7 +2667,7 @@
     var ex = function (k) { return (base * sp[k] / 100).toFixed(2).replace(/\.?0+$/, '') + '%'; };
     var rows = ['h', 'b', 'd'].map(function (k) { var c0 = SPC[k]; return '<div class="spr" style="--c:' + c0[0] + '"><span class="spr-l"><span class="sp-ic">' + ICO[c0[1]] + '</span>' + c0[2] + '</span>' + (sp.p === 'custom' ? '<span class="spr-rg' + (k === 'd' ? ' cap' : '') + '"><input type="range" min="0" max="100" step="5" value="' + sp[k] + '" data-split="' + k + '">' + (k === 'd' ? '<em>cap 50%</em>' : '') + '</span>' : '<span class="spr-fill"><i style="width:' + sp[k] + '%;background:' + c0[3] + '"></i></span>') + '<b class="mono" data-spv="' + k + '">' + sp[k] + '%</b><small class="mono" data-spx="' + k + '">' + ex(k) + ' of each trade</small></div>'; }).join('');
     return '<div class="spk"><div class="spk-h"><b>Where the tax goes</b><span class="spk-lock">' + ICO.lock + 'Locked forever at launch</span></div><div class="spk-chips">' + chips + '</div>' +
-      '<div class="spk-viz"><div class="spk-big" data-spbig>' + splitBar(sp, 'big') + '</div>' + rows + '</div>' +
+      '<div class="spk-viz"><div class="spk-big" data-spbig>' + splitBar(sp, 'big') + '</div>' + rows + '</div>' + rewardPick(c) +
       '<small class="spk-note">Dev share is capped at 50%. Buyers also pay a ' + FEE.taxed + '% trading fee (total ' + (base + FEE.taxed) + '% per trade): ' + FEE.creatorTaxed + '% of it goes to you, ' + FEE.treidTaxed + '% to treid, ' + FEE.dexTaxed + '% to Meteora. It never comes out of this split.</small></div>';
   }
   function spUpdate() {
@@ -2670,8 +2680,9 @@
     if (!sp) return '<section class="card-s panel tsp-panel"><div class="tsp-h"><b>Fees on this coin</b><span class="tsp-p">plain coin · 0% tax</span></div><div class="tsp-rows" style="grid-template-columns:1fr 1fr 1fr"><div class="tsp-r" style="--c:#E6CB95"><em class="sp-ic">' + ICO.dev + '</em><span>Creator rewards</span><b class="mono">' + FEE.creatorPlain + '%</b><small class="mono">of every trade</small></div><div class="tsp-r" style="--c:#9a9aa2"><em class="sp-ic">' + ICO.lock + '</em><span>treid</span><b class="mono">' + FEE.treidPlain + '%</b><small class="mono">platform</small></div><div class="tsp-r" style="--c:#7FB6FF"><em class="sp-ic">' + ICO.lock + '</em><span>Meteora</span><b class="mono">' + FEE.dexPlain + '%</b><small class="mono">DEX protocol</small></div></div><small class="muted tsp-n">Buyers pay a ' + FEE.plain + '% trading fee per trade, split automatically on-chain.</small></section>';
     var pre = SPRE[sp.p], name = pre ? pre[1] : 'Custom';
     return '<section class="card-s panel tsp-panel"><div class="tsp-h"><b>Where the ' + m + '% tax goes</b><span class="tsp-p">' + ICO.lock + name + ' · locked</span></div>' + splitBar(sp, 'big') +
+      (sp.h > 0 ? '<small class="muted tsp-n">Holders are paid in <b>' + esc(rwSym(t)) + '</b>' + (t.rw === 'pair' ? ' — the tax is sold for it before each payout.' : ' — nothing is sold.') + '</small>' : '') +
       '<div class="tsp-rows">' + ['h', 'b', 'd'].map(function (k) { var c0 = SPC[k]; return '<div class="tsp-r" style="--c:' + c0[0] + '"><em class="sp-ic">' + ICO[c0[1]] + '</em><span>' + c0[2] + '</span><b class="mono">' + sp[k] + '%</b><small class="mono">' + (m * sp[k] / 100).toFixed(2).replace(/\.?0+$/, '') + '% / trade</small></div>'; }).join('') + '</div>' +
-      '<small class="muted tsp-n">Plus a ' + FEE.taxed + '% trading fee (' + FEE.creatorTaxed + '% creator · ' + FEE.treidTaxed + '% treid · ' + FEE.dexTaxed + '% Meteora), total ' + (m + FEE.taxed) + '% per trade. On a 1 SOL buy: ' + ['h', 'b', 'd'].map(function (k) { return (m / 100 * sp[k] / 100).toFixed(4).replace(/\.?0+$/, '') + ' SOL ' + SPC[k][2].toLowerCase(); }).join(' · ') + '</small>' + (t.live && t.taxPaid && t.taxPaid.n ? '<div class="tsp-paid"><b>Paid out on-chain</b><span class="mono"><em class="sp-ic">' + ICO[SPC.b[1]] + '</em>' + fmtNum(t.taxPaid.burned) + ' burned</span><span class="mono"><em class="sp-ic">' + ICO[SPC.h[1]] + '</em>' + fmtNum(t.taxPaid.holders) + ' to holders</span><span class="mono"><em class="sp-ic">' + ICO[SPC.d[1]] + '</em>' + fmtNum(t.taxPaid.dev) + ' to dev</span></div>' : '') + '</section>';
+      '<small class="muted tsp-n">Plus a ' + FEE.taxed + '% trading fee (' + FEE.creatorTaxed + '% creator · ' + FEE.treidTaxed + '% treid · ' + FEE.dexTaxed + '% Meteora), total ' + (m + FEE.taxed) + '% per trade. On a 1 SOL buy: ' + ['h', 'b', 'd'].map(function (k) { return (m / 100 * sp[k] / 100).toFixed(4).replace(/\.?0+$/, '') + ' SOL ' + SPC[k][2].toLowerCase(); }).join(' · ') + '</small>' + (t.live && t.taxPaid && t.taxPaid.n ? '<div class="tsp-paid"><b>Paid out on-chain</b><span class="mono"><em class="sp-ic">' + ICO[SPC.b[1]] + '</em>' + fmtNum(t.taxPaid.burned) + ' burned</span><span class="mono"><em class="sp-ic">' + ICO[SPC.h[1]] + '</em>' + (t.rw === 'pair' ? (+t.taxPaid.holders_q || 0).toFixed(4).replace(/\.?0+$/, '') + ' ' + esc(rwSym(t)) : fmtNum(t.taxPaid.holders)) + ' to holders</span><span class="mono"><em class="sp-ic">' + ICO[SPC.d[1]] + '</em>' + fmtNum(t.taxPaid.dev) + ' to dev</span></div>' : '') + '</section>';
   }
   function taxPicker(c) {
     var sn = c.snipe || (c.snipe = { on: true, start: 50, dur: 30 }); sn.on = true; if (sn.start < 50) sn.start = 50; if (sn.dur < 30) sn.dur = 30; var base = c.buy;
@@ -3091,6 +3102,7 @@
       case 'ctax': setC(+arg > 0 ? { buy: +arg, sell: +arg } : { buy: 0, sell: 0 }); break;
       case 'qpick': qSelect(arg); break;
       case 'vanMode': S.c.van = S.c.van || { mode: 'treid', suf: '' }; S.c.van.mode = arg; render(); setTimeout(function () { var vi = document.getElementById('van-suf'); if (vi) vi.focus(); }, 30); break;
+      case 'rwPick': setC({ rw: arg === 'pair' ? 'pair' : 'coin' }); break;
       case 'spPre': var sp1 = S.c.split || {}; if (arg === 'custom') setC({ split: { p: 'custom', h: sp1.h || 70, b: sp1.b || 20, d: sp1.d || 10 } }); else { var pp = SPRE[arg]; setC({ split: { p: arg, h: pp[2], b: pp[3], d: pp[4] } }); } break;
       case 'snipeStart': var sn1 = S.c.snipe; sn1.start = +arg; setC({ snipe: sn1 }); break;
       case 'snipeDur': var sn2 = S.c.snipe; sn2.dur = +arg; setC({ snipe: sn2 }); break;
@@ -3261,7 +3273,7 @@
         if (dq2.isSol && dq2.sol > 0 && typeof S.balance === 'number' && dq2.sol > S.balance) { toast('Not enough ' + NET + 'SOL for a ' + dq2.sol + ' SOL buy — balance ' + S.balance.toFixed(3)); break; }
         if (find(c.tick)) { toast('$' + c.tick + ' is already taken'); break; }
         if (!S.demoLaunch) {
-          var tax0 = Math.max(c.buy, c.sell), sn0 = c.snipe || {}, cc0 = JSON.parse(JSON.stringify({ name: c.name.trim(), tick: c.tick, spec: c.spec, split: c.split, buy: c.buy, sell: c.sell, x: c.x, tg: c.tg, web: c.web, desc: c.desc, img: c.img, banner: c.banner, snipe: sn0, pair: c.pair, q: c.q || null }));
+          var tax0 = Math.max(c.buy, c.sell), sn0 = c.snipe || {}, cc0 = JSON.parse(JSON.stringify({ name: c.name.trim(), tick: c.tick, spec: c.spec, split: c.split, rw: c.rw || 'coin', buy: c.buy, sell: c.sell, x: c.x, tg: c.tg, web: c.web, desc: c.desc, img: c.img, banner: c.banner, snipe: sn0, pair: c.pair, q: c.q || null }));
           var solB = dq2.isSol ? dq2.sol : 0, qq1 = qOf(c);
           if (typeof S.balance === 'number' && S.balance < solB + 0.03) { toast('You need about ' + (solB + 0.03).toFixed(2) + ' ' + NET + 'SOL (coin creation ≈ 0.03 SOL' + (solB ? ' + your ' + solB + ' SOL buy' : '') + ')'); break; }
           var vc1 = c.van && c.van.mode === 'custom' && (c.van.suf || '').length >= 3, suf1 = vc1 ? c.van.suf : 'trd', vf1 = vc1 ? vanFee(suf1.length) : 0, grindT = null;
@@ -3288,7 +3300,7 @@
         var vc = c.van && c.van.mode === 'custom', vs = vc ? (c.van.suf || '') : 'trd', vf = vc ? vanFee(vs.length) : 0;
         if (vc && vs.length < 3) { toast('Custom address ending needs at least 3 characters'); break; }
         if (vf && typeof S.balance === 'number' && dq2.sol + vf > S.balance) { toast('Not enough ' + NET + 'SOL — need ' + (dq2.sol + vf).toFixed(2) + ' SOL incl. ' + vf + ' SOL address fee'); break; }
-        var nt = { name: c.name.trim(), tick: c.tick, spec: c.spec, img: c.img, banner: c.banner || null, snipe: { on: true, start: Math.max(50, (c.snipe && c.snipe.start) || 50), dur: Math.max(30, (c.snipe && c.snipe.dur) || 30) }, buy: c.buy, sell: c.sell, split: c.buy > 0 && c.split ? { p: c.split.p, h: c.split.h, b: c.split.b, d: c.split.d } : null, pair: c.pair, mcN: 5, mc0: 5, prog: 1, born: Date.now(), holders: 1,
+        var nt = { name: c.name.trim(), tick: c.tick, spec: c.spec, img: c.img, banner: c.banner || null, snipe: { on: true, start: Math.max(50, (c.snipe && c.snipe.start) || 50), dur: Math.max(30, (c.snipe && c.snipe.dur) || 30) }, buy: c.buy, sell: c.sell, split: c.buy > 0 && c.split ? { p: c.split.p, h: c.split.h, b: c.split.b, d: c.split.d } : null, rw: c.rw || 'coin', pair: c.pair, mcN: 5, mc0: 5, prog: 1, born: Date.now(), holders: 1,
           soc: !!(c.x || c.tg || c.web), links: { web: linkOf(c.web), x: c.x ? linkOf(/[\/.]/.test(c.x) ? c.x : 'x.com/' + c.x.replace(/^@/, '')) : null, tg: c.tg ? linkOf(/[\/.]/.test(c.tg) ? c.tg : 't.me/' + c.tg.replace(/^@/, '')) : null, demo: false }, rewards: false, burn: false, ca: fakeCA(vs), vanity: vc ? vs : null, vol: 0, hist: [5, 5], desc: c.desc.trim(), creator: S.account };
         if (vf && typeof S.balance === 'number') S.balance = Math.max(0, S.balance - vf);
         nt.devPct = +dq2.pct.toFixed(2);
@@ -3942,7 +3954,7 @@
     if (c.reserve != null) t.reserve = c.reserve;
     if (t.qMint) { if (c.quote_usd) t.qUsd = c.quote_usd; if (c.vol_usd != null) t.vol = c.vol_usd / 1000; }
     liveStat(t, c);
-    if (c.uri && !t._uri) { t._uri = 1; var pu = parseUri(c.uri); if (pu.spec) t.spec = pu.spec; if (pu.split) t.split = pu.split;
+    if (c.uri && !t._uri) { t._uri = 1; var pu = parseUri(c.uri); if (pu.spec) t.spec = pu.spec; if (pu.split) t.split = pu.split; if (pu.rw) t.rw = pu.rw;
       if (pu.x || pu.t || pu.w) { t.soc = true; t.links = { demo: false, x: pu.x ? xLink(pu.x) : null, tg: pu.t ? tgLink(pu.t) : null, web: pu.w ? linkOf(pu.w) : null }; }
       (trustedMeta(c.uri) ? fetch(c.uri.split('?')[0]).then(function (r) { return r.json(); }) : API ? apiGet('/api/meta/' + c.mint) : Promise.reject()).then(function (m) { var ch = false; if (m && safeImg(m.image) && !t.img) { t.img = safeImg(m.image); ch = true; } if (m && m.description && !t.desc) { t.desc = m.description; ch = true; } if (m && safeImg(m.banner) && !t.banner) { t.banner = safeImg(m.banner); ch = true; } if (ch) render(); }).catch(function () {}); }
     return t;
