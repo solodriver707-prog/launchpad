@@ -9,6 +9,7 @@ import { DatabaseSync } from 'node:sqlite';
 import http from 'node:http';
 import { opsKeypair, startOps } from './ops.mjs';
 import { startRewards } from './rewards.mjs';
+import { startCallouts } from './callouts.mjs';
 
 const RPC = process.env.RPC || 'http://127.0.0.1:8899';
 const WS = process.env.WS || RPC.replace('http', 'ws').replace(':8899', ':8900');
@@ -89,6 +90,7 @@ async function syncAddress(addr, limit = 1000) {   // fetch history (oldest firs
   for (const x of all.reverse()) await handle(x.signature).catch(e => console.log('err', e.message));
 }
 const clients = new Set(); const push = (ev) => { const s = `data: ${JSON.stringify(ev)}\n\n`; for (const c of clients) c.write(s); };
+let CO = null;   // callouts (started below, once the helpers exist)
 
 async function addCoin(mint, slot, ts, creator) {
   if (q1('SELECT 1 FROM coins WHERE mint=?', mint)) return true;
@@ -237,6 +239,9 @@ http.createServer(async (req, res) => {
     }
     if (p[1] === 'cto' && (p[2] === 'apply' || p[2] === 'vote') && req.method === 'POST') { let body = ''; req.on('data', (d) => { body += d; if (body.length > 6000) req.destroy(); });
       req.on('end', async () => { try { if (!REW) throw new Error('rewards escrow not enabled'); const b = JSON.parse(body); J(p[2] === 'apply' ? await REW.ctoApply(b) : await REW.ctoVote(b)); } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: e.message })); } }); return; }
+    if (p[1] === 'callout' && req.method === 'POST') { let body = ''; req.on('data', (d) => { body += d; if (body.length > 3000) req.destroy(); });
+      req.on('end', async () => { try { J(await CO.post(JSON.parse(body), ip(req))); } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: e.message })); } }); return; }
+    if (p[1] === 'callouts') return J(CO.list(u.searchParams.get('mint') || null));
     if (p[1] === 'burned' && req.method === 'POST') { let body = ''; req.on('data', (d) => { body += d; if (body.length > 1000) req.destroy(); });
       req.on('end', async () => { try { J(await verifyBurn(String(JSON.parse(body).sig || ''))); } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: e.message })); } }); return; }
     if (p[1] === 'leaderboard') { const pm = { '24h': 864e5, '7d': 6048e5 }[u.searchParams.get('per')] || 1e13, since = Date.now() - pm;
@@ -270,6 +275,11 @@ http.createServer(async (req, res) => {
 }).listen(PORT, () => console.log('API on :' + PORT));
 let ready = false;
 if (!PARTNER) { console.error('Set PARTNER=<treid fee-claimer wallet>'); process.exit(1); }
+CO = startCallouts({ q, q1, run, push, rate, pinJSON, pinataJwt: PINATA_JWT, gateway: PINATA_GW,
+  coinStats: async (mint, wallet) => { const last = q1('SELECT mcap_usd, price_usd FROM trades WHERE mint=? ORDER BY ts DESC, slot DESC LIMIT 1', mint) || {}; let pos = 0;
+    try { const hs = hCache.get(mint)?.list || await holders(mint); const h = hs.find((x) => x.wallet === wallet && !x.curve); if (h) pos = h.pct / 100 * SUPPLY * (last.price_usd || 0); } catch {}
+    return { mc: last.mcap_usd || 0, pos }; } });
+CO.restore();
 await solPrice(); setInterval(solPrice, 60e3); setInterval(() => quotePrices().catch(() => {}), 60e3);
 setInterval(() => push({ type: 'ping', t: Date.now() }), 25e3);               // keeps proxies from closing the stream
 await backfill(); ready = true;
