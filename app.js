@@ -13,7 +13,8 @@
   var RPC_DEV = devOverride('rpc', 'rpc'), RPC = RPC_DEV || window.TREID_RPC || 'https://api.devnet.solana.com';
   var TREASURY = window.TREID_TREASURY || 'BzCPzoJmoRKV8Ha7dHpyePikjSDL9a9Y3LNKJQdjeaNX';   // treid treasury (cold wallet)
   var PARTNER = window.TREID_PARTNER || TREASURY;   // fee claimer + reward escrow of new coins (the ops wallet) — pinned in index.html, never taken from the server
-  var CHAIN_ID = /mainnet/.test(RPC) ? 'solana:mainnet' : 'solana:devnet';
+  var CHAIN_ID = (window.TREID_CLUSTER || (/mainnet/.test(RPC) ? 'mainnet' : 'devnet')) === 'mainnet' ? 'solana:mainnet' : 'solana:devnet';
+  var GENESIS = { 'solana:mainnet': '5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d', 'solana:devnet': 'EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG' };
   var CLUSTER = CHAIN_ID === 'solana:mainnet' ? 'mainnet' : 'devnet', NET = CLUSTER === 'mainnet' ? '' : 'devnet ', NETP = CLUSTER === 'mainnet' ? '' : ' (devnet)';
   var LS = { wallet: 'dl.lastWallet', watch: 'dl.watch', created: 'dl.created' };
   var SOL_USD = 150; // simulation constant
@@ -318,6 +319,7 @@
     return m.length > 140 ? m.slice(0, 140) + '…' : m;
   }
   function chainRun(label, build) {
+    if (S.netBad) { toast('Network check failed: the connection isn’t ' + CLUSTER + ' — transactions are blocked'); return Promise.reject(new Error('busy')); }
     if (S.busy) { toast('Finish the current transaction first'); return Promise.reject(new Error('busy')); }
     S.busy = label; render(); toast(label + ' — confirm in your wallet');
     return chainLib().then(function (T) {
@@ -398,6 +400,8 @@
     return h.map(function (v, i) { return (i * 110 / (h.length - 1)).toFixed(1) + ',' + (36 - (v - mn) / sp * 32).toFixed(1); }).join(' ');
   }
 
+  function xLink(v) { var l = linkOf(/[\/.]/.test(v) ? v : 'x.com/' + String(v).replace(/^@/, '')); return l && /^https:\/\/(www\.)?(x|twitter)\.com\//i.test(l) ? l : null; }
+  function tgLink(v) { var l = linkOf(/[\/.]/.test(v) ? v : 't.me/' + String(v).replace(/^@/, '')); return l && /^https:\/\/(t|telegram)\.me\//i.test(l) ? l : null; }
   function linkOf(u) { if (!u) return null; u = String(u).trim(); if (!u) return null; if (!/^https?:\/\//i.test(u)) u = 'https://' + u; return /^https:\/\/[^\s"'<>]+$/i.test(u) ? u : null; }
   function socialsOf(t) {
     if (t.links) return t.links;
@@ -1804,6 +1808,7 @@
       '<span class="r"><button class="txb" data-act="wallet" data-arg="' + esc(tr.wallet) + '" aria-label="Open wallet details"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></button></span></div>';
   }
   function holdersOf(t) {
+    if (t.live && !t.lh) return [{ a: 'curve', pct: 100, label: 'Loading holders…', kind: 'curve' }];   // real coins: never invented wallets
     if (t.live && t.lh) { var cv = t.lh.filter(function (x) { return x.curve; }).reduce(function (a, x) { return a + x.pct; }, 0), tagOf = {}; S.trades.forEach(function (x) { if (x.tick === t.tick && x.side === 'buy') { var g = tagOf[x.wallet] || (tagOf[x.wallet] = { first: x.t }); g.first = Math.min(g.first, x.t); if (x.sniper) g.sn = 1; if (x.bundle) g.bu = 1; } });
       return [{ a: 'curve', pct: cv || Math.max(0, 100 - t.lh.reduce(function (a, x) { return a + (x.curve ? 0 : x.pct); }, 0)), label: 'Bonding curve', kind: 'curve' }].concat(t.lh.filter(function (x) { return !x.curve; }).slice(0, 60).map(function (x) { var g = tagOf[x.wallet] || {}, tg = []; if (x.dev) tg.push('dev'); if (S.account && x.wallet === S.account) tg.push('you'); if (g.sn) tg.push('sniper'); if (g.bu) tg.push('bundle'); return { a: x.wallet, pct: x.pct, tags: tg, first: g.first || t.born }; })); }
     var rm = riskMetrics(t), devP = rm[0].val === 'SOLD' ? 0 : parseFloat(rm[0].val), top = parseFloat(rm[1].val), sn = parseFloat(rm[2].val), bu = parseFloat(rm[3].val);
@@ -1940,7 +1945,7 @@
   }, 3500);
   // ---- real callouts: wallet-signed, stored by the indexer ----
   function coClean(x) { return String(x || '').replace(/[\u0000-\u0008\u000B-\u001F\u007F\u202A-\u202E\u2066-\u2069]/g, '').replace(/\n{3,}/g, '\n\n').trim().slice(0, 280); }   // must match indexer/callouts.mjs
-  function coFromRow(r) { return { id: r.id, w: r.wallet, text: r.text, t: r.ts, likes: 0, liked: false, reply: r.reply, mc0: (r.mc || 0) / 1000 || null, pos: Math.round(r.pos || 0), real: true }; }
+  function coFromRow(r) { return { id: Number(r.id), w: String(r.wallet), text: String(r.text), t: Number(r.ts) || 0, likes: 0, liked: false, reply: r.reply == null ? null : Number(r.reply), mc0: (Number(r.mc) || 0) / 1000 || null, pos: Math.round(Number(r.pos) || 0), real: true }; }
   function coMerge(rows) { var ch = []; rows.forEach(function (r) { var t = S.live.filter(function (x) { return x.ca === r.mint; })[0]; if (!t) return; var list = S.comments[t.tick] || (S.comments[t.tick] = []); if (list.some(function (c) { return c.id === r.id; })) return; var c = coFromRow(r); if (!c.mc0) c.mc0 = t.mcN; list.push(c); ch.push({ c: c, t: t }); }); return ch; }
   function coArrive(c, t) {
     coMeta(c, t);
@@ -1962,13 +1967,19 @@
   function b64Bytes(x) { var b = atob(x), u = new Uint8Array(b.length); for (var i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u; }
   function bytesB64(u) { var s0 = ''; for (var i = 0; i < u.length; i++) s0 += String.fromCharCode(u[i]); return btoa(s0); }
   function waitSig(sig) { var t0 = Date.now(); return new Promise(function (res, rej) { (function poll() { rpc('getSignatureStatuses', [[sig]]).then(function (r) { var st = r && r.value && r.value[0]; if (st && st.err) return rej(new Error('Swap failed on-chain')); if (st && (st.confirmationStatus === 'confirmed' || st.confirmationStatus === 'finalized')) return res(sig); if (Date.now() - t0 > 75e3) return rej(new Error('Swap not confirmed in time — check your wallet')); setTimeout(poll, 1500); }).catch(function () { setTimeout(poll, 2000); }); })(); }); }
-  function jupSolToPair(t, sol) {   // resolves with the minimum pair-token amount guaranteed by the route
+  function jupSolToPair(t, sol) {   // resolves with the pair-token amount that ACTUALLY arrived (balance before/after, on-chain decimals)
     var lam = Math.floor(sol * 1e9); if (lam <= 0) return Promise.reject(new Error('Enter an amount first'));
+    var who = S.account, bal0 = null, qm = null;
+    return chainLib().then(function (T) { return T.poolQuote({ rpc: RPC, pool: t.pool, expect: { mint: t.ca, partners: [PARTNER, TREASURY] } }).then(function (pq) { qm = pq.mint; if (qm !== t.qMint) throw new Error('Pair token mismatch — refusing'); return T.tokenBalance({ rpc: RPC, owner: who, mint: qm }); }); }).then(function (b) { bal0 = b; return jupSolToPair0(t, lam); })
+      .then(function () { if (S.account !== who) throw new Error('Wallet account changed — stopped'); return chainLib().then(function (T) { return T.tokenBalance({ rpc: RPC, owner: who, mint: qm }); }); })
+      .then(function (b1) { var got = b1 - bal0; if (!(got > 0)) throw new Error('The swap didn’t deliver ' + qSymT(t) + ' — nothing was bought'); return got; });
+  }
+  function jupSolToPair0(t, lam) {
     return fetch(JUP + '/quote?inputMint=' + WSOL + '&outputMint=' + t.qMint + '&amount=' + lam + '&slippageBps=' + Math.round(S.slip * 100)).then(function (r) { return r.json(); }).then(function (qr) {
       if (!qr || !qr.outAmount) throw new Error('No Jupiter route from SOL to ' + qSymT(t)); if (qr.inputMint !== WSOL || qr.outputMint !== t.qMint) throw new Error('Jupiter returned a different route — refusing');
       return fetch(JUP + '/swap', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ quoteResponse: qr, userPublicKey: S.account, wrapAndUnwrapSol: true, dynamicComputeUnitLimit: true }) }).then(function (r) { return r.json(); }).then(function (sw) {
         if (!sw || !sw.swapTransaction) throw new Error('Jupiter couldn’t build the swap');
-        var raw = b64Bytes(sw.swapTransaction); return chainLib().then(function (T) { T.checkSwapTx(raw, S.account); return walletSign([raw]); }).then(function (signed) { return rpc('sendTransaction', [bytesB64(signed[0]), { encoding: 'base64', preflightCommitment: 'confirmed', maxRetries: 3 }]); }).then(waitSig).then(function () { return Number(qr.otherAmountThreshold) / Math.pow(10, t.qDec != null ? t.qDec : 6); });
+        var raw = b64Bytes(sw.swapTransaction); return chainLib().then(function (T) { return T.checkSwapTx(raw, S.account, RPC).then(function () { return walletSign([raw]); }); }).then(function (signed) { return rpc('sendTransaction', [bytesB64(signed[0]), { encoding: 'base64', preflightCommitment: 'confirmed', maxRetries: 3 }]); }).then(waitSig);
       }); });
   }
   function qSymT(t) { return t && t.live && t.qMint ? (t.qSym || t.pair) : 'SOL'; }
@@ -1983,7 +1994,7 @@
     var res = { isBuy: isBuy, amt: amt, sol: sol, pct: pct, tax: tax, fp: fp, fee: fee, impact: impact, out: isBuy ? outTok : outSol, min: (isBuy ? outTok : outSol) * (1 - S.slip / 100) };
     if (t.live && t.pool && amt > 0) {   // real coins: exact on-chain quote (fetched in the background, panel re-renders when it lands)
       var key = t.tick + '|' + S.side + '|' + amt + '|' + S.slip, L = S.lq && S.lq.k === key ? S.lq.r : null;
-      if (!L) { if (S.lqWant !== key) { S.lqWant = key; clearTimeout(S.lqT); S.lqT = setTimeout(function () { chainLib().then(function (T) { return T.quote({ rpc: RPC, pool: t.pool, side: isBuy ? 'buy' : 'sell', amount: amt, slippageBps: Math.round(S.slip * 100) }); }).then(function (r) { S.lq = { k: key, r: r }; if (S.lqWant === key && S.screen === 'token' && S.tick === t.tick) render(); }).catch(function () {}); }, 300); } res.pending = true; }
+      if (!L) { if (S.lqWant !== key) { S.lqWant = key; clearTimeout(S.lqT); S.lqT = setTimeout(function () { chainLib().then(function (T) { return T.quote({ rpc: RPC, expect: { mint: t.ca, partners: [PARTNER, TREASURY] }, pool: t.pool, side: isBuy ? 'buy' : 'sell', amount: amt, slippageBps: Math.round(S.slip * 100) }); }).then(function (r) { S.lq = { k: key, r: r }; if (S.lqWant === key && S.screen === 'token' && S.tick === t.tick) render(); }).catch(function () {}); }, 300); } res.pending = true; }
       else { var ct = Math.max(t.buy, t.sell) / 100; res.pct = ct * 100; res.fee = L.feeSol; res.fp = sol > 0 ? L.feeSol / sol * 100 : 0;
         if (isBuy) { res.out = L.out * (1 - ct); res.min = L.minOut; res.tax = sol * ct; }
         else { res.out = L.out; res.min = L.minOut; res.tax = L.out * ct / Math.max(1e-9, 1 - ct); res.sol = L.out + L.feeSol; }
@@ -2187,8 +2198,9 @@
       var L = S.lbReal && S.lbReal.per === S.lbPer ? S.lbReal.d : null; if (!L || Date.now() - S.lbReal.at > 60e3) lbLoad(); if (!L) return [];
       var tk = function (m) { return S.live.filter(function (x) { return x.ca === m; })[0]; };
       if (tab === 'traders') return L.traders.map(function (e) { var bt = e.best && tk(e.best.mint), win = e.coins ? e.wins / e.coins * 100 : 0;
+        e = { wallet: String(e.wallet), pnl: Number(e.pnl) || 0, n: Number(e.n) || 0, coins: Number(e.coins) || 0, wins: Number(e.wins) || 0, best: e.best ? { mint: String(e.best.mint), x: Number(e.best.x) || 0 } : null };
         return { a: e.wallet, v: e.pnl, cols: [{ v: usdS(e.pnl), c: e.pnl >= 0 ? 'up' : 'down', big: 1 }, { v: win.toFixed(0) + '%', c: win >= 55 ? 'up' : '' }, { v: fmtNum(e.n) }, { v: bt ? '<span class="lb2-coin">' + avatarHTML(bt, 18) + '$' + esc(bt.tick) + '</span> <b class="' + (e.best.x >= 1 ? 'up' : 'down') + '">' + e.best.x.toFixed(1) + 'x</b>' : '—', raw: 1 }], sub: e.n + ' trades · ' + win.toFixed(0) + '% win', main: usdS(e.pnl) }; });
-      if (tab === 'devs') return L.devs.map(function (e) { var rate = e.launches ? e.grads / e.launches * 100 : 0, tag = e.left / Math.max(1, e.launches) > .4 && e.launches > 1 ? ['bad', 'Often leaves'] : e.grads && !e.left ? ['good', 'Trusted builder'] : e.launches <= 1 ? ['mid', 'New dev'] : ['mid', 'Mixed record'];
+      if (tab === 'devs') return L.devs.map(function (e) { e = { wallet: String(e.wallet), launches: Number(e.launches) || 0, grads: Number(e.grads) || 0, left: Number(e.left) || 0, best: Number(e.best) || 0 }; var rate = e.launches ? e.grads / e.launches * 100 : 0, tag = e.left / Math.max(1, e.launches) > .4 && e.launches > 1 ? ['bad', 'Often leaves'] : e.grads && !e.left ? ['good', 'Trusted builder'] : e.launches <= 1 ? ['mid', 'New dev'] : ['mid', 'Mixed record'];
         return { a: e.wallet, v: e.grads * 3 + Math.log10(e.best + 1) * 4 - e.left * 5, cols: [{ v: fmtNum(e.launches) }, { v: e.grads + ' <small class="muted">(' + rate.toFixed(0) + '%)</small>', c: rate >= 40 ? 'up' : '', raw: 1 }, { v: String(e.left), c: e.left ? 'down' : 'up' }, { v: fmtK(e.best / 1000), big: 1 }, { v: '<span class="lb2-tag ' + tag[0] + '">' + tag[1] + '</span>', raw: 1 }], sub: 'best ATH · ' + e.launches + ' launches · ' + e.grads + ' grad', main: fmtK(e.best / 1000) }; });
       if (tab === 'callers') { var m = {}; S.live.forEach(function (t) { (S.comments[t.tick] || []).forEach(function (c) { if (!c.real || c.reply != null || !c.mc0 || Date.now() - c.t > ({ '24h': 864e5, '7d': 6048e5 }[S.lbPer] || 1e13)) return; var g = (t.mcN / c.mc0 - 1) * 100, e = m[c.w] = m[c.w] || { a: c.w, n: 0, sum: 0, hit: 0, best: null }; e.n++; e.sum += g; if (g > 0) e.hit++; if (!e.best || g > e.best.g) e.best = { g: g, t: t }; }); });
         return Object.keys(m).map(function (k) { var e = m[k], avg = e.sum / e.n, hit = e.hit / e.n * 100;
@@ -2506,7 +2518,7 @@
         '<div class="cr-money">' + tiles.map(function (m) { return '<div><small>' + m[0] + '</small><b class="mono">' + m[1] + '</b></div>'; }).join('') + '</div>' + meterE +
         (mineE && E.era !== 'out' ? '<div class="cr-acts"><button class="btn sec" data-act="devHere" data-arg="' + esc(t.tick) + '">✋ I’m still here</button>' + (E.state === 'active' ? '<button class="btn pri" data-act="devClaimNow" data-arg="' + esc(t.tick) + '"' + (E.pendingSol < 0.0001 || S.busy ? ' disabled' : '') + '>Claim now · ' + solf(E.pendingSol) + '</button>' : '') + '</div>' : '') +
         ctoBox + (logE ? '<div class="cr-logs">' + logE + '</div>' : '') +
-        '<details class="cr-rules"><summary>How the rules work</summary><ul><li>Rewards stay in the Meteora pool — treid never holds them. An active creator is <b>paid straight from the pool</b> automatically once rewards reach $1, or any time with “Claim now” (from $1).</li><li><b>48h</b> with no creator activity → payouts pause; rewards meanwhile <b>buy back & burn</b> the coin. “I’m still here” (a free wallet signature) resumes payouts.</li><li><b>7 days</b> inactive, or the creator sells <b>or moves to another wallet 70%+</b> of their peak bag (selling and sending are added together; the rule covers the creator’s launch wallet) → creator is out: from then on <b>50%</b> of their rewards buys back & burns the coin and <b>50%</b> goes to the treid platform, until the community takes over.</li><li><b>Community takeover:</b> a holder with ' + (R0.applyPct || 1) + '%+ applies with a plan; holders support with a free signature. At ' + (R0.supportPct || 10) + '% of supply, held for 24 hours in a row, the new lead takes over and earns all future rewards — under the same rules.</li><li>Every step is an on-chain transaction — tap any line above to verify.</li></ul></details></section>';
+        '<details class="cr-rules"><summary>How the rules work</summary><ul><li>Rewards stay in the Meteora pool until they’re paid. treid’s automated wallet holds the pool’s creator role and pays them out under these rules — never anywhere else. An active creator is <b>paid straight from the pool</b> automatically once rewards reach $1, or any time with “Claim now” (from $1).</li><li><b>48h</b> with no creator activity → payouts pause; rewards meanwhile <b>buy back & burn</b> the coin. “I’m still here” (a free wallet signature) resumes payouts.</li><li><b>7 days</b> inactive, or the creator sells <b>or moves to another wallet 70%+</b> of their peak bag (selling and sending are added together; the rule covers the creator’s launch wallet) → creator is out: from then on <b>50%</b> of their rewards buys back & burns the coin and <b>50%</b> goes to the treid platform, until the community takes over.</li><li><b>Community takeover:</b> a holder with ' + (R0.applyPct || 1) + '%+ applies with a plan; holders support with a free signature. At ' + (R0.supportPct || 10) + '% of supply, held for 24 hours in a row, the new lead takes over and earns all future rewards — under the same rules.</li><li>Every step is an on-chain transaction — tap any line above to verify.</li></ul></details></section>';
     }
     if (t.live) {   // real coin: rewards are SOL sitting in the pool, the creator claims them straight to their wallet
       var f = t.crFees, mine = !!(S.account && f && S.account === f.creator), u = f ? f.unclaimed : null, uTxt = u == null ? '…' : (u < 0.0001 && u > 0 ? '<0.0001' : u.toFixed(4)) + ' ' + esc(qSymT(t));
@@ -2704,10 +2716,10 @@
   function qUsd(q) { return q.sol ? SOL_USD : q.usd; }
   function usdTxt(v) { return v >= 1 ? v.toFixed(2) : v.toPrecision(3); }
   function qReg(sym, mint, icon, name) {
-    if (mint === WSOL) return 'SOL'; if (mint === USDC_MINT) return 'USDC';
+    if (mint === WSOL) return 'SOL'; if (mint === USDC_MINT) return 'USDC';   // only the real mints map to the known icons
     var k = String(sym || mint.slice(0, 4)).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10) || 'TOKEN';
-    if (PAIR_INFO[k] && PAIR_INFO[k].ca && PAIR_INFO[k].ca !== mint) k = k + '·' + mint.slice(0, 3);
-    if (!PAIR_INFO[k]) PAIR_INFO[k] = { name: name || sym || 'Token', cat: 'crypto', g: k.slice(0, 2), c: '#4A4A4F', ca: mint };
+    if (PAIR_INFO[k] && PAIR_INFO[k].ca !== mint) k = k + '·' + mint.slice(0, 3);   // a token merely CALLED “USDC” never borrows the real one's name and icon
+    if (!PAIR_INFO[k]) PAIR_INFO[k] = { name: (name || sym || 'Token') + ' · ' + mint.slice(0, 4) + '…' + mint.slice(-4), cat: 'crypto', g: k.slice(0, 2), c: '#4A4A4F', ca: mint, custom: true };
     if (safeImg(icon) && !PAIR_INFO[k].img) PAIR_INFO[k].img = safeImg(icon);
     return k;
   }
@@ -2824,7 +2836,7 @@
   function routeOf() { if (S.screen === 'token' && S.tick) { var t0 = find(S.tick); return '#/coin/' + encodeURIComponent(t0 && t0.live ? t0.ca : S.tick); } return ROUTES[S.screen] ? '#/' + ROUTES[S.screen] : ''; }
   function syncRoute() { if (!routeReady) return; var r = routeOf(), cur = location.hash || ''; if (cur === r) return; try { history.pushState(null, '', r || (location.pathname + location.search)); } catch (e) {} }
   function applyRoute() {
-    var h = decodeURIComponent((location.hash || '').replace(/^#\/?/, '')), parts = h.split('/');
+    var h = ''; try { h = decodeURIComponent((location.hash || '').replace(/^#\/?/, '')); } catch (e) { h = ''; } var parts = h.split('/');
     if (parts[0] === 'coin' && parts[1]) { var id = parts[1], t1 = find(id) || S.live.filter(function (x) { return x.ca === id; })[0];
       if (t1) { if (S.screen !== 'token' || S.tick !== t1.tick) openToken(t1.tick); } else if (API) { S.pendingRoute = id; S.screen = 'pending'; setTimeout(function () { if (S.screen === 'pending') { S.pendingRoute = null; set({ screen: 'home' }); toast('Couldn\'t load that coin — the server may be waking up, try again'); } }, 45000); } else set({ screen: 'home' }); return; }
     for (var k in ROUTES) if (ROUTES[k] === parts[0]) { if (S.screen !== k) set({ screen: k, palOpen: false }); return; }
@@ -3217,11 +3229,11 @@
           if (t.qMint && typeof S.balance === 'number' && S.balance < 0.003) { toast('You need a little SOL for network fees'); break; }
           if (side0 === 'sell') { if (amt > ps0.tok) amt = ps0.tok; if (amt <= 0) { toast('You don\'t hold any $' + t.tick + ' yet — buy first'); break; } }
           if (paySol(t)) { if (typeof S.balance === 'number' && amt > S.balance - 0.01) { toast('Not enough SOL — balance ' + S.balance.toFixed(3)); break; } if (S.busy) break; S.busy = 'Swapping SOL → ' + qSymT(t); render(); toast('Step 1 of 2: swap SOL → ' + qSymT(t) + ' — confirm in your wallet');
-            jupSolToPair(t, amt).catch(function (e) { throw /fetch/i.test(String(e && e.message)) ? new Error('Couldn’t reach Jupiter — try again in a moment') : e; }).then(function (got) { S.busy = null; render(); return chainRun('Step 2 of 2: buying $' + t.tick, function (T) { return T.buildSwap({ rpc: RPC, owner: S.account, pool: t.pool, side: 'buy', amount: got, slippageBps: Math.round(S.slip * 100) }); }); })
+            jupSolToPair(t, amt).catch(function (e) { throw /fetch/i.test(String(e && e.message)) ? new Error('Couldn’t reach Jupiter — try again in a moment') : e; }).then(function (got) { S.busy = null; render(); return chainRun('Step 2 of 2: buying $' + t.tick, function (T) { return T.buildSwap({ rpc: RPC, expect: { mint: t.ca, partners: [PARTNER, TREASURY] }, owner: S.account, pool: t.pool, side: 'buy', amount: got, slippageBps: Math.round(S.slip * 100) }); }); })
               .then(function (b) { S.amount = ''; confettiSmall(); toast('Bought ~' + fmtNum(b.quote.out * (1 - Math.max(t.buy, t.sell) / 100)) + ' $' + t.tick + ' with SOL · on-chain ✓', t); setTimeout(function () { liveLoad(t); refreshBalance(); }, 1200); })
               .catch(function (e) { S.busy = null; render(); if (e && e.message !== 'busy') toast(chainErr(e)); });
             break; }
-          chainRun(side0 === 'buy' ? 'Buying $' + t.tick : 'Selling $' + t.tick, function (T) { return T.buildSwap({ rpc: RPC, owner: S.account, pool: t.pool, side: side0, amount: amt, slippageBps: Math.round(S.slip * 100) }); })
+          chainRun(side0 === 'buy' ? 'Buying $' + t.tick : 'Selling $' + t.tick, function (T) { return T.buildSwap({ rpc: RPC, expect: { mint: t.ca, partners: [PARTNER, TREASURY] }, owner: S.account, pool: t.pool, side: side0, amount: amt, slippageBps: Math.round(S.slip * 100) }); })
             .then(function (b) { S.amount = ''; S.sellAll = false; if (side0 === 'buy') confettiSmall(); toast((side0 === 'buy' ? 'Bought ~' + fmtNum(b.quote.out * (1 - Math.max(t.buy, t.sell) / 100)) + ' $' + t.tick : 'Sold ' + fmtNum(amt) + ' $' + t.tick + ' for ~' + b.quote.out.toFixed(4) + ' ' + qSymT(t)) + ' · on-chain ✓', t); setTimeout(function () { liveLoad(t); }, 1200); })
             .catch(function (e) { if (e && e.message !== 'busy') toast(chainErr(e)); });
           break;
@@ -3260,7 +3272,8 @@
           chainLib().then(function (T) { return dq2.isSol || !dq2.sol ? T : T.tokenBalance({ rpc: RPC, owner: S.account, mint: qq1.mint }).then(function (hb) { if (hb < dq2.sol) throw new Error('You have ' + fmtNum(hb) + ' ' + qq1.sym + ' — not enough for a ' + dq2.sol + ' ' + qq1.sym + ' buy'); return T; }); })
           .then(function (T) { return T.grind(suf1, { onProgress: function (n, exp) { var el = document.getElementById('gr-n'); if (!el) return; var rate = n / Math.max(0.2, (Date.now() - gStart) / 1000), left = Math.max(0, (exp - n) / rate); el.textContent = fmtNum(n) + ' tried · ' + (n >= exp ? 'any moment now — it\'s luck' : left < 5 ? 'almost there' : '~' + (left < 90 ? Math.ceil(left) + 's' : Math.ceil(left / 60) + ' min') + ' left'); } }); })
           .then(function (g) { gEl.remove(); grindT = g; S.busy = 'Saving logo…'; render();
-            var up = API ? Promise.race([fetch(API + '/api/upload', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: cc0.name, symbol: cc0.tick, description: (cc0.desc || '').trim(), image: cc0.img || null, banner: cc0.banner || null, x: cc0.x, tg: cc0.tg, web: cc0.web }) }).then(function (r) { return r.json(); }), new Promise(function (r) { setTimeout(function () { r({}); }, 25000); })]).catch(function () { return {}; }) : Promise.resolve({});
+            var fsU = S.wallet && S.wallet.features['solana:signMessage'], tsU = Date.now(), whoU = S.account;   // the upload is signed by your wallet (protects the IPFS account from spam)
+            var up = API ? (fsU ? Promise.resolve(fsU.signMessage({ account: S.walletAcc, message: new TextEncoder().encode('treid: upload \u2014 ' + whoU + ' \u2014 ' + tsU) })) : Promise.reject(new Error('This wallet can’t sign messages — try Phantom or Solflare'))).then(function (r) { var sg = (Array.isArray(r) ? r[0] : r).signature; return chainLib().then(function (T) { return T.b58(sg); }); }).then(function (sigU) { return Promise.race([fetch(API + '/api/upload', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ wallet: whoU, ts: tsU, sig: sigU, name: cc0.name, symbol: cc0.tick, description: (cc0.desc || '').trim(), image: cc0.img || null, banner: cc0.banner || null, x: cc0.x, tg: cc0.tg, web: cc0.web }) }).then(function (r) { return r.json(); }), new Promise(function (r) { setTimeout(function () { r({}); }, 25000); })]); }).catch(function (e) { return { error: e && e.message }; }) : Promise.resolve({});
             return up; }).then(function (up) { S.busy = null; if (API && !API_DEV && !(up && up.uri)) throw new Error((up && up.error) || 'Couldn’t save your logo to IPFS — please try again'); var g = grindT; return chainRun('Launching $' + c.tick, function (T) {
             return T.buildCreate({ rpc: RPC, payer: S.account, partner: PARTNER, treasury: TREASURY, mintSecret: g.secret, extraFeeSol: vf1, escrow: S.escrowWallet || null, name: cc0.name, symbol: cc0.tick, uri: coinUri('MINT'.repeat(11), cc0, up && up.uri), taxBps: tax0 * 100, trapBps: Math.max(50, sn0.start || 50) * 100, trapSecs: Math.max(30, sn0.dur || 30), devBuySol: dq2.sol, quoteMint: qq1.sol ? null : qq1.mint, mc0: qq1.sol ? null : 20 * SOL_USD / qq1.usd, mc1: qq1.sol ? null : 60 * SOL_USD / qq1.usd });
           }); }).then(function (b) {
@@ -3930,7 +3943,7 @@
     if (t.qMint) { if (c.quote_usd) t.qUsd = c.quote_usd; if (c.vol_usd != null) t.vol = c.vol_usd / 1000; }
     liveStat(t, c);
     if (c.uri && !t._uri) { t._uri = 1; var pu = parseUri(c.uri); if (pu.spec) t.spec = pu.spec; if (pu.split) t.split = pu.split;
-      if (pu.x || pu.t || pu.w) { t.soc = true; t.links = { demo: false, x: pu.x ? linkOf(/[\/.]/.test(pu.x) ? pu.x : 'x.com/' + pu.x) : null, tg: pu.t ? linkOf(/[\/.]/.test(pu.t) ? pu.t : 't.me/' + pu.t) : null, web: pu.w ? linkOf(pu.w) : null }; }
+      if (pu.x || pu.t || pu.w) { t.soc = true; t.links = { demo: false, x: pu.x ? xLink(pu.x) : null, tg: pu.t ? tgLink(pu.t) : null, web: pu.w ? linkOf(pu.w) : null }; }
       (trustedMeta(c.uri) ? fetch(c.uri.split('?')[0]).then(function (r) { return r.json(); }) : API ? apiGet('/api/meta/' + c.mint) : Promise.reject()).then(function (m) { var ch = false; if (m && safeImg(m.image) && !t.img) { t.img = safeImg(m.image); ch = true; } if (m && m.description && !t.desc) { t.desc = m.description; ch = true; } if (m && safeImg(m.banner) && !t.banner) { t.banner = safeImg(m.banner); ch = true; } if (ch) render(); }).catch(function () {}); }
     return t;
   }
@@ -3938,12 +3951,12 @@
     Promise.all([apiGet('/api/trades/' + t.ca), apiGet('/api/holders/' + t.ca).catch(function () { return null; }), apiGet('/api/coin/' + t.ca)]).then(function (res) {
       var rows = res[0].slice().reverse(); liveTok(res[2]);
       S.trades = S.trades.filter(function (x) { return x.tick !== t.tick; });
-      rows.forEach(function (x) { S.trades.push({ tick: t.tick, usd: x.usd, side: x.side, sol: x.sol, wallet: x.wallet, t: x.ts, tax: x.fee_sol, mine: !!(S.account && x.wallet === S.account), price: x.price_usd, sig: x.sig, tokens: x.tokens, sniper: x.sniper, bundle: x.bundle, real: true }); });
+      rows.forEach(function (x) { S.trades.push({ tick: t.tick, usd: Number(x.usd) || 0, side: x.side === 'sell' ? 'sell' : 'buy', sol: Number(x.sol) || 0, wallet: String(x.wallet), t: Number(x.ts) || 0, tax: x.fee_sol, mine: !!(S.account && x.wallet === S.account), price: x.price_usd, sig: x.sig, tokens: x.tokens, sniper: x.sniper, bundle: x.bundle, real: true }); });
       S.trades.sort(function (a, b) { return b.t - a.t; });
       t.tk = rows.length ? [[t.born, rows[0].mcap_usd / 1000, 0]].concat(rows.map(function (x) { return [x.ts, x.mcap_usd / 1000, x.sol]; })) : [[t.born, t.mcN, 0], [Date.now(), t.mcN, 0]];
       t.tk.push([Date.now(), t.mcN, 0]); t.hist = t.tk.slice(-160).map(function (x) { return x[1]; });
       if (res[1]) t.lh = res[1];
-      if (!t.auth) rpc('getAccountInfo', [t.ca, { encoding: 'jsonParsed', commitment: 'confirmed' }]).then(function (r) { var inf = r && r.value && r.value.data && r.value.data.parsed && r.value.data.parsed.info; if (inf) { t.auth = { mint: !inf.mintAuthority, freeze: !inf.freezeAuthority }; if (S.screen === 'token' && S.tick === t.tick) render(); } }).catch(function () {});
+      if (!t.auth) rpc('getAccountInfo', [t.ca, { encoding: 'jsonParsed', commitment: 'confirmed' }]).then(function (r) { var inf = r && r.value && r.value.data && r.value.data.parsed && r.value.data.parsed.info; if (inf) { var tfx = (inf.extensions || []).filter(function (x) { return x.extension === 'transferFeeConfig'; })[0], bps = tfx ? Number((tfx.state.newerTransferFee || {}).transferFeeBasisPoints || 0) : 0; t.auth = { mint: !inf.mintAuthority, freeze: !inf.freezeAuthority, taxBps: bps }; t.buy = t.sell = bps / 100; if (S.screen === 'token' && S.tick === t.tick) render(); } }).catch(function () {});
       livePos(t); if (t.qMint && S.account) chainLib().then(function (T) { return T.tokenBalance({ rpc: RPC, owner: S.account, mint: t.qMint }); }).then(function (b) { t.qBal = b; if (S.screen === 'token' && S.tick === t.tick) render(); }).catch(function () {});
       chainLib().then(function (T) { return T.creatorFees({ rpc: RPC, pool: t.pool }); }).then(function (f) { t.crFees = f; if (S.screen === 'token' && S.tick === t.tick) render(); }).catch(function () {});
       apiGet('/api/callouts?mint=' + t.ca).then(function (rows) { if (coMerge(rows).length && S.screen === 'token' && S.tick === t.tick) render(); }).catch(function () {});
@@ -3973,6 +3986,7 @@
     }).catch(function (e) { console.warn('[treid] indexer not reachable at', API, e); });
   }
   liveStart();
+  if (!RPC_DEV) rpc('getGenesisHash', []).then(function (g) { if (g !== GENESIS[CHAIN_ID]) { S.netBad = true; render(); console.warn('[treid] RPC network mismatch'); } }).catch(function () {});
   setInterval(function () { if (S.screen === 'burn' && !document.hidden) burnsLoad(); }, 30000);
   applyRoute(); render();   // same tick as the first paint → no flash of the board on refresh
 

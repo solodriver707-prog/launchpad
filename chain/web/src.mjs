@@ -71,23 +71,32 @@ export async function buildCreate({ rpc, payer, partner, treasury, name, symbol,
   const out = await finish(rpc, txs, payer, [cfg, mint]);
   return { ...out, uri: common.preCreatePoolParam.uri, mint: mint.publicKey.toBase58(), config: cfg.publicKey.toBase58(), pool: deriveDbcPoolAddress(QM, mint.publicKey, cfg.publicKey).toBase58(), quoteMint: qi.mint, quoteDecimals: qi.decimals };
 }
-async function poolCtx(rpc, pool) {
+// the site never trusts a pool address from the server: before any quote or trade it checks ON-CHAIN that the pool is this coin's
+// pool, made with a treid config (fee claimer = treid, fixed supply, locked LP, no vesting, quote-side fees)
+function treidCfgOk(cfg, partners) { const n = (x) => Number(x?.toString?.() ?? x), lv = cfg.lockedVestingConfig;
+  return partners.includes(cfg.feeClaimer.toBase58()) && n(cfg.tokenType) === 1 && n(cfg.tokenDecimal) === 6 && n(cfg.fixedTokenSupplyFlag) === 1 && n(cfg.tokenUpdateAuthority) === 1
+    && n(cfg.creatorLiquidityPercentage) === 0 && n(cfg.partnerLiquidityPercentage) === 0 && n(lv.amountPerPeriod) === 0 && n(lv.cliffUnlockAmount) === 0 && n(cfg.collectFeeMode) === 0 && n(cfg.transferFeeBasisPoints) <= 1000; }
+async function poolCtx(rpc, pool, expect) {
   const cl = client(rpc), vpw = await cl.state.getPool(pk(pool)); if (!vpw) throw new Error('Pool not found');
   const vp = vpw.poolState || vpw, cfg = await cl.state.getPoolConfig(vp.config), cp = await getCurrentPoint(C(rpc), cfg.activationType);
+  if (expect) { if (vp.baseMint.toBase58() !== expect.mint) throw new Error('Pool doesn’t belong to this coin — refusing');
+    if (!treidCfgOk(cfg, expect.partners || [])) throw new Error('This pool isn’t a treid pool — refusing'); }
   const qi = await quoteInfo({ rpc, mint: cfg.quoteMint.toBase58() });
   return { cl, vpw: vpw.poolState ? vpw : { poolState: vp }, vp, cfg, cp, qd: qi.decimals };
 }
+// the pool's real pair token, read on-chain after the pool checks (never the server's word for it)
+export async function poolQuote({ rpc, pool, expect }) { const { cfg, qd } = await poolCtx(rpc, pool, expect); return { mint: cfg.quoteMint.toBase58(), decimals: qd }; }
 // side 'buy': amount in SOL; side 'sell': amount in tokens
-export async function quote({ rpc, pool, side, amount, slippageBps = 500 }) {
-  const { cl, vpw, cfg, cp, qd } = await poolCtx(rpc, pool), sell = side === 'sell';
+export async function quote({ rpc, pool, side, amount, slippageBps = 500, expect = null }) {
+  const { cl, vpw, cfg, cp, qd } = await poolCtx(rpc, pool, expect), sell = side === 'sell';
   const amountIn = new BN(Math.floor(amount * (sell ? 10 ** RULES.decimals : 10 ** qd)));
   const q = cl.pool.swapQuote2({ virtualPool: vpw, config: cfg, swapBaseForQuote: sell, amountIn, slippageBps, hasReferral: false, currentPoint: cp, swapMode: SwapMode.ExactIn });
   const outRaw = q.outputAmount || q.amountOut || new BN(0), minRaw = q.minimumAmountOut || new BN(0), fee = q.tradingFee || q.fee || new BN(0);
   const div = sell ? 10 ** qd : 10 ** RULES.decimals;
   return { out: Number(outRaw.toString()) / div, minOut: Number(minRaw.toString()) / div, feeSol: Number(fee.toString()) / 10 ** qd, quoteDecimals: qd, quoteMint: cfg.quoteMint.toBase58(), amountIn: amountIn.toString(), minRaw: minRaw.toString() };
 }
-export async function buildSwap({ rpc, owner, pool, side, amount, slippageBps = 500 }) {
-  owner = pk(owner); const q = await quote({ rpc, pool, side, amount, slippageBps }), cl = client(rpc);
+export async function buildSwap({ rpc, owner, pool, side, amount, slippageBps = 500, expect = null }) {
+  owner = pk(owner); const q = await quote({ rpc, pool, side, amount, slippageBps, expect }), cl = client(rpc);
   const tx = await cl.pool.swap2({ owner, pool: pk(pool), swapBaseForQuote: side === 'sell', referralTokenAccount: null, swapMode: SwapMode.ExactIn, amountIn: new BN(q.amountIn), minimumAmountOut: new BN(q.minRaw) });
   const out = await finish(rpc, [tx], owner, []);
   return { ...out, quote: q };
@@ -156,10 +165,17 @@ export async function creatorFees({ rpc, pool }) {
 }
 // sanity-check a swap transaction from Jupiter's API before the wallet signs it: user pays, only known programs are called
 const JUP_OK = new Set(['JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4', 'ComputeBudget111111111111111111111111111111', 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA', 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb', 'ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL', '11111111111111111111111111111111']);
-export function checkSwapTx(bytes, owner) {
-  const tx = VersionedTransaction.deserialize(Uint8Array.from(bytes)), keys = tx.message.staticAccountKeys;
-  if (!keys.length || keys[0].toBase58() !== owner) throw new Error('Swap transaction is not paid by your wallet — refusing to sign');
-  for (const ix of tx.message.compiledInstructions) { const p = keys[ix.programIdIndex]; if (!p || !JUP_OK.has(p.toBase58())) throw new Error('Swap calls an unexpected program — refusing to sign'); }
+export async function checkSwapTx(bytes, owner, rpc) {
+  const tx = VersionedTransaction.deserialize(Uint8Array.from(bytes)), m = tx.message, me = pk(owner);
+  const alts = []; for (const l of m.addressTableLookups || []) { const r = await C(rpc).getAddressLookupTable(l.accountKey); if (!r.value) throw new Error('Swap uses an unknown lookup table — refusing'); alts.push(r.value); }
+  const keys = m.getAccountKeys({ addressLookupTableAccounts: alts }), key = (i) => keys.get(i), wsol = getAssociatedTokenAddressSync(NATIVE_MINT, me, true, TOKEN_PROGRAM_ID);
+  if (!m.staticAccountKeys[0]?.equals(me)) throw new Error('Swap transaction is not paid by your wallet — refusing to sign');
+  for (const ix of m.compiledInstructions) { const p = key(ix.programIdIndex)?.toBase58(), d = Buffer.from(ix.data), a = ix.accountKeyIndexes.map(key), bad = (why) => { throw new Error('Swap transaction looks wrong (' + why + ') — refusing to sign'); };
+    if (!p || !JUP_OK.has(p)) bad('unexpected program');
+    if (p === '11111111111111111111111111111111') { if (d.readUInt32LE(0) !== 2 || !a[0]?.equals(me) || !a[1]?.equals(wsol)) bad('SOL transfer'); }   // only wrapping your own SOL
+    if (p === 'ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL' && !a[2]?.equals(me)) bad('account for someone else');
+    if (p === TOKEN_PROGRAM_ID.toBase58() || p === TOKEN_2022_PROGRAM_ID.toBase58()) { const op = d[0];   // sync (17) or close (9) of your own account only
+      if (!(op === 17 || (op === 9 && a[1]?.equals(me) && a[2]?.equals(me)))) bad('token instruction'); } }
   return true;
 }
 // burn your own tokens of a treid coin (permanent) — with a memo so it's recognisable on-chain
