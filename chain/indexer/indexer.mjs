@@ -51,6 +51,8 @@ CREATE TABLE IF NOT EXISTS payouts(id INTEGER PRIMARY KEY AUTOINCREMENT, mint TE
 CREATE TABLE IF NOT EXISTS meta(mint TEXT PRIMARY KEY, name TEXT, symbol TEXT, description TEXT, image TEXT, banner TEXT, at INT);`);
 for (const col of ['trap_bps INT DEFAULT 0', 'trap_secs INT DEFAULT 0', 'trap_steps INT DEFAULT 0', "quote_mint TEXT DEFAULT 'So11111111111111111111111111111111111111112'", 'quote_dec INT DEFAULT 9', "quote_symbol TEXT DEFAULT 'SOL'"]) { try { db.exec('ALTER TABLE coins ADD COLUMN ' + col); } catch {} }
 try { db.exec('ALTER TABLE trades ADD COLUMN usd REAL DEFAULT 0'); } catch {}
+try { db.exec('ALTER TABLE trades ADD COLUMN reserve REAL DEFAULT 0'); } catch {}
+const gradTarget = new Map();   // curve migration threshold per coin (pair-token units)
 const q = (sql, ...a) => db.prepare(sql).all(...a), q1 = (sql, ...a) => db.prepare(sql).get(...a), run = (sql, ...a) => db.prepare(sql).run(...a);
 let configs = new Set(); const watched = new Map(); const escCache = new Map(); let REW = null;
 // treid configs = DBC configs whose fee claimer is the treid wallet. Each one is watched by address,
@@ -111,9 +113,10 @@ async function handle(sig) {
     const side = tokDelta > 0 ? 'buy' : 'sell', sol = Math.abs(vaultDelta), tokens = Math.abs(tokDelta);
     const sq = ev2?.data.swap_result.next_sqrt_price || ev3?.data.next_sqrt_price;
     const price = sq ? Number(getPriceFromSqrtPrice(sq, 6, coin.quote_dec ?? 9)) * QU : (tokens ? sol * QU / tokens : 0);
-    const fee = ev2 ? Number(ev2.data.swap_result.trading_fee) / QD : 0, prog = ev2 ? Number(ev2.data.quote_reserve_amount) / Number(ev2.data.migration_threshold) * 100 : 0;
+    const fee = ev2 ? Number(ev2.data.swap_result.trading_fee) / QD : 0, prog = ev2 ? Number(ev2.data.quote_reserve_amount) / Number(ev2.data.migration_threshold) * 100 : 0, reserve = ev2 ? Number(ev2.data.quote_reserve_amount) / QD : 0, target = ev2 ? Number(ev2.data.migration_threshold) / QD : 0;
     const sniper = side === 'buy' && signer !== coin.creator && (coin.created_slot > 0 ? tx.slot - coin.created_slot <= 4 : ts - coin.created_at <= 2000) ? 1 : 0; // ~1.5s after launch: faster than a human can click
-    run('INSERT OR IGNORE INTO trades(sig,mint,wallet,side,sol,tokens,price_usd,mcap_usd,slot,ts,sniper,bundle,fee_sol,progress,usd) VALUES(?,?,?,?,?,?,?,?,?,?,?,0,?,?,?)', sig, mint, signer, side, sol, tokens, price, price * SUPPLY, tx.slot, ts, sniper, fee, Math.min(100, prog), sol * QU);
+    run('INSERT OR IGNORE INTO trades(sig,mint,wallet,side,sol,tokens,price_usd,mcap_usd,slot,ts,sniper,bundle,fee_sol,progress,usd,reserve) VALUES(?,?,?,?,?,?,?,?,?,?,?,0,?,?,?,?)', sig, mint, signer, side, sol, tokens, price, price * SUPPLY, tx.slot, ts, sniper, fee, Math.min(100, prog), sol * QU, reserve);
+    if (target && !gradTarget.has(mint)) gradTarget.set(mint, target);
     const same = q('SELECT DISTINCT wallet FROM trades WHERE mint=? AND slot=? AND side=\'buy\'', mint, tx.slot);
     if (same.length >= 2) run('UPDATE trades SET bundle=1 WHERE mint=? AND slot=? AND side=\'buy\'', mint, tx.slot);
     const t = q1('SELECT * FROM trades WHERE sig=?', sig); push({ type: 'trade', ...t, symbol: coin.symbol });
@@ -144,7 +147,7 @@ const hCache = new Map();
 function liveHolders(mint) { const h = hCache.get(mint); if (!h || Date.now() - h.ts > 30e3) { if (!h?.busy) { const e = h || { ts: 0, list: null }; e.busy = true; hCache.set(mint, e); holders(mint).then((l) => { hCache.set(mint, { ts: Date.now(), list: l }); }).catch(() => { e.busy = false; }); } } return h?.list || null; }
 function stats(mint) {
   const c = q1('SELECT * FROM coins WHERE mint=?', mint); if (!c) return null;
-  const last = q1('SELECT mcap_usd, progress FROM trades WHERE mint=? ORDER BY ts DESC, slot DESC LIMIT 1', mint);
+  const last = q1('SELECT mcap_usd, progress, reserve FROM trades WHERE mint=? ORDER BY ts DESC, slot DESC LIMIT 1', mint);
   const agg = q1(`SELECT COUNT(*) n, SUM(sol) vol, SUM(usd) volusd, SUM(side='buy') buys, SUM(side='sell') sells, COUNT(DISTINCT wallet) traders, SUM(CASE WHEN sniper=1 THEN tokens ELSE 0 END) snipeTok, SUM(CASE WHEN bundle=1 AND side='buy' THEN tokens ELSE 0 END) bundleTok FROM trades WHERE mint=?`, mint);
   const bal = q(`SELECT wallet, SUM(CASE WHEN side='buy' THEN tokens ELSE -tokens END) n FROM trades WHERE mint=? GROUP BY wallet HAVING n > 0.5 ORDER BY n DESC`, mint);
   const devBuy = q1(`SELECT 1 x FROM trades WHERE mint=? AND wallet=? AND side='buy' LIMIT 1`, mint, c.creator);
@@ -152,7 +155,7 @@ function stats(mint) {
   const devN = real ? (real.find((h) => h.wallet === c.creator)?.pct || 0) / 100 * SUPPLY : bal.find(b => b.wallet === c.creator)?.n || 0;
   const top10 = Math.min(SUPPLY, real ? real.slice(0, 10).reduce((s, h) => s + h.pct / 100 * SUPPLY, 0) : bal.slice(0, 10).reduce((s, b) => s + b.n, 0));
   const po = OPS ? q1('SELECT COALESCE(SUM(burned),0) burned, COALESCE(SUM(holders),0) holders, COALESCE(SUM(dev),0) dev, COUNT(*) n FROM payouts WHERE mint=?', mint) : null;
-  return { ...c, tax_paid: po, quote_usd: quoteUsd(c.quote_mint, c.quote_symbol), vol_usd: agg.volusd || 0, holders: real ? real.length : bal.length, dev_pct: devN / SUPPLY * 100, dev_sold: !!devBuy && devN < 1, top10_pct: top10 / SUPPLY * 100, sol_usd: SOL_USD, mcap_usd: last?.mcap_usd || 0, curve_pct: last?.progress || 0, trades: agg.n, vol_sol: agg.vol || 0, buys: agg.buys || 0, sells: agg.sells || 0, traders: agg.traders, snipers_pct: (agg.snipeTok || 0) / SUPPLY * 100, bundles_pct: (agg.bundleTok || 0) / SUPPLY * 100 };
+  return { ...c, tax_paid: po, reserve: last?.reserve || 0, grad_target: gradTarget.get(mint) || 0, quote_usd: quoteUsd(c.quote_mint, c.quote_symbol), vol_usd: agg.volusd || 0, holders: real ? real.length : bal.length, dev_pct: devN / SUPPLY * 100, dev_sold: !!devBuy && devN < 1, top10_pct: top10 / SUPPLY * 100, sol_usd: SOL_USD, mcap_usd: last?.mcap_usd || 0, curve_pct: last?.progress || 0, trades: agg.n, vol_sol: agg.vol || 0, buys: agg.buys || 0, sells: agg.sells || 0, traders: agg.traders, snipers_pct: (agg.snipeTok || 0) / SUPPLY * 100, bundles_pct: (agg.bundleTok || 0) / SUPPLY * 100 };
 }
 http.createServer(async (req, res) => {
   const u = new URL(req.url, 'http://x'), p = u.pathname.split('/').filter(Boolean), J = (o) => { res.writeHead(200, { 'content-type': 'application/json', 'access-control-allow-origin': '*', 'cache-control': 'no-store' }); res.end(JSON.stringify(o)); };

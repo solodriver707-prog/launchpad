@@ -4325,3 +4325,7 @@ button[disabled].big-btn{opacity:.7;cursor:progress}
 .rpp-s input{flex:1;min-width:0;background:none;border:0;outline:0;color:inherit;font:inherit;font-size:14px}
 .rpp-st{font-size:12.5px;color:var(--muted)}.rpp-st.bad{color:var(--down)}.rpp-st.warn{color:#FFD15C}
 .rpp-note{font-size:12px;color:var(--muted);line-height:1.5}.rpp-note b{color:var(--text,#fff)}
+.tp-grid3.no-thread{grid-template-columns:minmax(0,1fr) 360px}
+@media (max-width:900px){.tp-grid3.no-thread{grid-template-columns:1fr}}
+.tc-empty{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:8px;padding:28px}
+.tc-empty b{font-size:20px}.tc-empty small{color:var(--muted);font-size:13.5px}
