@@ -1,1 +1,2 @@
 Crypto, gold and currency icons: spothq/cryptocurrency-icons (CC0 1.0 public domain).
+JUP, PYTH, JTO, PYUSD logos: trustwallet/assets (MIT). Tokenized-stock logos are the tokens' own icons, fetched from their verified listing at runtime.

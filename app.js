@@ -347,10 +347,11 @@
   var RW_TABS = [['memes', 'Memes'], ['crypto', 'Crypto'], ['stocks', 'Stocks'], ['fx', 'Stablecoins']];
   var RW_PRE = {   // [label, search symbol, logo]
     memes: [['BONK', 'BONK', 'memes/bonk.webp'], ['WIF', 'WIF', 'memes/wif.webp'], ['POPCAT', 'POPCAT', 'memes/popcat.webp'], ['MEW', 'MEW', 'memes/mew.webp'], ['BOME', 'BOME', 'memes/bome.webp'], ['PNUT', 'Pnut', 'memes/pnut.webp'], ['GOAT', 'GOAT', 'memes/goat.webp'], ['FARTCOIN', 'Fartcoin', 'memes/fartcoin.webp'], ['MOODENG', 'MOODENG', 'memes/moodeng.webp'], ['CHILLGUY', 'CHILLGUY', 'memes/chillguy.webp'], ['GIGA', 'GIGA', 'memes/giga.webp'], ['PONKE', 'PONKE', 'memes/ponke.webp'], ['MICHI', 'michi', 'memes/michi.webp'], ['MYRO', 'MYRO', 'memes/myro.webp'], ['SLERF', 'SLERF', 'memes/slerf.webp'], ['RETARDIO', 'RETARDIO', 'memes/retardio.webp']],
-    crypto: [['SOL', 'SOL', 'icons/sol.svg'], ['BTC', 'cbBTC', 'icons/btc.svg'], ['ETH', 'ETH', 'icons/eth.svg'], ['JUP', 'JUP', null], ['RAY', 'RAY', 'icons/ray.svg'], ['PYTH', 'PYTH', null], ['JTO', 'JTO', null], ['LINK', 'LINK', 'icons/link.svg']],
+    crypto: [['SOL', 'SOL', 'icons/sol.svg'], ['BTC', 'cbBTC', 'icons/btc.svg'], ['ETH', 'ETH', 'icons/eth.svg'], ['JUP', 'JUP', 'icons/jup.webp'], ['RAY', 'RAY', 'icons/ray.svg'], ['PYTH', 'PYTH', 'icons/pyth.webp'], ['JTO', 'JTO', 'icons/jto.webp'], ['LINK', 'LINK', 'icons/link.svg']],
     stocks: [['SPYx', 'SPYx', null], ['NVDAx', 'NVDAx', null], ['TSLAx', 'TSLAx', null], ['AAPLx', 'AAPLx', null], ['MSFTx', 'MSFTx', null], ['GOOGLx', 'GOOGLx', null], ['METAx', 'METAx', null], ['AMZNx', 'AMZNx', null]],
-    fx: [['USDC', 'USDC', 'icons/usdc.svg'], ['USDT', 'USDT', 'icons/usdt.svg'], ['EURC', 'EURC', 'icons/eur.svg'], ['PYUSD', 'PYUSD', null]] };
-  function preIcon(p, size) { return p[2] ? '<img class="coin rwp-ic" src="' + p[2] + '" alt="" style="width:' + size + 'px;height:' + size + 'px">' : '<span class="coin rwp-ic" style="width:' + size + 'px;height:' + size + 'px;background:#2E2E33;font-size:' + Math.round(size * .42) + 'px">' + esc(p[0].slice(0, 2)) + '</span>'; }
+    fx: [['USDC', 'USDC', 'icons/usdc.svg'], ['USDT', 'USDT', 'icons/usdt.svg'], ['EURC', 'EURC', 'icons/eur.svg'], ['PYUSD', 'PYUSD', 'icons/pyusd.webp']] };
+  function preIcon(p, size) { if (!p[2] && API) p = [p[0], p[1], API + '/api/ticon?sym=' + encodeURIComponent(p[1])];   // the token's own logo (e.g. xStocks), served by the treid server
+    return p[2] ? '<img class="coin rwp-ic" src="' + esc(p[2]) + '" alt="" data-ini="' + esc(p[0].slice(0, 2)) + '" style="width:' + size + 'px;height:' + size + 'px">' : '<span class="coin rwp-ic" style="width:' + size + 'px;height:' + size + 'px;background:#2E2E33;font-size:' + Math.round(size * .42) + 'px">' + esc(p[0].slice(0, 2)) + '</span>'; }
   function rwPreset(sym) {   // a shortcut chip: find the real verified token with exactly this symbol, then check it like any other
     if (sym === 'SOL') return rwSelect(WSOL); if (sym === 'USDC') return rwSelect(USDC_MINT);
     if (!API) { S.rwErr = 'Token search needs the treid server'; render(); return; }
@@ -385,7 +386,7 @@
   }
   function rewardPick(c) {
     if (!(c.split && c.split.h > 0)) return '';
-    var tk = '$' + (c.tick || 'COIN'), r = rwOf(c), q = qOf(c), chips = [[WSOL, 'SOL'], [USDC_MINT, 'USDC']];
+    var tk = '$' + (c.tick || 'TICKER'), r = rwOf(c), q = qOf(c), chips = [[WSOL, 'SOL'], [USDC_MINT, 'USDC']];
     if (q.mint !== WSOL && q.mint !== USDC_MINT) chips.push([q.mint, q.key]);
     if (r && !chips.some(function (x) { return x[0] === r.mint; })) chips.push([r.mint, r.key]);
     var me = { tick: c.tick || 'TICKER', name: c.name || 'Your token', spec: c.spec, img: c.img };
@@ -3370,6 +3371,9 @@
 
   document.addEventListener('click', function (e) { var b = e.target.closest && e.target.closest('.tc-ca'); if (!b) return; b.classList.add('ok'); var h = b.innerHTML; b.innerHTML = 'Copied ✓'; setTimeout(function () { if (b.isConnected) { b.innerHTML = h; b.classList.remove('ok'); } }, 1200); }, true);
   document.addEventListener('scroll', function (e) { if (e.target && e.target.id === 'cmts' && e.target.scrollTop < 20) { var np = document.getElementById('tt-new'); if (np && np._n) { np._n = 0; np.style.display = 'none'; } } }, true);
+  document.addEventListener('error', function (e) {   // a logo that can't load turns into initials
+    var im = e.target; if (!im || im.tagName !== 'IMG' || !im.classList.contains('rwp-ic')) return; var sp = document.createElement('span'); sp.className = 'coin rwp-ic'; sp.textContent = im.getAttribute('data-ini') || '?';
+    sp.style.cssText = 'width:' + im.style.width + ';height:' + im.style.height + ';background:#2E2E33;font-size:9px'; im.replaceWith(sp); }, true);
   document.addEventListener('input', function (e) {
     if (e.target.hasAttribute && e.target.hasAttribute('data-burnpct')) { S.burnPct = +e.target.value; var t = find(S.burnTick), pos = t && position(t); if (!pos) return; var tok = pos.tok * S.burnPct / 100;
       var q = function (id, v) { var x = document.getElementById(id); if (x) x.textContent = v; }; q('bt-tok', fmtNum(Math.round(tok)) + ' $' + t.tick); q('bt-sup', (tok / 1e9 * 100).toFixed(3) + '%'); q('bt-usd', '$' + fmtNum(Math.round(tok * price(t))));

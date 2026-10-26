@@ -283,7 +283,7 @@ async function holders(mint) {   // one row per OWNER (all their token accounts 
     .filter((h) => !h.ops).sort((x, y) => y.pct - x.pct);
 }
 // real on-chain balances (transfers, tax payouts and burns included) — cached, refreshed in the background
-const hCache = new Map(), inflight = new Map(), lbCache = new Map();
+const hCache = new Map(), inflight = new Map(), lbCache = new Map(), iconC = new Map();
 function holdersCached(mint) { const h = hCache.get(mint); if (h?.list && Date.now() - h.ts < 30e3) return Promise.resolve(h.list); if (!inflight.has(mint)) inflight.set(mint, holders(mint).then((l) => { hCache.set(mint, { ts: Date.now(), list: l }); return l; }).finally(() => inflight.delete(mint))); return inflight.get(mint); }
 // simple in-memory rate limiter (per key, n hits per window)
 const hits = new Map(); function rate(k, n, ms) { const now = Date.now(), a = (hits.get(k) || []).filter((t) => now - t < ms); if (a.length >= n) { hits.set(k, a); return false; } a.push(now); hits.set(k, a);
@@ -338,6 +338,17 @@ async function handleReq(req, res) {
       sseByIp.set(ipx, nIp + 1); req.on('close', () => { const v = (sseByIp.get(ipx) || 1) - 1; if (v > 0) sseByIp.set(ipx, v); else sseByIp.delete(ipx); });
       res.writeHead(200, { 'content-type': 'text/event-stream', 'access-control-allow-origin': '*', 'cache-control': 'no-cache' }); res.write(': hi\n\n'); clients.add(res); req.on('close', () => clients.delete(res)); return; }
     if (p[1] === 'qprice' && !rate('qp|' + ip(req), 30, 6e4)) { res.writeHead(429, { 'access-control-allow-origin': '*' }); return res.end('{}'); }
+    if (p[1] === 'ticon') {   // logo of a verified token by exact symbol (e.g. tokenized stocks), fetched once and served from here — raster images only
+      const sym = String(u.searchParams.get('sym') || ''); if (!/^[A-Za-z0-9]{2,12}$/.test(sym)) { res.writeHead(404); return res.end(); }
+      let h = iconC.get(sym.toLowerCase());
+      if (!h || Date.now() - h.at > 864e5) { if (!rate('ti|' + ip(req), 60, 6e4)) { res.writeHead(429); return res.end(); } h = { at: Date.now(), buf: null, ct: null };
+        try { const j = await (await fetchT('https://lite-api.jup.ag/tokens/v2/search?query=' + encodeURIComponent(sym))).json(), t = (Array.isArray(j) ? j : []).find((x) => x && (x.isVerified || (x.tags || []).includes('verified')) && String(x.symbol).toLowerCase() === sym.toLowerCase());
+          const url = t && typeof t.icon === 'string' ? new URL(t.icon) : null;
+          if (url && url.protocol === 'https:' && !/^(\d+\.){3}\d+$|^\[|localhost|\.internal$|\.local$/i.test(url.hostname)) { const r = await fetchT(url.href), ct = String(r.headers.get('content-type') || '').split(';')[0];
+            if (r.ok && /^image\/(png|jpeg|webp|gif)$/.test(ct)) { const buf = Buffer.from(await r.arrayBuffer()); if (buf.length <= 400e3) { h.buf = buf; h.ct = ct; } } } } catch {}
+        iconC.set(sym.toLowerCase(), h); if (iconC.size > 500) iconC.delete(iconC.keys().next().value); }
+      if (!h.buf) { res.writeHead(404, { 'access-control-allow-origin': '*' }); return res.end(); }
+      res.writeHead(200, { 'content-type': h.ct, 'cache-control': 'public, max-age=86400', 'access-control-allow-origin': '*', 'x-content-type-options': 'nosniff', 'content-security-policy': "default-src 'none'" }); return res.end(h.buf); }
     if (p[1] === 'tsearch') {   // token search by name / ticker / address — verified Jupiter tokens only, for the pair & holder-reward pickers
       if (!rate('ts|' + ip(req), 40, 6e4)) { res.writeHead(429, { 'access-control-allow-origin': '*' }); return res.end('[]'); }
       const qs = String(u.searchParams.get('q') || '').trim().slice(0, 50); if (qs.length < 2) return J([]);
