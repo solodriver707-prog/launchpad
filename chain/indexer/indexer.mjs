@@ -1,10 +1,11 @@
 // treid indexer: listens to Meteora DBC, stores treid coins + trades in SQLite, serves a JSON API + live stream
 import { Connection, PublicKey } from '@solana/web3.js';
 import { TOKEN_2022_PROGRAM_ID, getTokenMetadata, unpackAccount, getTransferFeeConfig, getMint, getExtensionTypes, ExtensionType } from '@solana/spl-token';
-import { DynamicBondingCurveClient, DYNAMIC_BONDING_CURVE_PROGRAM_ID, deriveDbcPoolAuthority, DynamicBondingCurveIdl, getPriceFromSqrtPrice } from '@meteora-ag/dynamic-bonding-curve-sdk';
+import { DynamicBondingCurveClient, DYNAMIC_BONDING_CURVE_PROGRAM_ID, deriveDbcPoolAuthority, DynamicBondingCurveIdl, getPriceFromSqrtPrice, deriveDammV2PoolAddress, DAMM_V2_MIGRATION_FEE_ADDRESS } from '@meteora-ag/dynamic-bonding-curve-sdk';
+import { CpAmm, CpAmmIdl, getPriceFromSqrtPrice as ammPrice } from '@meteora-ag/cp-amm-sdk';
 import anchor from '@coral-xyz/anchor';
 import bs58 from 'bs58';
-const coder = new anchor.BorshEventCoder(DynamicBondingCurveIdl);
+const coder = new anchor.BorshEventCoder(DynamicBondingCurveIdl), ammCoder = new anchor.BorshEventCoder(CpAmmIdl);
 import { DatabaseSync } from 'node:sqlite';
 import http from 'node:http';
 import { opsKeypair, startOps } from './ops.mjs';
@@ -46,7 +47,7 @@ async function quotePrices() {
 }
 const KNOWN_Q = { [WSOL]: 'SOL', EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v: 'USDC', Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB: 'USDT', '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU': 'USDC' };
 const conn = new Connection(RPC, { commitment: 'confirmed', wsEndpoint: WS });
-const dbc = new DynamicBondingCurveClient(conn, 'confirmed');
+const dbc = new DynamicBondingCurveClient(conn, 'confirmed'), amm = new CpAmm(conn);
 const db = new DatabaseSync(process.env.DB || 'treid.db');
 db.exec(`CREATE TABLE IF NOT EXISTS coins(mint TEXT PRIMARY KEY, pool TEXT, config TEXT, creator TEXT, name TEXT, symbol TEXT, uri TEXT, tax_bps INT, created_slot INT, created_at INT);
 CREATE TABLE IF NOT EXISTS trades(sig TEXT PRIMARY KEY, mint TEXT, wallet TEXT, side TEXT, sol REAL, tokens REAL, price_usd REAL, mcap_usd REAL, slot INT, ts INT, sniper INT DEFAULT 0, bundle INT DEFAULT 0, fee_sol REAL DEFAULT 0, progress REAL DEFAULT 0);
@@ -57,6 +58,7 @@ CREATE TABLE IF NOT EXISTS meta(mint TEXT PRIMARY KEY, name TEXT, symbol TEXT, d
 for (const col of ['trap_bps INT DEFAULT 0', 'trap_secs INT DEFAULT 0', 'trap_steps INT DEFAULT 0', "quote_mint TEXT DEFAULT 'So11111111111111111111111111111111111111112'", 'quote_dec INT DEFAULT 9', "quote_symbol TEXT DEFAULT 'SOL'"]) { try { db.exec('ALTER TABLE coins ADD COLUMN ' + col); } catch {} }
 try { db.exec('ALTER TABLE trades ADD COLUMN usd REAL DEFAULT 0'); } catch {}
 try { db.exec('ALTER TABLE trades ADD COLUMN reserve REAL DEFAULT 0'); } catch {}
+try { db.exec('ALTER TABLE coins ADD COLUMN damm TEXT'); } catch {}   // the coin's DAMM v2 pool once it graduated
 const gradTarget = new Map();
 db.exec('CREATE TABLE IF NOT EXISTS uburn(sig TEXT PRIMARY KEY, mint TEXT, wallet TEXT, tok REAL, ts INT)');
 // ---- burns: total burned is authoritative from the mint supply; events come from the ops receipts + reported user burns ----
@@ -154,8 +156,20 @@ function poolInits(tx) {
 const DBC_ID = DYNAMIC_BONDING_CURVE_PROGRAM_ID.toBase58(), discOf = (n) => Buffer.from(DynamicBondingCurveIdl.instructions.find((i) => i.name === n).discriminator).toString('hex');
 const SWAP_DISC = new Set(['swap', 'swap2'].map(discOf)), CFG_DISC = discOf('create_config');
 const badPool = new Map();   // pools we looked up and rejected (not treid) — never looked up again for a day
-function dbcIxs(tx, keys) {   // every DBC instruction in the tx (top-level and inner), with resolved account addresses
-  const out = [], key = (i) => keys.get(i)?.toBase58(), add = (pid, accts, data) => { if (key(pid) !== DBC_ID || !data || data.length < 8) return; out.push({ disc: Buffer.from(data.subarray(0, 8)).toString('hex'), accts: accts.map(key), data }); };
+const AMM_ID = 'cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG', AMM_SWAP = new Set(CpAmmIdl.instructions.filter((i) => i.name === 'swap' || i.name === 'swap2').map((i) => Buffer.from(i.discriminator).toString('hex')));
+const MIG_DISC = new Set(DynamicBondingCurveIdl.instructions.filter((i) => /^migrat/.test(i.name)).map((i) => Buffer.from(i.discriminator).toString('hex')));
+const DAMM_CFG = DAMM_V2_MIGRATION_FEE_ADDRESS[6];
+// graduation: the curve migrated into its DAMM v2 pool → remember the pool, watch it, index its trades like curve trades
+async function checkGrad(c) {
+  const known = q1('SELECT damm FROM coins WHERE mint=?', c.mint)?.damm; if (known) return known; const a = await dbc.state.getPool(new PublicKey(c.pool)).catch(() => null), vp = a && (a.poolState || a); if (!vp || !(Number(vp.isMigrated?.toString?.() ?? vp.isMigrated) > 0)) return null;
+  const pool = deriveDammV2PoolAddress(DAMM_CFG, new PublicKey(c.mint), new PublicKey(c.quote_mint || WSOL)), ps = await amm.fetchPoolState(pool).catch(() => null);
+  if (!ps || ps.tokenAMint.toBase58() !== c.mint || ps.tokenBMint.toBase58() !== (c.quote_mint || WSOL)) return null;
+  const k = pool.toBase58(); if (q1('SELECT damm FROM coins WHERE mint=?', c.mint)?.damm) return k; run('UPDATE coins SET damm=? WHERE mint=?', k, c.mint); watchPool(k); push({ type: 'grad', mint: c.mint, damm: k }); console.log('grad  ', c.symbol, '→ DAMM v2', k);
+  setTimeout(() => syncAddress(k, 1e9).catch(() => {}), 1000); return k;
+}
+function watchPool(k) { if (watched.has(k)) return; watched.set(k, conn.onLogs(new PublicKey(k), (l) => { if (!l.err) enqueue(l.signature); }, 'confirmed')); }
+function dbcIxs(tx, keys, pid0 = DBC_ID) {   // every instruction of one program in the tx (top-level and inner), with resolved account addresses
+  const out = [], key = (i) => keys.get(i)?.toBase58(), add = (pid, accts, data) => { if (key(pid) !== pid0 || !data || data.length < 8) return; out.push({ disc: Buffer.from(data.subarray(0, 8)).toString('hex'), accts: accts.map(key), data }); };
   for (const ix of tx.transaction.message.compiledInstructions || []) add(ix.programIdIndex, ix.accountKeyIndexes, Buffer.from(ix.data));
   for (const g of tx.meta.innerInstructions || []) for (const ix of g.instructions) { try { add(ix.programIdIndex, ix.accounts, Buffer.from(bs58.decode(ix.data))); } catch {} }
   return out;
@@ -168,6 +182,7 @@ async function handle(sig) {
   const keys = tx.transaction.message.getAccountKeys({ accountKeysFromLookups: tx.meta.loadedAddresses }), ts = (tx.blockTime || Math.floor(Date.now() / 1000)) * 1000, ixs = dbcIxs(tx, keys);
   if (ixs.some((x) => x.disc === CFG_DISC) && Date.now() - lastCfgScan > 120e3) { lastCfgScan = Date.now(); await loadConfigs().catch(() => {}); }
   const inits = poolInits(tx); for (const it of inits) await addCoin(it.mint, tx.slot, ts, it.creator, it.pool);
+  for (const x of ixs) if (MIG_DISC.has(x.disc)) for (const a of x.accts) { const c = a && q1('SELECT * FROM coins WHERE pool=?', a); if (c && !c.damm) setTimeout(() => checkGrad(c).catch(() => {}), 1500); }
   // swap events emitted by the DBC program itself (CPI through its event authority — can't be faked); the LAST one per pool wins
   const evs = []; for (const g of tx.meta.innerInstructions || []) for (const ix of g.instructions) { if (keys.get(ix.programIdIndex)?.toBase58() !== DBC_ID) continue; try { const e = coder.decode(Buffer.from(bs58.decode(ix.data)).subarray(8).toString('base64')); if (e && (e.name === 'EvtSwap2' || e.name === 'EvtSwap3')) evs.push(e); } catch {} }
   const byPool = new Map(); for (const e of evs) byPool.set(e.data.pool.toBase58(), e);
@@ -179,6 +194,7 @@ async function handle(sig) {
       if (!bm || !(await addCoin(bm, tx.slot, ts, null, pool))) { badPool.set(pool, Date.now()); if (badPool.size > 100000) badPool.clear(); continue; } coin = q1('SELECT * FROM coins WHERE pool=?', pool); if (!coin) continue; }
     const sw = ixs.filter((x) => SWAP_DISC.has(x.disc) && x.accts[2] === pool).pop(), trader = sw?.accts[9]; if (!trader) continue;   // the swap's own payer account = the trader
     const QD = 10 ** (coin.quote_dec ?? 9), QU = quoteUsd(coin.quote_mint || WSOL, coin.quote_symbol), tax = (coin.tax_bps || 0) / 1e4, buy = Number(ev.data.trade_direction) === 1;
+    if (!gradTarget.has(coin.mint) && coin.config) { const cf = await dbc.state.getPoolConfig(new PublicKey(coin.config)).catch(() => null); if (cf) gradTarget.set(coin.mint, Number(cf.migrationQuoteThreshold.toString()) / QD); }   // newer swap events don't carry the threshold
     let inAmt, outAmt, fee, sq, reserveRaw, targetRaw;
     if (ev.name === 'EvtSwap2') { const r = ev.data.swap_result; inAmt = Number(r.included_fee_input_amount); outAmt = Number(r.output_amount); fee = Number(r.trading_fee); sq = r.next_sqrt_price; reserveRaw = Number(ev.data.quote_reserve_amount); targetRaw = Number(ev.data.migration_threshold); }
     else { inAmt = Number(ev.data.included_transfer_fee_amount_in); outAmt = Number(ev.data.excluded_transfer_fee_amount_out); fee = Number(ev.data.trading_fee); sq = ev.data.next_sqrt_price; reserveRaw = Number(ev.data.quote_reserve); targetRaw = gradTarget.get(coin.mint) * QD || 0; }
@@ -194,6 +210,20 @@ async function handle(sig) {
     const t = q1('SELECT * FROM trades WHERE sig=?', rowSig); if (t) push({ type: 'trade', ...t, symbol: coin.symbol });
     console.log('trade ', coin.symbol, side.padEnd(4), sol.toFixed(3), coin.quote_symbol || 'SOL', tokens.toFixed(0), sniper ? 'SNIPER' : '', t?.bundle ? 'BUNDLE' : '');
   }
+  // graduated coins: swap events from the DAMM v2 program, only for pools we recorded at graduation (never discovered from a trade)
+  const aixs = dbcIxs(tx, keys, AMM_ID), aev = new Map();
+  if (aixs.length) for (const g of tx.meta.innerInstructions || []) for (const ix of g.instructions) { if (keys.get(ix.programIdIndex)?.toBase58() !== AMM_ID) continue; try { const e = ammCoder.decode(Buffer.from(bs58.decode(ix.data)).subarray(8).toString('base64')); if (e?.name === 'EvtSwap2') aev.set(e.data.pool.toBase58(), e); } catch {} }
+  for (const [pool, ev] of aev) {
+    const coin = q1('SELECT * FROM coins WHERE damm=?', pool); if (!coin) continue;
+    const trader = aixs.filter((x) => AMM_SWAP.has(x.disc) && x.accts[1] === pool).pop()?.accts[8]; if (!trader) continue;   // the swap's payer
+    const QD = 10 ** (coin.quote_dec ?? 9), QU = quoteUsd(coin.quote_mint || WSOL, coin.quote_symbol), d = ev.data, r = d.swap_result, buy = Number(d.trade_direction) === 1;   // tokenA = coin, tokenB = pair: B→A is a buy
+    const sol = Number(buy ? d.included_transfer_fee_amount_in : d.excluded_transfer_fee_amount_out) / QD, tokens = Number(buy ? d.excluded_transfer_fee_amount_out : d.included_transfer_fee_amount_in) / 1e6;
+    const fee = ['claiming_fee', 'protocol_fee', 'compounding_fee', 'referral_fee'].reduce((a, k) => a + Number(r[k] || 0), 0), price = Number(ammPrice(r.next_sqrt_price, 6, coin.quote_dec ?? 9)) * QU, side = buy ? 'buy' : 'sell';
+    const rowSig = n++ ? sig + '#' + coin.mint.slice(0, 6) : sig;
+    run('INSERT OR IGNORE INTO trades(sig,mint,wallet,side,sol,tokens,price_usd,mcap_usd,slot,ts,sniper,bundle,fee_sol,progress,usd,reserve) VALUES(?,?,?,?,?,?,?,?,?,?,0,0,?,100,?,?)', rowSig, coin.mint, trader, side, sol, tokens, price, price * SUPPLY, tx.slot, ts, fee / QD, sol * QU, Number(d.reserve_b_amount) / QD);
+    const t = q1('SELECT * FROM trades WHERE sig=?', rowSig); if (t) push({ type: 'trade', ...t, symbol: coin.symbol });
+    console.log('trade ', coin.symbol, side.padEnd(4), sol.toFixed(3), coin.quote_symbol || 'SOL', tokens.toFixed(0), '(DAMM)');
+  }
   run('INSERT OR IGNORE INTO seen VALUES(?)', sig);   // only after it was fully processed
 }
 // bounded concurrency for websocket-triggered work (a flood of notifications can't fan out into unlimited RPC calls)
@@ -203,6 +233,7 @@ function pump() { while (active < 4 && queue.length) { const s = queue.shift(); 
 async function backfill() {   // rebuilds everything from chain, so the server can run without a persistent disk
   await loadConfigs();
   for (const k of configs) await syncAddress(k, 1e9);   // FULL history (paged); with a persistent disk only the new part is fetched
+  for (const c of q(`SELECT c.* FROM coins c WHERE c.damm IS NOT NULL OR (SELECT progress FROM trades t WHERE t.mint=c.mint ORDER BY ts DESC, slot DESC LIMIT 1) >= 99`)) { const k = c.damm || await checkGrad(c).catch(() => null); if (k) { watchPool(k); await syncAddress(k, 1e9); } }   // graduated coins' DAMM trades
   // user burns made through treid carry a "treid:burn" memo: find them in each coin's history so the 70% rule never mistakes a burn for a sale
   for (const c of q('SELECT mint FROM coins')) { let before; for (let i = 0; i < 10; i++) { const pg = await conn.getSignaturesForAddress(new PublicKey(c.mint), { limit: 1000, before }, 'confirmed').catch(() => []); if (!pg.length) break;
     for (const x of pg) if (!x.err && /treid:burn:/.test(x.memo || '') && !q1('SELECT 1 FROM uburn WHERE sig=?', x.signature)) await verifyBurn(x.signature).catch(() => {});
@@ -348,7 +379,9 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let syncing = false;
 async function syncAll() {   // safety net for missed websocket messages: every config, 3 at a time, never overlapping runs
   if (syncing) return; syncing = true;
-  try { const list = [...configs]; for (let i = 0; i < list.length; i += 3) await Promise.all(list.slice(i, i + 3).map((k) => syncAddress(k, 200).catch(() => {}))); } finally { syncing = false; }
+  try { const list = [...configs, ...q('SELECT damm FROM coins WHERE damm IS NOT NULL').map((r) => r.damm)]; for (let i = 0; i < list.length; i += 3) await Promise.all(list.slice(i, i + 3).map((k) => syncAddress(k, 200).catch(() => {})));
+    for (const c of q(`SELECT c.* FROM coins c WHERE c.damm IS NULL AND (SELECT progress FROM trades t WHERE t.mint=c.mint ORDER BY ts DESC, slot DESC LIMIT 1) >= 99`)) await checkGrad(c).catch(() => {});   // a migration we missed
+  } finally { syncing = false; }
 }
 async function start() {
   // full history first (retrying until it works) — nothing that depends on history starts before this succeeds

@@ -8,12 +8,15 @@ const bs58enc = (b) => (bs58lib.default || bs58lib).encode(b instanceof Uint8Arr
 import { NATIVE_MINT, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, getAssociatedTokenAddressSync, createBurnCheckedInstruction, getMint, getExtensionTypes, ExtensionType, getTransferFeeConfig } from '@solana/spl-token';
 import BN from 'bn.js';
 import { DynamicBondingCurveClient, buildCurveWithMarketCap, TokenType, TokenDecimal, TokenAuthorityOption, BaseFeeMode, CollectFeeMode,
-  MigrationOption, MigrationFeeOption, MigratedCollectFeeMode, DammV2DynamicFeeMode, ActivationType, deriveDbcPoolAddress, deriveDammV1MigrationMetadataAddress, SwapMode, getCurrentPoint } from '@meteora-ag/dynamic-bonding-curve-sdk';
+  MigrationOption, MigrationFeeOption, MigratedCollectFeeMode, DammV2DynamicFeeMode, ActivationType, deriveDbcPoolAddress, deriveDammV1MigrationMetadataAddress, SwapMode, getCurrentPoint, deriveDammV2PoolAddress, DAMM_V2_MIGRATION_FEE_ADDRESS } from '@meteora-ag/dynamic-bonding-curve-sdk';
+import { CpAmm, calculateTransferFeeExcludedAmount } from '@meteora-ag/cp-amm-sdk';
 
 // ---- treid rules (must match chain/scripts/01_launch.mjs) ----
 export const RULES = { minTrapBps: 5000, minTrapSecs: 30, trapSteps: 3, feePlainBps: 100, feeTaxedBps: 50, maxTaxBps: 1000, creatorFeePct: 50, mc0Sol: 20, mc1Sol: 60, supply: 1e9, decimals: 6 };
 const conns = {}; const C = (rpc) => conns[rpc] || (conns[rpc] = new Connection(rpc, 'confirmed'));
 const client = (rpc) => new DynamicBondingCurveClient(C(rpc), 'confirmed');
+const amms = {}; const ammC = (rpc) => amms[rpc] || (amms[rpc] = new CpAmm(C(rpc)));
+const DAMM_CFG = DAMM_V2_MIGRATION_FEE_ADDRESS[6];   // treid curves migrate into Meteora's customizable DAMM v2 config
 const pk = (x) => (x instanceof PublicKey ? x : new PublicKey(x));
 
 export function curveFor({ taxBps = 0, trapBps = 5000, trapSecs = 30, quoteDecimals = 9, mc0 = RULES.mc0Sol, mc1 = RULES.mc1Sol }) {
@@ -82,22 +85,39 @@ async function poolCtx(rpc, pool, expect) {
   if (expect) { if (vp.baseMint.toBase58() !== expect.mint) throw new Error('Pool doesn’t belong to this coin — refusing');
     if (!treidCfgOk(cfg, expect.partners || [])) throw new Error('This pool isn’t a treid pool — refusing'); }
   const qi = await quoteInfo({ rpc, mint: cfg.quoteMint.toBase58() });
-  return { cl, vpw: vpw.poolState ? vpw : { poolState: vp }, vp, cfg, cp, qd: qi.decimals };
+  let damm = null;   // graduated: trades go to the coin's DAMM v2 pool — address derived from the curve, contents checked
+  if (Number(vp.isMigrated?.toString?.() ?? vp.isMigrated) > 0) { const ap = deriveDammV2PoolAddress(DAMM_CFG, vp.baseMint, cfg.quoteMint), ps = await ammC(rpc).fetchPoolState(ap);
+    if (!ps.tokenAMint.equals(vp.baseMint) || !ps.tokenBMint.equals(cfg.quoteMint)) throw new Error('Graduated pool doesn’t match this coin — refusing');
+    const [mi, ep] = await Promise.all([getMint(C(rpc), vp.baseMint, 'confirmed', TOKEN_2022_PROGRAM_ID), C(rpc).getEpochInfo()]);
+    damm = { pool: ap, ps, cp: await getCurrentPoint(C(rpc), Number(ps.activationType)), coin: { mint: mi, currentEpoch: ep.epoch }, qprog: qi.program === 'token2022' ? TOKEN_2022_PROGRAM_ID : TOKEN_PROGRAM_ID }; }
+  else if (BigInt(vp.quoteReserve.toString()) >= BigInt(cfg.migrationQuoteThreshold.toString())) throw new Error('The curve is full — trading opens on Meteora in a few minutes');
+  return { cl, vpw: vpw.poolState ? vpw : { poolState: vp }, vp, cfg, cp, qd: qi.decimals, damm };
 }
 // the pool's real pair token, read on-chain after the pool checks (never the server's word for it)
 export async function poolQuote({ rpc, pool, expect }) { const { cfg, qd } = await poolCtx(rpc, pool, expect); return { mint: cfg.quoteMint.toBase58(), decimals: qd }; }
 // side 'buy': amount in SOL; side 'sell': amount in tokens
 export async function quote({ rpc, pool, side, amount, slippageBps = 500, expect = null }) {
-  const { cl, vpw, cfg, cp, qd } = await poolCtx(rpc, pool, expect), sell = side === 'sell';
+  const { cl, vpw, cfg, cp, qd, damm } = await poolCtx(rpc, pool, expect), sell = side === 'sell';
   const amountIn = new BN(Math.floor(amount * (sell ? 10 ** RULES.decimals : 10 ** qd)));
-  const q = cl.pool.swapQuote2({ virtualPool: vpw, config: cfg, swapBaseForQuote: sell, amountIn, slippageBps, hasReferral: false, currentPoint: cp, swapMode: SwapMode.ExactIn });
-  const outRaw = q.outputAmount || q.amountOut || new BN(0), minRaw = q.minimumAmountOut || new BN(0), fee = q.tradingFee || q.fee || new BN(0);
   const div = sell ? 10 ** qd : 10 ** RULES.decimals;
-  return { out: Number(outRaw.toString()) / div, minOut: Number(minRaw.toString()) / div, feeSol: Number(fee.toString()) / 10 ** qd, quoteDecimals: qd, quoteMint: cfg.quoteMint.toBase58(), amountIn: amountIn.toString(), minRaw: minRaw.toString() };
+  if (damm) {   // graduated: quote on the DAMM v2 pool, with the coin's transfer tax on whichever side it applies
+    const { ps } = damm, q = ammC(rpc).getQuote2({ inputTokenMint: sell ? ps.tokenAMint : ps.tokenBMint, slippage: slippageBps, poolState: ps, currentPoint: damm.cp, hasReferral: false, tokenADecimal: RULES.decimals, tokenBDecimal: qd,
+      swapMode: 0, amountIn, inputTokenInfo: sell ? damm.coin : undefined, outputTokenInfo: sell ? undefined : damm.coin });
+    const outRaw = sell ? new BN(q.outputAmount.toString()) : calculateTransferFeeExcludedAmount(new BN(q.outputAmount.toString()), damm.coin.mint, damm.coin.currentEpoch).amount, minRaw = new BN(q.minimumAmountOut.toString()), fee = ['claimingFee', 'protocolFee', 'compoundingFee', 'referralFee'].reduce((a, k) => a + Number(q[k]?.toString?.() || 0), 0);
+    return { out: Number(outRaw.toString()) / div, minOut: Number(minRaw.toString()) / div, feeSol: fee / 10 ** qd, quoteDecimals: qd, quoteMint: cfg.quoteMint.toBase58(), amountIn: amountIn.toString(), minRaw: minRaw.toString(), graduated: true };
+  }
+  const mode = sell ? SwapMode.ExactIn : SwapMode.PartialFill;   // a buy that would overfill the curve fills it exactly and refunds the rest
+  const q = cl.pool.swapQuote2({ virtualPool: vpw, config: cfg, swapBaseForQuote: sell, amountIn, slippageBps, hasReferral: false, currentPoint: cp, swapMode: mode });
+  const outRaw = q.outputAmount || q.amountOut || new BN(0), minRaw = q.minimumAmountOut || new BN(0), fee = q.tradingFee || q.fee || new BN(0);
+  return { out: Number(outRaw.toString()) / div, minOut: Number(minRaw.toString()) / div, feeSol: Number(fee.toString()) / 10 ** qd, quoteDecimals: qd, quoteMint: cfg.quoteMint.toBase58(), amountIn: amountIn.toString(), minRaw: minRaw.toString(), mode };
 }
 export async function buildSwap({ rpc, owner, pool, side, amount, slippageBps = 500, expect = null }) {
   owner = pk(owner); const q = await quote({ rpc, pool, side, amount, slippageBps, expect }), cl = client(rpc);
-  const tx = await cl.pool.swap2({ owner, pool: pk(pool), swapBaseForQuote: side === 'sell', referralTokenAccount: null, swapMode: SwapMode.ExactIn, amountIn: new BN(q.amountIn), minimumAmountOut: new BN(q.minRaw) });
+  let tx;
+  if (q.graduated) { const { damm } = await poolCtx(rpc, pool, expect), ps = damm.ps, sell = side === 'sell';
+    tx = await ammC(rpc).swap2({ payer: owner, pool: damm.pool, inputTokenMint: sell ? ps.tokenAMint : ps.tokenBMint, outputTokenMint: sell ? ps.tokenBMint : ps.tokenAMint, amountIn: new BN(q.amountIn), minimumAmountOut: new BN(q.minRaw),
+      tokenAVault: ps.tokenAVault, tokenBVault: ps.tokenBVault, tokenAMint: ps.tokenAMint, tokenBMint: ps.tokenBMint, tokenAProgram: TOKEN_2022_PROGRAM_ID, tokenBProgram: damm.qprog, referralTokenAccount: null, swapMode: 0 }); }
+  else tx = await cl.pool.swap2({ owner, pool: pk(pool), swapBaseForQuote: side === 'sell', referralTokenAccount: null, swapMode: q.mode, amountIn: new BN(q.amountIn), minimumAmountOut: new BN(q.minRaw) });
   const out = await finish(rpc, [tx], owner, []);
   return { ...out, quote: q };
 }

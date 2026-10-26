@@ -4,7 +4,7 @@
 
 Build (from a folder with the chain deps + esbuild installed):
 
-    esbuild chain/web/src.mjs --bundle --format=iife --global-name=TreidChain --platform=browser --minify --target=es2020 --define:global=globalThis --outfile=chain.js
+    esbuild chain/web/src.mjs --bundle --format=iife --global-name=TreidChain --platform=browser --minify --target=es2020 --define:global=globalThis --alias:util=./chain/web/shim-util.mjs "--banner:js=var process=globalThis.process||{env:{},browser:true,version:''};" --outfile=chain.js
 
 - `buildCreate` — config + coin (+ optional dev first buy at min fee) in 1–2 txs; fee claimer = treid wallet
 - `buildSwap` / `quote` — real buy / sell on the bonding curve

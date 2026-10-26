@@ -1,0 +1,11 @@
+import * as T from './src.mjs'; import { Keypair, Transaction, Connection } from '@solana/web3.js'; import fs from 'fs';
+const rpc = 'http://127.0.0.1:8899', conn = new Connection(rpc, 'confirmed'), G = JSON.parse(fs.readFileSync('./grad.json'));
+const expect = { mint: G.mint, partners: ['BUCDaQveAzYbhd2c5ZzFgrXcn3nWiPhGRNe8QpT64p4j'] };
+const k = Keypair.generate(); await conn.confirmTransaction(await conn.requestAirdrop(k.publicKey, 3e9));
+const sign = (b) => b.bytes.map((x) => { const t = Transaction.from(x); t.partialSign(k); return t.serialize({ requireAllSignatures: false }); });
+const qb = await T.quote({ rpc, pool: G.pool, side: 'buy', amount: 1, expect }); console.log('quote buy', JSON.stringify(qb));
+const b = await T.buildSwap({ rpc, owner: k.publicKey.toBase58(), pool: G.pool, side: 'buy', amount: 1, expect }); await T.sendAll({ rpc, signed: sign(b), lastValidBlockHeight: b.lastValidBlockHeight });
+const bal = await T.tokenBalance({ rpc, owner: k.publicKey.toBase58(), mint: G.mint }); console.log('got tokens', bal, 'quoted min', qb.minOut);
+const qs = await T.quote({ rpc, pool: G.pool, side: 'sell', amount: bal / 2, expect }); console.log('quote sell', qs.out, qs.minOut);
+const s = await T.buildSwap({ rpc, owner: k.publicKey.toBase58(), pool: G.pool, side: 'sell', amount: bal / 2, expect }); const s0 = await conn.getBalance(k.publicKey); await T.sendAll({ rpc, signed: sign(s), lastValidBlockHeight: s.lastValidBlockHeight });
+console.log('sold, SOL +', ((await conn.getBalance(k.publicKey)) - s0) / 1e9);
