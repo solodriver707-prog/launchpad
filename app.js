@@ -6,9 +6,12 @@
   var A = window.Avatars;
 
   // ================= CONFIG =================
-  var RPC = (function () { var v = window.TREID_RPC || 'https://api.devnet.solana.com'; try { var q0 = new URLSearchParams(location.search); if (q0.has('rpc')) { if (q0.get('rpc')) localStorage.setItem('dl.rpc', q0.get('rpc')); else localStorage.removeItem('dl.rpc'); } var l0 = localStorage.getItem('dl.rpc'); if (l0) v = l0; } catch (e) {} return v; })();
+  // ?rpc= / ?api= overrides are for local development only: localhost addresses, this tab only (a shared link can never repoint someone's site)
+  function devHost(u) { try { var h = new URL(u).hostname; return h === 'localhost' || h === '127.0.0.1'; } catch (e) { return false; } }
+  function devOverride(key, param) { try { localStorage.removeItem('dl.' + key); var q0 = new URLSearchParams(location.search); if (q0.has(param)) { var v0 = q0.get(param); if (v0 && devHost(v0)) sessionStorage.setItem('dl.' + key, v0); else sessionStorage.removeItem('dl.' + key); } var s0 = sessionStorage.getItem('dl.' + key); return s0 && devHost(s0) ? s0 : null; } catch (e) { return null; } }
+  var RPC_DEV = devOverride('rpc', 'rpc'), RPC = RPC_DEV || window.TREID_RPC || 'https://api.devnet.solana.com';
   var TREASURY = window.TREID_TREASURY || 'BzCPzoJmoRKV8Ha7dHpyePikjSDL9a9Y3LNKJQdjeaNX';   // treid treasury (cold wallet)
-  var PARTNER = window.TREID_PARTNER || TREASURY;   // fee claimer of new coins — replaced by the indexer's ops wallet when it has one
+  var PARTNER = window.TREID_PARTNER || TREASURY;   // fee claimer + reward escrow of new coins (the ops wallet) — pinned in index.html, never taken from the server
   var CHAIN_ID = /mainnet/.test(RPC) ? 'solana:mainnet' : 'solana:devnet';
   var CLUSTER = 'devnet';
   var LS = { wallet: 'dl.lastWallet', watch: 'dl.watch', created: 'dl.created' };
@@ -146,7 +149,7 @@
   function coinHTML(id, size) {
     var p = pairInfo(id);
     if (p.meme) return '<span class="coin meme" style="width:' + size + 'px;height:' + size + 'px">' + avatarHTML(p.meme, size) + '</span>';
-    if (p.img) return '<span class="coin img" style="width:' + size + 'px;height:' + size + 'px"><img src="' + p.img + '" alt="' + esc(p.name) + '"></span>';
+    if (p.img) return '<span class="coin img" style="width:' + size + 'px;height:' + size + 'px"><img src="' + esc(p.img) + '" alt="' + esc(p.name) + '"></span>';
     var fs = Math.round(size * (p.g.length > 2 ? 0.3 : p.g.length > 1 ? 0.38 : 0.52));
     return '<span class="coin" style="width:' + size + 'px;height:' + size + 'px;background:' + p.c + ';font-size:' + fs + 'px">' + esc(p.g) + '</span>';
   }
@@ -373,11 +376,11 @@
     }
     return '<header><div class="wrap hdr">' +
       '<button class="brand" data-act="home" aria-label="treid home"><span class="brand-name">treid</span></button>' +
-      '<nav class="navlinks"><span class="nav-ind" id="nav-ind"></span><button class="' + (S.screen === 'home' ? 'on' : '') + '" data-act="home">Board</button><button class="' + (S.screen === 'create' ? 'on' : '') + '" data-act="create">Create</button>' + (DEMO ? '<button class="' + (S.screen === 'leaders' ? 'on' : '') + '" data-act="leaders">Leaderboard</button><button class="' + (S.screen === 'burn' ? 'on' : '') + '" data-act="burnPage">🔥 Burnery</button>' : '') + '<button class="' + (S.screen === 'trend' ? 'on' : '') + '" data-act="trendList">Trending</button><button data-act="how">How it works</button></nav>' +
+      '<nav class="navlinks"><span class="nav-ind" id="nav-ind"></span><button class="' + (S.screen === 'home' ? 'on' : '') + '" data-act="home">Board</button><button class="' + (S.screen === 'create' ? 'on' : '') + '" data-act="create">Create</button><button class="' + (S.screen === 'leaders' ? 'on' : '') + '" data-act="leaders">Leaderboard</button><button class="' + (S.screen === 'burn' ? 'on' : '') + '" data-act="burnPage">🔥 Burnery</button><button class="' + (S.screen === 'trend' ? 'on' : '') + '" data-act="trendList">Trending</button><button data-act="how">How it works</button></nav>' +
       '<button class="searchbtn" data-act="palette">' + I.search + '<span>Search tokens or paste CA</span><span class="kbd">Ctrl K</span></button>' +
       '<div class="hdr-right">' + (DEMO ? '<button class="wl-btn co-btn' + (S.coOpen ? ' on' : '') + '" data-act="coToggle" title="Hot callouts">🔥<span>Callouts</span><b class="mono" id="co-new" style="display:none">0</b></button>' : '') + '<button class="wl-btn' + (S.screen === 'watch' ? ' on' : '') + '" data-act="watchPage" aria-label="Watchlist" data-tip="Your watchlist">' + I.star(S.watch.length > 0) + (S.watch.length ? '<b class="mono" id="wl-n">' + S.watch.length + '</b>' : '') + '</button><button class="btn pri" data-act="create">+ Launch token</button>' + right + '</div>' +
       '</div></header>' +
-      '<nav class="mnav" aria-label="Main">' + [['home', 'Board', '<path d="M3 11l9-7 9 7v9a1 1 0 01-1 1h-5v-6H9v6H4a1 1 0 01-1-1z"/>', S.screen === 'home'], ['trendList', 'Trending', '<path d="M3 17l6-6 4 4 8-8M15 7h6v6"/>', S.screen === 'trend'], ['leaders', 'Ranks', '<path d="M8 21V11M16 21V7M12 21V3M4 21h16"/>', S.screen === 'leaders'], ['create', 'Launch', '<path d="M12 5v14M5 12h14"/>', S.screen === 'create', 'pri'], ['coToggle', 'Callouts', '<path d="M21 12a8 8 0 01-11.6 7.1L4 21l1.9-5.4A8 8 0 1121 12z"/>', S.coOpen], ['burnPage', 'Burnery', '<path d="M12 22c4 0 7-3 7-7 0-3-2-5-3-7-1 2-2 3-3 3 0-3-1-6-4-9 0 4-4 6-4 12 0 5 3 8 7 8z"/>', S.screen === 'burn'], ['watchPage', 'Watchlist', '<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/>', S.screen === 'watch']].filter(function (x) { return DEMO || ['leaders', 'coToggle', 'burnPage'].indexOf(x[0]) < 0; }).map(function (x) { return '<button class="' + (x[3] ? 'on ' : '') + (x[4] || '') + '" data-act="' + x[0] + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round">' + x[2] + '</svg><span>' + x[1] + '</span>' + (x[0] === 'coToggle' ? '<b class="mn-badge mono" id="mn-co"' + (S.mCo ? '' : ' style="display:none"') + '>' + (S.mCo || '') + '</b>' : '') + '</button>'; }).join('') + '</nav>';
+      '<nav class="mnav" aria-label="Main">' + [['home', 'Board', '<path d="M3 11l9-7 9 7v9a1 1 0 01-1 1h-5v-6H9v6H4a1 1 0 01-1-1z"/>', S.screen === 'home'], ['trendList', 'Trending', '<path d="M3 17l6-6 4 4 8-8M15 7h6v6"/>', S.screen === 'trend'], ['leaders', 'Ranks', '<path d="M8 21V11M16 21V7M12 21V3M4 21h16"/>', S.screen === 'leaders'], ['create', 'Launch', '<path d="M12 5v14M5 12h14"/>', S.screen === 'create', 'pri'], ['coToggle', 'Callouts', '<path d="M21 12a8 8 0 01-11.6 7.1L4 21l1.9-5.4A8 8 0 1121 12z"/>', S.coOpen], ['burnPage', 'Burnery', '<path d="M12 22c4 0 7-3 7-7 0-3-2-5-3-7-1 2-2 3-3 3 0-3-1-6-4-9 0 4-4 6-4 12 0 5 3 8 7 8z"/>', S.screen === 'burn'], ['watchPage', 'Watchlist', '<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/>', S.screen === 'watch']].filter(function (x) { return DEMO || ['coToggle'].indexOf(x[0]) < 0; }).map(function (x) { return '<button class="' + (x[3] ? 'on ' : '') + (x[4] || '') + '" data-act="' + x[0] + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round">' + x[2] + '</svg><span>' + x[1] + '</span>' + (x[0] === 'coToggle' ? '<b class="mn-badge mono" id="mn-co"' + (S.mCo ? '' : ' style="display:none"') + '>' + (S.mCo || '') + '</b>' : '') + '</button>'; }).join('') + '</nav>';
   }
 
   function cardPts(t) {
@@ -457,7 +460,7 @@
     var flags = fl.length ? '<div class="tc-flags bad" data-tip="' + esc(fl.join(' · ')) + '"><span class="fl-ic">!</span><span>' + esc(fl.slice(0, 2).join(' · ')) + (fl.length > 2 ? ' +' + (fl.length - 2) : '') + '</span></div>' :
       '<div class="tc-flags ok"><span class="fl-ic">✓</span><span>No red flags</span></div>';
     return '<article class="tcard' + (S.newTick === t.tick ? ' is-new' : '') + (t.live ? ' is-live' : '') + ' ' + fr.cls + '" data-card="' + esc(t.tick) + '" data-act="open" data-arg="' + esc(t.tick) + '">' +
-      '<div class="tc-hero' + (t.banner ? ' has-ban' : '') + '"><div class="tch-bg' + (t.banner ? ' ban' : '') + '" aria-hidden="true">' + (t.banner ? '<img src="' + t.banner + '" alt="">' : avatarHTML(t, 240)) + '</div>' +
+      '<div class="tc-hero' + (t.banner ? ' has-ban' : '') + '"><div class="tch-bg' + (t.banner ? ' ban' : '') + '" aria-hidden="true">' + (t.banner ? '<img src="' + esc(t.banner) + '" alt="">' : avatarHTML(t, 240)) + '</div>' +
         '<div class="tc-age tch-age ' + fr.cls + '"><span class="ag-dot"></span><span class="ag-lab">' + fr.lab + '</span><b class="mono" data-t="' + t.born + '">' + ago(t.born) + '</b>' + (done ? '<span class="ag-grad">GRADUATED</span>' : '') + '</div>' +
         '<div class="tch-av">' + avatarHTML(t, 150) + '</div>' + '' + (opts.preview ? '' : '<button class="tch-star' + (on ? ' on' : '') + '" data-act="star" data-arg="' + esc(t.tick) + '" aria-label="Add to watchlist" aria-pressed="' + on + '">' + I.star(on) + '</button>') +
         '<div class="tch-side">' + (trapLeft(t) > 0 ? trapBox(t, 'card') : '<div class="tax" style="background:' + taxBg(tmax) + '" data-tip="' + esc(splitTip(t)) + '"><small>TAX</small><b>' + tmax + '%</b>' + (splitOf(t) ? splitBar(splitOf(t), 'mini') : '') + '</div>') +
@@ -1107,10 +1110,19 @@
     return '<section class="ltable"><div class="lt-scroll">' + head + body + '</div></section>';
   }
   // ===== THE BURNERY: leaderboard of coins that burned their own supply =====
-  var BSRC = { dev: ['Dev burn', '#F5B14C'], tax: ['Tax buyback', '#3DDC97'], frozen: ['Frozen dev rewards', '#B48CFF'] };
+  var BSRC = { dev: [DEMO ? 'Dev burn' : 'Dev & holder burns', '#F5B14C'], tax: [DEMO ? 'Tax buyback' : 'Tax burn', '#3DDC97'], frozen: [DEMO ? 'Frozen dev rewards' : 'Buyback & burn', '#B48CFF'] };
+  function burnsLoad() { if (!API) return; apiGet('/api/burns').then(function (d) { S.burnData = d; S._burns = null; S._bnAgg = null; if (S.screen === 'burn') render(); }).catch(function () {}); }
   function burnLog() {
     if (S._burns && S._burnsN === all().length) return S._burns;
     var out = [];
+    if (!DEMO) {   // real: events from on-chain receipts + verified user burns; per-coin totals from the mint supply
+      var D = S.burnData || { coins: [], events: [] }, seen = {};
+      D.events.forEach(function (e) { var t = S.live.filter(function (x) { return x.ca === e.mint; })[0]; if (!t) return; seen[e.mint] = seen[e.mint] || { tax: 0, frozen: 0, dev: 0 }; seen[e.mint][e.src] += e.tok;
+        out.push({ t: t, tok: e.tok, pct: e.tok / 1e9 * 100, usd: e.tok * price(t), at: e.ts, src: e.src, who: e.wallet ? short(e.wallet) : 'auto', sig: e.sig, mine: !!(S.account && e.wallet === S.account) }); });
+      D.coins.forEach(function (c) { var t = S.live.filter(function (x) { return x.ca === c.mint; })[0]; if (!t) return; var k = seen[c.mint] || { tax: 0, frozen: 0, dev: 0 }, rest = Math.max(0, c.burned - k.tax - k.frozen - k.dev);
+        if (rest >= 1) out.push({ t: t, tok: rest, pct: rest / 1e9 * 100, usd: rest * price(t), at: 0, src: 'dev', who: 'auto', sig: null }); });   // burns we only see in the supply (older or made outside treid)
+      out.sort(function (a, b) { return b.at - a.at; }); S._burns = out; S._burnsN = all().length; return out;
+    }
     all().forEach(function (t) { var r = rng(hash(t.tick + 'burn2')); if (r() < .35) return; if (Date.now() - t.born < 3 * 36e5 && r() < .75) return;
       var heavy = r() < .25, n = 1 + Math.floor(r() * (heavy ? 7 : 3));
       for (var i = 0; i < n; i++) { var pct = +((heavy ? 1.2 : .08) + r() * r() * (heavy ? 9 : 2.4)).toFixed(3), tok = pct / 100 * 1e9, mc = t.mcN * (.35 + r() * .7), usd = tok * mc * 1000 / 1e9, at = Date.now() - 60000 - Math.min(Date.now() - t.born, 30 * 864e5) * r() * .98;
@@ -1126,7 +1138,7 @@
   function bhTubes(log) {
     var st = { dev: 0, tax: 0, frozen: 0 }, cn = { dev: {}, tax: {}, frozen: {} }, tot = 0; log.forEach(function (b) { st[b.src] += b.tok; cn[b.src][b.t.tick] = 1; tot += b.tok; }); BN.src = st;
     return '<div class="bh-side bh-src"><div class="bh-sh"><b>Who’s burning</b><small>share of all tokens burned</small></div><div class="bh-tubes">' + ['dev', 'tax', 'frozen'].map(function (k) { var sh = tot ? st[k] / tot * 100 : 0;
-      return '<div class="bh-tube" data-tube="' + k + '" style="--c:' + BSRC[k][1] + '"><span class="bh-pct mono" data-tpct="' + k + '">' + sh.toFixed(0) + '%</span><div class="bh-glass"><div class="bh-liq" data-tliq="' + k + '" style="height:' + Math.max(8, sh).toFixed(1) + '%"><i class="bh-wv"></i><u></u><u></u><u></u></div><span class="bh-shine"></span></div><em>' + BSI[k] + '</em><b>' + ({ dev: 'Devs', tax: 'Buybacks', frozen: 'Frozen' })[k] + '</b><small class="mono" data-ttok="' + k + '">' + fmtBig(st[k]) + '</small><small class="bh-cn">' + Object.keys(cn[k]).length + ' coins</small></div>'; }).join('') + '</div></div>';
+      return '<div class="bh-tube" data-tube="' + k + '" style="--c:' + BSRC[k][1] + '"><span class="bh-pct mono" data-tpct="' + k + '">' + sh.toFixed(0) + '%</span><div class="bh-glass"><div class="bh-liq" data-tliq="' + k + '" style="height:' + Math.max(8, sh).toFixed(1) + '%"><i class="bh-wv"></i><u></u><u></u><u></u></div><span class="bh-shine"></span></div><em>' + BSI[k] + '</em><b>' + (DEMO ? { dev: 'Devs', tax: 'Buybacks', frozen: 'Frozen' } : { dev: 'Devs & holders', tax: 'Tax burns', frozen: 'Buybacks' })[k] + '</b><small class="mono" data-ttok="' + k + '">' + fmtBig(st[k]) + '</small><small class="bh-cn">' + Object.keys(cn[k]).length + ' coins</small></div>'; }).join('') + '</div></div>';
   }
   function bhGauge(log, usd, ncoins) {
     var per = S.bhPer || '1h', W0 = { '1h': 36e5, '24h': 864e5, '7d': 6048e5, '30d': 2592e6 }[per], PL = { '1h': ['hour', '1h'], '24h': ['24 hours', '24h'], '7d': ['7 days', '7d'], '30d': ['30 days', '30d'] }[per];
@@ -1154,6 +1166,7 @@
     var hot = document.getElementById('bh-hot'); if (hot) { hot.textContent = lv > .8 ? '🔥 ON FIRE' : lv > .5 ? '🔥 HOT' : '♨ WARM'; hot.classList.remove('pulse'); void hot.offsetWidth; hot.classList.add('pulse'); }
   }
   function burnPage() {
+    if (!DEMO && !S.burnData && !S._bl) { S._bl = 1; setTimeout(burnsLoad, 0); }
     var log = burnLog(), by = {}, totUsd = 0, totTok = 0;
     log.forEach(function (b) { totUsd += b.usd; totTok += b.tok; var e = by[b.t.tick] = by[b.t.tick] || { t: b.t, tok: 0, pct: 0, usd: 0, n: 0, last: 0, src: {} }; e.tok += b.tok; e.pct += b.pct; e.usd += b.usd; e.n++; e.last = Math.max(e.last, b.at); e.src[b.src] = (e.src[b.src] || 0) + b.pct; });
     var key = { pct: function (e) { return e.pct; }, usd: function (e) { return e.usd; }, n: function (e) { return e.n; }, last: function (e) { return e.last; } }[S.bsort] || function (e) { return e.pct; };
@@ -1174,7 +1187,7 @@
       '<section class="bn-list card-s"><div class="bn-lh"><b>Burn leaderboard</b><div class="bn-leg">' + Object.keys(BSRC).map(function (k) { return '<span><i style="background:' + BSRC[k][1] + '"></i>' + BSRC[k][0] + '</span>'; }).join('') + '</div><div class="seg">' + sorts.map(function (x) { return '<button class="' + (S.bsort === x[0] ? 'on' : '') + '" data-act="bsort" data-arg="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div></div>' +
       '<div class="bn-row bn-head"><span>#</span><span>Coin</span><span>Supply burned</span><span class="r">Tokens</span><span class="r">Value</span><span class="r">Burns</span><span class="r">Last</span></div>' +
       coins.map(function (e, i) { return '<div class="bn-row" data-act="open" data-arg="' + esc(e.t.tick) + '"><span class="mono bn-rk' + (i < 3 ? ' top' : '') + '">' + (i + 1) + '</span><span class="bn-c">' + avatarHTML(e.t, 30) + '<span><b>$' + esc(e.t.tick) + '</b><small>' + esc(e.t.name) + '</small></span></span><span class="bn-bar"><span class="bn-stk">' + srcBar(e) + '</span><b class="mono">' + e.pct.toFixed(2) + '%</b></span><span class="r mono">' + fmtNum(Math.round(e.tok)) + '</span><span class="r mono bn-usd">$' + fmtNum(Math.round(e.usd)) + '</span><span class="r mono">' + e.n + '</span><span class="r mono muted">' + ago(e.last) + '</span></div>'; }).join('') + '</section>' +
-      '<section class="bn-feed card-s"><div class="bn-lh"><b>Live burns</b><span class="muted">every burn across treid, newest first</span></div><div id="bn-log">' + log.slice(0, 30).map(burnLogRow).join('') + '</div></section></main>';
+      '<section class="bn-feed card-s"><div class="bn-lh"><b>Live burns</b><span class="muted">every burn across treid, newest first</span></div><div id="bn-log">' + (log.filter(function (b) { return b.at > 0; }).slice(0, 30).map(burnLogRow).join('') || '<div class="muted" style="padding:14px">No burns yet.</div>') + '</div></section></main>';
   }
   function burnLogRow(b) { return '<div class="bn-lg">🔥<span class="bn-c">' + avatarHTML(b.t, 22) + '<b>$' + esc(b.t.tick) + '</b></span><span class="bn-src" style="--c:' + BSRC[b.src || 'dev'][1] + '">' + BSRC[b.src || 'dev'][0] + (b.who && b.who !== 'auto' ? ' <em class="mono">' + b.who + '</em>' : '') + '</span><span class="mono">' + fmtNum(Math.round(b.tok)) + ' tokens</span><span class="mono muted">' + b.pct.toFixed(3) + '% supply</span><span class="mono bn-usd">$' + fmtNum(Math.round(b.usd)) + '</span><span class="mono muted" data-t="' + b.at + '">' + ago(b.at) + '</span><button class="txb" data-act="tx" data-arg="' + esc(b.sig) + '" aria-label="View transaction">' + I.copy + '</button></div>'; }
   var BN = { raf: 0, el: null, parts: [], last: 0 };
@@ -1580,7 +1593,7 @@
     return '<section class="intro3" id="intro"><div class="aurora"><span class="a1"></span><span class="a2"></span><span class="a3"></span></div>' +
       '<div class="i3-l">' +
         '<h1 class="kin"><span class="kin-a">trade</span> <span class="kin-slot"><span class="kin-roll" id="kin-roll">' + KIN.concat([KIN[0]]).map(function (x) { return '<span class="kin-w">' + (x[0] ? (x[0].charAt(0) === '$' ? avatarHTML(find(x[0].slice(1)) || BASE[0], 64) : coinHTML(x[0], 64)) : '') + '<b>' + x[1] + '</b></span>'; }).join('') + '</span></span></h1>' +
-        '<p class="i3-p">Launch a coin. Pair it with anything. Tax is always on the label.</p>' +
+        '<p class="i3-p"><b class="i3-slogan">Launch fair. Trade safer.</b> Pair your coin with anything — tax, dev bag and risks always on the label.</p>' +
         '<div class="i3-cta"><button class="btn pri" data-act="create">Launch a coin <span aria-hidden="true">→</span></button><button class="btn sec" data-act="board">Trade anything ↓</button></div></div>' +
       (t0 ? '<div class="tc" id="tc">' + tcHTML(t0, tcI) + '<span class="tc-timer"></span></div>' : '<div class="tc tc-empty"><b>No coins yet</b><small>Be the first — launch a coin in a minute.</small><button class="btn pri" data-act="create">Launch a coin →</button></div>') +
       '<div class="i2-live"><div class="i2-lh"><span class="livedot"></span>JUST LAUNCHED</div><div id="i2-fresh">' + fresh.map(i2Row).join('') + '</div></div>' +
@@ -2142,7 +2155,20 @@
   S.lbPer = '7d';
   function lbYou(kind) { return S.account ? '<div class="lb2-you"><span class="lb2-rk mono">You</span>' + walletPill(S.account) + '<span class="muted">' + kind + '</span></div>' : '<div class="lb2-you off"><span class="muted">Connect a wallet to see your rank</span><button class="btn sec" data-act="openWallet">Connect</button></div>'; }
   function walletPill(a) { return '<span class="lb2-w"><span class="av" style="width:30px;height:30px">' + A.svg(walletSpec(a)) + '</span><b>' + esc(walletName(a)) + '</b></span>'; }
+  function usdS(v) { var a = Math.abs(v); return (v >= 0 ? '+' : '−') + '$' + (a >= 1e6 ? (a / 1e6).toFixed(2) + 'M' : a >= 1e3 ? (a / 1e3).toFixed(1) + 'K' : a.toFixed(a < 10 ? 2 : 0)); }
+  function lbLoad() { if (!API || S._lbBusy === S.lbPer) return; var per = S.lbPer; S._lbBusy = per; apiGet('/api/leaderboard?per=' + encodeURIComponent(per)).then(function (d) { S.lbReal = { per: per, d: d, at: Date.now() }; S._lbBusy = null; if (S.screen === 'leaders') render(); }).catch(function () { S._lbBusy = null; }); }
   function lbData(tab) {
+    if (!DEMO) {   // real: computed by the indexer from on-chain trades
+      var L = S.lbReal && S.lbReal.per === S.lbPer ? S.lbReal.d : null; if (!L || Date.now() - S.lbReal.at > 60e3) lbLoad(); if (!L) return [];
+      var tk = function (m) { return S.live.filter(function (x) { return x.ca === m; })[0]; };
+      if (tab === 'traders') return L.traders.map(function (e) { var bt = e.best && tk(e.best.mint), win = e.coins ? e.wins / e.coins * 100 : 0;
+        return { a: e.wallet, v: e.pnl, cols: [{ v: usdS(e.pnl), c: e.pnl >= 0 ? 'up' : 'down', big: 1 }, { v: win.toFixed(0) + '%', c: win >= 55 ? 'up' : '' }, { v: fmtNum(e.n) }, { v: bt ? '<span class="lb2-coin">' + avatarHTML(bt, 18) + '$' + esc(bt.tick) + '</span> <b class="' + (e.best.x >= 1 ? 'up' : 'down') + '">' + e.best.x.toFixed(1) + 'x</b>' : '—', raw: 1 }], sub: e.n + ' trades · ' + win.toFixed(0) + '% win', main: usdS(e.pnl) }; });
+      if (tab === 'devs') return L.devs.map(function (e) { var rate = e.launches ? e.grads / e.launches * 100 : 0, tag = e.left / Math.max(1, e.launches) > .4 && e.launches > 1 ? ['bad', 'Often leaves'] : e.grads && !e.left ? ['good', 'Trusted builder'] : e.launches <= 1 ? ['mid', 'New dev'] : ['mid', 'Mixed record'];
+        return { a: e.wallet, v: e.grads * 3 + Math.log10(e.best + 1) * 4 - e.left * 5, cols: [{ v: fmtNum(e.launches) }, { v: e.grads + ' <small class="muted">(' + rate.toFixed(0) + '%)</small>', c: rate >= 40 ? 'up' : '', raw: 1 }, { v: String(e.left), c: e.left ? 'down' : 'up' }, { v: fmtK(e.best / 1000), big: 1 }, { v: '<span class="lb2-tag ' + tag[0] + '">' + tag[1] + '</span>', raw: 1 }], sub: 'best ATH · ' + e.launches + ' launches · ' + e.grads + ' grad', main: fmtK(e.best / 1000) }; });
+      if (tab === 'hall') return L.hall.map(function (h) { var t = tk(h.mint); if (!t) return null; var ath = h.ath / 1000, off = Math.max(0, (1 - t.mcN / ath) * 100);
+        return { t: t, v: ath, cols: [{ v: fmtK(ath), big: 1 }, { v: msBadges(t) || '—', raw: 1 }, { v: fmtK(t.mcN) }, { v: off < 2 ? '<b class="up">at ATH</b>' : '−' + off.toFixed(0) + '%', c: off < 2 ? '' : 'down', raw: off < 2 }, { v: ago(t.born) }], sub: 'ATH ' + fmtK(ath), main: fmtK(ath) }; }).filter(Boolean);
+      return [];
+    }
     var per = S.lbPer, pm = { '24h': 864e5, '7d': 6048e5, all: 1e13 }[per], sc = { '24h': 1, '7d': 3.4, all: 11 }[per], a = all();
     if (tab === 'traders') {
       return WALLETS.map(function (w) { var r = rng(hash(w.a + 'lbt' + per)), pnl = (Math.pow(r(), 1.6) * 60 - 9) * sc * (.6 + r()), n = Math.round((8 + r() * 70) * sc), win = 32 + r() * 50, bt = a[Math.floor(r() * a.length)], bx = 1.6 + Math.pow(r(), 2) * 40;
@@ -2166,6 +2192,7 @@
       return { t: t, v: ath, cols: [{ v: fmtK(ath), big: 1 }, { v: msBadges(t) || '—', raw: 1 }, { v: fmtK(t.mcN) }, { v: off < 2 ? '<b class="up">at ATH</b>' : '−' + off.toFixed(0) + '%', c: off < 2 ? '' : 'down', raw: off < 2 }, { v: ago(t.born) }], sub: 'ATH ' + fmtK(ath), main: fmtK(ath) }; });
   }
   function lbMovesKick() {
+    if (!DEMO) return;   // no made-up rank changes on the real board
     clearInterval(lbMovesKick.t); lbMovesKick.t = setInterval(function () {
       var box = document.getElementById('lb2-moves'); if (!box) { clearInterval(lbMovesKick.t); return; }
       var tab = S.lbTab, full = lbData(tab), rows = full.slice(3, 40); if (!rows.length) return; var r = rows[Math.floor(Math.random() * rows.length)], i = full.indexOf(r), to = Math.max(1, i + 1 - (1 + Math.floor(Math.random() * 4)));
@@ -2201,7 +2228,7 @@
     tt.forEach(function (x) { if (x.side === 'buy') { nb++; vb += x.sol; } else { ns++; vs += x.sol; } });
     var q = quoteFor(t), pos = position(t), tmax = Math.max(t.buy, t.sell);
     var curveSol = t.live ? (liqK(t) * 1000 / qUsdT(t)).toFixed(2) : (t.prog / 100 * 85).toFixed(2);
-    var head = '<section class="card-s tp-head2 tp-banner"><div class="tb-bg' + (t.banner ? ' ban' : '') + '" aria-hidden="true">' + (t.banner ? '<img src="' + t.banner + '" alt="">' : avatarHTML(t, 420)) + '</div><div class="tb-av">' + avatarHTML(t, 104) + '</div>' +
+    var head = '<section class="card-s tp-head2 tp-banner"><div class="tb-bg' + (t.banner ? ' ban' : '') + '" aria-hidden="true">' + (t.banner ? '<img src="' + esc(t.banner) + '" alt="">' : avatarHTML(t, 420)) + '</div><div class="tb-av">' + avatarHTML(t, 104) + '</div>' +
       '<div class="tp-id"><div class="title-xl" style="margin:0;font-size:30px">' + esc(t.name) + ' <span class="tk">$' + id + '</span>' + crBadge(t) + '</div>' + msBadges(t, 'lg') + (t.archived ? '<div class="arch-note ' + t.archived + '">' + (t.archived === 'rug' ? '⚠ Past coin · dev sold after ' + durH(t.devSoldAfter) : t.archived === 'dead' ? '💤 Past coin · inactive, faded on the curve' : '🎓 Past coin · graduated') + '</div>' : '') +
         '<div class="hs-pills" style="margin-top:8px"><button class="pill copy2" data-act="ca" data-arg="' + id + '">CA ' + esc(short(t.ca)) + ' ' + I.copy + '</button><span class="pill" style="padding-left:11px">created <span data-t="' + t.born + '">&nbsp;' + ago(t.born) + '</span>&nbsp;ago by&nbsp;' + makerHTML(devOf(t), t) + '</span>' +
         socialsHTML(t, true) +
@@ -2449,7 +2476,7 @@
         '<div class="cr-money">' + tiles.map(function (m) { return '<div><small>' + m[0] + '</small><b class="mono">' + m[1] + '</b></div>'; }).join('') + '</div>' + meterE +
         (mineE && E.era !== 'out' ? '<div class="cr-acts"><button class="btn sec" data-act="devHere" data-arg="' + esc(t.tick) + '">✋ I’m still here</button>' + (E.state === 'active' ? '<button class="btn pri" data-act="devClaimNow" data-arg="' + esc(t.tick) + '"' + (E.pendingSol < 0.0001 || S.busy ? ' disabled' : '') + '>Claim now · ' + solf(E.pendingSol) + '</button>' : '') + '</div>' : '') +
         ctoBox + (logE ? '<div class="cr-logs">' + logE + '</div>' : '') +
-        '<details class="cr-rules"><summary>How the rules work</summary><ul><li>Rewards stay in the Meteora pool — treid never holds them. An active creator is <b>paid straight from the pool</b> automatically (from $1, or daily), or any time with “Claim now”.</li><li><b>48h</b> with no creator activity → payouts pause; rewards meanwhile <b>buy back & burn</b> the coin. “I’m still here” (a free wallet signature) resumes payouts.</li><li><b>7 days</b> inactive, or the creator sells <b>or moves to another wallet 70%+</b> of their peak bag (selling and sending are added together; the rule covers the creator’s launch wallet) → creator is out: from then on <b>50%</b> of their rewards buys back & burns the coin and <b>50%</b> goes to the treid platform, until the community takes over.</li><li><b>Community takeover:</b> a holder with ' + (R0.applyPct || 1) + '%+ applies with a plan; holders support with a free signature. At ' + (R0.supportPct || 10) + '% of supply the new lead takes over and earns all future rewards — under the same rules.</li><li>Every step is an on-chain transaction — tap any line above to verify.</li></ul></details></section>';
+        '<details class="cr-rules"><summary>How the rules work</summary><ul><li>Rewards stay in the Meteora pool — treid never holds them. An active creator is <b>paid straight from the pool</b> automatically (from $1, or daily), or any time with “Claim now”.</li><li><b>48h</b> with no creator activity → payouts pause; rewards meanwhile <b>buy back & burn</b> the coin. “I’m still here” (a free wallet signature) resumes payouts.</li><li><b>7 days</b> inactive, or the creator sells <b>or moves to another wallet 70%+</b> of their peak bag (selling and sending are added together; the rule covers the creator’s launch wallet) → creator is out: from then on <b>50%</b> of their rewards buys back & burns the coin and <b>50%</b> goes to the treid platform, until the community takes over.</li><li><b>Community takeover:</b> a holder with ' + (R0.applyPct || 1) + '%+ applies with a plan; holders support with a free signature. At ' + (R0.supportPct || 10) + '% of supply (counted again when the 24-hour vote closes) the new lead takes over and earns all future rewards — under the same rules.</li><li>Every step is an on-chain transaction — tap any line above to verify.</li></ul></details></section>';
     }
     if (t.live) {   // real coin: rewards are SOL sitting in the pool, the creator claims them straight to their wallet
       var f = t.crFees, mine = !!(S.account && f && S.account === f.creator), u = f ? f.unclaimed : null, uTxt = u == null ? '…' : (u < 0.0001 && u > 0 ? '<0.0001' : u.toFixed(4)) + ' ' + esc(qSymT(t));
@@ -2635,7 +2662,7 @@
     var k = String(sym || mint.slice(0, 4)).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10) || 'TOKEN';
     if (PAIR_INFO[k] && PAIR_INFO[k].ca && PAIR_INFO[k].ca !== mint) k = k + '·' + mint.slice(0, 3);
     if (!PAIR_INFO[k]) PAIR_INFO[k] = { name: name || sym || 'Token', cat: 'crypto', g: k.slice(0, 2), c: '#4A4A4F', ca: mint };
-    if (icon && !PAIR_INFO[k].img) PAIR_INFO[k].img = icon;
+    if (safeImg(icon) && !PAIR_INFO[k].img) PAIR_INFO[k].img = safeImg(icon);
     return k;
   }
   function qSelect(mint) {
@@ -2681,8 +2708,8 @@
       '<div class="create-grid">' +
         '<section class="card-s panel" style="flex:999 1 520px;min-width:0;display:flex;flex-direction:column;gap:20px;padding:24px">' +
           '<div class="fsec"><i>1</i>Identity</div>' +
-          '<div class="ident"><label class="ident-ban' + (c.banner ? ' has' : '') + '" for="c-banner" data-drop="banner">' + (c.banner ? '<img src="' + c.banner + '" alt="">' : '<span class="ib-ph">' + I.up + '<b>Add a banner</b><small>3:1 · e.g. 1500×500 · recommended</small></span>') + '</label>' +
-            '<label class="ident-logo' + (c.img ? ' has' : '') + '" for="c-img" data-drop="img">' + (c.img ? '<img src="' + c.img + '" alt="">' : '<span class="il-ph">' + I.up + '<b>Logo</b></span>') + '</label>' +
+          '<div class="ident"><label class="ident-ban' + (c.banner ? ' has' : '') + '" for="c-banner" data-drop="banner">' + (c.banner ? '<img src="' + esc(c.banner) + '" alt="">' : '<span class="ib-ph">' + I.up + '<b>Add a banner</b><small>3:1 · e.g. 1500×500 · recommended</small></span>') + '</label>' +
+            '<label class="ident-logo' + (c.img ? ' has' : '') + '" for="c-img" data-drop="img">' + (c.img ? '<img src="' + esc(c.img) + '" alt="">' : '<span class="il-ph">' + I.up + '<b>Logo</b></span>') + '</label>' +
             '<div class="ident-meta"><b>' + esc(c.name || 'Your coin') + '</b><span class="mono">$' + esc(c.tick || 'TICKER') + '</span></div>' +
             '<div class="ident-acts">' + (c.img ? '<button class="link" data-act="clearImg">Remove logo</button>' : '<span class="req">logo required</span>') + (c.banner ? '<button class="link" data-act="clearBanner">Remove banner</button>' : '') + '</div></div>' +
           '<input id="c-img" type="file" accept="image/png,image/jpeg,image/gif,image/webp" class="sr"><input id="c-banner" type="file" accept="image/png,image/jpeg,image/gif,image/webp" class="sr">' +
@@ -2761,8 +2788,8 @@
   function render() {
     var ae = document.activeElement, fid = ae && ae.id, ss = null, se = null;
     try { if (fid && ae.selectionStart != null) { ss = ae.selectionStart; se = ae.selectionEnd; } } catch (e) {}
-    var body = S.screen === 'pending' ? '<main class="wrap"><div class="route-wait"><span class="gr-sp"></span><b>Loading coin…</b><small class="muted">fetching live data from the chain</small></div></main>' : S.screen === 'token' ? tokenPage() : S.screen === 'create' ? createPage() : S.screen === 'leaders' && DEMO ? leadersPage() : S.screen === 'watch' ? watchPage() : S.screen === 'burn' && DEMO ? burnPage() : S.screen === 'trend' ? trendPage() : home();
-    document.getElementById('app').innerHTML = '<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="ccUp" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3DDC97" stop-opacity=".28"/><stop offset="1" stop-color="#3DDC97" stop-opacity="0"/></linearGradient><linearGradient id="ccDn" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F2708A" stop-opacity=".26"/><stop offset="1" stop-color="#F2708A" stop-opacity="0"/></linearGradient></defs></svg>' + tape() + header() + body + footer() + walletModal() + demoImgModal() + (DEMO ? calloutDrawer() : '') + (DEMO ? calloutRail() : '') + palette() + walletDrawer() + holderMap() + burnModal() + ctoModal();
+    var body = S.screen === 'pending' ? '<main class="wrap"><div class="route-wait"><span class="gr-sp"></span><b>Loading coin…</b><small class="muted">fetching live data from the chain</small></div></main>' : S.screen === 'token' ? tokenPage() : S.screen === 'create' ? createPage() : S.screen === 'leaders' ? leadersPage() : S.screen === 'watch' ? watchPage() : S.screen === 'burn' ? burnPage() : S.screen === 'trend' ? trendPage() : home();
+    document.getElementById('app').innerHTML = (RPC_DEV || API_DEV ? '<div class="devbar">⚠ Developer mode — custom ' + [RPC_DEV ? 'RPC' : '', API_DEV ? 'server' : ''].filter(Boolean).join(' + ') + ' (this tab only)</div>' : '') + '<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="ccUp" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3DDC97" stop-opacity=".28"/><stop offset="1" stop-color="#3DDC97" stop-opacity="0"/></linearGradient><linearGradient id="ccDn" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F2708A" stop-opacity=".26"/><stop offset="1" stop-color="#F2708A" stop-opacity="0"/></linearGradient></defs></svg>' + tape() + header() + body + footer() + walletModal() + demoImgModal() + (DEMO ? calloutDrawer() : '') + (DEMO ? calloutRail() : '') + palette() + walletDrawer() + holderMap() + burnModal() + ctoModal();
     document.body.classList.toggle('has-rail', S.screen === 'home' && !S.coOpen && !S.railHidden); document.body.classList.toggle('has-rail-min', S.screen === 'home' && !S.coOpen && !!S.railHidden);
     if (fid) { var el = document.getElementById(fid); if (el) { el.focus({ preventScroll: true }); try { if (ss != null) el.setSelectionRange(ss, se); } catch (e) {} } }
     if (S.palOpen && !fid) { var p = document.getElementById('pal'); if (p) p.focus(); }
@@ -2962,7 +2989,13 @@
       case 'burnClose': if (el.classList.contains('hm-ov') && e.target.closest('[data-stop]')) break; set({ burnOpen: false }); break;
       case 'burnPick': set({ burnTick: arg }); break;
       case 'burnPreset': set({ burnPct: +arg }); break;
-      case 'burnGo': (function () { var t = find(S.burnTick), pos = t && position(t); if (!pos) return; var tok = pos.tok * (S.burnPct || 25) / 100; S.pos[t.tick].tok -= tok; if (S.pos[t.tick].tok < 1) delete S.pos[t.tick];
+      case 'burnGo': (function () { var t = find(S.burnTick), pos = t && position(t); if (!pos) return; var tok = pos.tok * (S.burnPct || 25) / 100;
+        if (t.live) { S.burnOpen = false; render();
+          chainRun('Burning $' + t.tick, function (T) { return T.buildBurn({ rpc: RPC, owner: S.account, mint: t.ca, amount: tok }); }).then(function (b) {
+            toast('🔥 Burned ' + fmtNum(Math.round(b.tokens)) + ' $' + t.tick + ' — gone forever', t); livePos(t);
+            return fetch(API + '/api/burned', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sig: b.sigs[b.sigs.length - 1] }) }).then(function () { burnsLoad(); });
+          }).catch(function (e) { if (e && e.message !== 'busy') toast('Burn failed: ' + chainErr(e)); });
+          return; } S.pos[t.tick].tok -= tok; if (S.pos[t.tick].tok < 1) delete S.pos[t.tick];
         var b = { t: t, tok: tok, pct: tok / 1e9 * 100, usd: tok * price(t), at: Date.now(), src: 'dev', who: S.account, sig: b58(64), mine: true, fresh: true }; S.myBurns = S.myBurns || []; S.myBurns.push({ tick: t.tick, tok: tok, usd: b.usd, at: b.at, who: S.account, sig: b.sig }); try { localStorage.setItem('dl.myburns', JSON.stringify(S.myBurns)); } catch (er) {} S._burns = null; S._bnAgg = null;
         S.burnOpen = false; S._bnAgg = null; toast('🔥 Burned ' + fmtNum(Math.round(tok)) + ' $' + t.tick + ' — gone forever'); if (S.screen === 'burn') { render(); setTimeout(function () { var fl = document.getElementById('bn-fly'); if (fl) { var r = fl.getBoundingClientRect(); bnImpact(b, r.width / 2, r.height * .74); } }, 400); } else render(); })(); break;
       case 'hmapClose': if (el.classList.contains('hm-ov') && e.target.closest('[data-stop]')) break; set({ hmap: null }); break;
@@ -2980,7 +3013,7 @@
       case 'clearImg': setC({ img: null }); break;
       case 'clearBanner': setC({ banner: null }); break;
       case 'cpair': setC({ pair: arg }); break;
-      case 'burnPage': if (!DEMO) break; set({ screen: 'burn', palOpen: false, coOpen: false }); window.scrollTo(0, 0); break;
+      case 'burnPage': burnsLoad(); set({ screen: 'burn', palOpen: false, coOpen: false }); window.scrollTo(0, 0); break;
       case 'lsort': if (S.lsort === arg) S.ldir = -S.ldir; else { S.lsort = arg; S.ldir = -1; } render(); break;
       case 'trendList': S.lsort = 'rank'; S.ldir = -1; set({ screen: 'trend', palOpen: false, coOpen: false }); window.scrollTo(0, 0); break;
       case 'bsort': S.bsort = arg; render(); break;
@@ -3025,7 +3058,7 @@
       case 'quick': var qq0 = QUICK.filter(function (x) { return x[0] === arg; })[0]; if (qq0 && qq0[2]) set({ cat: pairInfo(qq0[2]).cat, pair: qq0[2], view: 'grid' }); else set({ cat: arg, pair: 'All', view: 'grid' }); setTimeout(function () { var bd = document.getElementById('board'); if (bd) bd.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 30); break;
       case 'board': var bd0 = document.getElementById('board'); if (bd0) bd0.scrollIntoView({ behavior: 'smooth', block: 'start' }); break;
       case 'feedf': S.feedF = arg; render(); break;
-      case 'leaders': if (!DEMO) break; set({ screen: 'leaders', palOpen: false }); window.scrollTo(0, 0); break;
+      case 'leaders': lbLoad(); set({ screen: 'leaders', palOpen: false }); window.scrollTo(0, 0); break;
       case 'watchPage': set({ screen: 'watch', palOpen: false }); window.scrollTo(0, 0); break;
       case 'unstar':
         var row = document.querySelector('.wl-row[data-wl="' + arg + '"]');
@@ -3146,6 +3179,7 @@
       case 'demoLaunch': S.demoLaunch = true; document.querySelector('[data-act=launch]') && document.querySelector('[data-act=launch]').click(); S.demoLaunch = false; break;
       case 'launch':
         if (!S.account) { set({ walletOpen: true }); toast('Connect a wallet to launch'); break; }
+        if (S.opsMismatch) { toast('Launching is paused: server configuration check failed. Please try again later.'); break; }
         var c = S.c;
         if (!c.name.trim() || c.tick.length < 2) { toast('Add a name and a ticker (2+ characters)'); break; }
         if (!c.img) { toast('Upload a logo image for your coin'); break; }
@@ -3165,13 +3199,12 @@
           .then(function (T) { return T.grind(suf1, { onProgress: function (n, exp) { var el = document.getElementById('gr-n'); if (!el) return; var rate = n / Math.max(0.2, (Date.now() - gStart) / 1000), left = Math.max(0, (exp - n) / rate); el.textContent = fmtNum(n) + ' tried · ' + (n >= exp ? 'any moment now — it\'s luck' : left < 5 ? 'almost there' : '~' + (left < 90 ? Math.ceil(left) + 's' : Math.ceil(left / 60) + ' min') + ' left'); } }); })
           .then(function (g) { gEl.remove(); grindT = g; S.busy = 'Saving logo…'; render();
             var up = API ? Promise.race([fetch(API + '/api/upload', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: cc0.name, symbol: cc0.tick, description: (cc0.desc || '').trim(), image: cc0.img || null, banner: cc0.banner || null, x: cc0.x, tg: cc0.tg, web: cc0.web }) }).then(function (r) { return r.json(); }), new Promise(function (r) { setTimeout(function () { r({}); }, 25000); })]).catch(function () { return {}; }) : Promise.resolve({});
-            return up; }).then(function (up) { S.busy = null; var g = grindT; return chainRun('Launching $' + c.tick, function (T) {
+            return up; }).then(function (up) { S.busy = null; if (API && !API_DEV && !(up && up.uri)) throw new Error((up && up.error) || 'Couldn’t save your logo to IPFS — please try again'); var g = grindT; return chainRun('Launching $' + c.tick, function (T) {
             return T.buildCreate({ rpc: RPC, payer: S.account, partner: PARTNER, treasury: TREASURY, mintSecret: g.secret, extraFeeSol: vf1, escrow: S.escrowWallet || null, name: cc0.name, symbol: cc0.tick, uri: coinUri('MINT'.repeat(11), cc0, up && up.uri), taxBps: tax0 * 100, trapBps: Math.max(50, sn0.start || 50) * 100, trapSecs: Math.max(30, sn0.dur || 30), devBuySol: dq2.sol, quoteMint: qq1.sol ? null : qq1.mint, mc0: qq1.sol ? null : 20 * SOL_USD / qq1.usd, mc1: qq1.sol ? null : 60 * SOL_USD / qq1.usd });
           }); }).then(function (b) {
             var coin = { mint: b.mint, pool: b.pool, config: b.config, creator: S.account, name: cc0.name, symbol: cc0.tick, uri: b.uri, tax_bps: tax0 * 100, trap_bps: Math.max(50, sn0.start || 50) * 100, trap_secs: Math.max(30, sn0.dur || 30), created_at: Date.now(), mcap_usd: 20 * SOL_USD, curve_pct: 0, holders: dq2.sol > 0 ? 1 : 0, quote_mint: qq1.mint, quote_symbol: qq1.sym, quote_usd: qUsd(qq1), quote_dec: qq1.dec };
             var nt2 = liveTok(coin); nt2.tick = cc0.tick; nt2.spec = cc0.spec; nt2.img = cc0.img; nt2.banner = cc0.banner || null; nt2.desc = (cc0.desc || '').trim(); nt2.split = tax0 > 0 && cc0.split ? { p: cc0.split.p, h: cc0.split.h, b: cc0.split.b, d: cc0.split.d } : null;
             if (cc0.x || cc0.tg || cc0.web) { nt2.soc = true; nt2.links = { demo: false, web: linkOf(cc0.web), x: cc0.x ? linkOf(/[\/.]/.test(cc0.x) ? cc0.x : 'x.com/' + cc0.x.replace(/^@/, '')) : null, tg: cc0.tg ? linkOf(/[\/.]/.test(cc0.tg) ? cc0.tg : 't.me/' + cc0.tg.replace(/^@/, '')) : null }; }
-            if (API) fetch(API + '/api/meta', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mint: b.mint, name: cc0.name, symbol: cc0.tick, image: cc0.img || null, banner: cc0.banner || null, description: nt2.desc, uri: b.uri }) }).catch(function () {});
             S.c = { name: '', tick: '', desc: '', x: '', tg: '', web: '', pair: 'SOL', q: null, buy: 0, sell: 0, img: null, banner: null, devBuy: '', spec: { kind: pick(A.KINDS), skin: pick(A.SKINS), bg: pick(A.BGS), eyes: 'normal', mouth: 'smile', acc: 'none' } };
             openToken(nt2.tick); confetti(); toast('$' + nt2.tick + ' is live on-chain (devnet) ✓', nt2);
           }).catch(function (e) { gEl.remove(); if (S.busy && /^Finding/.test(S.busy)) { S.busy = null; render(); } if (e && e.message !== 'busy') toast('Launch failed: ' + chainErr(e)); });
@@ -3808,10 +3841,13 @@
   // ================= LIVE CHAIN DATA (treid indexer) =================
   // Real coins launched on treid come from the indexer API. Without an API the site runs as a pure demo.
   // Set it with ?api=https://your-indexer (remembered), or window.TREID_API in index.html. ?api= (empty) clears it.
-  var API = (function () { var v = window.TREID_API || ''; try { var qp = new URLSearchParams(location.search); if (qp.has('api')) localStorage.setItem('dl.api', qp.get('api')); var ls = localStorage.getItem('dl.api'); if (ls !== null) v = ls; } catch (e) {} return (v || '').replace(/\/+$/, ''); })();
+  var API_DEV = devOverride('api', 'api'), API = (API_DEV || window.TREID_API || '').replace(/\/+$/, '');
+  if (window.TREID_PARTNER) S.escrowWallet = window.TREID_PARTNER;
   S.api = API; S.apiOk = false;
   function apiGet(path) { return fetch(API + path, { cache: 'no-store' }).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); }); }
   function liveStat(t, c) { if (c.tax_paid) t.taxPaid = c.tax_paid; t.lstat = { dev: c.dev_pct || 0, top: c.top10_pct || 0, sn: c.snipers_pct || 0, bu: c.bundles_pct || 0, devSold: !!c.dev_sold }; }
+  function safeImg(u) { return typeof u === 'string' && (/^data:image\/(png|jpe?g|gif|webp);base64,[A-Za-z0-9+\/=]+$/.test(u) || /^https:\/\/[^\s"'<>\\]+$/.test(u)) ? u : null; }
+  function trustedMeta(u) { try { var h = new URL(u).hostname; return /\/ipfs\//.test(u) && (h === 'gateway.pinata.cloud' || /\.mypinata\.cloud$/.test(h) || h === 'ipfs.io'); } catch (e) { return false; } }
   function liveTok(c) {
     if (c.sol_usd) SOL_USD = c.sol_usd;
     var t = S.live.filter(function (x) { return x.ca === c.mint; })[0];
@@ -3833,7 +3869,7 @@
     liveStat(t, c);
     if (c.uri && !t._uri) { t._uri = 1; var pu = parseUri(c.uri); if (pu.spec) t.spec = pu.spec; if (pu.split) t.split = pu.split;
       if (pu.x || pu.t || pu.w) { t.soc = true; t.links = { demo: false, x: pu.x ? linkOf(/[\/.]/.test(pu.x) ? pu.x : 'x.com/' + pu.x) : null, tg: pu.t ? linkOf(/[\/.]/.test(pu.t) ? pu.t : 't.me/' + pu.t) : null, web: pu.w ? linkOf(pu.w) : null }; }
-      (/\/ipfs\//.test(c.uri) ? fetch(c.uri.split('?')[0]).then(function (r) { return r.json(); }) : API ? apiGet('/api/meta/' + c.mint) : Promise.reject()).then(function (m) { var ch = false; if (m && m.image && !t.img) { t.img = m.image; ch = true; } if (m && m.description && !t.desc) { t.desc = m.description; ch = true; } if (m && m.banner && !t.banner) { t.banner = m.banner; ch = true; } if (ch) render(); }).catch(function () {}); }
+      (trustedMeta(c.uri) ? fetch(c.uri.split('?')[0]).then(function (r) { return r.json(); }) : API ? apiGet('/api/meta/' + c.mint) : Promise.reject()).then(function (m) { var ch = false; if (m && safeImg(m.image) && !t.img) { t.img = safeImg(m.image); ch = true; } if (m && m.description && !t.desc) { t.desc = m.description; ch = true; } if (m && safeImg(m.banner) && !t.banner) { t.banner = safeImg(m.banner); ch = true; } if (ch) render(); }).catch(function () {}); }
     return t;
   }
   function liveLoad(t) {
@@ -3862,17 +3898,18 @@
   }
   function liveStart() {
     if (!API) return;
-    apiGet('/api/health').then(function (h) { if (h && h.ops && !window.TREID_PARTNER) { PARTNER = h.ops; S.escrowWallet = h.ops; } }).catch(function () {});
+    apiGet('/api/health').then(function (h) { if (!h || !h.ops) return; if (!window.TREID_PARTNER || API_DEV) { PARTNER = h.ops; S.escrowWallet = h.ops; } else if (h.ops !== window.TREID_PARTNER) { S.opsMismatch = true; console.warn('[treid] server ops wallet does not match the pinned one — launching disabled'); render(); } }).catch(function () {});
     apiGet('/api/coins').then(function (cs) {
       S.apiOk = true; cs.filter(Boolean).forEach(liveTok); render();
       if (S.pendingRoute) { var pr = S.pendingRoute, tp = S.live.filter(function (x) { return x.ca === pr; })[0]; S.pendingRoute = null; var rr = routeReady; routeReady = false; if (tp) openToken(tp.tick); else { set({ screen: 'home' }); toast('That coin wasn\'t found'); } routeReady = rr; }
       var es = new EventSource(API + '/api/stream');
-      es.onmessage = function (m) { var ev; try { ev = JSON.parse(m.data); } catch (e) { return; } if (ev.type === 'trade') liveTrade(ev); else if (ev.type === 'coin') apiGet('/api/coin/' + ev.mint).then(function (c) { if (c) { var known = S.live.some(function (x) { return x.ca === c.mint; }), t = liveTok(c); if (!known && !isMob()) toast('New on treid: ' + t.name + ' $' + t.tick, t); render(); } }).catch(function () {}); };
+      es.onmessage = function (m) { var ev; try { ev = JSON.parse(m.data); } catch (e) { return; } if (ev.type === 'burn') burnsLoad(); else if (ev.type === 'trade') liveTrade(ev); else if (ev.type === 'coin') apiGet('/api/coin/' + ev.mint).then(function (c) { if (c) { var known = S.live.some(function (x) { return x.ca === c.mint; }), t = liveTok(c); if (!known && !isMob()) toast('New on treid: ' + t.name + ' $' + t.tick, t); render(); } }).catch(function () {}); };
       es.onerror = function () { S.apiOk = es.readyState === 1; };
       es.onopen = function () { S.apiOk = true; apiGet('/api/coins').then(function (cs2) { cs2.filter(Boolean).forEach(liveTok); }).catch(function () {}); };
     }).catch(function (e) { console.warn('[treid] indexer not reachable at', API, e); });
   }
   liveStart();
+  setInterval(function () { if (S.screen === 'burn' && !document.hidden) burnsLoad(); }, 30000);
   applyRoute(); render();   // same tick as the first paint → no flash of the board on refresh
 
   setTimeout(function () { S.loading = false; render(); routeReady = true; syncRoute(); }, 850);

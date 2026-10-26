@@ -17,7 +17,7 @@ export function opsKeypair(secret) {
 }
 const MEMO = new PublicKey('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr'), memoIx = (t) => new TransactionInstruction({ keys: [], programId: MEMO, data: Buffer.from(t) });
 const DEC = 6, SUPPLY = 1e9, MIN_HARVEST = 50_000 * 10 ** DEC;   // don't bother below 0.005% of supply
-const parseSplit = (uri) => { try { const s = new URL(uri).searchParams.get('s'); if (s) { const p = s.split('.').map(Number); if (p.length === 3 && p[0] + p[1] + p[2] === 100) return { h: p[0], b: p[1], d: p[2] }; } } catch {} return { h: 70, b: 20, d: 10 }; };
+const parseSplit = (uri) => { try { const s = new URL(uri).searchParams.get('s'); if (s) { const p = s.split('.').map(Number); if (p.length === 3 && p.every((x) => Number.isInteger(x) && x >= 0 && x <= 100) && p[0] + p[1] + p[2] === 100) return { h: p[0], b: p[1], d: p[2] }; } } catch {} return { h: 70, b: 20, d: 10 }; };
 
 export function startOps({ conn, dbc, ops, treasury, q, q1, run, quoteUsd = () => 150, poolAuthority, log = console.log, everyMs = 10 * 60e3, liabilities = () => 0, devState = (c) => ({ state: 'active', creator: c.creator }) }) {
   run(`CREATE TABLE IF NOT EXISTS payouts(id INTEGER PRIMARY KEY AUTOINCREMENT, mint TEXT, ts INT, harvested REAL, burned REAL, dev REAL, holders REAL, n_holders INT, fees_sol REAL)`);
@@ -52,12 +52,14 @@ export function startOps({ conn, dbc, ops, treasury, q, q1, run, quoteUsd = () =
       await send([createAssociatedTokenAccountIdempotentInstruction(ops.publicKey, devAta, new PublicKey(devTo), mint, TOKEN_2022_PROGRAM_ID), createTransferCheckedInstruction(opsAta, mint, devAta, ops.publicKey, devAmt, DEC, [], TOKEN_2022_PROGRAM_ID)]); }
     // holders: pro-rata to every real holder (not the curve vault, not ops, not the dev who already got the dev share)
     const skip = new Set([poolAuthority, ops.publicKey.toBase58(), c.creator, devTo]);
-    const hs = accs.filter((a) => a.amount > 0n && !skip.has(a.owner.toBase58())), held = hs.reduce((s, a) => s + a.amount, 0n);
+    const hs = accs.filter((a) => a.amount > 0n && !skip.has(a.owner.toBase58()) && PublicKey.isOnCurve(a.owner.toBytes())), held = hs.reduce((s, a) => s + a.amount, 0n);   // PDAs (pool vaults after migration, programs) are not holders
     let paid = 0n, n = 0;
     if (holdAmt > 0n && held > 0n) {
       const shares = hs.map((a) => ({ to: a.address, amt: holdAmt * a.amount / held })).filter((x) => x.amt >= 1000n);   // skip dust
+      const ix = (x) => createTransferCheckedInstruction(opsAta, mint, x.to, ops.publicKey, x.amt, DEC, [], TOKEN_2022_PROGRAM_ID);
       for (let i = 0; i < shares.length; i += 8) { const batch = shares.slice(i, i + 8);
-        await send(batch.map((x) => createTransferCheckedInstruction(opsAta, mint, x.to, ops.publicKey, x.amt, DEC, [], TOKEN_2022_PROGRAM_ID))); paid += batch.reduce((s, x) => s + x.amt, 0n); n += batch.length; }
+        try { await send(batch.map(ix)); paid += batch.reduce((s, x) => s + x.amt, 0n); n += batch.length; }
+        catch { for (const x of batch) { try { await send([ix(x)]); paid += x.amt; n++; } catch (e) { log('ops   skip holder', x.to.toBase58().slice(0, 6), e.message.slice(0, 60)); } } } }   // one bad account never blocks the rest
     }
     const left = holdAmt - paid; if (left > 0n) await send([createBurnCheckedInstruction(opsAta, mint, ops.publicKey, left, DEC, [], TOKEN_2022_PROGRAM_ID)]);   // nobody to pay → burn it
     const f = (x) => Number(x) / 10 ** DEC, burnTot = burnAmt + left + (devBurn ? devAmt : 0n), devPaid = devBurn ? 0n : devAmt;

@@ -34,13 +34,21 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, q
   const record = (sig, items) => items.forEach((it, i) => run('INSERT OR IGNORE INTO rlog(sig,i,mint,kind,lamports,ts,extra) VALUES(?,?,?,?,?,?,?)', sig, i, it.mint, it.kind, it.lamports, Date.now(), it.extra || null));
   const stamp = async (mint, kind, lamports = 0, extra = null, more = []) => { const s = await send([...more, memo(`treid:${kind}:${mint}:${lamports}` + (extra ? ':' + extra : ''))]); record(s, [{ mint, kind, lamports, extra }]); return s; };
   const verify = (msg, sig, wallet) => ed25519.verify(bs58.decode(sig), new TextEncoder().encode(msg), new PublicKey(wallet).toBytes());
-  const fresh = (ts) => { if (Math.abs(Date.now() - ts) > 10 * 60e3) throw new Error('signature expired — try again'); };
+  const fresh = (ts) => { if (!(Math.abs(Date.now() - ts) <= 2 * 60e3)) throw new Error('signature expired — try again'); };
+  // anti-replay + anti-spam: each signature works once, each wallet can act once per 30s per action
+  const usedSig = new Map(), lastAct = new Map();
+  const guard = (kind, wallet, sig) => { const now = Date.now(); for (const [k, t] of usedSig) if (now - t > 5 * 60e3) usedSig.delete(k);
+    if (usedSig.has(sig)) throw new Error('this signature was already used'); const k = kind + '|' + wallet; if (now - (lastAct.get(k) || 0) < 30e3) throw new Error('slow down — try again in a few seconds');
+    usedSig.set(sig, now); lastAct.set(k, now); };
+  const VOTE_WINDOW = 24 * 36e5;   // a takeover can only be approved after its application has been open this long (balances re-checked then)
 
   async function rebuild() {   // ledger = the ops wallet's own memo history
     let before, n = 0;
     while (true) { const page = await conn.getSignaturesForAddress(ops.publicKey, { limit: 1000, before }, 'confirmed'); if (!page.length) break;
       for (const x of page) { if (x.err || q1('SELECT 1 FROM rlog WHERE sig=?', x.signature)) continue; const t = await conn.getTransaction(x.signature, { maxSupportedTransactionVersion: 0 }).catch(() => null); if (!t) continue;
-        const items = (t.meta.logMessages || []).map((l) => (l.match(/Memo \(len \d+\): "(treid:[^"]+)"/) || [])[1]).filter(Boolean).map((m) => { const p = m.split(':'); return { kind: p[1], mint: p[2], lamports: +p[3] || 0, extra: p.length > 4 ? p.slice(4).join(':') : null }; });
+        const msg = t.transaction.message, keys = msg.getAccountKeys ? msg.getAccountKeys({ accountKeysFromLookups: t.meta.loadedAddresses }) : null, key = (i) => (keys ? keys.get(i) : msg.accountKeys[i]);
+        if (!key(0) || !key(0).equals(ops.publicKey)) continue;   // only the ops wallet's OWN transactions (fee payer = ops) — anyone can send memos to ops
+        const items = (msg.compiledInstructions || []).filter((ix) => key(ix.programIdIndex).equals(MEMO)).map((ix) => Buffer.from(ix.data).toString('utf8')).filter((m) => m.startsWith('treid:')).map((m) => { const p = m.split(':'); return { kind: p[1], mint: p[2], lamports: +p[3] || 0, extra: p.length > 4 ? p.slice(4).join(':') : null }; });
         items.forEach((it, i) => run('INSERT OR IGNORE INTO rlog(sig,i,mint,kind,lamports,ts,extra) VALUES(?,?,?,?,?,?,?)', x.signature, i, it.mint, it.kind, it.lamports, (x.blockTime || 0) * 1000, it.extra)); n += items.length; }
       if (page.length < 1000) break; before = page[page.length - 1].signature; }
     log('rewards ledger rebuilt:', n, 'entries');
@@ -83,9 +91,10 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, q
     const qt = dbc.pool.swapQuote2({ virtualPool: vpw, config: cfg, swapBaseForQuote: false, amountIn: new BN(lamports), slippageBps: 1000, hasReferral: false, currentPoint: cp, swapMode: SwapMode.ExactIn });
     const sw = await dbc.pool.swap2({ owner: ops.publicKey, pool: new PublicKey(c.pool), swapBaseForQuote: false, referralTokenAccount: null, swapMode: SwapMode.ExactIn, amountIn: new BN(lamports), minimumAmountOut: qt.minimumAmountOut || new BN(0) });
     const cl = await dbc.creator.claimCreatorTradingFee({ creator: ops.publicKey, payer: ops.publicKey, pool: new PublicKey(c.pool), maxBaseAmount: new BN(0), maxQuoteAmount: new BN(lamports) });
+    const before = await getAccount(conn, ata, 'confirmed', TOKEN_2022_PROGRAM_ID).then((a) => a.amount).catch(() => 0n);
     const full = new Transaction().add(...cl.instructions, ...sw.instructions, memo(`treid:buyback:${c.mint}:${lamports}`));   // claim + swap in ONE tx
     const s1 = await sendAndConfirmTransaction(conn, full, [ops], { commitment: 'confirmed' }); record(s1, [{ mint: c.mint, kind: 'buyback', lamports }]);
-    const got = (await getAccount(conn, ata, 'confirmed', TOKEN_2022_PROGRAM_ID)).amount;   // under the ops lock this ATA only holds bought-back tokens
+    const got = (await getAccount(conn, ata, 'confirmed', TOKEN_2022_PROGRAM_ID)).amount - before;   // burn only what this swap bought
     if (got > 0n) await stamp(c.mint, 'burntok', Number(got), null, [createBurnCheckedInstruction(ata, mint, ops.publicKey, got, 6, [], TOKEN_2022_PROGRAM_ID)]);
     log('rewards buyback', c.symbol, (lamports / 10 ** (c.quote_dec ?? 9)).toFixed(4), c.quote_symbol || 'SOL', '→ burned', (Number(got) / 1e6).toFixed(0), 'tokens');
   }
@@ -112,7 +121,7 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, q
   }
   async function tryApprove(c) {
     const st = state(c); if (st.era !== 'out') return null;
-    const best = (await applications(c)).find((a) => a.eligible && a.supportPct >= RULES.ctoSupportPct); if (!best) return null;
+    balCache.delete(c.mint); const best = (await applications(c)).find((a) => a.eligible && a.supportPct >= RULES.ctoSupportPct && Date.now() - a.at >= VOTE_WINDOW); if (!best) return null;
     await stamp(c.mint, 'cto', Math.max(0, st.fund), best.wallet); log('rewards CTO approved', c.symbol, '→', best.wallet.slice(0, 6), (best.supportPct).toFixed(1) + '%'); return best;
   }
   async function cycleCoin(c) {
@@ -135,12 +144,12 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, q
   const cycle = () => withLock(async () => { for (const c of q('SELECT * FROM coins')) { try { await cycleCoin(c); } catch (e) { log('rewards err', c.symbol, e.message.slice(0, 140)); } } });
   const coin = (mint) => { const c = q1('SELECT * FROM coins WHERE mint=?', mint); if (!c) throw new Error('unknown coin'); return c; };
   async function ping({ mint, wallet, ts, sig }) {
-    const c = coin(mint), st = state(c); fresh(ts); if (!verify(pingMessage(mint, ts), sig, wallet)) throw new Error('bad signature');
+    const c = coin(mint), st = state(c); fresh(ts); if (!verify(pingMessage(mint, ts), sig, wallet)) throw new Error('bad signature'); guard('ping', wallet, sig);
     if (st.era === 'out' || st.state === 'out') throw new Error('creator is already out'); if (wallet !== st.creator) throw new Error('only the current creator can check in');
     await withLock(() => stamp(mint, 'ping', 0, wallet)); return { ok: true };
   }
   async function claimNow({ mint, wallet, ts, sig }) {
-    const c = coin(mint); fresh(ts); if (!verify(claimMessage(mint, ts), sig, wallet)) throw new Error('bad signature');
+    const c = coin(mint); fresh(ts); if (!verify(claimMessage(mint, ts), sig, wallet)) throw new Error('bad signature'); guard('claim', wallet, sig);
     return withLock(async () => { const st = state(c); if (wallet !== st.creator) throw new Error('only the current creator can claim');
       if (st.state !== 'active') throw new Error(st.state === 'frozen' ? 'payouts are paused — tap “I’m still here” first' : 'creator is out');
       const vp = (await dbc.state.getPool(new PublicKey(c.pool))).poolState, free = Math.max(0, Number(vp.creatorQuoteFee.toString()) - st.fund);
@@ -148,16 +157,18 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, q
   }
   async function ctoApply({ mint, wallet, ts, sig, plan }) {
     const c = coin(mint), p = cleanPlan(plan); fresh(ts); if (p.length < 10) throw new Error('write a short plan (10+ characters)');
-    if (!verify(applyMessage(mint, ts, String(plan || '').slice(0, 240)), sig, wallet) && !verify(applyMessage(mint, ts, p), sig, wallet)) throw new Error('bad signature');
+    if (!verify(applyMessage(mint, ts, String(plan || '').slice(0, 240)), sig, wallet) && !verify(applyMessage(mint, ts, p), sig, wallet)) throw new Error('bad signature'); guard('apply', wallet, sig);
+    if (q1(`SELECT 1 FROM rlog WHERE mint=? AND kind='ctoapply' AND ts>=? AND extra LIKE ?`, mint, era(c).start || 0, wallet + '|%')) throw new Error('you already applied');
     if (state(c).era !== 'out') throw new Error('takeovers open only when the creator is out'); if (pastLeads(c).has(wallet)) throw new Error('this wallet can’t lead this coin');
     balCache.delete(mint); const own = (await bals(mint)).get(wallet) || 0; if (own / SUPPLY * 100 < RULES.ctoApplyPct) throw new Error(`you need at least ${RULES.ctoApplyPct}% of the supply to apply`);
     await withLock(() => stamp(mint, 'ctoapply', 0, wallet + '|' + p)); return { ok: true };
   }
   async function ctoVote({ mint, applicant, wallet, ts, sig }) {
-    const c = coin(mint); fresh(ts); if (!verify(voteMessage(mint, applicant, ts), sig, wallet)) throw new Error('bad signature');
+    const c = coin(mint); fresh(ts); if (!verify(voteMessage(mint, applicant, ts), sig, wallet)) throw new Error('bad signature'); guard('vote', wallet, sig);
+    const prev = q1(`SELECT extra FROM rlog WHERE mint=? AND kind='ctovote' AND ts>=? AND extra LIKE ? ORDER BY ts DESC LIMIT 1`, mint, era(c).start || 0, wallet + '|%'); if (prev && prev.extra === wallet + '|' + applicant) return { ok: true, approved: false, already: true };
     if (state(c).era !== 'out') throw new Error('no takeover vote is open'); if (pastLeads(c).has(wallet)) throw new Error('this wallet can’t vote here');
     balCache.delete(mint); if (!((await bals(mint)).get(wallet) > 0)) throw new Error('only holders can support a takeover');
-    return withLock(async () => { await stamp(mint, 'ctovote', 0, wallet + '|' + applicant); const won = await tryApprove(c); return { ok: true, approved: !!won }; });
+    await withLock(() => stamp(mint, 'ctovote', 0, wallet + '|' + applicant)); return { ok: true, approved: false };   // approval happens in the cycle, after the voting window, with balances re-checked
   }
   return { rebuild, cycle, state, era, applications, ping, claimNow, ctoApply, ctoVote, logFor: (mint) => q(`SELECT sig, kind, lamports, ts, extra FROM rlog WHERE mint=? AND kind NOT IN ('ctovote','ctoapply') ORDER BY ts DESC LIMIT 30`, mint) };
 }

@@ -4329,3 +4329,5 @@ button[disabled].big-btn{opacity:.7;cursor:progress}
 @media (max-width:900px){.tp-grid3.no-thread{grid-template-columns:1fr}}
 .tc-empty{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:8px;padding:28px}
 .tc-empty b{font-size:20px}.tc-empty small{color:var(--muted);font-size:13.5px}
+.i3-slogan{display:block;color:var(--ivory,#fff);font-size:1.15em;margin-bottom:4px}
+.devbar{position:fixed;left:12px;bottom:12px;z-index:9999;background:#5A1E12;color:#FFD9C9;border:1px solid #FF7A50;border-radius:10px;padding:6px 10px;font-size:12px;font-weight:700;pointer-events:none}

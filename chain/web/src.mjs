@@ -1,11 +1,11 @@
 // treid browser chain module → bundled to chain.js (window.TreidChain). Builds real DBC transactions; the wallet only signs.
 import { Buffer } from 'buffer';
 if (!globalThis.Buffer) globalThis.Buffer = Buffer;
-import { Connection, Keypair, PublicKey, Transaction, SystemProgram } from '@solana/web3.js';
+import { Connection, Keypair, PublicKey, Transaction, SystemProgram, TransactionInstruction } from '@solana/web3.js';
 import { ed25519 } from '@noble/curves/ed25519';
 import bs58lib from 'bs58';
 const bs58enc = (b) => (bs58lib.default || bs58lib).encode(b instanceof Uint8Array ? b : Uint8Array.from(b));
-import { NATIVE_MINT, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, getMint, getExtensionTypes, ExtensionType, getTransferFeeConfig } from '@solana/spl-token';
+import { NATIVE_MINT, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, getAssociatedTokenAddressSync, createBurnCheckedInstruction, getMint, getExtensionTypes, ExtensionType, getTransferFeeConfig } from '@solana/spl-token';
 import BN from 'bn.js';
 import { DynamicBondingCurveClient, buildCurveWithMarketCap, TokenType, TokenDecimal, TokenAuthorityOption, BaseFeeMode, CollectFeeMode,
   MigrationOption, MigrationFeeOption, MigratedCollectFeeMode, DammV2DynamicFeeMode, ActivationType, deriveDbcPoolAddress, deriveDammV1MigrationMetadataAddress, SwapMode, getCurrentPoint } from '@meteora-ag/dynamic-bonding-curve-sdk';
@@ -153,6 +153,13 @@ export function cosign(signed, cosigners = []) {
 export async function creatorFees({ rpc, pool }) {
   const vpw = await client(rpc).state.getPool(pk(pool)); const vp = vpw.poolState || vpw, cfg = await client(rpc).state.getPoolConfig(vp.config), qi = await quoteInfo({ rpc, mint: cfg.quoteMint.toBase58() }), D = 10 ** qi.decimals;
   return { quoteMint: qi.mint, unclaimed: Number(vp.creatorQuoteFee.toString()) / D, creator: vp.creator.toBase58(), partnerUnclaimed: Number(vp.partnerQuoteFee.toString()) / D };
+}
+// burn your own tokens of a treid coin (permanent) — with a memo so it's recognisable on-chain
+export async function buildBurn({ rpc, owner, mint, amount }) {
+  owner = pk(owner); const m = pk(mint), raw = BigInt(Math.floor(amount * 10 ** RULES.decimals)); if (raw <= 0n) throw new Error('Nothing to burn');
+  const ata = getAssociatedTokenAddressSync(m, owner, false, TOKEN_2022_PROGRAM_ID);
+  const tx = new Transaction().add(createBurnCheckedInstruction(ata, m, owner, raw, RULES.decimals, [], TOKEN_2022_PROGRAM_ID), new TransactionInstruction({ keys: [], programId: pk('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr'), data: Buffer.from(`treid:burn:${m.toBase58()}:${raw}`) }));
+  return { ...(await finish(rpc, [tx], owner, [])), tokens: Number(raw) / 10 ** RULES.decimals };
 }
 export async function buildClaimCreator({ rpc, creator, pool }) {
   creator = pk(creator); const vpw = await client(rpc).state.getPool(pk(pool)); const vp = vpw.poolState || vpw;
