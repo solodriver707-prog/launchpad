@@ -21,6 +21,7 @@ export function opsKeypair(secret, { mainnet = false } = {}) {
   return Keypair.fromSeed(createHash('sha256').update('treid-ops:' + s).digest());
 }
 const MEMO = new PublicKey('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr'), memoIx = (t) => new TransactionInstruction({ keys: [], programId: MEMO, data: Buffer.from(t) });
+const WSOL = 'So11111111111111111111111111111111111111112', START = Date.now() - 7 * 864e5;   // after a restart: re-check fees of coins traded in the last week
 const DEC = 6, HARVEST_USD = 5, SHARE_USD = 0.05, FEE_USD = 1, MAX_ACCTS = 200;
 const parseSplit = (uri) => { try { const s = new URL(uri).searchParams.get('s'); if (s) { const p = s.split('.').map(Number); if (p.length === 3 && p.every((x) => Number.isInteger(x) && x >= 0 && x <= 100) && p[0] + p[1] + p[2] === 100) return { h: p[0], b: p[1], d: p[2] }; } } catch {} return { h: 70, b: 20, d: 10 }; };
 
@@ -32,11 +33,19 @@ export function startOps({ conn, dbc, ops, treasury, q, q1, run, quoteUsd = () =
 
   async function claimFees() {
     for (const c of q('SELECT * FROM coins')) {
-      const lt = lastTradeTs(c.mint), ls = seenFee.get(c.mint) || 0; if (lt <= ls && Date.now() - ls < 24 * 36e5) continue;   // nothing traded since the last look → nothing new to claim
+      const lt = lastTradeTs(c.mint), ls = seenFee.get(c.mint) || START; if (lt <= ls) continue;   // fees only grow with trades: nothing traded since the last look → nothing to claim
       try { const vpw = await dbc.state.getPool(new PublicKey(c.pool)), vp = vpw?.poolState || vpw; if (!vp) continue;
         if (c.config) { const cfg = await dbc.state.getPoolConfig(vp.config); if (cfg.feeClaimer.toBase58() !== ops.publicKey.toBase58()) { seenFee.set(c.mint, Date.now()); continue; } }
         const fee = Number(vp.partnerQuoteFee.toString()) / 10 ** (c.quote_dec ?? 9); if (fee * (quoteUsd(c) || 0) < FEE_USD) { seenFee.set(c.mint, Date.now()); continue; }
-        const tx = await dbc.partner.claimPartnerTradingFeeToReceiver({ pool: new PublicKey(c.pool), feeClaimer: ops.publicKey, payer: ops.publicKey, maxBaseAmount: new BN(0), maxQuoteAmount: new BN(vp.partnerQuoteFee.toString()), receiver: new PublicKey(treasury) });
+        // claimed INTO ops (a claim "to the treasury" would open a coin account for the treasury and pay its rent, for every coin), then:
+        // SOL → the sweep forwards it; other pair tokens → passed on to the treasury in the same transaction, exact amount
+        const amt = BigInt(vp.partnerQuoteFee.toString()), mint = new PublicKey(c.mint), tx = await dbc.partner.claimPartnerTradingFeeToReceiver({ pool: new PublicKey(c.pool), feeClaimer: ops.publicKey, payer: ops.publicKey, maxBaseAmount: new BN(0), maxQuoteAmount: new BN(amt.toString()), receiver: ops.publicKey });
+        const qm = new PublicKey(c.quote_mint || WSOL); if (!qm.equals(new PublicKey(WSOL))) { const qprog = (await conn.getAccountInfo(qm)).owner, dst = getAssociatedTokenAddressSync(qm, new PublicKey(treasury), true, qprog);
+          tx.add(createAssociatedTokenAccountIdempotentInstruction(ops.publicKey, dst, new PublicKey(treasury), qm, qprog), createTransferCheckedInstruction(getAssociatedTokenAddressSync(qm, ops.publicKey, false, qprog), qm, dst, ops.publicKey, amt, c.quote_dec ?? 6, [], qprog)); }
+        const ata = getAssociatedTokenAddressSync(mint, ops.publicKey, false, TOKEN_2022_PROGRAM_ID), ai = await conn.getAccountInfo(ata); let closeOk = !ai;
+        if (ai) { try { const a = unpackAccount(ata, ai, TOKEN_2022_PROGRAM_ID); closeOk = a.amount === 0n && !(getTransferFeeAmount(a)?.withheldAmount > 0n); } catch {} }
+        if (closeOk) tx.add(createCloseAccountInstruction(ata, ops.publicKey, ops.publicKey, [], TOKEN_2022_PROGRAM_ID));   // the claim opens ops' coin account; close it again, rent back
+        tx.add(memoIx(`treid:pfee:${c.mint}:${amt}`));
         await send(tx); seenFee.set(c.mint, Date.now()); log('ops   claimed', fee.toFixed(4), c.quote_symbol || 'SOL', 'from', c.symbol, '→ treasury');
       } catch (e) { log('ops   claim err', c.symbol, e.message.slice(0, 120)); }
     }
@@ -51,7 +60,7 @@ export function startOps({ conn, dbc, ops, treasury, q, q1, run, quoteUsd = () =
     const total = withheld.reduce((s, a) => s + wa(a), 0n) + inMint + stranded;
     if (Number(total) / 10 ** DEC * px < HARVEST_USD) return null;   // not worth the transactions yet
     if (!opsAcc) await send([createAssociatedTokenAccountIdempotentInstruction(ops.publicKey, opsAta, ops.publicKey, mint, TOKEN_2022_PROGRAM_ID)]);
-    for (let i = 0; i < withheld.length; i += 20) await send([createWithdrawWithheldTokensFromAccountsInstruction(mint, opsAta, ops.publicKey, [], withheld.slice(i, i + 20).map((a) => a.address), TOKEN_2022_PROGRAM_ID)]);
+    for (let i = 0; i < withheld.length; i += 24) await send([createWithdrawWithheldTokensFromAccountsInstruction(mint, opsAta, ops.publicKey, [], withheld.slice(i, i + 24).map((a) => a.address), TOKEN_2022_PROGRAM_ID)]);   // 24 accounts per tx (size limit)
     if (inMint > 0n) await send([createWithdrawWithheldTokensFromMintInstruction(mint, opsAta, ops.publicKey, [], TOKEN_2022_PROGRAM_ID)]);
     const got = (await getAccount(conn, opsAta, 'confirmed', TOKEN_2022_PROGRAM_ID)).amount; if (got <= 0n) return null;   // the WHOLE balance: harvest + anything stranded earlier
     const sp = parseSplit(c.uri), burnAmt = got * BigInt(sp.b) / 100n, devAmt = got * BigInt(sp.d) / 100n, holdAmt = got - burnAmt - devAmt;
@@ -65,7 +74,7 @@ export function startOps({ conn, dbc, ops, treasury, q, q1, run, quoteUsd = () =
     let paid = 0n, n = 0, aborted = false;
     if (holdAmt > 0n && held > 0n) {
       const shares = hs.map((a) => ({ to: a.to, amt: holdAmt * a.total / held })).filter((x) => x.amt >= minAmt), ix = (x) => createTransferCheckedInstruction(opsAta, mint, x.to, ops.publicKey, x.amt, DEC, [], TOKEN_2022_PROGRAM_ID);
-      for (let i = 0; i < shares.length; i += 8) { const batch = shares.slice(i, i + 8);
+      for (let i = 0; i < shares.length; i += 16) { const batch = shares.slice(i, i + 16);   // 16 transfers per tx (fits the size limit with the compute budget)
         try { await send(batch.map(ix)); paid += batch.reduce((s, x) => s + x.amt, 0n); n += batch.length; }
         catch (e) { if (e.unconfirmed) { aborted = true; log('ops   batch unconfirmed — stopping, next cycle redistributes what is left', c.symbol); break; }   // never resend a batch that may have landed
           for (const x of batch) { try { await send([ix(x)]); paid += x.amt; n++; } catch (e2) { if (e2.unconfirmed) { aborted = true; break; } log('ops   skip holder', x.to.toBase58().slice(0, 6), e2.message.slice(0, 60)); } } } }
@@ -90,7 +99,7 @@ export function startOps({ conn, dbc, ops, treasury, q, q1, run, quoteUsd = () =
     if (busy || !ready()) return; busy = true;
     try { await claimFees();
       for (const c of q('SELECT * FROM coins WHERE tax_bps > 0')) {
-        const lt = lastTradeTs(c.mint), ls = seenTax.get(c.mint) || 0; if (!(lt > ls && Date.now() - ls > 36e5) && Date.now() - ls < 24 * 36e5) continue;   // hourly at most, only after new trades (daily fallback)
+        const lt = lastTradeTs(c.mint), ls = seenTax.get(c.mint) || 0; if (!(lt > ls && Date.now() - ls > 36e5) && Date.now() - ls < 7 * 864e5) continue;   // hourly at most, only after new trades (weekly fallback: plain wallet-to-wallet transfers pay tax too)
         try { const cfg = await dbc.state.getPoolConfig(new PublicKey(c.config)); if (cfg.feeClaimer.toBase58() === ops.publicKey.toBase58()) await taxCycle(c); seenTax.set(c.mint, Date.now()); } catch (e) { log('ops   tax err', c.symbol, e.message.slice(0, 140)); } }
       await sweep();
     } catch (e) { log('ops   cycle err', e.message); } finally { busy = false; }

@@ -1,6 +1,6 @@
 // treid indexer: listens to Meteora DBC, stores treid coins + trades in SQLite, serves a JSON API + live stream
 import { Connection, PublicKey } from '@solana/web3.js';
-import { TOKEN_2022_PROGRAM_ID, getTokenMetadata, unpackAccount, getTransferFeeConfig, getMint, getExtensionTypes, ExtensionType } from '@solana/spl-token';
+import { TOKEN_2022_PROGRAM_ID, getTokenMetadata, unpackAccount, getTransferFeeConfig, getMint, getExtensionTypes, ExtensionType, getScaledUiAmountConfig } from '@solana/spl-token';
 import { DynamicBondingCurveClient, DYNAMIC_BONDING_CURVE_PROGRAM_ID, deriveDbcPoolAuthority, DynamicBondingCurveIdl, getPriceFromSqrtPrice, deriveDammV2PoolAddress, DAMM_V2_MIGRATION_FEE_ADDRESS } from '@meteora-ag/dynamic-bonding-curve-sdk';
 import { CpAmm, CpAmmIdl, getPriceFromSqrtPrice as ammPrice } from '@meteora-ag/cp-amm-sdk';
 import anchor from '@coral-xyz/anchor';
@@ -43,8 +43,14 @@ const STABLE = new Set(['EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', 'Es9vMFr
 function quoteUsd(mint, symbol) { if (!mint || mint === WSOL) return SOL_USD; if (QUOTE_OVERRIDE[mint] != null) return +QUOTE_OVERRIDE[mint]; const p = qPrice.get(mint); if (p) return p; return STABLE.has(mint) ? 1 : 0; }
 async function quotePrices() {
   const ms = q('SELECT DISTINCT quote_mint m FROM coins WHERE quote_mint IS NOT NULL AND quote_mint != ?', WSOL).map((r) => r.m).filter((m) => QUOTE_OVERRIDE[m] == null); if (!ms.length) return;
-  try { const r = await fetchT('https://lite-api.jup.ag/price/v3?ids=' + ms.slice(0, 50).join(',')); const j = await r.json(); for (const m of ms) if (j?.[m]?.usdPrice) qPrice.set(m, +j[m].usdPrice); } catch {}
+  try { const r = await fetchT('https://lite-api.jup.ag/price/v3?ids=' + ms.slice(0, 50).join(',')); const j = await r.json(); for (const m of ms) if (j?.[m]?.usdPrice) qPrice.set(m, +j[m].usdPrice * (await qMult(m))); } catch {}
 }
+const multC = new Map();
+async function qMult(m) {   // current UI multiplier of a scaled-UI-amount token (1 for everything else)
+  const h = multC.get(m); if (h && Date.now() - h.at < 6e5) return h.v; let v = 1;
+  try { const ai = await conn.getAccountInfo(new PublicKey(m)); if (ai?.owner.equals(TOKEN_2022_PROGRAM_ID)) { const sc = getScaledUiAmountConfig(await getMint(conn, new PublicKey(m), 'confirmed', TOKEN_2022_PROGRAM_ID));
+    if (sc) v = Date.now() / 1000 >= Number(sc.newMultiplierEffectiveTimestamp) ? Number(sc.newMultiplier) : Number(sc.multiplier); } } catch {}
+  if (!(v > 0)) v = 1; multC.set(m, { v, at: Date.now() }); return v; }
 const KNOWN_Q = { [WSOL]: 'SOL', EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v: 'USDC', Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB: 'USDT', '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU': 'USDC' };
 const conn = new Connection(RPC, { commitment: 'confirmed', wsEndpoint: WS });
 const dbc = new DynamicBondingCurveClient(conn, 'confirmed'), amm = new CpAmm(conn);
@@ -93,11 +99,28 @@ function treidConfig(cf) {
   } catch { return false; } }
 async function loadConfigs() {
   if (!PARTNERS.length) return; const cs = (await Promise.all(PARTNERS.map((w) => dbc.state.getPoolConfigsByOwner(new PublicKey(w))))).flat();
-  for (const c of cs) { const k = c.publicKey.toBase58(); if (!configs.has(k) && treidConfig(c.account) && configs.size < 20000) { configs.add(k); watchConfig(k); } }
+  for (const c of cs) { const k = c.publicKey.toBase58(); if (!configs.has(k) && treidConfig(c.account) && configs.size < 20000) configs.add(k); }   // which ones get a live stream is decided by retier()
 }
-function watchConfig(k) {
-  if (watched.has(k)) return;
-  watched.set(k, conn.onLogs(new PublicKey(k), (l) => { if (!l.err) enqueue(l.signature); }, 'confirmed'));
+const cfgFound = new Map();   // configs seen being created (their coin may not be indexed yet) → counted as active
+async function addConfig(k) {   // one new config, read on its own (never a rescan of every config)
+  if (configs.has(k)) return true; if (configs.size >= 20000) return false;
+  const cf = await dbc.state.getPoolConfig(new PublicKey(k)).catch(() => null); if (!cf || !treidConfig(cf)) return false;
+  configs.add(k); cfgFound.set(k, Date.now()); watch(k); for (const ms of [6e3, 25e3]) setTimeout(() => syncAddress(k, 100).catch(() => {}), ms); return true;   // its pool may be created before the stream is up
+}
+function watch(k) { if (watched.has(k)) return; watched.set(k, conn.onLogs(new PublicKey(k), (l) => { if (!l.err) enqueue(l.signature); }, 'confirmed')); }
+function unwatch(k) { const id = watched.get(k); if (id == null) return; watched.delete(k); conn.removeOnLogsListener(id).catch(() => {}); }
+// live streams only for addresses with recent activity (an RPC allows a limited number of subscriptions); quiet ones are polled less often
+const LIVE_MS = 48 * 36e5, MAX_LIVE = +(process.env.MAX_LIVE || 1500);
+function activity() {
+  const last = new Map(), bump = (a, t) => { if (a) last.set(a, Math.max(last.get(a) || 0, t || 0)); };
+  for (const r of q('SELECT c.config a, c.damm d, c.created_at cr, (SELECT MAX(ts) FROM trades t WHERE t.mint=c.mint) lt FROM coins c')) { const t = Math.max(r.cr || 0, r.lt || 0); if (r.d) bump(r.d, t); else bump(r.a, t); }   // graduated: only its DAMM pool still trades
+  for (const k of configs) if (!last.has(k) && !q1('SELECT 1 FROM coins WHERE config=? AND damm IS NOT NULL', k)) last.set(k, cfgFound.get(k) || 0);
+  return last;
+}
+function retier() {
+  const now = Date.now(), act = activity(), live = new Set([...act].filter(([, t]) => now - t < LIVE_MS).sort((x, y) => y[1] - x[1]).slice(0, MAX_LIVE).map((x) => x[0]));
+  const n0 = watched.size; for (const k of live) watch(k); for (const k of [...watched.keys()]) if (!live.has(k)) unwatch(k);
+  if (watched.size !== n0) console.log('live  ', watched.size, 'streams of', act.size, 'addresses'); return act;
 }
 async function syncAddress(addr, limit = 1000) {   // fetch history (oldest first), skipping what we've already processed
   let before, all = [];
@@ -110,9 +133,13 @@ const clients = new Set(); const push = (ev) => { const s = `data: ${JSON.string
 let CO = null, coinsSnap = null, burnsSnap = null;   // callouts (started below, once the helpers exist)
 
 // pair tokens: SOL, USDC, USDT always; anything else only if Jupiter lists it as verified with real liquidity (no self-priced fakes)
-const qOk = new Map();
+const qOk = new Map(), badgeC = new Map();
+// Meteora's own approval for a Token-2022 pair token with extra features (e.g. tokenized stocks): a "token badge" PDA of the DBC program
+async function hasBadge(qm) { const h = badgeC.get(qm); if (h && Date.now() - h.at < 864e5) return h.ok;
+  const [b] = PublicKey.findProgramAddressSync([Buffer.from('token_badge'), new PublicKey(qm).toBuffer()], DYNAMIC_BONDING_CURVE_PROGRAM_ID), ai = await conn.getAccountInfo(b).catch(() => null);
+  const ok = !!ai && ai.owner.equals(DYNAMIC_BONDING_CURVE_PROGRAM_ID); badgeC.set(qm, { ok, at: Date.now() }); return ok; }
 async function quoteAllowed(qm) {
-  if (qm === WSOL || STABLE.has(qm) || QUOTE_OVERRIDE[qm] != null) return true; if (!MAINNET) return false; const h = qOk.get(qm); if (h && Date.now() - h.at < 864e5) return h.ok;
+  if (qm === WSOL || STABLE.has(qm) || QUOTE_OVERRIDE[qm] != null) return true; if (await hasBadge(qm)) return true; if (!MAINNET) return false; const h = qOk.get(qm); if (h && Date.now() - h.at < 864e5) return h.ok;
   let ok = false; try { const j = await (await fetchT('https://lite-api.jup.ag/tokens/v2/search?query=' + qm)).json(), t = Array.isArray(j) ? j.find((x) => x.id === qm) : null; ok = !!(t && (t.isVerified || (t.tags || []).includes('verified')) && (t.liquidity || 0) >= 1e5); } catch {}
   qOk.set(qm, { ok, at: Date.now() }); return ok;
 }
@@ -122,7 +149,7 @@ async function addCoin(mint, slot, ts, creator, poolAddr = null) {
   if (poolAddr) { const a = await dbc.state.getPool(new PublicKey(poolAddr)).catch(() => null); if (a && (a.poolState || a).baseMint?.toBase58() === mint) ps = { publicKey: new PublicKey(poolAddr), account: a }; }   // one cheap account read
   else ps = await dbc.state.getPoolByBaseMint(new PublicKey(mint)).catch(() => null);
   if (!ps) return false;
-  const pst = ps.account.poolState || ps.account; const cfg = pst.config.toBase58(); if (PARTNER && !configs.has(cfg)) { await loadConfigs(); if (!configs.has(cfg)) return false; }
+  const pst = ps.account.poolState || ps.account; const cfg = pst.config.toBase58(); if (PARTNER && !configs.has(cfg) && !(await addConfig(cfg))) return false;
   const cf = await dbc.state.getPoolConfig(pst.config).catch(() => null), bf = cf?.poolFees?.baseFee;
   const trap = bf && Number(bf.baseFeeMode) <= 1 ? { bps: Math.round(Number(bf.cliffFeeNumerator) / 1e5), secs: Number(bf.firstFactor) * Number(bf.secondFactor), steps: Number(bf.firstFactor) } : { bps: 0, secs: 0, steps: 0 };
   if (!creator) {   // seen first via a trade: find the pool's creation tx and read the creator from its DBC instruction
@@ -139,7 +166,8 @@ async function addCoin(mint, slot, ts, creator, poolAddr = null) {
   const OKX = new Set([ExtensionType.TransferFeeConfig, ExtensionType.MetadataPointer, ExtensionType.TokenMetadata]);
   if (!m || m.decimals !== 6 || m.mintAuthority || m.freezeAuthority || getExtensionTypes(m.tlvData).some((e) => !OKX.has(e))) { console.log('skip  non-standard coin', mint); return false; }
   const tfa = tf?.transferFeeConfigAuthority; if (tfa && !tfa.equals(PublicKey.default) && tfa.toBase58() !== deriveDbcPoolAuthority().toBase58()) { console.log('skip  tax can be changed by someone', mint); return false; }   // nobody but the program may ever change the tax
-  if (qm !== WSOL) { const qa = await conn.getAccountInfo(new PublicKey(qm)).catch(() => null); if (qa?.owner?.equals(TOKEN_2022_PROGRAM_ID)) { const qmi = await getMint(conn, new PublicKey(qm), 'confirmed', TOKEN_2022_PROGRAM_ID).catch(() => null); const QOK = new Set([ExtensionType.MetadataPointer, ExtensionType.TokenMetadata, ExtensionType.ImmutableOwner]); if (!qmi || getExtensionTypes(qmi.tlvData).some((e) => !QOK.has(e))) { console.log('skip  pair token not allowed', mint); return false; } } }
+  if (qm !== WSOL) { const qa = await conn.getAccountInfo(new PublicKey(qm)).catch(() => null); if (qa?.owner?.equals(TOKEN_2022_PROGRAM_ID)) { const qmi = await getMint(conn, new PublicKey(qm), 'confirmed', TOKEN_2022_PROGRAM_ID).catch(() => null); const QOK = new Set([ExtensionType.MetadataPointer, ExtensionType.TokenMetadata, ExtensionType.ImmutableOwner]); const tfq = qmi && getTransferFeeConfig(qmi), taxed = tfq && (tfq.newerTransferFee.transferFeeBasisPoints > 0 || tfq.olderTransferFee.transferFeeBasisPoints > 0);
+    if (!qmi || taxed || getExtensionTypes(qmi.tlvData).includes(ExtensionType.TransferHook) || (getExtensionTypes(qmi.tlvData).some((e) => !QOK.has(e)) && !(await hasBadge(qm)))) { console.log('skip  pair token not allowed', mint); return false; } } }   // extra features only with Meteora's badge; never taxed or hooked
   const ins = run('INSERT OR IGNORE INTO coins(mint,pool,config,creator,name,symbol,uri,tax_bps,created_slot,created_at,trap_bps,trap_secs,trap_steps,quote_mint,quote_dec,quote_symbol) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', mint, ps.publicKey.toBase58(), cfg, creator || pst.creator.toBase58(), md?.name || '', md?.symbol || '', md?.uri || '', tf ? tf.newerTransferFee.transferFeeBasisPoints : 0, creator ? slot : 0, creator || !cf || Number(cf.activationType) !== 1 ? ts : Number(pst.activationPoint) * 1000, trap.bps, trap.secs, trap.steps, qm, qd, qs || 'SOL');
   if (ins.changes) { push({ type: 'coin', mint, name: md?.name, symbol: md?.symbol }); console.log('coin  ', md?.symbol, mint); } return true;
 }
@@ -154,7 +182,7 @@ function poolInits(tx) {
 }
 // ---- transaction processing: everything is read from decoded Meteora instructions/events, never from log text ----
 const DBC_ID = DYNAMIC_BONDING_CURVE_PROGRAM_ID.toBase58(), discOf = (n) => Buffer.from(DynamicBondingCurveIdl.instructions.find((i) => i.name === n).discriminator).toString('hex');
-const SWAP_DISC = new Set(['swap', 'swap2'].map(discOf)), CFG_DISC = discOf('create_config');
+const SWAP_DISC = new Set(['swap', 'swap2'].map(discOf)), CFG_DISCS = new Set(['create_config', 'create_config2'].map(discOf));
 const badPool = new Map();   // pools we looked up and rejected (not treid) — never looked up again for a day
 const AMM_ID = 'cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG', AMM_SWAP = new Set(CpAmmIdl.instructions.filter((i) => i.name === 'swap' || i.name === 'swap2').map((i) => Buffer.from(i.discriminator).toString('hex')));
 const MIG_DISC = new Set(DynamicBondingCurveIdl.instructions.filter((i) => /^migrat/.test(i.name)).map((i) => Buffer.from(i.discriminator).toString('hex')));
@@ -164,10 +192,9 @@ async function checkGrad(c) {
   const known = q1('SELECT damm FROM coins WHERE mint=?', c.mint)?.damm; if (known) return known; const a = await dbc.state.getPool(new PublicKey(c.pool)).catch(() => null), vp = a && (a.poolState || a); if (!vp || !(Number(vp.isMigrated?.toString?.() ?? vp.isMigrated) > 0)) return null;
   const pool = deriveDammV2PoolAddress(DAMM_CFG, new PublicKey(c.mint), new PublicKey(c.quote_mint || WSOL)), ps = await amm.fetchPoolState(pool).catch(() => null);
   if (!ps || ps.tokenAMint.toBase58() !== c.mint || ps.tokenBMint.toBase58() !== (c.quote_mint || WSOL)) return null;
-  const k = pool.toBase58(); if (q1('SELECT damm FROM coins WHERE mint=?', c.mint)?.damm) return k; run('UPDATE coins SET damm=? WHERE mint=?', k, c.mint); watchPool(k); push({ type: 'grad', mint: c.mint, damm: k }); console.log('grad  ', c.symbol, '→ DAMM v2', k);
+  const k = pool.toBase58(); if (q1('SELECT damm FROM coins WHERE mint=?', c.mint)?.damm) return k; run('UPDATE coins SET damm=? WHERE mint=?', k, c.mint); unwatch(c.config); watch(k); push({ type: 'grad', mint: c.mint, damm: k }); console.log('grad  ', c.symbol, '→ DAMM v2', k);
   setTimeout(() => syncAddress(k, 1e9).catch(() => {}), 1000); return k;
 }
-function watchPool(k) { if (watched.has(k)) return; watched.set(k, conn.onLogs(new PublicKey(k), (l) => { if (!l.err) enqueue(l.signature); }, 'confirmed')); }
 function dbcIxs(tx, keys, pid0 = DBC_ID) {   // every instruction of one program in the tx (top-level and inner), with resolved account addresses
   const out = [], key = (i) => keys.get(i)?.toBase58(), add = (pid, accts, data) => { if (key(pid) !== pid0 || !data || data.length < 8) return; out.push({ disc: Buffer.from(data.subarray(0, 8)).toString('hex'), accts: accts.map(key), data }); };
   for (const ix of tx.transaction.message.compiledInstructions || []) add(ix.programIdIndex, ix.accountKeyIndexes, Buffer.from(ix.data));
@@ -180,7 +207,7 @@ async function handle(sig) {
   if (!tx) return;   // not marked seen → picked up again by the next sync
   if (tx.meta?.err) { run('INSERT OR IGNORE INTO seen VALUES(?)', sig); return; }
   const keys = tx.transaction.message.getAccountKeys({ accountKeysFromLookups: tx.meta.loadedAddresses }), ts = (tx.blockTime || Math.floor(Date.now() / 1000)) * 1000, ixs = dbcIxs(tx, keys);
-  if (ixs.some((x) => x.disc === CFG_DISC) && Date.now() - lastCfgScan > 120e3) { lastCfgScan = Date.now(); await loadConfigs().catch(() => {}); }
+  for (const x of ixs) if (CFG_DISCS.has(x.disc) && x.accts[0]) await addConfig(x.accts[0]);   // a new treid config: account 0 of create_config
   const inits = poolInits(tx); for (const it of inits) await addCoin(it.mint, tx.slot, ts, it.creator, it.pool);
   for (const x of ixs) if (MIG_DISC.has(x.disc)) for (const a of x.accts) { const c = a && q1('SELECT * FROM coins WHERE pool=?', a); if (c && !c.damm) setTimeout(() => checkGrad(c).catch(() => {}), 1500); }
   // swap events emitted by the DBC program itself (CPI through its event authority — can't be faked); the LAST one per pool wins
@@ -233,7 +260,7 @@ function pump() { while (active < 4 && queue.length) { const s = queue.shift(); 
 async function backfill() {   // rebuilds everything from chain, so the server can run without a persistent disk
   await loadConfigs();
   for (const k of configs) await syncAddress(k, 1e9);   // FULL history (paged); with a persistent disk only the new part is fetched
-  for (const c of q(`SELECT c.* FROM coins c WHERE c.damm IS NOT NULL OR (SELECT progress FROM trades t WHERE t.mint=c.mint ORDER BY ts DESC, slot DESC LIMIT 1) >= 99`)) { const k = c.damm || await checkGrad(c).catch(() => null); if (k) { watchPool(k); await syncAddress(k, 1e9); } }   // graduated coins' DAMM trades
+  for (const c of q(`SELECT c.* FROM coins c WHERE c.damm IS NOT NULL OR (SELECT progress FROM trades t WHERE t.mint=c.mint ORDER BY ts DESC, slot DESC LIMIT 1) >= 99`)) { const k = c.damm || await checkGrad(c).catch(() => null); if (k) await syncAddress(k, 1e9); }   // graduated coins' DAMM trades
   // user burns made through treid carry a "treid:burn" memo: find them in each coin's history so the 70% rule never mistakes a burn for a sale
   for (const c of q('SELECT mint FROM coins')) { let before; for (let i = 0; i < 10; i++) { const pg = await conn.getSignaturesForAddress(new PublicKey(c.mint), { limit: 1000, before }, 'confirmed').catch(() => []); if (!pg.length) break;
     for (const x of pg) if (!x.err && /treid:burn:/.test(x.memo || '') && !q1('SELECT 1 FROM uburn WHERE sig=?', x.signature)) await verifyBurn(x.signature).catch(() => {});
@@ -313,7 +340,7 @@ async function handleReq(req, res) {
     if (p[1] === 'qprice' && !rate('qp|' + ip(req), 30, 6e4)) { res.writeHead(429, { 'access-control-allow-origin': '*' }); return res.end('{}'); }
     if (p[1] === 'qprice') { const m = String(u.searchParams.get('mint') || ''); if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(m)) return J({ usd: 0 });   // pair-token price for the Create page
       let usd = quoteUsd(m, KNOWN_Q[m]), symbol = KNOWN_Q[m] || null, name = null, icon = null;
-      try { const r = await fetchT('https://lite-api.jup.ag/tokens/v2/search?query=' + m); const j = await r.json(); const t = Array.isArray(j) ? j.find((x) => x.id === m) : null; if (t) { symbol = symbol || t.symbol; name = t.name; icon = t.icon || null; if (!QUOTE_OVERRIDE[m] && t.usdPrice) { usd = +t.usdPrice; qPrice.set(m, usd); } } } catch {}
+      try { const r = await fetchT('https://lite-api.jup.ag/tokens/v2/search?query=' + m); const j = await r.json(); const t = Array.isArray(j) ? j.find((x) => x.id === m) : null; if (t) { symbol = symbol || t.symbol; name = t.name; icon = t.icon || null; if (!QUOTE_OVERRIDE[m] && t.usdPrice) { usd = +t.usdPrice * (await qMult(m)); qPrice.set(m, usd); } } } catch {}   // per on-chain unit (scaled-UI tokens: × multiplier)
       return J({ mint: m, usd, symbol, name, icon }); }
     if (p[1] === 'coins') { if (!coinsSnap || Date.now() - coinsSnap.at > 10e3) coinsSnap = { at: Date.now(), v: q('SELECT mint FROM coins ORDER BY created_slot DESC LIMIT 2000').map((r) => stats(r.mint)) }; return J(coinsSnap.v); }
     if (p[1] === 'coin') return J(stats(p[2]));
@@ -376,10 +403,12 @@ CO = startCallouts({ q, q1, run, push, rate, pinJSON, pinataJwt: PINATA_JWT, gat
 CO.restore();
 setInterval(() => push({ type: 'ping', t: Date.now() }), 25e3);               // keeps proxies from closing the stream
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-let syncing = false;
+let syncing = false; const lastSync = new Map();
 async function syncAll() {   // safety net for missed websocket messages: every config, 3 at a time, never overlapping runs
   if (syncing) return; syncing = true;
-  try { const list = [...configs, ...q('SELECT damm FROM coins WHERE damm IS NOT NULL').map((r) => r.damm)]; for (let i = 0; i < list.length; i += 3) await Promise.all(list.slice(i, i + 3).map((k) => syncAddress(k, 200).catch(() => {})));
+  try { const act = retier(), now = Date.now();   // live (48h): every 5 min · quiet (30d): every 30 min · dead: every 6h
+    const list = [...act].filter(([k, t]) => { const age = now - t, every = age < LIVE_MS ? 5 * 60e3 : age < 30 * 864e5 ? 30 * 60e3 : 6 * 36e5; return now - (lastSync.get(k) || 0) >= every; }).map((x) => x[0]);
+    for (let i = 0; i < list.length; i += 3) await Promise.all(list.slice(i, i + 3).map((k) => syncAddress(k, 200).then(() => lastSync.set(k, now)).catch(() => {})));
     for (const c of q(`SELECT c.* FROM coins c WHERE c.damm IS NULL AND (SELECT progress FROM trades t WHERE t.mint=c.mint ORDER BY ts DESC, slot DESC LIMIT 1) >= 99`)) await checkGrad(c).catch(() => {});   // a migration we missed
   } finally { syncing = false; }
 }
@@ -389,7 +418,7 @@ async function start() {
   ready = true; setInterval(solPrice, 60e3); setInterval(() => quotePrices().catch(() => {}), 60e3);
   for (const w of PARTNERS) conn.onLogs(new PublicKey(w), (l) => { if (!l.err) enqueue(l.signature); }, 'confirmed');
   setInterval(() => syncAll().catch(() => {}), 5 * 60e3);
-  setInterval(() => { if (Date.now() - lastCfgScan > 120e3) { lastCfgScan = Date.now(); loadConfigs().catch(() => {}); } }, 15 * 60e3);
+  retier(); setInterval(() => loadConfigs().catch(() => {}), 24 * 36e5);   // full config rescan only daily (new configs are picked up from their own create tx)
   console.log('watching', configs.size, 'treid configs (partners', PARTNERS.join(', '), ')');
   if (!OPS) return;
   REW = startRewards({ conn, dbc, ops: OPS, treasury: PARTNER, q, q1, run, mainnet: MAINNET, quoteUsd: (c) => quoteUsd(c.quote_mint, c.quote_symbol), balances: async (mint) => new Map((await holders(mint)).filter((h) => !h.curve).map((h) => [h.wallet, h.pct / 100 * SUPPLY])) });

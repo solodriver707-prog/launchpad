@@ -16,7 +16,7 @@ export const RULES = { minTrapBps: 5000, minTrapSecs: 30, trapSteps: 3, feePlain
 const conns = {}; const C = (rpc) => conns[rpc] || (conns[rpc] = new Connection(rpc, 'confirmed'));
 const client = (rpc) => new DynamicBondingCurveClient(C(rpc), 'confirmed');
 const amms = {}; const ammC = (rpc) => amms[rpc] || (amms[rpc] = new CpAmm(C(rpc)));
-const DAMM_CFG = DAMM_V2_MIGRATION_FEE_ADDRESS[6];   // treid curves migrate into Meteora's customizable DAMM v2 config
+const DAMM_CFG = DAMM_V2_MIGRATION_FEE_ADDRESS[6], DBC_PROGRAM = new PublicKey('dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN');   // treid curves migrate into Meteora's customizable DAMM v2 config
 const pk = (x) => (x instanceof PublicKey ? x : new PublicKey(x));
 
 export function curveFor({ taxBps = 0, trapBps = 5000, trapSecs = 30, quoteDecimals = 9, mc0 = RULES.mc0Sol, mc1 = RULES.mc1Sol }) {
@@ -44,7 +44,13 @@ export async function quoteInfo({ rpc, mint }) {
   if (mi.freezeAuthority) out.warn = 'This token has a freeze authority — its issuer can freeze holders';
   if (is22) { const ext = getExtensionTypes(mi.tlvData); const tf = getTransferFeeConfig(mi);
     if (tf && (tf.newerTransferFee.transferFeeBasisPoints > 0 || tf.olderTransferFee.transferFeeBasisPoints > 0)) return { ...out, ok: false, reason: 'Tokens with a transfer tax can’t be used as a pair' };
-    const bad = ext.filter((e) => !ALLOWED_EXT.has(e) && e !== ExtensionType.TransferFeeConfig); if (bad.length) return { ...out, ok: false, reason: 'This token type needs extra approval from Meteora — not supported yet' }; }
+    const bad = ext.filter((e) => !ALLOWED_EXT.has(e) && e !== ExtensionType.TransferFeeConfig);
+    if (bad.includes(ExtensionType.TransferHook)) return { ...out, ok: false, reason: 'Tokens with a transfer hook can’t be used as a pair' };
+    if (bad.length) { const [b] = PublicKey.findProgramAddressSync([Buffer.from('token_badge'), m.toBuffer()], DBC_PROGRAM), bi = await C(rpc).getAccountInfo(b);   // Meteora's approval (e.g. tokenized stocks)
+      if (!bi || !bi.owner.equals(DBC_PROGRAM)) return { ...out, ok: false, reason: 'This token type needs approval from Meteora first — not supported yet' };
+      const w = []; if (bad.includes(ExtensionType.PermanentDelegate)) w.push('its issuer can move tokens from any account'); if (bad.includes(ExtensionType.PausableConfig)) w.push('its issuer can pause all transfers (trading would stop)');
+      if (bad.includes(ExtensionType.ScaledUiAmountConfig)) w.push('its displayed amount can change (splits/dividends)');
+      out.badge = true; out.warn = [out.warn, 'Meteora-approved pair' + (w.length ? ' — ' + w.join('; ') : '')].filter(Boolean).join(' · '); } }
   return (qCache[k] = out);
 }
 async function finish(rpc, txs, payer, keypairs) {

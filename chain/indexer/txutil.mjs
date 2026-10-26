@@ -10,7 +10,17 @@ export const fetchT = (url, opts = {}, ms = 8000) => fetch(url, { ...opts, signa
 // landed must never be retried blindly — that's how double payments happen)
 export async function sendTx(conn, txOrIxs, signers) {
   const tx = Array.isArray(txOrIxs) ? new Transaction().add(...txOrIxs) : txOrIxs;
-  if (PRIO > 0 && !tx.instructions.some((ix) => ix.programId.equals(ComputeBudgetProgram.programId))) tx.instructions.unshift(ComputeBudgetProgram.setComputeUnitPrice({ microLamports: PRIO }));
+  if (PRIO > 0 && !tx.instructions.some((ix) => ix.programId.equals(ComputeBudgetProgram.programId))) {
+    // the priority fee is charged on the compute LIMIT, and the default limit is 200k CU per instruction (up to 1.4M):
+    // measure what the tx really uses and ask for just that (+15%), so a 40k-CU transfer never pays for 1.4M
+    let limit = 1_400_000;
+    try { tx.instructions.unshift(ComputeBudgetProgram.setComputeUnitLimit({ units: limit })); const sim = await conn.simulateTransaction(tx, signers);
+      if (!sim.value.err && sim.value.unitsConsumed) limit = Math.min(1_400_000, Math.ceil(sim.value.unitsConsumed * 1.15) + 2000); tx.instructions.shift(); }
+    catch { if (tx.instructions[0]?.programId.equals(ComputeBudgetProgram.programId)) tx.instructions.shift(); }
+    tx.instructions.unshift(ComputeBudgetProgram.setComputeUnitLimit({ units: limit }), ComputeBudgetProgram.setComputeUnitPrice({ microLamports: PRIO }));
+    try { tx.feePayer = tx.feePayer || signers[0].publicKey; if (!tx.recentBlockhash) tx.recentBlockhash = (await conn.getLatestBlockhash()).blockhash;
+      if (tx.serialize({ requireAllSignatures: false, verifySignatures: false }).length > 1232) tx.instructions.splice(0, 2); } catch { tx.instructions.splice(0, 2); }   // a tx already at the size limit goes without a priority fee
+    tx.signatures = []; }
   try { return await sendAndConfirmTransaction(conn, tx, signers, { commitment: 'confirmed', maxRetries: 3 }); }
   catch (e) {
     const sig = e.signature || (tx.signature ? bs58.encode(tx.signature) : null); if (!sig) throw e;

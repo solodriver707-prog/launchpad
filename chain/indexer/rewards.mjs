@@ -196,7 +196,22 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, q
     for (const r of q(`SELECT sig, mint, lamports, extra FROM rlog WHERE kind='claimx'`)) { if (isSettled(r.sig, String(r.extra || '').split('|')[1], done)) continue; const c = q1('SELECT quote_mint FROM coins WHERE mint=?', r.mint); if (!c || !c.quote_mint || c.quote_mint === NATIVE_MINT.toBase58()) tot += r.lamports; }
     for (const p of pending.values()) tot += p.amount; return tot;
   }
-  async function payout(c, amount, dest, purpose, src = 'dbc') { const s = await claim(c, amount, dest, purpose, src); await settle(c, s, `${dest}|${purpose}` + (src === 'dbc' ? '' : '|' + src)); return s; }
+  // fees still in the curve: the claimable amount is known exactly (only ops can claim it, it only grows), so claim N and pass N on
+  // in ONE transaction — half the fees, and nothing can be left half-done. (LP-position fees can't be capped, so they keep two steps.)
+  async function payAtomic(c, amount, dest, kind) {
+    const QM = quoteOf(c), rcv = new PublicKey(dest), ixs = [...(await dbc.creator.claimCreatorTradingFee({ creator: ops.publicKey, payer: ops.publicKey, pool: new PublicKey(c.pool), maxBaseAmount: new BN(0), maxQuoteAmount: new BN(amount) })).instructions];
+    if (QM.equals(NATIVE_MINT)) ixs.push(SystemProgram.transfer({ fromPubkey: ops.publicKey, toPubkey: rcv, lamports: amount }));
+    else { const qprog = await qprogOf(c), dst = getAssociatedTokenAddressSync(QM, rcv, true, qprog);
+      if (!(await conn.getAccountInfo(dst))) { if (dest === treasury) ixs.push(createAssociatedTokenAccountIdempotentInstruction(ops.publicKey, dst, rcv, QM, qprog)); else throw new Error(`receiver has no ${c.quote_symbol || 'pair token'} account yet — add ${c.quote_symbol || 'it'} to the wallet; the payout waits`); }
+      ixs.push(createTransferCheckedInstruction(getAssociatedTokenAddressSync(QM, ops.publicKey, false, qprog), QM, dst, ops.publicKey, BigInt(amount), c.quote_dec ?? 6, [], qprog)); }
+    const ata = getAssociatedTokenAddressSync(new PublicKey(c.mint), ops.publicKey, false, TOKEN_2022_PROGRAM_ID), had = await conn.getAccountInfo(ata), cl0 = had ? await closeIfEmpty(c) : createCloseAccountInstruction(ata, ops.publicKey, ops.publicKey, [], TOKEN_2022_PROGRAM_ID);
+    if (cl0) ixs.push(cl0);   // the claim opens ops' coin account: close it in the same tx, rent back
+    ixs.push(memo(`treid:${kind}:${c.mint}:${amount}:${dest}|atomic`));
+    const s = await sendTx(conn, ixs, [ops]); record(s, [{ mint: c.mint, kind, lamports: amount, extra: `${dest}|atomic` }]);
+    log('rewards', kind, c.symbol, (amount / 10 ** (c.quote_dec ?? 9)).toFixed(4), c.quote_symbol || 'SOL', '→', dest.slice(0, 6), '(1 tx)'); return s;
+  }
+  async function payout(c, amount, dest, purpose, src = 'dbc') { if (src === 'dbc' && (purpose === 'pay' || purpose === 'platform')) return payAtomic(c, amount, dest, purpose);
+    const s = await claim(c, amount, dest, purpose, src); await settle(c, s, `${dest}|${purpose}` + (src === 'dbc' ? '' : '|' + src)); return s; }
   // the creator's fees, wherever they are: still in the curve, and (after graduation) the creator's LP position
   async function creatorSources(c, vp) {
     const out = [['dbc', num(vp.creatorQuoteFee)]]; let platform = 0;
@@ -211,6 +226,10 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, q
     record(s, [{ mint: c.mint, kind: 'migrate', lamports: 0 }]); log('rewards migrated', c.symbol, 'to DAMM v2'); return true;
   }
 
+  async function walletBal(mint, wallet) {   // all of one wallet's token accounts for this coin, added up (1 RPC call)
+    const r = await conn.getParsedTokenAccountsByOwner(new PublicKey(wallet), { mint: new PublicKey(mint) }, 'confirmed');
+    return r.value.reduce((s, a) => s + Number(a.account.data.parsed.info.tokenAmount.amount) / 1e6, 0);
+  }
   // ---- community takeover ----
   let balCache = new Map();
   async function bals(mint, fresh = false) { const h = balCache.get(mint); if (!fresh && h && Date.now() - h.at < 60e3) return h.m; const m = await balances(mint); balCache.set(mint, { at: Date.now(), m }); return m; }
@@ -228,6 +247,7 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, q
   }
   async function tryApprove(c) {
     const e = era(c); if (e.type !== 'out') return null;
+    if (!q1(`SELECT 1 FROM rlog WHERE mint=? AND kind='ctoapply' AND ts>=?`, c.mint, e.start)) return null;   // nobody applied → no holder scan
     await bals(c.mint, true); const apps = await applications(c), now = Date.now();
     for (const a of apps) { const k = c.mint + '|' + e.start + '|' + a.wallet; if (a.eligible && a.supportPct >= RULES.ctoSupportPct) { if (!held.has(k)) held.set(k, now); } else held.delete(k); }
     const best = apps.find((a) => { const k = c.mint + '|' + e.start + '|' + a.wallet; return held.has(k) && now - held.get(k) >= RULES.ctoHoldMs; }); if (!best) return null;
@@ -236,18 +256,19 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, q
   }
 
   // ---- the cycle: only coins where something happened, plus a slow sweep of the rest ----
-  const lastDone = new Map();
+  const lastDone = new Map(), cfgCache = new Map();
   function due(c) {
     const lt = q1('SELECT MAX(ts) t FROM trades WHERE mint=?', c.mint)?.t || 0, ld = lastDone.get(c.mint) || 0;
     if (lt > ld) return true;                                   // new trades since we last looked
     if (!c.damm && (q1('SELECT progress p FROM trades WHERE mint=? ORDER BY ts DESC, slot DESC LIMIT 1', c.mint)?.p || 0) >= 100) return true;   // finished curve: watch until migrated
-    if (Date.now() - ld > 6 * 36e5) return true;                // everything else: every 6h
+    if (Date.now() - ld > 6 * 36e5) { const e = era(c); if (e.type !== 'out') return true;   // creator in charge: idle timers run → every 6h
+      return !!q1(`SELECT 1 FROM rlog WHERE mint=? AND kind='ctoapply' AND ts>=?`, c.mint, e.start); }   // out & no trades: fees can't grow; only a takeover vote needs a look
     const st = state(c); return st.era !== 'out' && (st.state !== (lastDone.get(c.mint + '|st') || 'active'));   // a state change by time (idle → paused/out)
   }
   async function cycleCoin(c) {
     const vpw = await dbc.state.getPool(new PublicKey(c.pool)), vp = vpw?.poolState || vpw; if (!vp || vp.creator.toBase58() !== ops.publicKey.toBase58()) { lastDone.set(c.mint, Date.now()); return; }
-    const cfg = await dbc.state.getPoolConfig(vp.config); if (await maybeMigrate(c, vp, cfg).catch((er) => { log('rewards migrate err', c.symbol, er.message.slice(0, 100)); return false; })) return;   // fees are picked up next cycle
-    const e = era(c); if (e.wallet) { const m = await bals(c.mint, true); balNow.set(c.mint + '|' + e.wallet, m.get(e.wallet) || 0); }
+    const cfg = cfgCache.get(c.mint) || await dbc.state.getPoolConfig(vp.config); cfgCache.set(c.mint, cfg); if (await maybeMigrate(c, vp, cfg).catch((er) => { log('rewards migrate err', c.symbol, er.message.slice(0, 100)); return false; })) return;   // fees are picked up next cycle
+    const e = era(c); if (e.wallet) balNow.set(c.mint + '|' + e.wallet, await walletBal(c.mint, e.wallet));
     let st = state(c);
     if (st.era !== 'out' && st.state === 'out') { await stamp(c.mint, 'out', 0, st.creator); log('rewards creator out', c.symbol, st.why); st = state(c); }
     if (st.era === 'out') { if (await tryApprove(c)) st = state(c); }
