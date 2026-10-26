@@ -57,11 +57,11 @@ Real coins appear on the board with an **ON-CHAIN** badge: real market cap, curv
 chart, sniper/bundle flags and dev %. Demo coins keep running beside them. On-chain buy/sell from the site is next.
 
 ## Creator rewards escrow (rules enforced)
-New coins hand the pool's *creator* role to the treid ops wallet in the launch transaction, so the ops wallet claims the
-creator fee share and applies the rules every cycle (`indexer/rewards.mjs`):
-- active creator → paid automatically
+New coins hand the pool's *creator* role to the treid ops wallet in the launch transaction. treid never holds the money:
+fees stay in the Meteora pool and every claim goes straight to its destination (`indexer/rewards.mjs`):
+- active creator → paid pool→creator automatically (≥0.01 SOL, or daily), or on demand (`POST /api/claim`, signed message)
 - 48h no activity → paused; rewards buy back & burn the coin; "I'm still here" (free wallet signature) resumes
-- 7d inactive or sold ≥70% of peak bag → creator out: 50% buyback & burn, 50% takeover fund; the creator's tax share is burned
+- 7d inactive or sold ≥70% of peak bag → creator out: 50% buyback & burn (claim + swap in one tx), 50% takeover fund kept inside the pool; the creator's tax share is burned
 - fund not used by a takeover within 14 days → treid grants (treasury)
 Every action carries an on-chain memo `treid:<kind>:<mint>:<lamports>`; the ledger is rebuilt from chain on every start.
 API: `GET /api/creator/:mint`, `POST /api/ping`.

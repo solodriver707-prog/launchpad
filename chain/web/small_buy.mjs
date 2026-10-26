@@ -1,0 +1,4 @@
+import * as T from './src.mjs'; import { Keypair, Transaction, Connection, PublicKey } from '@solana/web3.js'; import { NATIVE_MINT } from '@solana/spl-token'; import { deriveDbcPoolAddress } from '@meteora-ag/dynamic-bonding-curve-sdk';
+const rpc = 'http://127.0.0.1:8899', conn = new Connection(rpc, 'confirmed'), [mint, config, sol] = process.argv.slice(2), pool = deriveDbcPoolAddress(NATIVE_MINT, new PublicKey(mint), new PublicKey(config)).toBase58();
+const k = Keypair.generate(); await conn.confirmTransaction(await conn.requestAirdrop(k.publicKey, 3e9)); const b = await T.buildSwap({ rpc, owner: k.publicKey.toBase58(), pool, side: 'buy', amount: +sol });
+await T.sendAll({ rpc, signed: b.bytes.map((x) => { const t = Transaction.from(x); t.partialSign(k); return t.serialize(); }), lastValidBlockHeight: b.lastValidBlockHeight }); console.log('bought', sol);
