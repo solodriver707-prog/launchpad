@@ -97,6 +97,8 @@
   }
   // DEMO mode = simulated coins/trades/callouts (no indexer, or ?demo=1). The real site shows only on-chain data.
   var DEMO = (function () { try { var qp = new URLSearchParams(location.search); if (qp.has('demo')) return qp.get('demo') !== '0'; } catch (e) {} return !window.TREID_API; })();
+  if (DEMO) document.documentElement.classList.add('demo-mode'), document.body && document.body.classList.add('demo');
+  document.addEventListener('DOMContentLoaded', function () { if (DEMO) document.body.classList.add('demo'); });
   var BASE = [
     mk('Neon Frog', 'NFROG', 'frog', 0, 3, 'normal', 'smile', 'crown', 0, 0, 'SOL', 1240, 34.2, 100, 4320, 4120, true, 1, 1),
     mk('Orbit Cat', 'ORBIT', 'cat', 1, 1, 'shades', 'smile', 'none', 1, 1, 'SPYx', 486, 12.8, 78, 540, 1930, true, 1, 0),
