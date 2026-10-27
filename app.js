@@ -318,14 +318,18 @@
     if (/slippage|0x1771|ExceededSlippage/i.test(m)) return 'Price moved too much — raise slippage';
     return m.length > 140 ? m.slice(0, 140) + '…' : m;
   }
-  function chainRun(label, build) {
+  function chainRun(label, build, again) {
     if (S.netBad) { toast('Network check failed: the connection isn’t ' + CLUSTER + ' — transactions are blocked'); return Promise.reject(new Error('busy')); }
     if (S.busy) { toast('Finish the current transaction first'); return Promise.reject(new Error('busy')); }
     S.busy = label; render(); toast(label + ' — confirm in your wallet');
     return chainLib().then(function (T) {
       return build(T).then(function (b) { return walletSign(b.bytes).then(function (signed) { S.busy = 'Confirming on-chain…'; render(); return T.sendAll({ rpc: RPC, signed: T.cosign(signed, b.cosigners), lastValidBlockHeight: b.lastValidBlockHeight }); }).then(function (sigs) { b.sigs = sigs; return b; }); });
-    }).then(function (b) { S.busy = null; render(); setTimeout(refreshBalance, 1500); return b; }, function (e) { S.busy = null; render(); throw e; });
+    }).then(function (b) { S.busy = null; render(); setTimeout(refreshBalance, 1500); [2500, 8000].forEach(function (ms) { setTimeout(function () { var tt = S.screen === 'token' && find(S.tick); if (tt && tt.live) livePos(tt); }, ms); }); return b; }, function (e) { S.busy = null; render();
+      // the transaction expired before it was sent (a wallet window open for over ~60 s) and nothing went through: build a fresh one and ask once more
+      if (e && e.expired && !e.sent && !again) { toast('That took a bit long and the transaction expired — please sign the fresh one'); return chainRun(label, build, true); }
+      throw e; });
   }
+  setInterval(function () { var tt = S.account && S.screen === 'token' && find(S.tick); if (tt && tt.live && !S.busy && !document.hidden) livePos(tt); }, 20000);   // your balance stays current on the coin page
   function livePos(t) {   // real token balance + cost basis from the user's on-chain trades
     if (!S.account || !t.live) return Promise.resolve(); var who = S.account;
     return chainLib().then(function (T) { return T.tokenBalance({ rpc: RPC, owner: who, mint: t.ca }); }).then(function (bal) {
@@ -2868,7 +2872,7 @@
           '<div class="socrow"><span class="soc-l">Socials <small>optional · shown as buttons on your coin</small></span><div class="socgrid">' + socField(c, 'x', 'X', '', 'Paste X link') + socField(c, 'tg', 'Telegram', '', 'Paste Telegram link') + socField(c, 'web', 'Website', '', 'Paste website link') + '</div></div>' +
           '<button class="big-btn btn pri" data-act="launch"' + (S.busy ? ' disabled' : '') + '>' + (S.busy ? esc(S.busy) + '…' : S.account ? 'Launch on-chain' + NETP + '' : 'Connect wallet to launch') + '</button>' +
           (S.account && DEMO ? '<button class="demo-l" data-act="demoLaunch">No ' + NET + 'SOL? Try a demo launch instead</button>' : '') +
-          '<span class="note">Devnet beta: your coin is created on-chain on Meteora. Your wallet signs every step.</span>' +
+          '<span class="note">' + (CHAIN_ID === 'solana:devnet' ? 'Devnet beta: your coin is created on the Solana test network.' : 'Your coin is created on-chain on Meteora (Solana mainnet).') + ' Your wallet signs every step.</span>' +
         '</section>' +
         '<aside style="flex:1 1 320px;display:flex;flex-direction:column;gap:12px;position:sticky;top:90px"><span class="kicker">LIVE PREVIEW</span>' + card(preview, { preview: true }) +
           '<div class="card-s panel pv-sum"><div class="pv-row">' + avatarHTML(preview, 52) + '<div><b>At launch</b><small class="muted">what buyers will see</small></div></div>' +

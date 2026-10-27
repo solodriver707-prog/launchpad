@@ -1,7 +1,7 @@
 // treid browser chain module → bundled to chain.js (window.TreidChain). Builds real DBC transactions; the wallet only signs.
 import { Buffer } from 'buffer';
 if (!globalThis.Buffer) globalThis.Buffer = Buffer;
-import { Connection, Keypair, PublicKey, Transaction, SystemProgram, TransactionInstruction, VersionedTransaction } from '@solana/web3.js';
+import { Connection, Keypair, PublicKey, Transaction, SystemProgram, TransactionInstruction, VersionedTransaction, ComputeBudgetProgram } from '@solana/web3.js';
 import { ed25519 } from '@noble/curves/ed25519';
 import bs58lib from 'bs58';
 const bs58enc = (b) => (bs58lib.default || bs58lib).encode(b instanceof Uint8Array ? b : Uint8Array.from(b));
@@ -56,10 +56,23 @@ export async function quoteInfo({ rpc, mint, reward = false }) {   // reward: on
       out.badge = true; out.warn = [out.warn, 'Meteora-approved pair' + (w.length ? ' — ' + w.join('; ') : '')].filter(Boolean).join(' · '); } }
   return (qCache[k] = out);
 }
+// every wallet transaction states its compute budget (measured by simulation, +20%) and a small priority fee: wallets can predict it
+// (fewer "could be malicious" warnings) and it lands on a busy mainnet. A tx that depends on an earlier one can't be simulated → safe default.
+const PRIO_UL = 50_000;   // micro-lamports per CU (≈0.00001 SOL on a 200k-CU tx)
+async function budget(rpc, tx) {
+  if (tx.instructions.some((ix) => ix.programId.equals(ComputeBudgetProgram.programId))) return;
+  let units = 400_000;
+  try { const sim = await C(rpc).simulateTransaction(new VersionedTransaction(tx.compileMessage()), { sigVerify: false, replaceRecentBlockhash: true, commitment: 'confirmed' });
+    if (!sim.value.err && sim.value.unitsConsumed) units = Math.min(1_400_000, Math.ceil(sim.value.unitsConsumed * 1.2) + 5000); } catch {}
+  const ixs = [ComputeBudgetProgram.setComputeUnitLimit({ units }), ComputeBudgetProgram.setComputeUnitPrice({ microLamports: PRIO_UL })];
+  tx.instructions.unshift(...ixs);
+  try { if (tx.serialize({ requireAllSignatures: false, verifySignatures: false }).length > 1232) tx.instructions.splice(0, 2); } catch { tx.instructions.splice(0, 2); }   // already at the size limit: leave it as it was
+}
 async function finish(rpc, txs, payer, keypairs) {
   const { blockhash, lastValidBlockHeight } = await C(rpc).getLatestBlockhash('confirmed');
   for (const tx of txs) {
     tx.feePayer = payer; tx.recentBlockhash = blockhash;
+    await budget(rpc, tx);
   }
   return { bytes: txs.map((t) => t.serialize({ requireAllSignatures: false, verifySignatures: false })), lastValidBlockHeight, cosigners: keypairs.map((k) => Array.from(k.secretKey)) };
 }
@@ -138,13 +151,13 @@ export async function tokenBalance({ rpc, owner, mint }) {
 // send wallet-signed transactions in order, waiting for each
 export async function sendAll({ rpc, signed, lastValidBlockHeight }) {
   const sigs = [];
-  for (const b of signed) {
+  try { for (const b of signed) {
     const raw = b instanceof Uint8Array ? b : Uint8Array.from(b);
     const sig = await C(rpc).sendRawTransaction(raw, { skipPreflight: false, preflightCommitment: 'confirmed' });
     const tx = Transaction.from(raw); const r = await C(rpc).confirmTransaction({ signature: sig, blockhash: tx.recentBlockhash, lastValidBlockHeight: lastValidBlockHeight || (await C(rpc).getBlockHeight()) + 150 }, 'confirmed');
     if (r.value.err) throw new Error('Transaction failed: ' + JSON.stringify(r.value.err));
     sigs.push(sig);
-  }
+  } } catch (e) { e.sent = sigs.length; e.expired = /blockhash not found|block height exceeded|expired/i.test(String(e?.message || e)); throw e; }
   return sigs;
 }
 export const version = 1;
