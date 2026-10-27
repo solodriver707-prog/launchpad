@@ -4741,3 +4741,5 @@ button[disabled].big-btn{opacity:.7;cursor:progress}
 .ts-cv{display:block;height:5px;border-radius:3px;background:rgba(255,255,255,.12);overflow:hidden;margin-top:4px}
 .ts-cv i{display:block;height:100%;background:linear-gradient(90deg,#5AC8E8,#3DDC97)}
 @media (max-width:640px){.ts-card{width:170px;height:214px}.ts-h b{font-size:18px}.ts-h .muted{display:none}}
+/* hover tooltips only where a real mouse hovers — on phones a tap left them stuck on top of cards */
+@media (hover:none){[data-tip]:hover::after,[data-tip]:hover::before,[data-tip]:focus::after,[data-tip]:focus::before{display:none!important;content:none!important}}
