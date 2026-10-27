@@ -5,7 +5,7 @@ import bs58 from 'bs58';
 
 import { verifySig, checkSession, hmac } from './sig.mjs';
 export const calloutMessage = (mint, ts, reply, text) => `treid: callout — ${mint} — ${ts}${reply != null ? ' — reply ' + reply : ''}\n${text}`;
-const clean = (t) => String(t || '').replace(/[\u0000-\u0008\u000B-\u001F\u007F‪-‮⁦-⁩]/g, '').replace(/\n{3,}/g, '\n\n').trim().slice(0, 280);
+const clean = (t) => String(t || '').replace(/[\u0000-\u0008\u000B-\u001F\u007F‪-‮⁦-⁩]/g, '').replace(/\n{3,}/g, '\n\n').trim().slice(0, 2000);
 
 export function startCallouts({ q, q1, run, push, rate, coinStats, pinJSON, pinFile, pinataJwt, gateway, log = console.log }) {
   run(`CREATE TABLE IF NOT EXISTS callouts(id INTEGER PRIMARY KEY AUTOINCREMENT, mint TEXT, wallet TEXT, text TEXT, ts INT, sig TEXT UNIQUE, reply INT, mc REAL, pos REAL)`);
@@ -26,14 +26,15 @@ export function startCallouts({ q, q1, run, push, rate, coinStats, pinJSON, pinF
     const mint = String(body.mint || ''), wallet = session || String(body.wallet || ''), ts = session ? Date.now() : +body.ts, reply = body.reply == null || body.reply === '' ? null : +body.reply, text = String(body.text || '');
     const image = body.image ? imageOf(body.image) : null; if (image && !pinataJwt) throw new Error('image uploads are off right now');
     if (!clean(text) && !image) throw new Error('write something first');
-    if (text && text !== clean(text)) throw new Error('unsupported characters or too long (280 max)');
+    if (text && text !== clean(text)) throw new Error('unsupported characters or too long (2000 max)');
     if (!(Math.abs(Date.now() - ts) <= 2 * 60e3)) throw new Error('signature expired — try again');
     if (!q1('SELECT 1 FROM coins WHERE mint=?', mint)) throw new Error('unknown coin');
     if (reply != null && !q1('SELECT 1 FROM callouts WHERE id=? AND mint=?', reply, mint)) throw new Error('reply target not found');
     if (!session) { const c0 = { mint, wallet, ts, sig: String(body.sig || ''), reply, text }; if (!verify(c0)) throw new Error('bad signature'); if (q1('SELECT 1 FROM callouts WHERE sig=?', c0.sig)) throw new Error('already posted'); }
     if (!rate('co|' + wallet, 1, 15e3) || !rate('coh|' + wallet, 40, 36e5) || !rate('coip|' + ipAddr, 120, 36e5)) throw new Error('slow down — too many callouts');
+    const root = reply != null ? q1('SELECT wallet, reply FROM callouts WHERE id=?', reply) : null, isUpdate = !!root && root.wallet === wallet && root.reply == null;   // an update to your own callout
     const s = await coinStats(mint, wallet);
-    if (!s.allowed) throw new Error('only holders of at least $1 of this coin can post callouts');   // market cap now + the poster's bag value (shown as "holding $X" and used for the callers board)
+    if (!s.allowed && !isUpdate) throw new Error('only holders of at least $1 of this coin can post callouts');   // market cap now + the poster's bag value (shown as "holding $X" and used for the callers board)
     let img = null; if (image) { if (!rate('coimg|' + wallet, 10, 36e5)) throw new Error('too many images — try again later'); img = await pinFile(image, 'callout-' + mint.slice(0, 6) + '-' + ts); }   // pinned only after the holder check
     const sig = session ? seal({ mint, wallet, ts, reply, text, img }) : String(body.sig || '');
     const r = run('INSERT INTO callouts(mint,wallet,text,ts,sig,reply,mc,pos,img) VALUES(?,?,?,?,?,?,?,?,?)', mint, wallet, text, ts, sig, reply, s.mc, s.pos, img);   // ts = the signed time, so a restored copy still verifies

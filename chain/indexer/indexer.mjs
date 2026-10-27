@@ -292,6 +292,16 @@ function candles(mint, tf) {
   for (const r of rows) { const k = Math.floor(r.ts / b) * b, c = out[out.length - 1]; if (c && c.t === k) { c.h = Math.max(c.h, r.m); c.l = Math.min(c.l, r.m); c.c = r.m; c.v += r.sol; } else { const o = c ? c.c : r.m; out.push({ t: k, o, h: Math.max(o, r.m), l: Math.min(o, r.m), c: r.m, v: r.sol }); } }
   return out;
 }
+// a wallet's position in a coin, like pump.fun shows it: value now, spent, received, avg entry market cap, % of its buys sold, supply held, profit
+function posStats(mint, wallet, held = null) {
+  const r = q1(`SELECT COALESCE(SUM(CASE WHEN side='buy' THEN usd END),0) spent, COALESCE(SUM(CASE WHEN side='sell' THEN usd END),0) got, COALESCE(SUM(CASE WHEN side='buy' THEN tokens END),0) bought,
+    COALESCE(SUM(CASE WHEN side='sell' THEN tokens END),0) sold, COALESCE(SUM(CASE WHEN side='buy' THEN usd*mcap_usd END),0) wmc, COUNT(*) n FROM trades WHERE mint=? AND wallet=?`, mint, wallet);
+  const px = q1('SELECT price_usd p FROM trades WHERE mint=? ORDER BY ts DESC, slot DESC LIMIT 1', mint)?.p || 0;
+  if (held == null) { const lh = hCache.get(mint)?.list; const h = lh && lh.find((x) => x.wallet === wallet); held = h ? h.pct / 100 * SUPPLY : Math.max(0, r.bought - r.sold); }
+  const value = held * px, profit = value + r.got - r.spent;
+  return { value, spent: r.spent, got: r.got, profit, profitPct: r.spent > 0 ? profit / r.spent * 100 : 0, avgEntryMc: r.spent > 0 ? r.wmc / r.spent : 0,
+    soldPct: r.bought > 0 ? Math.min(100, r.sold / r.bought * 100) : 0, supplyPct: held / SUPPLY * 100, held, trades: r.n };
+}
 async function holders(mint) {   // one row per OWNER (all their token accounts added up) — a dust account can't fake someone's balance
   const coin = q1('SELECT * FROM coins WHERE mint=?', mint); if (!coin) return [];
   const accs = await conn.getProgramAccounts(TOKEN_2022_PROGRAM_ID, { filters: [{ memcmp: { offset: 0, bytes: mint } }] });
@@ -400,7 +410,9 @@ async function handleReq(req, res) {
       req.on('end', () => { try { if (!rate('ss|' + ip(req), 20, 36e5)) throw new Error('too many sign-ins'); J(issueSession(JSON.parse(body))); } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: e.message })); } }); return; }
     if (p[1] === 'callout' && req.method === 'POST') { let body = ''; req.on('data', (d) => { body += d; if (body.length > 2.3e6) req.destroy(); });   // text + optional image
       req.on('end', async () => { try { J(await CO.post(JSON.parse(body), ip(req))); } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: e.message })); } }); return; }
-    if (p[1] === 'callouts') return J(CO.list(u.searchParams.get('mint') || null));
+    if (p[1] === 'callouts') { const memo = new Map(); return J(CO.list(u.searchParams.get('mint') || null).map((c) => { const k = c.mint + '|' + c.wallet; if (!memo.has(k)) memo.set(k, posStats(c.mint, c.wallet)); return { ...c, ps: memo.get(k) }; })); }   // every callout carries its author's live position
+    if (p[1] === 'pos') { const m = String(u.searchParams.get('mint') || ''), w = String(u.searchParams.get('wallet') || ''); if (!q1('SELECT 1 FROM coins WHERE mint=?', m) || !/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(w)) return J(null); return J(posStats(m, w)); }
+    if (p[1] === 'mytrades') { const m = String(u.searchParams.get('mint') || ''), w = String(u.searchParams.get('wallet') || ''); return J(q('SELECT sig, side, sol, tokens, usd, mcap_usd, ts FROM trades WHERE mint=? AND wallet=? ORDER BY ts DESC LIMIT 100', m, w)); }
     if (p[1] === 'burned' && req.method === 'POST' && !rate('burn|' + ip(req), 30, 36e5)) { res.writeHead(429, { 'access-control-allow-origin': '*' }); return res.end('{"ok":false,"error":"too many requests"}'); }
     if (p[1] === 'burned' && req.method === 'POST') { let body = ''; req.on('data', (d) => { body += d; if (body.length > 1000) req.destroy(); });
       req.on('end', async () => { try { J(await verifyBurn(String(JSON.parse(body).sig || ''))); } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: e.message })); } }); return; }
@@ -433,7 +445,8 @@ async function handleReq(req, res) {
       req.on('end', async () => { try { if (!REW) throw new Error('rewards escrow not enabled'); J(await REW.ping(JSON.parse(body))); } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: e.message })); } }); return; }
     if (p[1] === 'payouts') return J(OPS && REW ? q(`SELECT sig, MAX(ts) ts, SUM(lamports)/1e6 harvested, SUM(CASE WHEN kind='taxburn' THEN lamports ELSE 0 END)/1e6 burned, SUM(CASE WHEN kind='taxdev' THEN lamports ELSE 0 END)/1e6 dev, SUM(CASE WHEN kind='taxhold' THEN lamports ELSE 0 END)/1e6 holders, MAX(CASE WHEN kind='taxhold' THEN CAST(extra AS INT) END) n_holders FROM rlog WHERE mint=? AND kind IN ('taxburn','taxdev','taxhold') GROUP BY sig ORDER BY ts DESC LIMIT 50`, p[2]) : []);
     if (p[1] === 'candles') return J(candles(p[2], u.searchParams.get('tf') || '1m'));
-    if (p[1] === 'holders') { const h = hCache.get(p[2]); if (h?.list && Date.now() - h.ts < 15e3) return J(h.list.slice(0, 300)); if (!q1('SELECT 1 FROM coins WHERE mint=?', p[2])) return J([]); if (!inflight.has(p[2])) inflight.set(p[2], holders(p[2]).finally(() => inflight.delete(p[2]))); const l = await inflight.get(p[2]); hCache.set(p[2], { ts: Date.now(), list: l }); return J(l.slice(0, 300)); }
+    if (p[1] === 'holders') { const withPs = (l) => l.slice(0, 300).map((x) => (x.curve || x.pool ? x : { ...x, ps: posStats(p[2], x.wallet, x.pct / 100 * SUPPLY) }));   // position value, spent and profit per holder
+      const h = hCache.get(p[2]); if (h?.list && Date.now() - h.ts < 15e3) return J(withPs(h.list)); if (!q1('SELECT 1 FROM coins WHERE mint=?', p[2])) return J([]); if (!inflight.has(p[2])) inflight.set(p[2], holders(p[2]).finally(() => inflight.delete(p[2]))); const l = await inflight.get(p[2]); hCache.set(p[2], { ts: Date.now(), list: l }); return J(withPs(l)); }
     res.writeHead(404, { 'access-control-allow-origin': '*' }); res.end('{}');
   } catch (e) { res.writeHead(500, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ error: e.message })); }
 }
