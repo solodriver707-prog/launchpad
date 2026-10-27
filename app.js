@@ -2432,6 +2432,13 @@
   }
   // ===== WALLET PROFILE: hover preview on any wallet + full profile (positions, closed, created, this coin) =====
   S.wprof = {}; S.wTab = 'open';
+  function rwCoinHTML(t, taxed) {   // total holder rewards this wallet got from this coin
+    var L = (S.rw.acc === S.account ? S.rw.list : []).filter(function (r) { return r.mint === t.ca; });
+    if (!L.length && !taxed) return '';
+    var by = {}; L.forEach(function (r) { by[r.tokenSymbol] = (by[r.tokenSymbol] || 0) + r.amount; });
+    var tot = Object.keys(by).map(function (k) { return '+' + fmtNum(by[k]) + ' $' + esc(k); }).join(' · ');
+    return '<button class="pc-rw" data-act="rwOpen"><span class="pc-rw-i">🎁</span><span class="pc-rw-t"><small>Rewards received</small><b class="mono">' + (L.length ? tot : '—') + '</b></span><span class="pc-rw-m muted">' + (L.length ? L.length + ' payout' + (L.length > 1 ? 's' : '') + ' · last ' + ago(L[0].ts) + ' ›' : 'Paid to holders as tax builds up') + '</span></button>';
+  }
   function rwListHTML() {
     var L = S.rw.acc === S.account ? S.rw.list : [], cl = CHAIN_ID === 'solana:devnet' ? '?cluster=devnet' : '';
     if (!L.length) return '<div class="muted wb-empty">No holder rewards yet. Hold taxed coins — every payout lands here with its transaction.</div>';
@@ -2751,7 +2758,7 @@
       return '<section class="card-s panel poscard pc2"><div class="pc-h"><b>Your position</b><span class="pc-hr">' + (sold > 0.5 ? '<span class="pc-sold">Sold ' + Math.round(sold) + '%</span>' : '') + '<button class="pc-share" data-act="shPos" data-arg="' + id + '" title="Share your PnL"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8h16v-8M12 3v13M7 8l5-5 5 5"/></svg></button></span></div>' +
         '<div class="pc-top"><div><small>Value</small><b class="mono pc-big">$' + money(val) + '</b><span class="mono muted">' + pos.val.toFixed(4) + ' ' + esc(QS) + '</span></div>' +
         '<div class="pc-pnl ' + (up ? 'up' : 'down') + '"><small>Profit</small><b class="mono">' + (up ? '+' : '−') + '$' + money(pr) + '</b><span class="mono">' + (up ? '+' : '') + prp.toFixed(1) + '%</span></div></div>' +
-        '<div class="pc-grid">' + cell('Holding', fmtNum(pos.tok) + ' $' + id) + cell('Spent', '$' + moneyS(spent)) + cell('Avg entry', avg > 0 ? '$' + moneyS(avg) + ' MC' : '—') + cell('Supply held', sup.toFixed(2) + '%') + '</div>' +
+        '<div class="pc-grid">' + cell('Holding', fmtNum(pos.tok) + ' $' + id) + cell('Spent', '$' + moneyS(spent)) + cell('Avg entry', avg > 0 ? '$' + moneyS(avg) + ' MC' : '—') + cell('Supply held', sup.toFixed(2) + '%') + '</div>' + rwCoinHTML(t, q && q.pct > 0) +
         (t.live && coCanPost(t) ? '<button class="btn sec add-co" data-act="coNew">⊕ Add your callout</button>' : '') + '</section>';
     })() : '';
     var hsS = holdersOf(t), top10S = 0, devPct = 0, devA = devOf(t);
@@ -3795,6 +3802,7 @@
       case 'wallet': set({ walletView: arg, walletMenu: false }); break;
       case 'closeW': set({ walletView: null }); break;
       case 'wTab': set({ wTab: arg }); break;
+      case 'rwOpen': rwLoad(); set({ walletMenu: true, wbTab: 'rewards' }); window.scrollTo({ top: 0, behavior: 'smooth' }); break;
       case 'wbTab': if (arg === 'rewards') rwLoad(); set({ wbTab: arg }); break;
       case 'wbDeposit': S.wbDep = !S.wbDep; render(); break;
       case 'copyW': copy(arg, 'Wallet address copied'); break;
