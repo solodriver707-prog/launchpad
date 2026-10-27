@@ -97,8 +97,8 @@
   }
   // DEMO mode = simulated coins/trades/callouts (no indexer, or ?demo=1). The real site shows only on-chain data.
   var DEMO = (function () { try { var qp = new URLSearchParams(location.search); if (qp.has('demo')) return qp.get('demo') !== '0'; } catch (e) {} return !window.TREID_API; })();
-  if (DEMO) document.documentElement.classList.add('demo-mode'), document.body && document.body.classList.add('demo');
-  document.addEventListener('DOMContentLoaded', function () { if (DEMO) document.body.classList.add('demo'); });
+  if (DEMO) document.documentElement.classList.add('demo-mode'), document.body && document.body.classList.add('is-demo');
+  document.addEventListener('DOMContentLoaded', function () { if (DEMO) document.body.classList.add('is-demo'); });
   var BASE = [
     mk('Neon Frog', 'NFROG', 'frog', 0, 3, 'normal', 'smile', 'crown', 0, 0, 'SOL', 1240, 34.2, 100, 4320, 4120, true, 1, 1),
     mk('Orbit Cat', 'ORBIT', 'cat', 1, 1, 'shades', 'smile', 'none', 1, 1, 'SPYx', 486, 12.8, 78, 540, 1930, true, 1, 0),
@@ -1964,7 +1964,7 @@
       (me ? '' : '<button class="co-ic co-fol' + (fol ? ' on' : '') + '" data-act="coFollow" data-arg="' + esc(c.w) + '" title="' + (fol ? 'Following' : 'Follow') + '">' + (fol ? '✓' : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="4"/><path d="M2 21c0-4 3-6 7-6s7 2 7 6M19 8v6M16 11h6"/></svg>') + '</button>') +
       '<span class="co-mw"><button class="co-ic" data-act="coMenu" data-arg="' + esc(key) + '" title="More">⋯</button>' + (S.coMenu === key ? '<span class="co-menu"><button data-act="coCopy" data-arg="' + esc(key) + '">Copy text</button><button data-act="coShare" data-arg="' + esc(key) + '">Copy link</button>' + (me ? '' : '<button data-act="coMute" data-arg="' + esc(c.w) + '">Mute ' + esc(coName(c.w)) + '</button><button data-act="coReport" data-arg="' + esc(key) + '">Report</button>') + '</span>' : '') + '</span></div>' +
       (opts.coinTag && !(c.pos > 0) ? '<button class="co-coin" data-act="open" data-arg="' + esc(t.tick) + '">' + avatarHTML(t, 18) + '<b>$' + esc(t.tick) + '</b><span class="mono">' + fmtK(t.mcN) + '</span></button>' : '') +
-      (c.text ? '<div class="co-t' + (long ? ' clamp' : '') + '">' + esc(c.text) + '</div>' : '') + (c.img ? '<a class="co-img" href="' + esc(c.img) + '" target="_blank" rel="noopener noreferrer"><img src="' + esc(c.img) + '" loading="lazy" alt=""></a>' : '') + (long ? '<button class="co-more" data-act="coExpand" data-arg="' + esc(key) + '">Show more</button>' : '') +
+      (c.text ? '<div class="co-t' + (long ? ' clamp' : '') + (c.real && !opts.child ? ' co-link' : '') + '"' + (c.real && !opts.child ? ' data-act="coPage" data-arg="' + esc(key) + '"' : '') + '>' + esc(c.text) + '</div>' : '') + (c.img ? '<a class="co-img" href="' + esc(c.img) + '" target="_blank" rel="noopener noreferrer"><img src="' + esc(c.img) + '" loading="lazy" alt=""></a>' : '') + (long ? '<button class="co-more" data-act="coExpand" data-arg="' + esc(key) + '">Show more</button>' : '') +
       (c.real && c.ps && !opts.child ? psBlock(c.ps, key) : '') + (!c.real && c.pos > 0 && !opts.child ? '<button class="co-pos" data-act="open" data-arg="' + esc(t.tick) + '" title="Open $' + esc(t.tick) + '">' + avatarHTML(t, 26) + '<span class="co-pn"><b>' + esc(t.tick) + '</b><small>' + esc(t.name) + '</small></span><span class="co-pv"><small>Position</small><b class="mono">$' + fmtNum(c.pos) + '</b></span><span class="co-pv"><small>PnL</small><b class="mono ' + (up ? 'up' : 'down') + '">' + (up ? '+' : '−') + '$' + Math.abs(pnl).toFixed(2) + '</b></span><span class="co-go">›</span></button>' : '') +
       '<div class="co-a"><button data-act="coShare" data-arg="' + esc(key) + '" title="Share"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8h16v-8M12 3v13M7 8l5-5 5 5"/></svg></button>' +
         '<button class="' + (c.rtd ? 'on rt' : '') + '" data-act="coRT" data-arg="' + esc(key) + '" title="Repost"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 2l4 4-4 4M3 11V9a3 3 0 013-3h15M7 22l-4-4 4-4M21 13v2a3 3 0 01-3 3H3"/></svg>' + (c.rt || '') + '</button>' +
@@ -2505,6 +2505,39 @@
   function holdUsd(t) { var p = S.pos[t.tick]; return p && p.tok > 0 ? p.tok * price(t) : 0; }
   function coCanPost(t) { return !!S.account && (!t.live || holdUsd(t) >= 1); }   // like the server: you must hold ≥ $1 of the coin
   function coOpen() { return !!S.coCompose || S.replyTo != null; }
+  // ===== CALLOUT PAGE: share card (PNG) · the callout + updates · the coin =====
+  function calloutPage() {
+    var v = S.coView || {}, t = find(v.tick); if (!t) return '<main class="wrap"><div class="route-wait"><b>Callout not found</b></div></main>';
+    var list = seedComments(t), c = list.filter(function (x) { return x.id === v.id; })[0];
+    if (!c) { if (t.live && !S.coViewTried) { S.coViewTried = 1; refreshCallouts(); } return '<main class="wrap"><div class="route-wait"><span class="gr-sp"></span><b>Loading callout…</b></div></main>'; }
+    var mine = S.account && c.w === S.account, me = { tick: t.tick };
+    var thread = threadHTML(t, list.filter(function (x) { return x.id === c.id || x.reply === c.id; }));
+    var upd = mine ? '<div class="cp-upd"><textarea id="cmt-in" class="inp" data-bind="cmtDraft" maxlength="2000" placeholder="Add an update to your callout">' + (S.replyTo === c.id ? esc(S.cmtDraft || '') : '') + '</textarea>' + (S.coImg ? '<div class="co-prev"><img src="' + esc(S.coImg) + '" alt=""><button data-act="coImgDel">✕</button></div>' : '') +
+      '<div class="co-bar"><label class="co-imgb" title="Add an image"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/></svg><input type="file" accept="image/png,image/jpeg,image/gif,image/webp" data-coimg hidden></label><span class="co-bar-r"><span class="muted mono" style="font-size:12px">' + (S.replyTo === c.id ? (S.cmtDraft || '').length : 0) + '/2000</span><button class="btn pri" data-act="cpPost" data-arg="' + c.id + '">' + (S.busy === 'Posting' ? 'Posting…' : 'Post') + '</button></span></div>' + (S.coErr ? '<small class="co-err">' + esc(S.coErr) + '</small>' : '') + '</div>' : '';
+    var ps = c.ps, my = S.myPs && S.myPs[t.ca];
+    return '<main class="wrap cp-wrap"><section class="cp-card"><canvas id="co-share" width="800" height="1200"></canvas><div class="cp-acts"><button class="btn sec" data-act="coShareLink">🔗 Copy link</button><button class="btn sec" data-act="coShareDl">⬇ Download</button></div></section>' +
+      '<section class="cp-mid"><div class="cp-h"><button class="link" data-act="coBack">← </button><b>Callout</b><button class="link" data-act="coShareLink" title="Share">⇪</button></div>' + thread + upd + '</section>' +
+      '<aside class="cp-side"><div class="card-s panel cp-coin">' + avatarHTML(t, 52) + '<span><b>' + esc(t.tick) + '</b><small>' + esc(t.name) + ' · ' + ago(t.born) + ' old</small></span><span class="cp-mc"><small>MC</small><b class="mono">' + fmtK(t.mcN) + '</b></span><button class="btn sec cp-view" data-act="open" data-arg="' + esc(t.tick) + '">View coin</button></div>' +
+      (my ? '<div class="card-s panel"><b style="font-size:13px">Your position</b>' + psBlock(my, null) + '</div>' : '') +
+      '<button class="btn pri cp-buy" data-act="open" data-arg="' + esc(t.tick) + '">Buy $' + esc(t.tick) + '</button></aside></main>';
+  }
+  function drawShareCard() {   // the shareable PnL card, drawn on a canvas so it downloads as a PNG
+    var cv = document.getElementById('co-share'); if (!cv || !S.coView) return; var t = find(S.coView.tick); if (!t) return; var c = seedComments(t).filter(function (x) { return x.id === S.coView.id; })[0]; if (!c) return;
+    var g = cv.getContext('2d'), W = cv.width, H = cv.height, ps = c.ps || { profit: 0, profitPct: 0, spent: 0, value: 0 }, up = ps.profit >= 0, col = up ? '#3DDC97' : '#F2708A';
+    var bg = g.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, up ? '#06170f' : '#1a0a0e'); bg.addColorStop(1, '#0b0b0c'); g.fillStyle = bg; g.fillRect(0, 0, W, H);
+    g.fillStyle = 'rgba(255,255,255,.05)'; for (var x = 20; x < W; x += 40) for (var y = 20; y < H; y += 40) g.fillRect(x, y, 2, 2);
+    g.textBaseline = 'top'; g.fillStyle = '#fff'; g.font = '800 40px Manrope, system-ui, sans-serif'; g.fillText('$' + t.tick, 56, 60);
+    g.textAlign = 'right'; g.fillStyle = 'rgba(255,255,255,.55)'; g.font = '700 22px "JetBrains Mono", monospace'; g.fillText(up ? 'PROFIT' : 'PNL', W - 56, 62);
+    g.fillStyle = col; g.font = '800 92px Manrope, system-ui, sans-serif'; g.fillText((up ? '+$' : '−$') + moneyS(ps.profit), W - 56, 96);
+    g.font = '700 30px "JetBrains Mono", monospace'; g.fillText((up ? '+' : '') + (ps.profitPct || 0).toFixed(1) + '%', W - 56, 200);
+    g.fillStyle = 'rgba(255,255,255,.55)'; g.font = '700 20px "JetBrains Mono", monospace'; g.fillText('INVESTED', W - 56, 252); g.fillStyle = '#fff'; g.font = '800 30px "JetBrains Mono", monospace'; g.fillText('$' + moneyS(ps.spent), W - 56, 280);
+    g.textAlign = 'left';
+    var hs = (t.hist && t.hist.length > 1 ? t.hist : [t.mcN, t.mcN]).slice(-80), mn = Math.min.apply(null, hs), mx = Math.max.apply(null, hs), x0 = 56, x1 = W - 56, y0 = 420, y1 = 960, sx = function (i) { return x0 + (x1 - x0) * i / (hs.length - 1); }, sy = function (v) { return mx === mn ? (y0 + y1) / 2 : y1 - (y1 - y0) * (v - mn) / (mx - mn); };
+    g.beginPath(); hs.forEach(function (v, i) { if (i) g.lineTo(sx(i), sy(v)); else g.moveTo(sx(i), sy(v)); }); g.strokeStyle = col; g.lineWidth = 6; g.shadowColor = col; g.shadowBlur = 24; g.stroke(); g.shadowBlur = 0;
+    var fill = g.createLinearGradient(0, y0, 0, y1); fill.addColorStop(0, up ? 'rgba(61,220,151,.25)' : 'rgba(242,112,138,.22)'); fill.addColorStop(1, 'rgba(0,0,0,0)'); g.lineTo(sx(hs.length - 1), y1); g.lineTo(sx(0), y1); g.closePath(); g.fillStyle = fill; g.fill();
+    g.fillStyle = 'rgba(255,255,255,.55)'; g.font = '700 20px "JetBrains Mono", monospace'; g.fillText('MARKET CAP NOW', 56, 1000); g.fillStyle = '#fff'; g.font = '800 34px "JetBrains Mono", monospace'; g.fillText(fmtK(t.mcN), 56, 1028);
+    g.fillStyle = '#fff'; g.font = '800 30px Manrope, system-ui, sans-serif'; g.fillText(coName(c.w), 56, 1110); g.textAlign = 'right'; g.fillStyle = col; g.fillText('treid', W - 56, 1110); g.textAlign = 'left';
+  }
   function coModal() {
     if (!S.coModal) return ''; var t = find(S.tick); if (!t) return ''; var upd = S.coModal.upd, n = (S.cmtDraft || '').length;
     return '<div class="modal-bg co-mbg" data-act="coCancel"></div><div class="co-modal" role="dialog" aria-label="New callout"><div class="co-mh"><b>' + (upd ? 'Update your callout' : 'New callout') + '</b><button class="co-x" data-act="coCancel" aria-label="Close">✕</button></div>' +
@@ -3003,12 +3036,14 @@
   var firstCount = true;
   // ================= URL ROUTING (refresh / share / back button keep your place) =================
   var ROUTES = { create: 'create', burn: 'burnery', leaders: 'leaderboard', trend: 'trending', watch: 'watchlist' }, routeReady = false;
-  function routeOf() { if (S.screen === 'token' && S.tick) { var t0 = find(S.tick); return '#/coin/' + encodeURIComponent(t0 && t0.live ? t0.ca : S.tick); } return ROUTES[S.screen] ? '#/' + ROUTES[S.screen] : ''; }
+  function routeOf() { if (S.screen === 'callout' && S.coView) { var tv = find(S.coView.tick); return '#/callout/' + encodeURIComponent(tv && tv.live ? tv.ca : S.coView.tick) + '/' + S.coView.id; } if (S.screen === 'token' && S.tick) { var t0 = find(S.tick); return '#/coin/' + encodeURIComponent(t0 && t0.live ? t0.ca : S.tick); } return ROUTES[S.screen] ? '#/' + ROUTES[S.screen] : ''; }
   function syncRoute() { if (!routeReady) return; var r = routeOf(), cur = location.hash || ''; if (cur === r) return; try { history.pushState(null, '', r || (location.pathname + location.search)); } catch (e) {} }
   function applyRoute() {
     var h = ''; try { h = decodeURIComponent((location.hash || '').replace(/^#\/?/, '')); } catch (e) { h = ''; } var parts = h.split('/');
     if (parts[0] === 'coin' && parts[1]) { var id = parts[1], t1 = find(id) || S.live.filter(function (x) { return x.ca === id; })[0];
       if (t1) { if (S.screen !== 'token' || S.tick !== t1.tick) openToken(t1.tick); } else if (API) { S.pendingRoute = id; S.screen = 'pending'; setTimeout(function () { if (S.screen === 'pending') { S.pendingRoute = null; set({ screen: 'home' }); toast('Couldn\'t load that coin — the server may be waking up, try again'); } }, 45000); } else set({ screen: 'home' }); return; }
+    if (parts[0] === 'callout' && parts[1] && parts[2]) { var tc = find(parts[1]) || S.live.filter(function (x) { return x.ca === parts[1]; })[0];
+      if (tc) { if (tc.live) liveLoad(tc); S.tick = tc.tick; set({ screen: 'callout', coView: { tick: tc.tick, id: +parts[2] } }); } else if (API) { setTimeout(applyRoute, 2500); } else set({ screen: 'home' }); return; }
     for (var k in ROUTES) if (ROUTES[k] === parts[0]) { if (S.screen !== k) set({ screen: k, palOpen: false }); return; }
     if (S.screen !== 'home') set({ screen: 'home' });
   }
@@ -3016,13 +3051,14 @@
   function render() {
     var ae = document.activeElement, fid = ae && ae.id, ss = null, se = null;
     try { if (fid && ae.selectionStart != null) { ss = ae.selectionStart; se = ae.selectionEnd; } } catch (e) {}
-    var body = S.screen === 'pending' ? '<main class="wrap"><div class="route-wait"><span class="gr-sp"></span><b>Loading coin…</b><small class="muted">fetching live data from the chain</small></div></main>' : S.screen === 'token' ? tokenPage() : S.screen === 'create' ? createPage() : S.screen === 'leaders' ? leadersPage() : S.screen === 'watch' ? watchPage() : S.screen === 'burn' ? burnPage() : S.screen === 'trend' ? trendPage() : home();
+    var body = S.screen === 'pending' ? '<main class="wrap"><div class="route-wait"><span class="gr-sp"></span><b>Loading coin…</b><small class="muted">fetching live data from the chain</small></div></main>' : S.screen === 'token' ? tokenPage() : S.screen === 'create' ? createPage() : S.screen === 'leaders' ? leadersPage() : S.screen === 'watch' ? watchPage() : S.screen === 'burn' ? burnPage() : S.screen === 'trend' ? trendPage() : S.screen === 'callout' ? calloutPage() : home();
     document.getElementById('app').innerHTML = (RPC_DEV || API_DEV ? '<div class="devbar">⚠ Developer mode — custom ' + [RPC_DEV ? 'RPC' : '', API_DEV ? 'server' : ''].filter(Boolean).join(' + ') + ' (this tab only)</div>' : '') + '<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="ccUp" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3DDC97" stop-opacity=".28"/><stop offset="1" stop-color="#3DDC97" stop-opacity="0"/></linearGradient><linearGradient id="ccDn" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F2708A" stop-opacity=".26"/><stop offset="1" stop-color="#F2708A" stop-opacity="0"/></linearGradient></defs></svg>' + tape() + header() + body + footer() + walletModal() + demoImgModal() + termsModal() + calloutDrawer() + calloutRail() + palette() + walletDrawer() + holderMap() + burnModal() + ctoModal() + coModal();
     document.body.classList.toggle('has-rail', S.screen === 'home' && !S.coOpen && !S.railHidden); document.body.classList.toggle('has-rail-min', S.screen === 'home' && !S.coOpen && !!S.railHidden);
     if (fid) { var el = document.getElementById(fid); if (el) { el.focus({ preventScroll: true }); try { if (ss != null) el.setSelectionRange(ss, se); } catch (e) {} } }
     if (S.palOpen && !fid) { var p = document.getElementById('pal'); if (p) p.focus(); }
     if (S.screen === 'home' && !S.loading && firstCount) { firstCount = false; countUp(); }
     if (typeof reveal === 'function') reveal();
+    if (S.screen === 'callout') drawShareCard();
     setTimeout(function () { navInd(); labKick(); fwKick(); mbuyWatch(); bnKick(); }, 0);
     mFit(); if (S.screen === 'home') mSetStep(M.step);
   }
@@ -3326,6 +3362,10 @@
       case 'coNew': S.coModal = { upd: false }; S.replyTo = null; S.coErr = ''; S.tick = S.tick || arg; render(); setTimeout(function () { var x = document.getElementById('cmt-in'); if (x) x.focus(); }, 30); break;
       case 'coUpdate': S.coModal = { upd: true }; S.replyTo = +arg; S.coErr = ''; render(); setTimeout(function () { var x = document.getElementById('cmt-in'); if (x) x.focus(); }, 30); break;
       case 'coCancel': S.coModal = null; S.coCompose = false; S.replyTo = null; S.coErr = ''; S.coImg = null; render(); break;
+      case 'coPage': var cp = arg.split('|'); S.coModal = null; S.tick = cp[0]; set({ screen: 'callout', coView: { tick: cp[0], id: +cp[1] } }); window.scrollTo(0, 0); break;
+      case 'coShareDl': var cvs = document.getElementById('co-share'); if (cvs) { var a = document.createElement('a'); a.href = cvs.toDataURL('image/png'); a.download = 'treid-callout-' + (S.coView ? S.coView.tick + '-' + S.coView.id : 'card') + '.png'; document.body.appendChild(a); a.click(); a.remove(); } break;
+      case 'coShareLink': copy(location.href, 'Link copied'); break;
+      case 'coBack': set({ screen: 'token' }); break;
       case 'coTipOff': S.coTipOff = true; try { localStorage.setItem('dl.coTipOff', '1'); } catch (er) {} render(); break;
       case 'coUpMore': S.coUpAll = S.coUpAll || {}; S.coUpAll[arg] = 1; render(); break;
       case 'coTrades': if (S.coTrOpen === arg) { S.coTrOpen = null; render(); break; } S.coTrOpen = arg; S.coTr = S.coTr || {}; render();
@@ -3346,6 +3386,8 @@
       case 'coReply': var cp = arg.split('|'); if (S.screen !== 'token' || S.tick !== cp[0]) openToken(cp[0]); S.coOpen = false; set({ replyTo: +cp[1] }); setTimeout(function () { var ci = document.getElementById('cmt-in'); if (ci) ci.focus(); else toast('Connect a wallet to reply'); }, 60); break;
       case 'like': var cl = (S.comments[S.tick] || [])[+arg]; if (cl) { cl.liked = !cl.liked; cl.likes += cl.liked ? 1 : -1; render(); } break;
       case 'replyTo': set({ replyTo: +arg }); setTimeout(function () { var ci = document.getElementById('cmt-in'); if (ci) ci.focus(); }, 20); break;
+      case 'cpPost': S.replyTo = +arg;   // update from the callout page → same posting path
+      // falls through
       case 'post':
         var txt = (S.cmtDraft || '').trim(); if (!txt && !S.coImg) { toast('Write something first'); break; }
         var tp0 = find(S.tick); if (tp0 && tp0.live) {
