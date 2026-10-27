@@ -2930,38 +2930,139 @@
     }); }); });
   }
   // ===== COIN SITE: a free, shareable website for every coin (#/c/<CA or TICK>/<theme>) =====
-  var SITE_TH = [['dark', 'Dark'], ['coin', 'Coin color'], ['neon', 'Neon'], ['vapor', 'Synthwave'], ['aurora', 'Aurora'], ['fire', 'Fire'], ['gold', 'Luxury'], ['terminal', 'Terminal'], ['arcade', 'Arcade'], ['comic', 'Comic'], ['meme', 'Meme'], ['paper', 'Paper']];
-  var SITE_FONT = { vapor: 'Monoton', gold: 'Playfair+Display:wght@700;900', terminal: 'VT323', arcade: 'Press+Start+2P', comic: 'Bangers' };
+  // template = layout + palette. Old links keep working (paper/gold/aurora/fire map to their closest new template).
+  var SITE_TH = [['dark', 'Dark', 'classic'], ['coin', 'Coin color', 'classic'], ['neon', 'Neon', 'classic'], ['bento', 'Bento', 'bento'], ['editorial', 'Editorial', 'editorial'], ['maison', 'Maison', 'maison'],
+    ['cinema', 'Cinema', 'cinema'], ['vapor', 'Synthwave', 'split'], ['terminal', 'Terminal', 'terminal'], ['arcade', 'Arcade', 'arcade'], ['comic', 'Comic', 'sticker'], ['meme', 'Meme', 'sticker']];
+  var SITE_ALIAS = { paper: 'editorial', gold: 'maison', aurora: 'cinema', fire: 'cinema' };
+  var SITE_FONT = { vapor: 'Monoton', terminal: 'VT323', arcade: 'Press+Start+2P', comic: 'Bangers', meme: 'Archivo+Black', maison: 'Cormorant+Garamond:ital,wght@0,300;0,500;1,300;1,500' };
   function siteFont(th) { var f = SITE_FONT[th]; if (!f || document.getElementById('csf-' + th)) return; var l = document.createElement('link'); l.id = 'csf-' + th; l.rel = 'stylesheet'; l.href = 'https://fonts.googleapis.com/css2?family=' + f + '&display=swap'; document.head.appendChild(l); }
+  function siteThOf(th) { th = SITE_ALIAS[th] || th; return SITE_TH.filter(function (x) { return x[0] === th; })[0] || SITE_TH[0]; }
   function siteUrl(t, th) { return location.href.split('#')[0] + '#/c/' + encodeURIComponent(t.live ? t.ca : t.tick) + (th && th !== 'dark' ? '/' + th : ''); }
   function sitePage() {
     var v = S.site || {}, t = find(v.tick); if (!t) return '<main class="wrap"><div class="route-wait"><span class="gr-sp"></span><b>Loading…</b></div></main>';
-    var th = SITE_TH.some(function (x) { return x[0] === v.th; }) ? v.th : 'dark', id = esc(t.tick), c = chg(t), up = c >= 0, tm = Math.max(t.buy, t.sell), rm = riskMetrics(t), vo = vampOf(t), ds = devStatus(t), so = socialsOf(t);
-    var ch = heroChart(t, 600, 160), col = (t.spec && t.spec.bg) || '#3DDC97'; (function () { var m = /^#?([0-9a-f]{6})$/i.exec(col); var n = m ? parseInt(m[1], 16) : 0, L = ((n >> 16) * .299 + ((n >> 8) & 255) * .587 + (n & 255) * .114) / 255; if (!m || L < .5) col = '#3DDC97'; })();
-    var soc = [['x', 'X', I.x], ['tg', 'Telegram', I.tg], ['web', 'Website', I.web]].filter(function (x) { return so[x[0]]; }).map(function (x) { return '<button class="cs-soc" data-act="soc" data-arg="' + id + '|' + x[0] + '">' + x[2] + '<span>' + x[1] + '</span></button>'; }).join('');
-    var warn = (vo ? '<div class="cs-warn">🧛 Same name as an older coin, $' + esc(vo.tick) + ' — check the contract address before you buy.</div>' : '') + (ds.state === 'out' ? '<div class="cs-warn">The creator is no longer active on this coin.</div>' : '') + (rm.some(function (m) { return m.lv === 'r'; }) ? '<div class="cs-warn">⚠ Risk flags: ' + rm.filter(function (m) { return m.lv === 'r'; }).map(function (m) { return m.lab + ' ' + m.val; }).join(' · ') + '</div>' : '');
+    var TH = siteThOf(v.th), th = TH[0], lay = TH[2], id = esc(t.tick), c = chg(t), up = c >= 0, tm = Math.max(t.buy, t.sell), rm = riskMetrics(t), vo = vampOf(t), ds = devStatus(t), so = socialsOf(t), spl = splitOf(t);
     siteFont(th);
-    return '<div class="cs cs-' + th + '" style="--cc:' + esc(col) + '">' +
-      '<header class="cs-top"><span class="cs-brand">' + avatarHTML(t, 28) + '<b>$' + id + '</b></span><span class="cs-tr">' + soc + '<button class="cs-buy sm" data-act="open" data-arg="' + id + '">Buy $' + id + '</button></span></header>' +
-      '<div class="cs-glow" aria-hidden="true">' + avatarHTML(t, 400) + '</div>' +
-      '<section class="cs-hero">' + (t.banner ? '<div class="cs-ban"><img src="' + esc(t.banner) + '" alt=""></div>' : '') +
-        '<div class="cs-id"><span class="cs-logo">' + avatarHTML(t, 150) + '</span><h1>' + esc(t.name) + '</h1><span class="cs-tk mono">$' + id + '</span>' +
-        (t.desc ? '<p class="cs-desc">' + esc(t.desc) + '</p>' : '') +
-        '<div class="cs-ctas"><button class="cs-buy" data-act="open" data-arg="' + id + '">Buy $' + id + ' on treid</button><button class="cs-ca mono" data-act="ca" data-arg="' + id + '"><small>CA</small> ' + esc(short(t.ca)) + ' ' + I.copy + '</button></div></div></section>' + warn +
-      '<section class="cs-stats"><div><span class="cs-si">📈</span><small>Market cap</small><b class="mono">' + fmtK(t.mcN) + '</b><em class="' + (up ? 'up' : 'down') + '">' + chgTxt(c) + ' 24h</em></div><div><span class="cs-si">👥</span><small>Holders</small><b class="mono">' + fmtNum(t.holders) + '</b><em class="mut">vol ' + fmtK(t.vol) + '</em></div><div><span class="cs-si">🧾</span><small>Tax</small><b class="mono">' + tm + '%</b><em class="mut">' + (tm ? 'buy & sell' : 'no tax') + '</em></div><div><span class="cs-si">' + (t.prog >= 100 ? '🎓' : '⛰️') + '</span><small>' + (t.prog >= 100 ? 'Status' : 'Bonding curve') + '</small><b class="mono">' + (t.prog >= 100 ? 'Graduated' : t.prog.toFixed(0) + '%') + '</b><i class="cs-bar"><u style="width:' + Math.min(100, t.prog).toFixed(0) + '%"></u></i></div></section>' +
-      '<section class="cs-chart"><svg viewBox="0 0 600 160" preserveAspectRatio="none"><defs><linearGradient id="csg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--cc)" stop-opacity=".35"/><stop offset="1" stop-color="var(--cc)" stop-opacity="0"/></linearGradient></defs><path d="' + ch.area + '" fill="url(#csg)"/><path d="' + ch.line + '" fill="none" stroke="var(--cc)" stroke-width="3" vector-effect="non-scaling-stroke"/></svg><button class="cs-chartbtn" data-act="open" data-arg="' + id + '">Open live chart →</button></section>' +
-      (function () { var spl = splitOf(t), row = function (k, v) { return '<div><small>' + k + '</small><b>' + v + '</b></div>'; };
+    var ch = heroChart(t, 600, 160), col = (t.spec && t.spec.bg) || '#3DDC97'; (function () { var m = /^#?([0-9a-f]{6})$/i.exec(col); var n = m ? parseInt(m[1], 16) : 0, L = ((n >> 16) * .299 + ((n >> 8) & 255) * .587 + (n & 255) * .114) / 255; if (!m || L < .5) col = '#3DDC97'; })();
+    var P = {
+      av: function (s) { return avatarHTML(t, s); },
+      buy: function (lab, cls) { return '<button class="cs-buy' + (cls ? ' ' + cls : '') + '" data-act="open" data-arg="' + id + '">' + (lab || 'Buy $' + id) + '</button>'; },
+      ca: function (cls) { return '<button class="cs-ca mono' + (cls ? ' ' + cls : '') + '" data-act="ca" data-arg="' + id + '"><small>CA</small> ' + esc(short(t.ca)) + ' ' + I.copy + '</button>'; },
+      soc: [['x', 'X', I.x], ['tg', 'Telegram', I.tg], ['web', 'Website', I.web]].filter(function (x) { return so[x[0]]; }).map(function (x) { return '<button class="cs-soc" data-act="soc" data-arg="' + id + '|' + x[0] + '">' + x[2] + '<span>' + x[1] + '</span></button>'; }).join(''),
+      warn: (vo ? '<div class="cs-warn">🧛 Same name as an older coin, $' + esc(vo.tick) + ' — check the contract address before you buy.</div>' : '') + (ds.state === 'out' ? '<div class="cs-warn">The creator is no longer active on this coin.</div>' : '') + (rm.some(function (m) { return m.lv === 'r'; }) ? '<div class="cs-warn">⚠ Risk flags: ' + rm.filter(function (m) { return m.lv === 'r'; }).map(function (m) { return m.lab + ' ' + m.val; }).join(' · ') + '</div>' : ''),
+      mc: fmtK(t.mcN), chg: chgTxt(c), up: up, hold: fmtNum(t.holders), vol: fmtK(t.vol), tax: tm + '%', prog: Math.min(100, t.prog), grad: t.prog >= 100,
+      chart: function (sw) { return '<svg viewBox="0 0 600 160" preserveAspectRatio="none"><defs><linearGradient id="csg' + (sw || '') + '" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--cc)" stop-opacity=".35"/><stop offset="1" stop-color="var(--cc)" stop-opacity="0"/></linearGradient></defs><path d="' + ch.area + '" fill="url(#csg' + (sw || '') + ')"/><path d="' + ch.line + '" fill="none" stroke="var(--cc)" stroke-width="' + (sw || 3) + '" vector-effect="non-scaling-stroke"/></svg>'; },
+      desc: t.desc ? esc(t.desc) : '',
+      split: spl ? '💎 ' + spl.h + '% holders · 🔥 ' + spl.b + '% burn · 👤 ' + spl.d + '% dev' : (tm ? 'set by the creator' : 'no tax'),
+      info: function () { var row = function (k, v) { return '<div><small>' + k + '</small><b>' + v + '</b></div>'; };
         return '<section class="cs-info"><h2>Token info</h2><div class="cs-ig">' + row('Contract', '<button class="cs-cab mono" data-act="ca" data-arg="' + id + '">' + esc(short(t.ca)) + ' ' + I.copy + '</button>') + row('Network', '◎ Solana') + row('Paired with', coinHTML(t.pair, 18) + ' ' + esc(pairLabel(t.pair))) + row('Total supply', '1,000,000,000') +
-          row('Created', ago(t.born) + ' ago') + row('Creator', esc(short(devOf(t)))) + row('Launched on', 'treid · Meteora') + row('Tax split', spl ? '💎 ' + spl.h + '% · 🔥 ' + spl.b + '% · 👤 ' + spl.d + '%' : (tm ? 'set by the creator' : '—')) + '</div></section>'; })() +
-      '<section class="cs-safe"><h2>On-chain, in the open</h2><div class="cs-rk">' + rm.map(function (m) { return '<div class="lv-' + m.lv + '"><small>' + m.lab + '</small><b class="mono">' + m.val + '</b></div>'; }).join('') + '</div><p>Live from the chain. Paired with ' + esc(pairLabel(t.pair)) + (tm ? ' · every trade pays a ' + tm + '% tax, split as the creator set it' : ' · no tax') + '.</p></section>' +
-      '<section class="cs-how"><h2>How to buy $' + id + '</h2><ol><li><b>Get a wallet</b><span>Phantom, Solflare or Backpack.</span></li><li><b>Add some SOL</b><span>From an exchange or a card.</span></li><li><b>Open $' + id + ' on treid</b><span>Pick an amount and confirm in your wallet.</span></li></ol><button class="cs-buy" data-act="open" data-arg="' + id + '">Buy $' + id + '</button></section>' +
-      '<footer class="cs-foot"><span>Launched on <b>treid</b> — launch fair, trade safer.</span><button class="cs-more" data-act="home">Explore more coins on treid →</button><small>Nothing here is financial advice. Memecoins are risky.</small></footer></div>';
+          row('Created', ago(t.born) + ' ago') + row('Creator', esc(short(devOf(t)))) + row('Launched on', 'treid · Meteora') + row('Tax split', spl ? '💎 ' + spl.h + '% · 🔥 ' + spl.b + '% · 👤 ' + spl.d + '%' : (tm ? 'set by the creator' : '—')) + '</div></section>'; },
+      safe: function () { return '<section class="cs-safe"><h2>On-chain, in the open</h2><div class="cs-rk">' + rm.map(function (m) { return '<div class="lv-' + m.lv + '"><small>' + m.lab + '</small><b class="mono">' + m.val + '</b></div>'; }).join('') + '</div><p>Live from the chain. Paired with ' + esc(pairLabel(t.pair)) + (tm ? ' · every trade pays a ' + tm + '% tax, split as the creator set it' : ' · no tax') + '.</p></section>'; },
+      how: function () { return '<section class="cs-how"><h2>How to buy $' + id + '</h2><ol><li><b>Get a wallet</b><span>Phantom, Solflare or Backpack.</span></li><li><b>Add some SOL</b><span>From an exchange or a card.</span></li><li><b>Open $' + id + ' on treid</b><span>Pick an amount and confirm in your wallet.</span></li></ol>' + P.buy() + '</section>'; },
+      foot: '<footer class="cs-foot"><span>Launched on <b>treid</b> — launch fair, trade safer.</span><button class="cs-more" data-act="home">Explore more coins on treid →</button><small>Nothing here is financial advice. Memecoins are risky.</small></footer>',
+      top: function (extra) { return '<header class="cs-top"><span class="cs-brand">' + avatarHTML(t, 28) + '<b>$' + id + '</b></span><span class="cs-tr">' + (extra || '') + P.soc + P.buy('Buy $' + id, 'sm') + '</span></header>'; },
+      stats4: function () { return '<section class="cs-stats"><div><span class="cs-si">📈</span><small>Market cap</small><b class="mono">' + P.mc + '</b><em class="' + (up ? 'up' : 'down') + '">' + P.chg + ' 24h</em></div><div><span class="cs-si">👥</span><small>Holders</small><b class="mono">' + P.hold + '</b><em class="mut">vol ' + P.vol + '</em></div><div><span class="cs-si">🧾</span><small>Tax</small><b class="mono">' + P.tax + '</b><em class="mut">' + (tm ? 'buy & sell' : 'no tax') + '</em></div><div><span class="cs-si">' + (P.grad ? '🎓' : '⛰️') + '</span><small>' + (P.grad ? 'Status' : 'Bonding curve') + '</small><b class="mono">' + (P.grad ? 'Graduated' : P.prog.toFixed(0) + '%') + '</b><i class="cs-bar"><u style="width:' + P.prog.toFixed(0) + '%"></u></i></div></section>'; }
+    };
+    var body = (SITE_LAY[lay] || SITE_LAY.classic)(t, P, id);
+    return '<div class="cs cs-' + th + ' csl-' + lay + '" style="--cc:' + esc(col) + '">' + body + '</div>';
+  }
+  function csMarquee(items) { var row = items.map(function (x) { return '<span>' + x + '</span>'; }).join('<i>✦</i>'); return '<div class="cs-mq" aria-hidden="true"><div>' + row + '<i>✦</i>' + row + '<i>✦</i></div></div>'; }
+  function csBurst(n) { var p = []; for (var i = 0; i < n * 2; i++) { var a = i / (n * 2) * Math.PI * 2, r = i % 2 ? 38 : 50; p.push((50 + r * Math.cos(a)).toFixed(1) + '% ' + (50 + r * Math.sin(a)).toFixed(1) + '%'); } return 'polygon(' + p.join(',') + ')'; }
+  var SITE_LAY = {
+    classic: function (t, P, id) {
+      return P.top() + '<div class="cs-glow" aria-hidden="true">' + P.av(400) + '</div>' +
+        '<section class="cs-hero">' + (t.banner ? '<div class="cs-ban"><img src="' + esc(t.banner) + '" alt=""></div>' : '') +
+        '<div class="cs-id"><span class="cs-logo">' + P.av(150) + '</span><h1>' + esc(t.name) + '</h1><span class="cs-tk mono">$' + id + '</span>' + (P.desc ? '<p class="cs-desc">' + P.desc + '</p>' : '') +
+        '<div class="cs-ctas">' + P.buy('Buy $' + id + ' on treid') + P.ca() + '</div></div></section>' + P.warn + P.stats4() +
+        '<section class="cs-chart">' + P.chart() + '<button class="cs-chartbtn" data-act="open" data-arg="' + id + '">Open live chart →</button></section>' + P.info() + P.safe() + P.how() + P.foot;
+    },
+    bento: function (t, P, id) {
+      return P.top() +
+        '<section class="bn">' +
+          '<div class="bn-t bn-logo">' + (t.banner ? '<img class="bn-banbg" src="' + esc(t.banner) + '" alt="">' : '') + '<span class="bn-av">' + P.av(170) + '</span></div>' +
+          '<div class="bn-t bn-name"><small class="mono">$' + id + ' · Solana</small><h1>' + esc(t.name) + '</h1>' + (P.desc ? '<p>' + P.desc + '</p>' : '') + '</div>' +
+          '<div class="bn-t bn-mc"><small>Market cap</small><b class="mono">' + P.mc + '</b><em class="' + (P.up ? 'up' : 'down') + '">' + P.chg + ' · 24h</em></div>' +
+          '<div class="bn-t bn-ho"><small>Holders</small><b class="mono">' + P.hold + '</b><em>vol ' + P.vol + '</em></div>' +
+          '<div class="bn-t bn-ch"><div class="bn-chh"><small>Price · 24h</small><button data-act="open" data-arg="' + id + '">Live chart ↗</button></div>' + P.chart() + '</div>' +
+          '<div class="bn-t bn-ring"><i style="--p:' + P.prog.toFixed(0) + '"><b class="mono">' + (P.grad ? '🎓' : P.prog.toFixed(0) + '%') + '</b></i><small>' + (P.grad ? 'Graduated' : 'Bonding curve') + '</small></div>' +
+          '<div class="bn-t bn-tax"><small>Tax</small><b class="mono">' + P.tax + '</b><em>' + P.split + '</em></div>' +
+          '<button class="bn-t bn-buy" data-act="open" data-arg="' + id + '"><small>Trade on treid</small><b>Buy $' + id + '</b><span>↗</span></button>' +
+          '<div class="bn-t bn-ca"><small>Contract address</small>' + P.ca('bn-cab') + (P.soc ? '<div class="bn-soc">' + P.soc + '</div>' : '') + '</div>' +
+        '</section>' + P.warn + P.info() + P.safe() + P.how() + P.foot;
+    },
+    editorial: function (t, P, id) {
+      var d = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+      return '<div class="ed-mast"><div class="ed-rule"><span>' + d + '</span><span>Solana edition</span><span>' + P.soc + '</span></div><h1 class="ed-title">' + esc(t.name) + '</h1><div class="ed-rule b"><span class="mono">$' + id + '</span><span>Market cap ' + P.mc + ' <em class="' + (P.up ? 'up' : 'down') + '">' + P.chg + '</em></span><span>' + P.buy('Buy $' + id, 'sm') + '</span></div></div>' +
+        csMarquee(['$' + id + ' ' + P.mc, 'Holders ' + P.hold, 'Vol 24h ' + P.vol, 'Tax ' + P.tax, P.grad ? 'Graduated' : 'Curve ' + P.prog.toFixed(0) + '%', 'Paired with ' + esc(pairLabel(t.pair))]) +
+        '<section class="ed-lead"><div class="ed-story"><span class="ed-kicker">The story</span><h2>' + (P.desc ? esc(t.desc.split(/[.!?]/)[0]).slice(0, 90) : 'A new coin takes the stage') + '</h2>' + (P.desc ? '<p class="ed-drop">' + P.desc + '</p>' : '<p class="ed-drop">$' + id + ' launched on treid, paired with ' + esc(pairLabel(t.pair)) + '. Every trade is on-chain and in the open.</p>') +
+          '<div class="cs-ctas">' + P.buy('Buy $' + id + ' on treid') + P.ca() + '</div></div>' +
+          '<figure class="ed-fig"><div class="ed-img">' + (t.banner ? '<img src="' + esc(t.banner) + '" alt="">' : '') + '<span>' + P.av(220) + '</span></div><figcaption>Fig. 1 — $' + id + ', created ' + ago(t.born) + ' ago</figcaption></figure></section>' + P.warn +
+        '<section class="ed-cols"><article><span class="ed-kicker">Markets</span><b class="mono">' + P.mc + '</b><p>Market cap, ' + P.chg + ' over 24 hours on ' + P.vol + ' of volume.</p></article><article><span class="ed-kicker">Community</span><b class="mono">' + P.hold + '</b><p>Wallets holding $' + id + ' right now, read straight from the chain.</p></article><article><span class="ed-kicker">Economics</span><b class="mono">' + P.tax + '</b><p>Tax on every trade — ' + P.split + '.</p></article></section>' +
+        '<figure class="ed-chart">' + P.chart(2) + '<figcaption>Fig. 2 — Price, last 24 hours. <button class="link" data-act="open" data-arg="' + id + '">Open the live chart →</button></figcaption></figure>' + P.info() + P.safe() + P.how() + P.foot;
+    },
+    maison: function (t, P, id) {
+      var ring = ('$' + id + ' · SOLANA · TREID · ').toUpperCase(); ring = ring + ring;
+      return '<div class="ms-top"><span class="ms-soc">' + P.soc + '</span><span class="ms-mark">' + esc(t.tick).split('').join(' ') + '</span><span>' + P.buy('Acquire', 'sm') + '</span></div>' +
+        '<section class="ms-hero"><div class="ms-ring"><svg viewBox="0 0 200 200" aria-hidden="true"><defs><path id="msr" d="M100,100 m-86,0 a86,86 0 1,1 172,0 a86,86 0 1,1 -172,0"/></defs><text><textPath href="#msr" textLength="535">' + esc(ring) + '</textPath></text></svg><span class="ms-av">' + P.av(190) + '</span></div>' +
+          '<span class="ms-est">Est. ' + new Date(t.born).getFullYear() + ' — On Solana</span><h1>' + esc(t.name) + '</h1>' + (P.desc ? '<p class="ms-desc">' + P.desc + '</p>' : '') +
+          '<div class="ms-ctas">' + P.buy('Acquire $' + id) + P.ca() + '</div></section>' + P.warn +
+        '<section class="ms-stats"><div><small>Valuation</small><b>' + P.mc + '</b><em class="' + (P.up ? 'up' : 'down') + '">' + P.chg + '</em></div><div><small>Holders</small><b>' + P.hold + '</b><em>' + P.vol + ' traded</em></div><div><small>Tax</small><b>' + P.tax + '</b><em>' + (Math.max(t.buy, t.sell) ? 'on each trade' : 'none') + '</em></div><div><small>' + (P.grad ? 'Status' : 'Curve') + '</small><b>' + (P.grad ? 'Graduated' : P.prog.toFixed(0) + '%') + '</b><em>' + esc(pairLabel(t.pair)) + ' pair</em></div></section>' +
+        '<section class="ms-chart"><span class="ms-lab">Performance</span>' + P.chart(1.5) + '<button class="link" data-act="open" data-arg="' + id + '">View the live chart</button></section>' + P.info() + P.safe() + P.how() + P.foot;
+    },
+    cinema: function (t, P, id) {
+      return P.top() + '<section class="cn-hero"><div class="cn-bg" aria-hidden="true">' + (t.banner ? '<img src="' + esc(t.banner) + '" alt="">' : P.av(900)) + '</div><div class="cn-in"><span class="cn-av">' + P.av(110) + '</span><span class="cn-tag mono">Now trading · $' + id + '</span><h1>' + esc(t.name) + '</h1>' + (P.desc ? '<p>' + P.desc + '</p>' : '') + '<div class="cs-ctas">' + P.buy('Buy $' + id) + P.ca() + '</div></div>' +
+        '<div class="cn-bar"><div><small>Market cap</small><b class="mono">' + P.mc + '</b><em class="' + (P.up ? 'up' : 'down') + '">' + P.chg + '</em></div><div><small>Holders</small><b class="mono">' + P.hold + '</b></div><div><small>Volume 24h</small><b class="mono">' + P.vol + '</b></div><div><small>Tax</small><b class="mono">' + P.tax + '</b></div><div><small>' + (P.grad ? 'Status' : 'Curve') + '</small><b class="mono">' + (P.grad ? 'Graduated' : P.prog.toFixed(0) + '%') + '</b></div></div></section>' + P.warn +
+        '<section class="cs-chart">' + P.chart() + '<button class="cs-chartbtn" data-act="open" data-arg="' + id + '">Open live chart →</button></section>' + P.info() + P.safe() + P.how() + P.foot;
+    },
+    split: function (t, P, id) {
+      return P.top() + '<section class="sp-hero"><div class="sp-txt"><span class="sp-k mono">$' + id + ' // SOLANA</span><h1>' + esc(t.name) + '</h1>' + (P.desc ? '<p>' + P.desc + '</p>' : '') + '<div class="cs-ctas">' + P.buy('Buy $' + id) + P.ca() + '</div>' +
+        '<ul class="sp-list"><li><span>Market cap</span><b class="mono">' + P.mc + ' <em class="' + (P.up ? 'up' : 'down') + '">' + P.chg + '</em></b></li><li><span>Holders</span><b class="mono">' + P.hold + '</b></li><li><span>Tax</span><b class="mono">' + P.tax + '</b></li><li><span>' + (P.grad ? 'Status' : 'Bonding curve') + '</span><b class="mono">' + (P.grad ? 'Graduated' : P.prog.toFixed(0) + '%') + '</b></li></ul></div>' +
+        '<div class="sp-art"><span class="sp-sun"></span><span class="sp-av">' + P.av(220) + '</span><span class="sp-floor"></span></div></section>' + P.warn +
+        '<section class="cs-chart">' + P.chart() + '<button class="cs-chartbtn" data-act="open" data-arg="' + id + '">Open live chart →</button></section>' + P.info() + P.safe() + P.how() + P.foot;
+    },
+    terminal: function (t, P, id) {
+      var ln = function (k, v, cls) { return '<div class="tm-l"><span>' + k + '</span><i></i><b class="' + (cls || '') + '">' + v + '</b></div>'; };
+      return '<div class="tm"><aside class="tm-side"><span class="tm-av">' + P.av(120) + '</span><h1>' + esc(t.name) + '</h1><span class="mono tm-tk">$' + id + '</span>' + (P.desc ? '<p>' + P.desc + '</p>' : '') + P.buy('./buy $' + id) + P.ca() + (P.soc ? '<div class="tm-soc">' + P.soc + '</div>' : '') + '</aside>' +
+        '<main class="tm-main"><div class="tm-win"><div class="tm-bar"><i></i><i></i><i></i><span>treid — ' + esc(t.tick.toLowerCase()) + ' — live</span></div><div class="tm-body">' +
+          '<div class="tm-cmd">$ treid stats --coin ' + id + '</div>' + ln('market_cap', P.mc) + ln('change_24h', P.chg, P.up ? 'up' : 'down') + ln('holders', P.hold) + ln('volume_24h', P.vol) + ln('tax', P.tax + ' (' + P.split + ')') + ln('curve', P.grad ? 'GRADUATED' : P.prog.toFixed(0) + '% ' + '█'.repeat(Math.round(P.prog / 10)) + '░'.repeat(10 - Math.round(P.prog / 10))) + ln('pair', esc(pairLabel(t.pair))) +
+          '<div class="tm-cmd">$ treid chart --24h</div><div class="tm-chart">' + P.chart(2) + '</div>' +
+          '<div class="tm-cmd">$ treid audit ' + id + '</div>' + riskMetrics(t).map(function (m) { return '<div class="tm-l"><span>' + (m.lv === 'g' ? '[ OK ]' : m.lv === 'y' ? '[WARN]' : '[RISK]') + ' ' + m.lab.toLowerCase().replace(/\s+/g, '_') + '</span><i></i><b class="lv-' + m.lv + '">' + m.val + '</b></div>'; }).join('') +
+          '<div class="tm-cmd">$ <span class="tm-cur"></span></div></div></div>' + P.warn + P.how() + '</main></div>' + P.foot;
+    },
+    arcade: function (t, P, id) {
+      var rows = [['MKT CAP', P.mc], ['HOLDERS', P.hold], ['VOL 24H', P.vol], ['TAX', P.tax], [P.grad ? 'STATUS' : 'CURVE', P.grad ? 'GRAD!' : P.prog.toFixed(0) + '%']];
+      return P.top() + '<section class="ar-screen"><div class="ar-hud"><span>1UP</span><span>HI-SCORE ' + P.mc + '</span><span>$' + id + '</span></div><span class="ar-av">' + P.av(150) + '</span><h1>' + esc(t.name) + '</h1>' + (P.desc ? '<p>' + P.desc + '</p>' : '') +
+        '<button class="ar-start" data-act="open" data-arg="' + id + '">▶ PRESS START TO BUY</button>' + P.ca() + '<div class="ar-coin">INSERT COIN · ' + P.chg + ' TODAY</div></section>' + P.warn +
+        '<section class="ar-table"><h2>High scores</h2>' + rows.map(function (r, i) { return '<div><span>' + (i + 1) + (['ST', 'ND', 'RD', 'TH', 'TH'][i]) + '</span><span>' + r[0] + '</span><b>' + r[1] + '</b></div>'; }).join('') + '</section>' +
+        '<section class="cs-chart">' + P.chart() + '<button class="cs-chartbtn" data-act="open" data-arg="' + id + '">LIVE CHART →</button></section>' + P.info() + P.how() + P.foot;
+    },
+    sticker: function (t, P, id) {
+      return P.top() + '<section class="sk-hero"><div class="sk-art"><span class="sk-burst" style="clip-path:' + csBurst(14) + '"></span><span class="sk-av">' + P.av(200) + '</span><span class="sk-tag">$' + id + '</span></div>' +
+        '<div class="sk-txt"><h1>' + esc(t.name) + '</h1>' + (P.desc ? '<div class="sk-bub">' + P.desc + '</div>' : '') + '<div class="cs-ctas">' + P.buy('BUY $' + id + '!') + P.ca() + '</div></div></section>' + P.warn +
+        csMarquee(['$' + id, 'MC ' + P.mc, P.chg + ' TODAY', P.hold + ' HOLDERS', 'TAX ' + P.tax]) +
+        '<section class="sk-stats"><div><small>Market cap</small><b class="mono">' + P.mc + '</b></div><div><small>Holders</small><b class="mono">' + P.hold + '</b></div><div><small>Tax</small><b class="mono">' + P.tax + '</b></div><div><small>' + (P.grad ? 'Status' : 'Curve') + '</small><b class="mono">' + (P.grad ? 'GRAD 🎓' : P.prog.toFixed(0) + '%') + '</b></div></section>' +
+        '<section class="cs-chart">' + P.chart(4) + '<button class="cs-chartbtn" data-act="open" data-arg="' + id + '">Live chart →</button></section>' + P.info() + P.how() + P.foot;
+    }
+  };
+  function sitePrev(x, t) {   // a tiny sketch of each template's layout, using the coin's own logo
+    var a = avatarHTML(t, 22), k = x[0];
+    var L = {
+      classic: '<em class="p-c">' + a + '<u></u><s></s><span class="p-row"><b></b><b></b><b></b></span></em>',
+      bento: '<em class="p-bn"><b class="p1">' + a + '</b><b class="p2"></b><b class="p3"></b><b class="p4"></b><b class="p5"></b></em>',
+      editorial: '<em class="p-ed"><u></u><strong>' + esc(t.name).slice(0, 14) + '</strong><span class="p-row"><s></s><b>' + a + '</b></span></em>',
+      maison: '<em class="p-ms"><span class="p-ring">' + a + '</span><u></u></em>',
+      cinema: '<em class="p-cn"><span class="p-bg">' + avatarHTML(t, 120) + '</span><u></u><span class="p-row"><b></b><b></b><b></b></span></em>',
+      split: '<em class="p-sp"><span class="p-l"><u></u><s></s></span><span class="p-r"><i></i>' + a + '</span></em>',
+      terminal: '<em class="p-tm"><span class="p-sd">' + a + '</span><span class="p-mn">&gt; stats<br>mc ' + fmtK(t.mcN) + '<br>_</span></em>',
+      arcade: '<em class="p-ar"><span>1UP</span>' + a + '<u>PRESS START</u></em>',
+      sticker: '<em class="p-sk"><span class="p-bs" style="clip-path:' + csBurst(10) + '"></span>' + a + '<u>BUY!</u></em>'
+    };
+    return '<i class="spv spv-' + k + '">' + (L[x[2]] || L.classic) + '</i>';
   }
   function siteModal() {
     if (!S.siteShare) return ''; var t = find(S.siteShare); if (!t) return ''; var th = S.siteTh || 'dark';
     return '<div class="modal-bg" data-act="siteClose"></div><div class="sh-modal site-m" role="dialog" aria-label="Coin website"><div class="sh-top"><b style="font-size:17px">Your coin’s website</b><button class="co-x" data-act="siteClose" aria-label="Close">✕</button></div>' +
       '<p class="muted" style="margin:0;font-size:13.5px">Every coin on treid gets a free website. Pick a look and share the link on X and Telegram.</p>' +
-      '<div class="site-ths">' + SITE_TH.map(function (x) { return '<button class="site-th st-' + x[0] + (th === x[0] ? ' on' : '') + '" data-act="siteTh" data-arg="' + x[0] + '"><i></i><span>' + x[1] + '</span></button>'; }).join('') + '</div>' +
+      '<div class="site-ths">' + SITE_TH.map(function (x) { return '<button class="site-th st-' + x[0] + (th === x[0] ? ' on' : '') + '" data-act="siteTh" data-arg="' + x[0] + '">' + sitePrev(x, t) + '<span>' + x[1] + '</span></button>'; }).join('') + '</div>' +
       '<div class="site-link mono">' + esc(siteUrl(t, th)) + '</div><div class="sh-acts"><button class="btn sec" data-act="siteCopy">🔗 Copy link</button><button class="btn pri" data-act="siteOpen">Open site →</button></div></div>';
   }
   function coModal() {
