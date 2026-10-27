@@ -5108,3 +5108,30 @@ body.on-site{background:#08080a}
 .kin-a{white-space:nowrap;flex:none}
 .kin-w>:first-child:not(b){width:calc(clamp(34px,3.7vw,56px)*.78)!important;height:calc(clamp(34px,3.7vw,56px)*.78)!important}
 @media (max-width:760px){.kin{font-size:34px!important}.kin-w>:first-child:not(b){width:27px!important;height:27px!important}}
+/* coin site v2 */
+.cs{position:relative;overflow:hidden}
+.cs-glow{position:absolute;left:50%;top:-180px;width:900px;height:700px;transform:translateX(-50%);opacity:.22;filter:blur(90px) saturate(1.6);pointer-events:none;z-index:0;max-width:none!important}
+.cs-glow .av{width:100%!important;height:100%!important;border-radius:50%!important}
+.cs-paper .cs-glow,.cs-meme .cs-glow{opacity:.12}
+.cs>*:not(.cs-glow){position:relative;z-index:1}
+.cs-top{z-index:6!important}
+.cs-ban{aspect-ratio:3/1!important;max-height:none;border:1px solid var(--ln);box-shadow:0 30px 60px -30px rgba(0,0,0,.8)}
+.cs-logo .av{animation:csFloat 5s ease-in-out infinite}
+@keyframes csFloat{50%{transform:translateY(-6px)}}
+.cs-stats>div{position:relative;overflow:hidden;border-top:3px solid var(--cc)!important}
+.cs-paper .cs-stats>div,.cs-meme .cs-stats>div{border-top-width:3px}
+.cs-si{font-size:20px;margin-bottom:4px}
+.cs-stats em.mut{color:var(--mut)!important;font-weight:600}
+.cs-bar{display:block;height:6px;border-radius:99px;background:color-mix(in srgb,var(--fg) 12%,transparent);overflow:hidden;margin-top:6px}
+.cs-bar u{display:block;height:100%;background:var(--cc)}
+.cs-info{margin-top:12px!important;padding:22px;border-radius:20px;background:var(--card);border:1px solid var(--ln)}
+.cs-ig{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.cs-ig>div{padding:12px 14px;border-radius:14px;border:1px solid var(--ln);display:flex;flex-direction:column;gap:5px;min-width:0}
+.cs-ig small{font-size:12px;color:var(--mut);font-weight:700}
+.cs-ig b{font-size:14.5px;display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cs-cab{min-height:0;padding:0;border:0;background:none;color:var(--fg);display:inline-flex;gap:6px;align-items:center;cursor:pointer;font-size:14px}
+.cs-cab svg{width:13px;height:13px}
+.cs-more{min-height:46px;padding:0 22px;border-radius:99px;border:1.5px solid var(--cc);background:color-mix(in srgb,var(--cc) 12%,transparent);color:var(--fg);font:800 15px Manrope,sans-serif;cursor:pointer;transition:transform .15s,background .15s}
+.cs-more:hover{transform:translateY(-2px);background:color-mix(in srgb,var(--cc) 22%,transparent)}
+.cs-paper .cs-more,.cs-meme .cs-more{border-color:var(--fg);background:transparent}
+@media (max-width:760px){.cs-ig{grid-template-columns:1fr 1fr}.cs-glow{width:600px;height:500px}}
