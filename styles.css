@@ -4965,3 +4965,4 @@ button[disabled].big-btn{opacity:.7;cursor:progress}
   .fxp-belt{bottom:22px!important}
 }
 @media (max-width:760px){.fxp-txt,.fxp-txt *{white-space:normal!important}.fxp-st{overflow:hidden}.fxp-st .fm{transform:none!important;max-width:100%}}
+@media (hover:none){.mnav button:hover,.mnav button:focus{color:var(--muted)}.mnav button.on,.mnav button.on:hover,.mnav button.on:focus{color:var(--ivory)}.mnav button:focus{outline:none}}
