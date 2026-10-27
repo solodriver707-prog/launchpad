@@ -1728,7 +1728,7 @@
       }).join('') + '</div></section>';
 
     var slogan = introHTML();
-    return '<main class="wrap">' + slogan + trendStrip() + '<div id="board"></div>' + toolbar + filters + '<div class="layout full">' + grid + '</div>' + (S.view === 'orbit' ? '' : raceSection()) + machineSection() + '</main>';
+    return '<main class="wrap">' + slogan + trendStrip() + '<div id="board"></div>' + toolbar + filters + '<div class="layout full">' + grid + '</div>' + machineSection() + '</main>';
   }
 
   // ===== sliding "trending now" strip (persistent node, moved in on every render so the slide never jumps) =====
