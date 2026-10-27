@@ -4759,3 +4759,5 @@ button[disabled].big-btn{opacity:.7;cursor:progress}
 #tc .tc-side .tax b{font-size:28px}
 #tc .tc-crown{font-size:24px;top:-18px}
 @media (max-width:640px){#tc .tc-n{font-size:19px}#tc .tc-row{font-size:14px}#tc .tc-in{gap:14px;padding:14px}}
+#tc .tc-n{font-size:22px}
+#tc .tc-tk{font-size:13px;color:var(--muted);font-weight:700;margin-top:-4px}

@@ -1670,7 +1670,7 @@
     var c = chg(t), tm = Math.max(t.buy, t.sell), id = esc(t.tick);
     return '<div class="tc-in" role="button" tabindex="0" data-act="open" data-arg="' + id + '">' +
       '<span class="tc-av">' + avatarHTML(t, 84) + '<i class="tc-crown">♛</i></span>' +
-      '<span class="tc-main"><span class="tc-k">TOP MEME <b>#' + (k + 1) + '</b></span><b class="tc-n">' + esc(t.name) + '</b>' +
+      '<span class="tc-main"><span class="tc-k">TOP MEME <b>#' + (k + 1) + '</b></span><b class="tc-n">' + esc(t.name) + '</b><span class="tc-tk mono">$' + id + '</span>' +
         '<span class="tc-row"><span class="mono">' + fmtK(t.mcN) + '</span><span class="mono ' + (c >= 0 ? 'up' : 'down') + '">' + chgTxt(c) + '</span></span>' +
         '<span class="tc-bar"><i style="width:' + Math.min(100, t.prog) + '%"></i></span></span>' +
       '<span class="tc-side"><span class="tc-pair">' + coinHTML(t.pair, 26) + '<b>' + esc(pairLabel(t.pair)) + '</b></span><span class="tax" style="background:' + taxBg(tm) + '"><small>TAX</small><b>' + tm + '%</b></span></span></div>' + socialsHTML(t);
@@ -4542,7 +4542,7 @@
     apiGet('/api/health').then(function (h) { if (!h || !h.ops) return; if (!window.TREID_PARTNER || API_DEV) { PARTNER = h.ops; S.escrowWallet = h.ops; } else if (h.ops !== window.TREID_PARTNER) { S.opsMismatch = true; console.warn('[treid] server ops wallet does not match the pinned one — launching disabled'); render(); } }).catch(function () {});
     apiGet('/api/coins').then(function (cs) {
       S.apiOk = true; cs.filter(Boolean).forEach(liveTok); render();
-      apiGet('/api/callouts').then(function (rows) { if (coMerge(rows).length) render(); }).catch(function () {});
+      var coAll = function (n) { apiGet('/api/callouts').then(function (rows) { if (coMerge(rows || []).length) render(); }).catch(function () { if (n < 6) setTimeout(function () { coAll(n + 1); }, 5000 * (n + 1)); }); }; coAll(0); setInterval(function () { if (!document.hidden) coAll(6); }, 60e3);   // retried: a server restart must not leave the callouts empty
       if (S.pendingRoute) { var pr = S.pendingRoute, tp = S.live.filter(function (x) { return x.ca === pr || x.tick.toUpperCase() === String(pr).toUpperCase(); })[0]; S.pendingRoute = null; var rr = routeReady; routeReady = false; if (tp) openToken(tp.tick); else { set({ screen: 'home' }); toast('That coin wasn\'t found'); } routeReady = rr; }
       var es = new EventSource(API + '/api/stream');
       es.onmessage = function (m) { var ev; try { ev = JSON.parse(m.data); } catch (e) { return; } if (ev.type === 'callout') { coMerge([ev]).forEach(function (x) { coArrive(x.c, x.t); if (!(S.account && x.c.w === S.account)) coPeek(x.c, x.t); }); } else if (ev.type === 'burn') burnsLoad(); else if (ev.type === 'trade') liveTrade(ev); else if (ev.type === 'coin') apiGet('/api/coin/' + ev.mint).then(function (c) { if (c) { var known = S.live.some(function (x) { return x.ca === c.mint; }), t = liveTok(c); if (!known && !isMob()) toast('New on treid: ' + t.name + ' $' + t.tick, t); render(); } }).catch(function () {}); };
