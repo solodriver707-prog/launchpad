@@ -458,7 +458,7 @@
             return '<div class="wb-pos"><button class="wb-pt" data-act="open" data-arg="' + esc(c.t.tick) + '">' + avatarHTML(c.t, 42) + '<span class="wb-pn"><b>$' + esc(c.t.tick) + '</b><small class="muted">' + esc(c.t.name) + '</small></span><span class="wb-pv"><small>Position</small><b class="mono">$' + money(S.wbTab === 'closed' ? c.got : c.value) + '</b></span><span class="wb-pv"><small>Profit</small><b class="mono ' + (up ? 'up' : 'down') + '">' + (up ? '+' : '−') + '$' + money(c.profit) + '</b></span></button>' +
               '<div class="wb-pm"><span>Spent <b class="mono">$' + moneyS(c.spent) + '</b></span><span>Avg entry <b class="mono">' + (c.avgEntryMc ? fmtK(c.avgEntryMc / 1000) : '—') + '</b> → <b class="mono">' + fmtK(c.t.mcN) + ' MC</b></span></div>' + (my ? '<div class="wb-co">' + esc(my.text.length > 110 ? my.text.slice(0, 110) + '…' : my.text) + '</div>' : '') + '</div>'; }).join('') : '<div class="muted wb-empty">' + (S.wbTab === 'closed' ? 'No closed positions yet.' : 'No open positions on treid yet.') + '</div>') + '</div></div>' : '') + '</div>';
     } else {
-      right = '<button class="btn sec" data-act="openWallet">Connect wallet</button>';
+      right = '<button class="btn sec" data-act="openWallet">Connect<span class="cw-w"> wallet</span></button>';
     }
     return '<header><div class="wrap hdr">' +
       '<button class="brand" data-act="home" aria-label="treid home"><span class="brand-name">treid</span></button>' +
@@ -3499,6 +3499,7 @@
     if (S.coMenu && !e.target.closest('.co-mw')) { S.coMenu = null; if (!el) { render(); return; } }
     if (!el) return;
     var act = el.getAttribute('data-act'), arg = el.getAttribute('data-arg');
+    if (/^(home|create|leaders|trendList|burnPage|watchPage|open|coPage|lbCo)$/.test(act) || (el.closest('.mnav') && act !== 'coToggle')) { S.coOpen = false; S.walletView = null; S.hmap = null; S.share = null; S.walletMenu = false; S.palOpen = false; S.coModal = null; S.burnOpen = false; S.mFilt = false; pvClose && pvClose(); }   // going somewhere closes every panel and sheet
     if (el.tagName === 'A' && act !== 'how') e.preventDefault();
     switch (act) {
       case 'bg': if (e.target === el) set({ walletOpen: false, palOpen: false, walletView: null }); break;
@@ -4086,15 +4087,16 @@
   function fxpSpawn(box) { var t = pick(all()) || BASE[0], blank = FXP.k === 0, el = document.createElement('span'); el.className = 'fxp-c' + (blank ? ' blank' : '');
     el.innerHTML = '<span class="fxp-cf">' + avatarHTML(t, 44) + '</span><span class="fxp-cq">?</span><span class="fxp-tag"></span>'; box.appendChild(el); FXP.coins.push({ el: el, x: -30, hit: false, k: FXP.k }); }
   function fxpHit(c, W) { var k = FXP.k, el = c.el, pi = document.getElementById('fxp-piston'), tag = el.querySelector('.fxp-tag');
-    if (pi) { pi.classList.remove('down'); void pi.offsetWidth; pi.classList.add('down'); }
+    if (pi) { pi.classList.remove('down'); void pi.offsetWidth; pi.classList.add('down'); } el.classList.remove('squash'); void el.offsetWidth; el.classList.add('squash');
     var st = document.getElementById('fxp-st'); if (st) { st.classList.remove('hit'); void st.offsetWidth; st.classList.add('hit'); }
     setTimeout(function () { if (!el.isConnected) return; el.classList.add('fx' + k); el.classList.remove('blank');
       var txt = k === 0 ? 'minted' : k === 1 ? (Math.random() < .5 ? '🤖 −80%' : '🙂 −2%') : k === 2 ? '▲' : k === 3 ? (Math.random() < .3 ? '⚠' : '✓') : k === 4 ? '🎓' : '💎🔥👤';
       tag.textContent = txt; tag.className = 'fxp-tag on' + (k === 1 && txt.indexOf('80') > 0 ? ' r' : k === 3 && txt === '⚠' ? ' y' : ''); }, 230);
     FXP.hits++; if (FXP.hits >= 3 && Date.now() > FXP.hold) setTimeout(function () { fxpShow(FXP.k + 1); }, 900); }
   function fxpTick(now) { FXP.raf = requestAnimationFrame(fxpTick); var box = document.getElementById('fxp-coins'); if (!box || document.hidden || !box.offsetParent) { FXP.last = now; return; }
-    var W = box.clientWidth, dt = Math.min(60, now - (FXP.last || now)); FXP.last = now; if (!FXP.coins.length || now - FXP.spawn > 1500) { FXP.spawn = now; fxpSpawn(box); }
-    FXP.coins = FXP.coins.filter(function (c) { c.x += dt * .085; if (!c.hit && c.x >= W / 2) { c.hit = true; fxpHit(c, W); } c.el.style.transform = 'translateX(' + (c.x - 23).toFixed(1) + 'px)'; if (c.x > W + 40) { c.el.remove(); return false; } return true; }); }
+    var W = box.clientWidth, dt = Math.min(60, now - (FXP.last || now)); FXP.last = now; if (now < (FXP.stop || 0)) { FXP.spawn += dt; return; }   // the belt halts while the press comes down, so it lands dead centre
+    if (!FXP.coins.length || now - FXP.spawn > 1500) { FXP.spawn = now; fxpSpawn(box); }
+    FXP.coins = FXP.coins.filter(function (c) { c.x += dt * .085; if (!c.hit && c.x >= W / 2) { var over = c.x - W / 2; FXP.coins.forEach(function (o) { o.x -= over; o.el.style.transform = 'translateX(' + (o.x - 23).toFixed(1) + 'px)'; }); c.hit = true; FXP.stop = now + 560; fxpHit(c, W); } c.el.style.transform = 'translateX(' + (c.x - 23).toFixed(1) + 'px)'; if (c.x > W + 40) { c.el.remove(); return false; } return true; }); }
   requestAnimationFrame(fxpTick);
   (function () { var sx = null; document.addEventListener('touchstart', function (e) { if (e.target.closest && e.target.closest('#fxp')) { sx = e.touches[0].clientX; } }, { passive: true });
     document.addEventListener('touchend', function (e) { if (sx == null) return; var dx = e.changedTouches[0].clientX - sx; sx = null; if (Math.abs(dx) > 40) { FXP.hold = Date.now() + 9000; fxpShow(FXP.k + (dx < 0 ? 1 : -1)); } }, { passive: true }); })();

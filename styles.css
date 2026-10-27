@@ -4966,3 +4966,29 @@ button[disabled].big-btn{opacity:.7;cursor:progress}
 }
 @media (max-width:760px){.fxp-txt,.fxp-txt *{white-space:normal!important}.fxp-st{overflow:hidden}.fxp-st .fm{transform:none!important;max-width:100%}}
 @media (hover:none){.mnav button:hover,.mnav button:focus{color:var(--muted)}.mnav button.on,.mnav button.on:hover,.mnav button.on:focus{color:var(--ivory)}.mnav button:focus{outline:none}}
+@media (max-width:760px){
+  /* full-screen panels stop above the bottom nav, so the nav always works (it also closes them) */
+  .overlay,.hm-ov,.wp-ov{bottom:calc(64px + env(safe-area-inset-bottom))!important;top:0!important;height:auto!important}
+  .wp{max-height:100%!important;height:100%}
+  .bm{height:100%!important;max-height:100%!important;border-radius:0}
+  .hm-ov{padding:0!important}
+}
+@media (max-width:760px){
+  .fxp-piston{top:146px}
+  @keyframes fxpPress{40%{transform:translateY(66px)}55%{transform:translateY(66px)}100%{transform:translateY(0)}}
+  @keyframes fxpRod{40%{transform:scaleY(5.7)}55%{transform:scaleY(5.7)}100%{transform:scaleY(1)}}
+  .fxp-c.squash .fxp-cf,.fxp-c.squash .fxp-cq{animation:fxpSquash .5s ease}
+  @keyframes fxpSquash{40%,55%{transform:scale(1.08,.86) translateY(4px)}}
+}
+@media (max-width:380px){
+  .cw-w{display:none}
+  .hdr{gap:8px!important}
+  .hdr-right{gap:6px!important}
+  .wb-pill .wb-car{display:none}
+  .wrap{padding-left:10px!important;padding-right:10px!important}
+}
+@media (max-width:380px){.mnav button{min-width:0;font-size:9px!important;padding:0 1px}.mnav button span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
+@media (max-width:760px){
+  .bn-lh{flex-wrap:wrap;gap:8px}.bn-lh .seg{max-width:100%;overflow-x:auto;scrollbar-width:none;flex-wrap:nowrap}.bn-lh .seg button{flex:none;white-space:nowrap}
+  .devb-in{flex:1 1 140px;min-width:0}.devb-in input{min-width:0;width:100%}
+}
