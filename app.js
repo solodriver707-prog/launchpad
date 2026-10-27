@@ -2385,9 +2385,8 @@
     var tabs = [['trades', 'Trades'], ['holders', 'Holders'], ['top', 'Top traders']];
     var cmAll = seedComments(t);
     var ttAll = S.ttab === 'all';
-    var thread = '<aside class="tp-thread card-s"><div class="tt-h"><b>Callouts</b><div class="tt-tabs"><button class="' + (ttAll ? '' : 'on') + '" data-act="ttab" data-arg="coin">$' + id + ' <span class="mono">' + cmAll.length + '</span></button><button class="' + (ttAll ? 'on' : '') + '" data-act="ttab" data-arg="all"><i class="tt-dot"></i>All live</button></div></div>' +
-      '<div class="composer">' + (S.account ? '<textarea id="cmt-in" class="inp" data-bind="cmtDraft" placeholder="' + (S.replyTo != null ? 'Replying to #' + (1000 + S.replyTo) + '…' : 'Call it: what\'s your take on $' + id + '?') + '" maxlength="280">' + esc(S.cmtDraft || '') + '</textarea>' + coImgBar() :
-        '<span class="muted">Connect a wallet to post a callout.</span><button class="btn sec" data-act="openWallet">Connect</button>') + '</div>' +
+    var thread = '<aside class="tp-thread card-s"><div class="tt-h"><b>Callouts</b><div class="tt-tabs"><button class="' + (ttAll ? '' : 'on') + '" data-act="ttab" data-arg="coin">$' + id + ' <span class="mono">' + cmAll.length + '</span></button><button class="' + (ttAll ? 'on' : '') + '" data-act="ttab" data-arg="all"><i class="tt-dot"></i>All live</button></div>' + (coCanPost(t) && !coOpen() ? '<button class="co-newb" data-act="coNew" title="New callout">+</button>' : '') + '</div>' +
+      coComposer(t, id, 'Call it: what\'s your take on $' + id + '?') +
       '<div class="tt-wrap"><button class="tt-new" id="tt-new" data-act="ttNew" style="display:none"></button><div id="cmts" class="tt-list' + (ttAll ? ' all' : '') + '">' + (ttAll ? allLiveHTML() : threadHTML(t, cmAll)) + '</div></div></aside>';
     var body = '';
     if (S.tpTab === 'trades') {
@@ -2400,8 +2399,7 @@
         '<div id="tp-trades">' + (rows.length ? rows.map(function (x) { return tradeRow(x, t); }).join('') : '<div class="muted" style="padding:24px;text-align:center">No trades match these filters</div>') + '</div></div>';
     } else if (S.tpTab === 'thread') {
       var cm = seedComments(t);
-      body = '<div class="composer">' + (S.account ? '<textarea id="cmt-in" class="inp" data-bind="cmtDraft" placeholder="' + (S.replyTo != null ? 'Replying to #' + (1000 + S.replyTo) + '…' : 'Say something about $' + id + '…') + '" maxlength="280">' + esc(S.cmtDraft || '') + '</textarea>' + coImgBar() :
-        '<span class="muted">Connect a wallet to join the thread.</span><button class="btn sec" data-act="openWallet">Connect wallet</button>') + '</div>' +
+      body = (coCanPost(t) && !coOpen() ? '<button class="btn sec co-newwide" data-act="coNew">+ New callout</button>' : '') + coComposer(t, id, 'Say something about $' + id + '…') +
         '<div id="cmts">' + cm.slice().sort(function (a, b) { return b.t - a.t; }).map(function (x) { return commentHTML(x, t); }).join('') + '</div>';
     } else if (S.tpTab === 'holders') {
       body = holdersTab(t);
@@ -2483,8 +2481,18 @@
   S.cpq = ''; S.cpTab = 'crypto';
   try { var CP = JSON.parse(localStorage.getItem('dl.cpairs') || '{}'); Object.keys(CP).forEach(function (k) { PAIR_INFO[k] = CP[k]; }); } catch (e) {}
   // ---- sign in once (24 h): the wallet signs one message, the server hands back a session token — no popup for every callout ----
+  function holdUsd(t) { var p = S.pos[t.tick]; return p && p.tok > 0 ? p.tok * price(t) : 0; }
+  function coCanPost(t) { return !!S.account && (!t.live || holdUsd(t) >= 1); }   // like the server: you must hold ≥ $1 of the coin
+  function coOpen() { return !!S.coCompose || S.replyTo != null; }
+  function coComposer(t, id, ph) {
+    if (!S.account) return '<div class="co-gate"><span class="muted">Connect a wallet to post a callout.</span><button class="btn sec" data-act="openWallet">Connect</button></div>';
+    if (!coCanPost(t)) return '<div class="co-gate muted">Hold at least <b>$1</b> of $' + esc(id) + ' to post callouts.</div>';
+    if (!coOpen()) return '';
+    return '<div class="composer"><textarea id="cmt-in" class="inp" data-bind="cmtDraft" placeholder="' + (S.replyTo != null ? 'Replying to #' + (1000 + S.replyTo) + '…' : ph) + '" maxlength="280">' + esc(S.cmtDraft || '') + '</textarea>' + coImgBar() +
+      (S.coErr ? '<small class="co-err">' + esc(S.coErr) + '</small>' : '') + '</div>';
+  }
   function coImgBar() { return (S.coImg ? '<div class="co-prev"><img src="' + esc(S.coImg) + '" alt=""><button data-act="coImgDel" title="Remove image">✕</button></div>' : '') +
-    '<div class="co-bar"><label class="co-imgb" title="Add an image or GIF"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/></svg><input type="file" accept="image/png,image/jpeg,image/gif,image/webp" data-coimg hidden></label><button class="btn pri" data-act="post">Post</button></div>'; }
+    '<div class="co-bar"><label class="co-imgb" title="Add an image or GIF"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/></svg><input type="file" accept="image/png,image/jpeg,image/gif,image/webp" data-coimg hidden></label><span class="co-bar-r"><button class="btn sec" data-act="coCancel">Cancel</button><button class="btn pri" data-act="post"' + (S.busy === 'Posting' ? ' disabled' : '') + '>' + (S.busy === 'Posting' ? 'Posting…' : 'Post') + '</button></span></div>'; }
   function sessKey() { return 'treid.sess.' + S.account; }
   function dropSession() { try { localStorage.removeItem(sessKey()); } catch (e) {} S.sess = null; }
   function getSession() {
@@ -3281,6 +3289,8 @@
       case 'sellpct': var tp0 = find(S.tick), ps0 = tp0 && S.pos[tp0.tick]; if (ps0) set({ side: 'sell', amount: (ps0.tok * (+arg) / 100).toFixed(0) }); break;
       case 'sellall': var tp1 = find(S.tick), ps1 = tp1 && S.pos[tp1.tick]; if (ps1) set({ side: 'sell', amount: String(Math.floor(ps1.tok)), sellAll: true }); break;
       case 'coImgDel': S.coImg = null; render(); break;
+      case 'coNew': S.coCompose = true; S.coErr = ''; render(); setTimeout(function () { var x = document.getElementById('cmt-in'); if (x) x.focus(); }, 30); break;
+      case 'coCancel': S.coCompose = false; S.replyTo = null; S.coErr = ''; S.coImg = null; render(); break;
       case 'coToggle': S.mCo = 0; set({ coOpen: !S.coOpen, coQueue: 0 }); break;
       case 'coClose': set({ coOpen: false }); break;
       case 'coPause': S.coPaused = !S.coPaused; if (!S.coPaused) S.coQueue = 0; render(); break;
@@ -3305,8 +3315,8 @@
           if (S.busy) break; S.busy = 'Posting'; render();
           var sendCo = function (tok) { return fetch(API + '/api/callout', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mint: tp0.ca, session: tok, reply: rpC, text: txC, image: imgC }) }).then(function (x) { return x.json(); }); };
           getSession().then(sendCo).then(function (j) { if (j && !j.ok && /sign in again/.test(j.error || '')) { dropSession(); return getSession().then(sendCo); } return j; })   // signed in once per day — no wallet popup per callout
-            .then(function (j) { S.busy = null; if (!j || !j.ok) throw new Error((j && j.error) || 'posting failed'); coMerge([j.callout]); devPing(tp0); S.coImg = null; set({ cmtDraft: '', replyTo: null }); toast('Callout posted ✓'); })
-            .catch(function (e) { S.busy = null; render(); toast(chainErr(e)); });
+            .then(function (j) { S.busy = null; if (!j || !j.ok) throw new Error((j && j.error) || 'posting failed'); coMerge([j.callout]); devPing(tp0); S.coImg = null; S.coCompose = false; S.coErr = ''; set({ cmtDraft: '', replyTo: null }); toast('Callout posted ✓'); })
+            .catch(function (e) { S.busy = null; S.coErr = chainErr(e); render(); toast(S.coErr); });   // the error stays visible under the composer
           break; }
         var cms = seedComments(find(S.tick)); cms.push({ id: cms.length, w: S.account, text: txt, t: Date.now(), likes: 0, liked: false, reply: S.replyTo != null ? S.replyTo : null });
         devPing(find(S.tick)); set({ cmtDraft: '', replyTo: null }); toast('Callout posted'); break;
