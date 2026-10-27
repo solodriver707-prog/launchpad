@@ -5211,3 +5211,87 @@ body.on-site{background:#08080a}
 .pc-rw-t b{font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pc-rw-r{margin-left:auto;text-align:right;flex:none}
 .pc-rw-r b{color:#3fd68a;font-size:15px}
+
+/* ===== coin site: more themes ===== */
+.site-ths{grid-template-columns:repeat(4,1fr)!important;max-height:min(52vh,420px);overflow:auto;padding:2px}
+.site-th i{position:relative;overflow:hidden}
+.cs::before,.cs::after{content:'';position:fixed;pointer-events:none;z-index:0}
+/* Coin color: the whole page takes the coin's own colour */
+.cs-coin{--bg:color-mix(in srgb,var(--cc) 12%,#060608);--card:color-mix(in srgb,var(--cc) 9%,#0e0e11);--ln:color-mix(in srgb,var(--cc) 35%,transparent);background:radial-gradient(ellipse at 50% -10%,color-mix(in srgb,var(--cc) 45%,transparent),transparent 60%),var(--bg)}
+.cs-coin h1{background:linear-gradient(180deg,#fff 30%,var(--cc));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.st-coin i{background:radial-gradient(ellipse at 50% 0,#3DDC97,#0a1712 75%);box-shadow:inset 0 -12px 0 #3DDC97}
+/* Synthwave */
+.cs-vapor{--cc:#ff71ce!important;--bg:#12002b;--fg:#fff;--mut:#d6a8ff;--card:rgba(36,6,70,.72);--ln:rgba(255,113,206,.38);--btn:linear-gradient(90deg,#ff71ce,#ffb86b);--btnfg:#1b0436;background:linear-gradient(180deg,#12002b 0%,#2a0750 55%,#12002b)}
+.cs-vapor::before{left:50%;top:70px;width:440px;height:440px;margin-left:-220px;border-radius:50%;background:linear-gradient(180deg,#ffe66d 10%,#ff71ce 60%,#b026ff);-webkit-mask:repeating-linear-gradient(180deg,#000 0 22px,transparent 22px 28px);mask:repeating-linear-gradient(180deg,#000 0 22px,transparent 22px 28px);opacity:.45;filter:drop-shadow(0 0 40px #ff71ce)}
+.cs-vapor::after{left:-50%;right:-50%;bottom:0;height:45vh;background-image:linear-gradient(rgba(255,113,206,.55) 2px,transparent 2px),linear-gradient(90deg,rgba(255,113,206,.55) 2px,transparent 2px);background-size:60px 60px;transform:perspective(320px) rotateX(62deg);transform-origin:bottom;-webkit-mask:linear-gradient(transparent,#000 70%);mask:linear-gradient(transparent,#000 70%);animation:vpGrid 2.5s linear infinite;opacity:.6}
+@keyframes vpGrid{to{background-position:0 60px,0 0}}
+.cs-vapor h1{font-family:Monoton,Manrope,sans-serif;font-weight:400;letter-spacing:.02em;background:linear-gradient(180deg,#fff 20%,#ff71ce 55%,#7b5cff);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;filter:drop-shadow(0 0 18px rgba(255,113,206,.6))}
+.cs-vapor .cs-stats>div,.cs-vapor .cs-info,.cs-vapor .cs-safe,.cs-vapor .cs-how,.cs-vapor .cs-chart{backdrop-filter:blur(8px);box-shadow:0 0 0 1px rgba(255,113,206,.15),0 10px 40px -15px #ff71ce}
+.st-vapor i{background:linear-gradient(180deg,#2a0750 40%,#ff71ce 75%,#ffb86b)}
+.st-vapor i::after{content:'';position:absolute;left:50%;top:10px;width:30px;height:30px;margin-left:-15px;border-radius:50%;background:linear-gradient(#ffe66d,#ff71ce)}
+/* Aurora */
+.cs-aurora{--cc:#5eead4!important;--bg:#020617;--fg:#f1f5f9;--mut:#94a3b8;--card:rgba(255,255,255,.055);--ln:rgba(255,255,255,.14);--btn:linear-gradient(90deg,#22d3ee,#a78bfa,#f472b6);--btnfg:#020617;background:#020617}
+.cs-aurora::before{inset:-20%;background:radial-gradient(40% 30% at 20% 20%,rgba(34,211,238,.45),transparent 70%),radial-gradient(35% 30% at 80% 15%,rgba(167,139,250,.45),transparent 70%),radial-gradient(40% 35% at 60% 70%,rgba(244,114,182,.30),transparent 70%),radial-gradient(30% 25% at 15% 80%,rgba(52,211,153,.30),transparent 70%);filter:blur(30px);animation:auro 16s ease-in-out infinite alternate}
+@keyframes auro{to{transform:translate(4%,-3%) rotate(8deg) scale(1.1)}}
+.cs-aurora .cs-stats>div,.cs-aurora .cs-info,.cs-aurora .cs-safe,.cs-aurora .cs-how,.cs-aurora .cs-chart,.cs-aurora .cs-ca{backdrop-filter:blur(16px) saturate(1.4)}
+.cs-aurora h1{background:linear-gradient(90deg,#67e8f9,#c4b5fd,#f9a8d4);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.cs-aurora .cs-glow{display:none}
+.st-aurora i{background:radial-gradient(60% 60% at 25% 30%,#22d3ee,transparent),radial-gradient(60% 60% at 80% 40%,#a78bfa,transparent),radial-gradient(60% 60% at 50% 100%,#f472b6,transparent),#020617}
+/* Fire */
+.cs-fire{--cc:#ff7a1a!important;--bg:#0c0302;--fg:#fff3e6;--mut:#d9a083;--card:#1a0805;--ln:rgba(255,110,40,.32);--btn:linear-gradient(90deg,#ff3d00,#ffb300);--btnfg:#1a0500;background:#0c0302}
+.cs-fire::before{left:0;right:0;bottom:-10vh;height:60vh;background:radial-gradient(60% 80% at 20% 100%,#ff3d00,transparent 70%),radial-gradient(50% 90% at 55% 100%,#ff9100,transparent 70%),radial-gradient(45% 70% at 85% 100%,#ff3d00,transparent 70%);filter:blur(40px);opacity:.55;animation:fireB 3s ease-in-out infinite alternate}
+@keyframes fireB{to{transform:scaleY(1.15) translateY(-2%);opacity:.75}}
+.cs-fire h1{background:linear-gradient(0deg,#ff3d00,#ffb300 55%,#fff3c4);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;filter:drop-shadow(0 0 22px rgba(255,90,0,.55));text-transform:uppercase}
+.cs-fire .cs-stats>div,.cs-fire .cs-info,.cs-fire .cs-safe,.cs-fire .cs-how,.cs-fire .cs-chart{box-shadow:0 0 30px -12px #ff5a00}
+.st-fire i{background:radial-gradient(60% 90% at 50% 110%,#ffb300,#ff3d00 45%,#1a0805 80%)}
+/* Luxury */
+.cs-gold{--cc:#d4af37!important;--bg:#0a0806;--fg:#f5ead0;--mut:#a8977a;--card:#14100a;--ln:rgba(212,175,55,.3);--btn:linear-gradient(135deg,#f7e08a,#d4af37 50%,#9c7a1e);--btnfg:#1a1305;background:radial-gradient(ellipse at 50% 0,rgba(212,175,55,.16),transparent 55%),#0a0806}
+.cs-gold h1,.cs-gold h2{font-family:'Playfair Display',Georgia,serif;font-weight:900;letter-spacing:.01em}
+.cs-gold h1{background:linear-gradient(180deg,#fff6d5,#d4af37 60%,#8a6a14);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.cs-gold .cs-logo .av{box-shadow:0 0 0 3px #0a0806,0 0 0 5px #d4af37,0 25px 60px -20px #d4af37!important}
+.cs-gold .cs-stats>div{border-top-color:#d4af37!important}
+.cs-gold .cs-buy{letter-spacing:.06em;text-transform:uppercase;font-size:15px}
+.st-gold i{background:linear-gradient(160deg,#1a140a,#0a0806);box-shadow:inset 0 -12px 0 #d4af37}
+.st-gold i::after{content:'';position:absolute;inset:10px 30%;border:2px solid #d4af37;border-radius:4px}
+/* Terminal */
+.cs-terminal{--cc:#33ff66!important;--bg:#000;--fg:#33ff66;--mut:#1fae4a;--card:#020f05;--ln:rgba(51,255,102,.35);--btn:#33ff66;--btnfg:#000;background:#000;font-family:'JetBrains Mono',monospace}
+.cs-terminal::before{inset:0;background:repeating-linear-gradient(180deg,rgba(0,0,0,0) 0 2px,rgba(0,0,0,.35) 2px 4px);z-index:20}
+.cs-terminal::after{inset:0;background:radial-gradient(ellipse at center,transparent 60%,rgba(0,0,0,.7));z-index:20}
+.cs-terminal h1,.cs-terminal h2{font-family:VT323,monospace;font-weight:400;text-shadow:0 0 12px rgba(51,255,102,.7)}
+.cs-terminal h1{font-size:clamp(52px,10vw,96px)}
+.cs-terminal h1::before{content:'> '}
+.cs-terminal h1::after{content:'_';animation:blink 1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+.cs-terminal *{border-radius:2px!important}
+.cs-terminal b,.cs-terminal .cs-tk{text-shadow:0 0 8px rgba(51,255,102,.5)}
+.cs-terminal .cs-glow{display:none}
+.st-terminal i{background:#000;box-shadow:inset 0 -12px 0 #33ff66}
+.st-terminal i::after{content:'> _';position:absolute;left:8px;top:8px;color:#33ff66;font:700 13px monospace}
+/* Arcade */
+.cs-arcade{--cc:#ffd300!important;--bg:#0d0221;--fg:#fff;--mut:#b9a6ff;--card:#1b0b3a;--ln:#ffd300;--btn:#ffd300;--btnfg:#0d0221;background:radial-gradient(#fff 1px,transparent 1.5px) 0 0/48px 48px,radial-gradient(#ff2a6d 1px,transparent 1.5px) 24px 24px/48px 48px,#0d0221}
+.cs-arcade *{border-radius:0!important}
+.cs-arcade h1,.cs-arcade h2,.cs-arcade .cs-buy,.cs-arcade .cs-more{font-family:'Press Start 2P',monospace;font-weight:400;letter-spacing:0}
+.cs-arcade h1{font-size:clamp(24px,5.5vw,48px);line-height:1.3;color:#ffd300!important;text-shadow:4px 4px 0 #ff2a6d}
+.cs-arcade h2{font-size:16px}
+.cs-arcade .cs-buy{font-size:13px;box-shadow:4px 4px 0 #ff2a6d}
+.cs-arcade .cs-more{font-size:11px}
+.cs-arcade .cs-stats>div,.cs-arcade .cs-info,.cs-arcade .cs-safe,.cs-arcade .cs-how,.cs-arcade .cs-chart{border:2px solid #ffd300!important;box-shadow:6px 6px 0 #ff2a6d}
+.cs-arcade .cs-logo .av{image-rendering:pixelated;box-shadow:0 0 0 4px #ffd300,8px 8px 0 4px #ff2a6d!important}
+.cs-arcade .cs-glow{display:none}
+.st-arcade i{background:radial-gradient(#fff 1px,transparent 1.5px) 0 0/10px 10px,#0d0221;border-radius:0!important;box-shadow:inset 0 -12px 0 #ffd300}
+/* Comic */
+.cs-comic{--cc:#1e6bff!important;--bg:#fff3cf;--fg:#111;--mut:#4a4030;--card:#fff;--ln:#111;--btn:#ff3b30;--btnfg:#fff;background:radial-gradient(rgba(255,59,48,.22) 2px,transparent 2.5px) 0 0/14px 14px,#fff3cf}
+.cs-comic h1,.cs-comic h2{font-family:Bangers,Impact,sans-serif;font-weight:400;letter-spacing:.04em}
+.cs-comic h1{font-size:clamp(52px,11vw,110px);color:#ffd60a!important;-webkit-text-stroke:3px #111;text-shadow:6px 6px 0 #111;transform:rotate(-2deg)}
+.cs-comic h2{font-size:32px}
+.cs-comic .cs-stats>div,.cs-comic .cs-info,.cs-comic .cs-safe,.cs-comic .cs-how,.cs-comic .cs-chart,.cs-comic .cs-ca{border:3px solid #111!important;box-shadow:6px 6px 0 #111}
+.cs-comic .cs-buy{border:3px solid #111;box-shadow:5px 5px 0 #111;font-family:Bangers,Impact,sans-serif;font-weight:400;font-size:22px;letter-spacing:.05em}
+.cs-comic .cs-stats>div:nth-child(2n){background:#e6f0ff}
+.cs-comic .cs-logo .av{box-shadow:0 0 0 4px #111,8px 8px 0 4px #111!important;transform:rotate(3deg)}
+.cs-comic .cs-glow{display:none}
+.cs-comic .cs-warn{background:#ffd5dc;border-color:#c0304d;color:#5a0f1d}
+.cs-comic .cs-more{border-color:#111;background:#ffd60a;box-shadow:4px 4px 0 #111}
+.st-comic i{background:radial-gradient(rgba(255,59,48,.5) 1.5px,transparent 2px) 0 0/7px 7px,#fff3cf;box-shadow:inset 0 -12px 0 #ff3b30}
+.st-comic i::after{content:'POW!';position:absolute;left:50%;top:9px;transform:translateX(-50%) rotate(-6deg);font:900 14px Impact,sans-serif;color:#ffd60a;-webkit-text-stroke:1px #111}
+@media (max-width:560px){.site-ths{grid-template-columns:repeat(3,1fr)!important}.site-th i{height:46px}.cs-vapor::before{width:300px;height:300px;margin-left:-150px}}
+@media (prefers-reduced-motion:reduce){.cs::before,.cs::after{animation:none!important}}

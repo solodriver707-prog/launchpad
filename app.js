@@ -2930,7 +2930,9 @@
     }); }); });
   }
   // ===== COIN SITE: a free, shareable website for every coin (#/c/<CA or TICK>/<theme>) =====
-  var SITE_TH = [['dark', 'Dark'], ['neon', 'Neon'], ['paper', 'Paper'], ['meme', 'Meme']];
+  var SITE_TH = [['dark', 'Dark'], ['coin', 'Coin color'], ['neon', 'Neon'], ['vapor', 'Synthwave'], ['aurora', 'Aurora'], ['fire', 'Fire'], ['gold', 'Luxury'], ['terminal', 'Terminal'], ['arcade', 'Arcade'], ['comic', 'Comic'], ['meme', 'Meme'], ['paper', 'Paper']];
+  var SITE_FONT = { vapor: 'Monoton', gold: 'Playfair+Display:wght@700;900', terminal: 'VT323', arcade: 'Press+Start+2P', comic: 'Bangers' };
+  function siteFont(th) { var f = SITE_FONT[th]; if (!f || document.getElementById('csf-' + th)) return; var l = document.createElement('link'); l.id = 'csf-' + th; l.rel = 'stylesheet'; l.href = 'https://fonts.googleapis.com/css2?family=' + f + '&display=swap'; document.head.appendChild(l); }
   function siteUrl(t, th) { return location.href.split('#')[0] + '#/c/' + encodeURIComponent(t.live ? t.ca : t.tick) + (th && th !== 'dark' ? '/' + th : ''); }
   function sitePage() {
     var v = S.site || {}, t = find(v.tick); if (!t) return '<main class="wrap"><div class="route-wait"><span class="gr-sp"></span><b>Loading…</b></div></main>';
@@ -2938,6 +2940,7 @@
     var ch = heroChart(t, 600, 160), col = (t.spec && t.spec.bg) || '#3DDC97'; (function () { var m = /^#?([0-9a-f]{6})$/i.exec(col); var n = m ? parseInt(m[1], 16) : 0, L = ((n >> 16) * .299 + ((n >> 8) & 255) * .587 + (n & 255) * .114) / 255; if (!m || L < .5) col = '#3DDC97'; })();
     var soc = [['x', 'X', I.x], ['tg', 'Telegram', I.tg], ['web', 'Website', I.web]].filter(function (x) { return so[x[0]]; }).map(function (x) { return '<button class="cs-soc" data-act="soc" data-arg="' + id + '|' + x[0] + '">' + x[2] + '<span>' + x[1] + '</span></button>'; }).join('');
     var warn = (vo ? '<div class="cs-warn">🧛 Same name as an older coin, $' + esc(vo.tick) + ' — check the contract address before you buy.</div>' : '') + (ds.state === 'out' ? '<div class="cs-warn">The creator is no longer active on this coin.</div>' : '') + (rm.some(function (m) { return m.lv === 'r'; }) ? '<div class="cs-warn">⚠ Risk flags: ' + rm.filter(function (m) { return m.lv === 'r'; }).map(function (m) { return m.lab + ' ' + m.val; }).join(' · ') + '</div>' : '');
+    siteFont(th);
     return '<div class="cs cs-' + th + '" style="--cc:' + esc(col) + '">' +
       '<header class="cs-top"><span class="cs-brand">' + avatarHTML(t, 28) + '<b>$' + id + '</b></span><span class="cs-tr">' + soc + '<button class="cs-buy sm" data-act="open" data-arg="' + id + '">Buy $' + id + '</button></span></header>' +
       '<div class="cs-glow" aria-hidden="true">' + avatarHTML(t, 400) + '</div>' +
