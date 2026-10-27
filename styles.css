@@ -4769,3 +4769,131 @@ button[disabled].big-btn{opacity:.7;cursor:progress}
 .wl-deep b{flex:1}
 .wl-deep.ph{background:linear-gradient(135deg,#ab9ff2,#7b6cf0);border-color:transparent;color:#120c2c}
 .wl-di{width:32px;height:32px;border-radius:9px;display:grid;place-items:center;background:rgba(255,255,255,.18);font-size:18px}
+/* ===== MOBILE PASS (phones are the main market) ===== */
+.fx-mlist{display:none}
+.m-bar{display:none}
+@media (max-width:760px){
+  /* coin page: every block full width, sensible order */
+  .tp-grid3{align-items:stretch!important}
+  .tp-grid3 .vamp-warn,.tp-grid3 .kst{order:0}
+  .tp-grid3 .cpanel{order:1}
+  .tp-grid3 .tradebox{order:2}
+  .tp-grid3 .poscard{order:3}
+  .tp-grid3 .actbox{order:4}
+  .tp-grid3 .tp-main>.panel:not(.cpanel){order:5}
+  .tp-grid3 .tp-side>*:not(.tradebox):not(.poscard):not(.actbox){order:6}
+  .tp-grid3 .tp-thread{order:7}
+  .kst{grid-template-columns:1fr 1fr 1fr 1fr;margin-bottom:0}
+  .kst>div{padding:10px 10px}
+  .kst>div:first-child{grid-column:1/-1;border-left:0;flex-direction:row;align-items:center;justify-content:space-between}
+  .kst>div:nth-child(n+2){border-top:1px solid var(--line)}
+  .kst>div:nth-child(2){border-left:0}
+  .kst small{font-size:10.5px}.kst b{font-size:13px}
+  .kst .big b{font-size:20px}
+  /* banner header: compact and stacked */
+  .tp-banner{padding:14px!important;gap:12px!important;flex-wrap:wrap}
+  .tp-banner .tb-av .av,.tp-banner .tb-av>span{width:64px!important;height:64px!important}
+  .tp-banner .tp-id{min-width:0;flex:1 1 calc(100% - 80px)}
+  .tp-banner .title-xl{font-size:21px!important;line-height:1.15;word-break:break-word}
+  .tp-banner .title-xl .tk{font-size:13px;padding:3px 8px;vertical-align:middle}
+  .tp-banner .hs-pills{gap:6px!important;flex-wrap:wrap}
+  .tp-banner .hs-pills .pill{font-size:11.5px;min-height:30px;padding:0 10px}
+  .tp-banner .tp-key{width:100%;display:grid!important;grid-template-columns:auto 1fr;gap:8px}
+  .tp-banner .tp-key .tax{padding:7px 12px!important}
+  .tp-banner .tp-key .tax b{font-size:20px!important}
+  .tp-banner .pairbig{min-width:0;padding:8px 12px}
+  .tp-banner .pairbig .coin,.tp-banner .pairbig>span:first-child{width:32px!important;height:32px!important}
+  .tp-banner .pairbig b{font-size:15px}
+  /* chart */
+  .tp-main .cpanel .chartbox{height:340px}
+  .cpanel{padding:10px!important}
+  .cpanel .chart-tb{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
+  .cpanel .chart-tb::-webkit-scrollbar{display:none}
+  .cpanel .chart-tb>*{flex:none}
+  .c-help{display:none}
+  .c-legend{font-size:10.5px;left:6px;top:4px}.c-ohlc{font-size:10px}
+  .c-scale{right:62px;top:auto;bottom:30px}
+  /* bottom Buy / Sell bar like pump.fun */
+  .m-buy{display:none!important}
+  .m-bar{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:center;position:fixed;left:10px;right:10px;bottom:72px;z-index:54;padding:6px;border-radius:16px;background:rgba(14,14,16,.92);border:1px solid #2a2a2e;backdrop-filter:blur(10px);box-shadow:0 14px 34px -12px rgba(0,0,0,.9);transition:transform .25s,opacity .25s}
+  .m-bar.hide{transform:translateY(20px);opacity:0;pointer-events:none}
+  .m-bar button{min-height:46px;border:0;border-radius:12px;font:800 16px Manrope,sans-serif}
+  .m-b{background:#3DDC97;color:#04140C}.m-s{background:#F2708A;color:#1a060b}
+  .m-tx{font-size:11.5px;color:var(--muted);padding:0 6px;white-space:nowrap}
+  /* factory: vertical steps instead of the wide conveyor */
+  .fx .fx-scroll{display:none}
+  .fx-mlist{display:flex;flex-direction:column;gap:10px;margin-top:14px}
+  .fx-mi{display:flex;gap:12px;align-items:flex-start;padding:14px;border-radius:16px;border:1px solid color-mix(in srgb,var(--sc) 45%,transparent);background:linear-gradient(135deg,color-mix(in srgb,var(--sc) 12%,transparent),transparent)}
+  .fx-mic{width:40px;height:40px;flex:none;border-radius:12px;display:grid;place-items:center;background:color-mix(in srgb,var(--sc) 22%,transparent);color:var(--sc)}
+  .fx-mic svg{width:20px;height:20px}
+  .fx-mt{display:flex;flex-direction:column;gap:3px}
+  .fx-mt .mono{font-size:11px;color:var(--sc)}.fx-mt b{font-size:16px}.fx-mt small{font-size:13px;color:var(--soft);line-height:1.45}
+  .fx .lab-title{font-size:30px!important}
+}
+.fb-mtog{display:none}
+@media (max-width:760px){
+  header{background:#08080a!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+  /* board filters folded behind one button */
+  .fb-mtog{display:flex;width:100%;align-items:center;gap:8px;min-height:44px;padding:0 14px;border-radius:12px;border:1px solid var(--line);background:rgba(255,255,255,.03);color:#fff;font-weight:700;font-size:14px}
+  .fb-mtog em{font-style:normal;font-size:11px;padding:1px 7px;border-radius:99px;background:var(--up);color:#04140c}
+  .fb-mtog span{margin-left:auto;color:var(--muted)}
+  .fbar2:not(.mopen) .fb2-row{display:none}
+  .fbar2 .pairrow{margin-top:10px}
+  .fbar2{padding:10px!important}
+  /* top-meme card */
+  #tc .tc-in{gap:12px;padding:14px}
+  #tc .tc-av .av,#tc .tc-av>span{width:62px!important;height:62px!important}
+  #tc .tc-n{font-size:18px}
+  #tc .tc-side .tax b{font-size:22px}
+  #tc .tc-pair{font-size:13px}
+  /* trending strip cards a bit smaller */
+  .ts{margin-top:18px}
+}
+@media (max-width:760px){
+  .ident-ban .ib-ph{padding-bottom:34px;padding-left:96px;text-align:left;align-items:flex-start}
+  .ident-ban .ib-ph small{font-size:10.5px}
+}
+@media (max-width:760px){
+  .lb3{padding-top:16px;gap:28px}
+  .lb3-h{font-size:24px}
+  .lb3-tabs{gap:16px;overflow-x:auto;scrollbar-width:none}.lb3-tabs button{font-size:14.5px;white-space:nowrap}
+  .lb3-info{padding:10px 4px;font-size:12.5px}
+  .lb3-one{gap:10px;flex-wrap:wrap}
+  .lb3-stage{height:auto!important;transform:none!important;margin:10px 0 0!important;display:grid;grid-template-columns:1fr 1.15fr 1fr;gap:10px;align-items:end}
+  .lb3-star,.lb3-card.c4{display:none}
+  .lb3-card{position:relative!important;left:auto!important;right:auto!important;bottom:auto!important;margin:0!important;transform:none!important;animation:none}
+  .lb3-card.c2{order:1}.lb3-card.c1{order:2}.lb3-card.c3{order:3}
+  .lb3-card .lb3-pic{padding:6px;border-width:3px;border-radius:14px}
+  .lb3-card .lb3-pic .av,.lb3-card .lb3-pic>span{width:100%!important;height:auto!important;aspect-ratio:1}
+  .lb3-num{font-size:26px;left:-4px;top:-10px}
+  .lb3-crown{font-size:30px;top:-24px;right:-6px}
+  .lb3-cap{flex-direction:column;gap:1px;font-size:11px;padding:0 2px}
+  .lb3-cap b{max-width:100%}
+  .lb3-list.cut .lb3-row:nth-child(n+22){display:none}
+  .lb3-all{width:100%;margin-top:10px;min-height:44px}
+  .lb3-side h2{font-size:24px}
+}
+@media (max-width:760px){
+  .lrow2{grid-template-columns:26px minmax(0,1fr) 38px 72px 62px!important;min-width:0!important;padding:0 10px!important;gap:6px!important;height:56px!important}
+  .ltable,.lt-wrap{overflow-x:hidden!important}
+  .tr-bar{gap:8px}.tr-bar .seg{overflow-x:auto;scrollbar-width:none;flex-wrap:nowrap;max-width:100%}.tr-bar .seg button{white-space:nowrap;flex:none}
+}
+@media (max-width:760px){
+  /* overlays sit above the bottom nav */
+  .overlay,.hm-ov,.wp-ov,.modal-bg{z-index:900!important}
+  .sh-modal,.co-modal,.wbal{z-index:901!important}
+  .wpv{display:none!important}
+  .bm-st{top:auto;bottom:12px;left:50%;font-size:11.5px;padding:5px 10px}
+  .bm-tools{left:10px;top:10px}
+  .bm-h{padding:12px 14px}.bm-h small{display:none}
+  .bm-body{grid-template-rows:minmax(300px,48vh) auto}
+  .wp-top{padding:0 16px;margin-top:-40px}.wp-av{width:76px!important;height:76px!important}
+  .wp-id>b{font-size:20px}
+  .wp-btns{width:100%}.wp-btns .btn{flex:1;min-height:40px;font-size:12.5px;padding:0 10px}
+  .wp-stats,.wp-tabs{margin-left:16px;margin-right:16px}.wp-body{padding:6px 16px 0}
+  .wp-ban{height:110px}
+  .wp-tabs{gap:16px;overflow-x:auto;scrollbar-width:none}.wp-tabs button{white-space:nowrap}
+  .sh-modal{width:calc(100vw - 16px);padding:12px}
+  .sh-th{width:48px;height:48px}
+  .co-modal{left:8px!important;right:8px!important;width:auto!important;max-height:calc(100vh - 24px);overflow-y:auto}
+}

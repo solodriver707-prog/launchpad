@@ -1640,7 +1640,7 @@
       var on = !!S[t[0]]; if (on) active++;
       return '<button class="ftog' + (on ? ' on' : '') + '" data-act="toggle" data-arg="' + t[0] + '" aria-pressed="' + on + '">' + t[2] + t[1] + '</button>';
     }).join('');
-    return '<div class="fbar2">' + pairRow() + '<div class="fb2-row">' + ['mc', 'age', 'prog', 'tax'].map(inlineRange).join('') + '</div>' +
+    return '<div class="fbar2' + (S.mFilt ? ' mopen' : '') + '"><button class="fb-mtog" data-act="mFilt">⚙ Filters' + (active ? ' <em>' + active + '</em>' : '') + '<span>' + (S.mFilt ? '▴' : '▾') + '</span></button>' + pairRow() + '<div class="fb2-row">' + ['mc', 'age', 'prog', 'tax'].map(inlineRange).join('') + '</div>' +
       '<div class="fb2-row sub">' + tg + '<span class="mono muted" style="margin-left:auto;font-size:12px" id="rpc-all">' + filtered().length + ' coins match</span>' + (active ? '<button class="freset" style="margin-left:10px" data-act="reset">Reset · ' + active + '</button>' : '') + '</div></div>';
   }
   function refreshGrid() {
@@ -2528,7 +2528,7 @@
   function leadersPage() {
     var tabs = [['traders', 'Traders', 'Profit from every buy and sell on treid — realised plus what you still hold.'], ['devs', 'Devs', 'Creators ranked by track record — graduations, best ATH, coins left behind.'], ['callers', 'Callers', 'Whose callouts actually pump — average gain since the call.'], ['hall', 'Hall of fame', 'Coins that hit the biggest milestones.']];
     if (!tabs.some(function (x) { return x[0] === S.lbTab; })) S.lbTab = 'traders';
-    var cur = tabs.filter(function (x) { return x[0] === S.lbTab; })[0], tab = cur[0], full = lbData(tab), rows = full.slice(0, 50), hall = tab === 'hall';
+    var cur = tabs.filter(function (x) { return x[0] === S.lbTab; })[0], tab = cur[0], full = lbData(tab), rows = full.slice(0, 50), hall = tab === 'hall', cut = isMob() && !S.lbAll && rows.length > 20;
     var heads = { traders: ['Profit', 'Win rate', 'Trades', 'Best trade'], devs: ['Launches', 'Graduated', 'Left', 'Best ATH', 'Record'], callers: ['Avg gain', 'Hit rate', 'Calls', 'Best call'], hall: ['ATH', 'Milestones', 'Now', 'From ATH', 'Age'] }[tab];
     var nm = function (r) { return hall ? '$' + r.t.tick : walletName(r.a); }, pic = function (r, sz) { return hall ? avatarHTML(r.t, sz) : '<span class="av" style="width:' + sz + 'px;height:' + sz + 'px">' + A.svg(walletSpec(r.a)) + '</span>'; };
     var key = function (r) { return hall ? r.t.tick : r.a; }, go = function (r) { return hall ? 'data-act="open" data-arg="' + esc(r.t.tick) + '"' : 'data-act="walletAny" data-arg="' + esc(r.a) + '"'; };
@@ -2546,7 +2546,7 @@
     return '<main class="wrap lb3"><div class="lb3-main"><h1 class="lb3-h">Leaderboard</h1><div class="lb3-tabs">' + tabs.map(function (x) { return '<button class="' + (tab === x[0] ? 'on' : '') + '" data-act="lbtab" data-arg="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div>' +
       '<div class="lb3-info">ⓘ ' + cur[2] + '</div>' + hero +
       '<div class="lb3-bar">' + (hall ? '<span></span>' : '<div class="seg">' + [['24h', '1D'], ['7d', '1W'], ['all', 'All']].map(function (x) { return '<button class="' + (S.lbPer === x[0] ? 'on' : '') + '" data-act="lbper" data-arg="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div>') + '<span class="lb3-sort muted">↓ ' + heads[0] + '</span></div>' +
-      '<div class="lb3-list">' + you + list + '</div></div>' + right + '</main>';
+      '<div class="lb3-list' + (cut ? ' cut' : '') + '">' + you + list + '</div>' + (cut ? '<button class="btn sec lb3-all" data-act="lbAll">Show all 50</button>' : '') + '</div>' + right + '</main>';
   }
 
 
@@ -2682,7 +2682,7 @@
     var curve = '<section class="card-s panel" style="display:flex;flex-direction:column;gap:10px"><div style="display:flex;justify-content:space-between"><b>' + (t.prog >= 100 ? 'Graduated to Meteora' : 'Bonding curve') + '</b><span class="mono" style="color:var(--ice)" data-prog="' + id + '">' + Math.min(100, t.prog).toFixed(0) + '%</span></div>' +
       '<div class="bar" style="height:12px"><i class="' + (t.prog >= 100 ? 'done' : '') + '" data-bar="' + id + '" style="width:' + Math.max(1, Math.min(100, t.prog)) + '%"></i></div>' +
       '<span class="muted" style="font-size:12.5px;line-height:1.55">' + (t.prog >= 100 ? 'Liquidity is live on Meteora.' : curveSol + ' ' + esc(qSymT(t)) + ' in the curve. Graduates to Meteora at 100%.') + '</span></section>';
-    var mbuy = '<button class="m-buy" data-act="mBuy">Buy / Sell $' + id + (trapLeft(t) > 0 ? ' · 🪤 ' + snipeNow(t) + '%' : ' · tax ' + tmax + '%') + '</button>';
+    var mbuy = '<div class="m-bar"><button class="m-b" data-act="mSide" data-arg="buy">Buy</button><button class="m-s" data-act="mSide" data-arg="sell">Sell</button><span class="m-tx mono">' + (trapLeft(t) > 0 ? '🪤 ' + snipeNow(t) + '%' : 'tax ' + tmax + '%') + '</span></div>';
     return mbuy + '<main class="wrap tp-env" style="padding-top:14px;--coin:' + ((t.spec && t.spec.bg) || '#2A2418') + '"><div class="tp-glow" aria-hidden="true">' + avatarHTML(t, 300) + '</div><button class="link" data-act="home">' + I.back + 'Back to board</button>' + head +
       '<div class="tp-grid3">' + thread + '<div class="tp-main">' + vampWarn + kstats + chart + tabsHTML + '</div><aside class="tp-side">' + panel + posCard + activity + (t.desc ? '<section class="card-s panel about-b"><div class="ab-h">' + avatarHTML(t, 26) + '<b>About $' + id + '</b></div><p class="ab-t' + (t.desc.length > 220 && !S.descOpen ? ' clamp' : '') + '">' + esc(t.desc) + '</p>' + (t.desc.length > 220 ? '<button class="ab-more" data-act="descToggle">' + (S.descOpen ? 'Show less' : 'Show more') + '</button>' : '') + '</section>' : '') + taxSplitPanel(t) + crPanel(t) + safety + curve + '</aside></div></main>';
   }
@@ -3591,6 +3591,8 @@
       case 'bsort': S.bsort = arg; render(); break;
       case 'tcat': S.tcat = arg; render(); break;
       case 'tpreset': S.lsort = arg; S.ldir = -1; render(); break;
+      case 'mFilt': S.mFilt = !S.mFilt; render(); break;
+      case 'mSide': S.side = arg; render(); setTimeout(function () { var tb = document.querySelector('.tradebox'); if (tb) tb.scrollIntoView({ behavior: 'smooth', block: 'start' }); var inp = document.getElementById('amt'); if (inp) setTimeout(function () { inp.focus({ preventScroll: true }); }, 450); }, 30); break;
       case 'mBuy': var tbx = document.querySelector('.tradebox'); if (tbx) tbx.scrollIntoView({ behavior: 'smooth', block: 'center' }); break;
       case 'stf': S.stf = arg; render(); break;
       case 'fwGo': fwCenter(FW.hi === +arg ? -1 : +arg); break;
@@ -3647,6 +3649,7 @@
       case 'wlClear': if (!S.wlConfirm) { set({ wlConfirm: true }); setTimeout(function () { if (S.wlConfirm) set({ wlConfirm: false }); }, 3000); break; }
         S.watch = []; S.wlConfirm = false; try { localStorage.setItem(LS.watch, '[]'); } catch (er) {} render(); toast('Watchlist cleared'); break;
       case 'lbtab': set({ lbTab: arg }); break;
+      case 'lbAll': S.lbAll = true; render(); break;
       case 'lbOpen': S.lbOpen = S.lbOpen === arg ? null : arg; render(); break;
       case 'lbCoPer': set({ lbCoPer: arg }); break;
       case 'lbCo': var lp = String(arg).split('|'), lt = find(lp[0]), lc = lt && (S.comments[lt.tick] || []).filter(function (c) { return String(c.id) === lp[1]; })[0]; if (lt && lc && lc.real) set({ screen: 'callout', coView: { tick: lt.tick, id: lc.id } }); else if (lt) { openToken(lt.tick); set({ tpTab: 'thread' }); } break;
@@ -4073,6 +4076,7 @@
     var cap = STS.map(function (x, k) { return '<button class="fx-cap" data-act="fwGo" data-arg="' + k + '" data-fcap="' + k + '"><span class="mono">0' + (k + 1) + '</span><b>' + x[0] + '</b><small>' + x[1] + '</small>' +
       (k === 5 ? '<span class="fx-jars">' + [['Creator', '#F5D9A8'], ['Holders', '#7FB6FF'], ['Burn', '#FF8A5B']].map(function (j, q) { return '<span class="fx-jar" style="--c:' + j[1] + '"><i data-jar="' + q + '"></i><em>' + j[0] + '</em></span>'; }).join('') + '</span>' : '') + '</button>'; }).join('');
     return '<section class="story card-s fx" id="machine"><div class="st2-head"><div><span class="kicker">HOW IT WORKS</span><h2 class="title-xl lab-title">The treid factory</h2></div><span class="muted st2-hint">watch a coin go from launch to tax payouts</span></div>' +
+      '<div class="fx-mlist">' + STS.map(function (x, k) { return '<div class="fx-mi" style="--sc:' + FST[k][2] + '"><span class="fx-mic">' + FICO[k] + '</span><span class="fx-mt"><span class="mono">0' + (k + 1) + '</span><b>' + x[0] + '</b><small>' + x[1] + '</small></span></div>'; }).join('') + '</div>' +
       '<div class="fx-scroll"><div class="fx-floor" id="fw-wheel"><div class="fx-belt"><span class="fx-tread"></span><span class="fx-roll l"></span><span class="fx-roll r"></span></div><div class="fx-coins" id="fx-coins"></div>' + st + '</div>' +
       '</div></section>';
   }
@@ -4116,7 +4120,7 @@
     }
     FW.raf = requestAnimationFrame(fwLoop);
   }
-  function mbuyWatch() { var tb = document.querySelector('.tradebox'), mb = document.querySelector('.m-buy'); if (!tb || !mb || !window.IntersectionObserver) return; if (mbuyWatch.o) mbuyWatch.o.disconnect(); mbuyWatch.o = new IntersectionObserver(function (en) { mb.classList.toggle('hide', en[0].isIntersecting); }, { threshold: .15 }); mbuyWatch.o.observe(tb); }
+  function mbuyWatch() { var tb = document.querySelector('.tradebox'), mb = document.querySelector('.m-bar'); if (!tb || !mb || !window.IntersectionObserver) return; if (mbuyWatch.o) mbuyWatch.o.disconnect(); mbuyWatch.o = new IntersectionObserver(function (en) { mb.classList.toggle('hide', en[0].isIntersecting); }, { threshold: .15 }); mbuyWatch.o.observe(tb); }
   function fwKick() { if (!FW.raf && document.getElementById('fw-wheel')) FW.raf = requestAnimationFrame(fwLoop); }
   // ---------- conveyor + crane engine ----------
   var LC = [], lastSpawn = 0, LT = performance.now(), ARM = { busy: false };
