@@ -4710,3 +4710,34 @@ button[disabled].big-btn{opacity:.7;cursor:progress}
 .wb-co{font-size:12.5px;color:var(--soft);padding-top:2px;line-height:1.4}
 .wb-empty{padding:24px;text-align:center;display:flex;gap:8px;justify-content:center;align-items:center}
 @media (max-width:640px){.wbal{position:fixed;left:8px;right:8px;width:auto;top:64px}.wb-tot{font-size:13px}}
+/* copycat flag */
+.vampb{display:inline-flex;align-items:center;gap:3px;margin-left:6px;padding:2px 7px;border-radius:99px;font-size:10.5px;font-weight:800;letter-spacing:.02em;color:#ffd6dd;background:rgba(190,30,60,.28);border:1px solid rgba(255,90,120,.5);vertical-align:middle;white-space:nowrap}
+.vamp-warn{display:flex;align-items:center;gap:12px;padding:12px 16px;margin-bottom:12px;border-radius:16px;background:rgba(190,30,60,.12);border:1px solid rgba(255,90,120,.4);font-size:13.5px;color:#ffd6dd}
+.vamp-warn>span{flex:1}.vamp-warn .btn{min-height:34px;font-size:12.5px;white-space:nowrap}
+.vamp-note{margin:8px 0 4px;padding:10px 12px;border-radius:12px;background:rgba(190,30,60,.1);border:1px solid rgba(255,90,120,.35);font-size:12.5px;color:#ffd6dd;line-height:1.45}
+/* sliding trending strip */
+.ts{margin:26px 0 8px}
+.ts-h{display:flex;align-items:baseline;gap:14px;margin-bottom:12px}
+.ts-h b{font-size:22px;font-weight:800;letter-spacing:-.01em}
+.ts-h .muted{font-size:12.5px;margin-left:auto}
+.ts-h .link{min-height:0;font-size:13px}
+.ts-view{overflow:hidden;-webkit-mask-image:linear-gradient(90deg,transparent,#000 4%,#000 96%,transparent);mask-image:linear-gradient(90deg,transparent,#000 4%,#000 96%,transparent)}
+.ts-track{display:flex;gap:14px;width:max-content;will-change:transform;padding:4px 0 8px}
+.ts-card{position:relative;flex:none;width:214px;height:262px;border-radius:20px;overflow:hidden;border:1px solid rgba(255,255,255,.08);padding:0;background:#141416;cursor:pointer;transition:transform .2s cubic-bezier(.2,1.3,.4,1),box-shadow .2s;text-align:left;color:#fff}
+.ts-card:hover{transform:translateY(-6px);box-shadow:0 20px 40px -12px rgba(0,0,0,.8),0 0 0 1px rgba(255,255,255,.18)}
+.ts-img{position:absolute;inset:0;display:block}
+.ts-img .tav,.ts-img img,.ts-img>span{width:100%!important;height:100%!important;border-radius:0!important;object-fit:cover}
+.ts-img svg{width:100%;height:100%}
+.ts-rk{position:absolute;left:10px;top:10px;padding:3px 8px;border-radius:9px;background:rgba(10,10,12,.78);border:1px solid rgba(255,255,255,.25);font-size:12px;font-weight:800}
+.ts-vamp{position:absolute;right:10px;top:8px;font-size:18px}
+.ts-bot{position:absolute;left:0;right:0;bottom:0;padding:44px 12px 12px;display:flex;flex-direction:column;gap:4px;background:linear-gradient(180deg,transparent,rgba(8,8,10,.82) 38%,rgba(8,8,10,.96))}
+.ts-n{font-size:16px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ts-r{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.ts-r small{color:rgba(255,255,255,.65);font-size:11.5px}
+.ts-r em{font-style:normal;font-size:11px;font-weight:800;padding:2px 6px;border-radius:7px;background:rgba(0,0,0,.4)}
+.ts-r em.up{color:var(--up)}.ts-r em.down{color:var(--down)}
+.ts-mc{font-size:16px}
+.ts-r .lb-spark{width:70px;height:22px}
+.ts-cv{display:block;height:5px;border-radius:3px;background:rgba(255,255,255,.12);overflow:hidden;margin-top:4px}
+.ts-cv i{display:block;height:100%;background:linear-gradient(90deg,#5AC8E8,#3DDC97)}
+@media (max-width:640px){.ts-card{width:170px;height:214px}.ts-h b{font-size:18px}.ts-h .muted{display:none}}

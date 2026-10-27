@@ -150,6 +150,20 @@ async function quoteAllowed(qm) {
   if (got) qOk.set(qm, { ok, at: Date.now() }); else if (!ok) throw new Error('pair check unavailable');   // a failed lookup is retried, never cached as "not allowed"
   return ok;
 }
+// copycat ("vamp") detection: a coin whose ticker or name folds to the same thing as an OLDER treid coin gets flagged, never blocked
+const LEET = { '0': 'o', '1': 'i', '3': 'e', '4': 'a', '5': 's', '7': 't', '8': 'b', '$': 's', '@': 'a', '!': 'i' };
+function fold(x) { let v = String(x || '').replace(/^\s*\$+/, '').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[0134578$@!]/g, (ch) => LEET[ch]).replace(/[^a-z0-9]/g, '');
+  for (let i = 0; i < 3; i++) v = v.replace(/^(the|real|official|new)/, '').replace(/(official|real|new|v2|v3|ii|2|3|coin|token|onsol|sol)$/, ''); return v; }
+let vampMap = null, vampAt = 0;
+function vampOf(mint) {
+  if (!vampMap || Date.now() - vampAt > 60e3) { vampMap = new Map(); vampAt = Date.now(); const first = new Map();
+    for (const c of q('SELECT mint, symbol, name, created_at FROM coins ORDER BY created_at ASC')) { if (HIDDEN.has(c.mint)) continue;
+      const keys = [...new Set([fold(c.symbol), fold(c.name)].filter((k) => k.length >= 2))]; let hit = null;
+      for (const k of keys) { const o = first.get(k); if (o && o.mint !== c.mint) { hit = o; break; } }
+      if (hit) vampMap.set(c.mint, { mint: hit.mint, symbol: hit.symbol, name: hit.name });
+      for (const k of keys) if (!first.has(k)) first.set(k, c); } }
+  return vampMap.get(mint) || null;
+}
 async function addCoin(mint, slot, ts, creator, poolAddr = null) {   // returns true (indexed), false (not a treid coin) or 'retry' (an RPC error — try again later, never "not ours")
   let transient = false; const softErr = () => { transient = true; return null; };
   let r; try { r = await addCoin0(mint, slot, ts, creator, poolAddr, softErr); } catch (e) { console.log('addCoin retry later', mint.slice(0, 6), String(e?.message || e).slice(0, 80)); return 'retry'; }
@@ -332,7 +346,7 @@ function stats(mint, list = false) {
   const devN = real ? (real.find((h) => h.wallet === c.creator)?.pct || 0) / 100 * SUPPLY : bal.find(b => b.wallet === c.creator)?.n || 0;
   const top10 = Math.min(SUPPLY, real ? real.slice(0, 10).reduce((s, h) => s + h.pct / 100 * SUPPLY, 0) : bal.slice(0, 10).reduce((s, b) => s + b.n, 0));
   const po = OPS && REW ? q1(`SELECT COALESCE(SUM(CASE WHEN kind='taxburn' THEN lamports END),0)/1e6 burned, COALESCE(SUM(CASE WHEN kind='taxhold' THEN lamports END),0)/1e6 holders, COALESCE(SUM(CASE WHEN kind='taxdev' THEN lamports END),0)/1e6 dev, COUNT(CASE WHEN kind='taxhold' THEN 1 END) n, COALESCE(SUM(CASE WHEN kind='taxholdq' THEN lamports END),0) * 1.0 / ${10 ** (c.quote_dec ?? 9)} holders_q FROM rlog WHERE mint=? AND kind IN ('taxburn','taxdev','taxhold','taxholdq')`, mint) : null;   // from on-chain receipts → survives restarts
-  return { ...c, tax_paid: po, reserve: last?.reserve || 0, grad_target: gradTarget.get(mint) || 0, quote_usd: quoteUsd(c.quote_mint, c.quote_symbol), vol_usd: agg.volusd || 0, holders: real ? real.length : bal.length, dev_pct: devN / SUPPLY * 100, dev_sold: !!devBuy && devN < 1, top10_pct: top10 / SUPPLY * 100, sol_usd: SOL_USD, mcap_usd: last?.mcap_usd || 0, curve_pct: last?.progress || 0, trades: agg.n, vol_sol: agg.vol || 0, buys: agg.buys || 0, sells: agg.sells || 0, traders: agg.traders, snipers_pct: (agg.snipeTok || 0) / SUPPLY * 100, bundles_pct: (agg.bundleTok || 0) / SUPPLY * 100 };
+  return { ...c, vamp: vampOf(mint), tax_paid: po, reserve: last?.reserve || 0, grad_target: gradTarget.get(mint) || 0, quote_usd: quoteUsd(c.quote_mint, c.quote_symbol), vol_usd: agg.volusd || 0, holders: real ? real.length : bal.length, dev_pct: devN / SUPPLY * 100, dev_sold: !!devBuy && devN < 1, top10_pct: top10 / SUPPLY * 100, sol_usd: SOL_USD, mcap_usd: last?.mcap_usd || 0, curve_pct: last?.progress || 0, trades: agg.n, vol_sol: agg.vol || 0, buys: agg.buys || 0, sells: agg.sells || 0, traders: agg.traders, snipers_pct: (agg.snipeTok || 0) / SUPPLY * 100, bundles_pct: (agg.bundleTok || 0) / SUPPLY * 100 };
 }
 process.on('unhandledRejection', (e) => console.log('unhandled', String(e?.message || e).slice(0, 200)));   // one bad request or RPC hiccup must never kill the server
 process.on('uncaughtException', (e) => console.log('uncaught', String(e?.message || e).slice(0, 200)));
@@ -418,6 +432,7 @@ async function handleReq(req, res) {
       const coins = rows.map((r) => { const c = q1('SELECT symbol, name FROM coins WHERE mint=?', r.mint) || {}; const ps = posStats(r.mint, w); return { mint: r.mint, symbol: c.symbol || '', name: c.name || '', first: r.f, last: r.l, ...ps }; });
       const created = q('SELECT mint, symbol, name, created_at FROM coins WHERE creator=? ORDER BY created_at DESC LIMIT 50', w).filter((r) => !HIDDEN.has(r.mint));
       const v = { wallet: w, sol, first: rows.length ? Math.min(...rows.map((r) => r.f)) : null, coins, created }; walC.set(w, { ts: Date.now(), v }); if (walC.size > 3000) walC.delete(walC.keys().next().value); return J(v); }
+    if (p[1] === 'vampcheck') { const sym = fold(u.searchParams.get('symbol')), nm = fold(u.searchParams.get('name')); const hits = q('SELECT mint, symbol, name, created_at FROM coins ORDER BY created_at ASC LIMIT 20000').filter((c) => !HIDDEN.has(c.mint) && ((sym.length >= 2 && (fold(c.symbol) === sym || fold(c.name) === sym)) || (nm.length >= 2 && (fold(c.name) === nm || fold(c.symbol) === nm)))).slice(0, 3); return J({ hits }); }
     if (p[1] === 'pos') { const m = String(u.searchParams.get('mint') || ''), w = String(u.searchParams.get('wallet') || ''); if (!q1('SELECT 1 FROM coins WHERE mint=?', m) || !/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(w)) return J(null); return J(posStats(m, w)); }
     if (p[1] === 'mytrades') { const m = String(u.searchParams.get('mint') || ''), w = String(u.searchParams.get('wallet') || ''); return J(q('SELECT sig, side, sol, tokens, usd, mcap_usd, ts FROM trades WHERE mint=? AND wallet=? ORDER BY ts DESC LIMIT 100', m, w)); }
     if (p[1] === 'burned' && req.method === 'POST' && !rate('burn|' + ip(req), 30, 36e5)) { res.writeHead(429, { 'access-control-allow-origin': '*' }); return res.end('{"ok":false,"error":"too many requests"}'); }

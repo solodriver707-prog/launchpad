@@ -1718,9 +1718,25 @@
       }).join('') + '</div></section>';
 
     var slogan = introHTML();
-    return '<main class="wrap">' + slogan + '<div id="board"></div>' + toolbar + filters + '<div class="layout full">' + grid + '</div>' + (S.view === 'orbit' ? '' : raceSection()) + machineSection() + '</main>';
+    return '<main class="wrap">' + slogan + trendStrip() + '<div id="board"></div>' + toolbar + filters + '<div class="layout full">' + grid + '</div>' + (S.view === 'orbit' ? '' : raceSection()) + machineSection() + '</main>';
   }
 
+  // ===== sliding "trending now" strip (persistent node, moved in on every render so the slide never jumps) =====
+  var TS = { el: null, key: '', x: 0, last: 0, hover: false, at: 0 };
+  function tsList() { return all().filter(function (t) { return !t.archived; }).sort(function (a, b) { return chgOver(b, 360) * Math.log10(b.vol * 1000 + 10) - chgOver(a, 360) * Math.log10(a.vol * 1000 + 10); }).slice(0, 14); }
+  function tsCard(t, i) { var c = chgOver(t, 360), up = c >= 0;
+    return '<button class="ts-card" data-act="open" data-arg="' + esc(t.tick) + '"><span class="ts-img">' + avatarHTML(t, 240) + '</span><span class="ts-rk mono">#' + (i + 1) + '</span>' + (vampOf(t) ? '<span class="ts-vamp" title="Possible copy">🧛</span>' : '') +
+      '<span class="ts-bot"><b class="ts-n">' + esc(t.name) + '</b><span class="ts-r"><small class="mono">$' + esc(t.tick) + '</small><em class="mono ' + (up ? 'up' : 'down') + '">' + (up ? '▲ ' : '▼ ') + Math.abs(c).toFixed(1) + '%</em></span>' +
+      '<span class="ts-r"><b class="mono ts-mc">' + fmtK(t.mcN) + '</b>' + lbSpark(t, 70, 22, 'ts' + i) + '</span><span class="ts-cv"><i style="width:' + Math.min(100, t.prog).toFixed(0) + '%"></i></span></span></button>'; }
+  function tsMount() {
+    var slot = document.getElementById('ts-slot'); if (!slot) return;
+    if (!TS.el) { TS.el = document.createElement('div'); TS.el.className = 'ts-track'; TS.el.addEventListener('mouseenter', function () { TS.hover = true; }); TS.el.addEventListener('mouseleave', function () { TS.hover = false; }); requestAnimationFrame(tsTick); }
+    var L = tsList(), key = L.map(function (t) { return t.tick; }).join(',');
+    if (key !== TS.key || Date.now() - TS.at > 45e3) { var h = L.map(tsCard).join(''); TS.el.innerHTML = h + h; TS.key = key; TS.at = Date.now(); }
+    if (TS.el.parentNode !== slot) slot.appendChild(TS.el);
+  }
+  function tsTick(now) { if (TS.el && TS.el.isConnected) { var dt = Math.min(64, now - (TS.last || now)); if (!TS.hover && !document.hidden) { TS.x -= dt * .045; var half = TS.el.scrollWidth / 2; if (half > 0 && -TS.x >= half) TS.x += half; TS.el.style.transform = 'translate3d(' + TS.x.toFixed(1) + 'px,0,0)'; } } TS.last = now; requestAnimationFrame(tsTick); }
+  function trendStrip() { return '<section class="ts"><div class="ts-h"><b>🔥 trending now</b><span class="muted">point at it to stop it</span><button class="link" data-act="trendList">See all →</button></div><div class="ts-view" id="ts-slot"></div></section>'; }
   // ================= PRO TOKEN PAGE (pump.fun / dexscreener style) =================
   // ===== time-based chart engine (1m … 1d candles, zoom, pan, line/candles, MA, trade markers) =====
   var TFS = [['1M', '1m', 6e4], ['5M', '5m', 3e5], ['15M', '15m', 9e5], ['1H', '1h', 36e5], ['4H', '4h', 144e5], ['1D', '1d', 864e5]];
@@ -2045,7 +2061,7 @@
       '<span class="co-mw"><button class="co-ic" data-act="coMenu" data-arg="' + esc(key) + '" title="More">⋯</button>' + (S.coMenu === key ? '<span class="co-menu"><button data-act="coCopy" data-arg="' + esc(key) + '">Copy text</button><button data-act="coShare" data-arg="' + esc(key) + '">Copy link</button>' + (me ? '' : '<button data-act="coMute" data-arg="' + esc(c.w) + '">Mute ' + esc(coName(c.w)) + '</button><button data-act="coReport" data-arg="' + esc(key) + '">Report</button>') + '</span>' : '') + '</span></div>' +
       (opts.coinTag && !(c.pos > 0) ? '<button class="co-coin" data-act="open" data-arg="' + esc(t.tick) + '">' + avatarHTML(t, 18) + '<b>$' + esc(t.tick) + '</b><span class="mono">' + fmtK(t.mcN) + '</span></button>' : '') +
       (c.text ? '<div class="co-t' + (long ? ' clamp' : '') + (c.real && !opts.child ? ' co-link' : '') + '"' + (c.real && !opts.child ? ' data-act="coPage" data-arg="' + esc(key) + '"' : '') + '>' + esc(c.text) + '</div>' : '') + (c.img ? '<a class="co-img" href="' + esc(c.img) + '" target="_blank" rel="noopener noreferrer"><img src="' + esc(c.img) + '" loading="lazy" alt=""></a>' : '') + (long ? '<button class="co-more" data-act="coExpand" data-arg="' + esc(key) + '">Show more</button>' : '') +
-      (c.real && c.ps && !opts.child ? psBlock(c.ps, key) : '') + (!c.real && c.pos > 0 && !opts.child ? '<button class="co-pos" data-act="open" data-arg="' + esc(t.tick) + '" title="Open $' + esc(t.tick) + '">' + avatarHTML(t, 26) + '<span class="co-pn"><b>' + esc(t.tick) + '</b><small>' + esc(t.name) + '</small></span><span class="co-pv"><small>Position</small><b class="mono">$' + fmtNum(c.pos) + '</b></span><span class="co-pv"><small>PnL</small><b class="mono ' + (up ? 'up' : 'down') + '">' + (up ? '+' : '−') + '$' + Math.abs(pnl).toFixed(2) + '</b></span><span class="co-go">›</span></button>' : '') +
+      (c.real && c.ps && c.ps.trades > 0 && !opts.child ? (function () { var pu = c.ps.profit >= 0; return '<button class="co-pos" data-act="open" data-arg="' + esc(t.tick) + '" title="Open $' + esc(t.tick) + '">' + avatarHTML(t, 26) + '<span class="co-pn"><b>' + esc(t.tick) + '</b><small>' + esc(t.name) + '</small></span><span class="co-pv"><small>Position</small><b class="mono">$' + money(c.ps.value) + '</b></span><span class="co-pv"><small>Profit</small><b class="mono ' + (pu ? 'up' : 'down') + '">' + (pu ? '+' : '−') + '$' + money(c.ps.profit) + '</b></span><span class="co-go">›</span></button>'; })() : '') + (!c.real && c.pos > 0 && !opts.child ? '<button class="co-pos" data-act="open" data-arg="' + esc(t.tick) + '" title="Open $' + esc(t.tick) + '">' + avatarHTML(t, 26) + '<span class="co-pn"><b>' + esc(t.tick) + '</b><small>' + esc(t.name) + '</small></span><span class="co-pv"><small>Position</small><b class="mono">$' + fmtNum(c.pos) + '</b></span><span class="co-pv"><small>Profit</small><b class="mono ' + (up ? 'up' : 'down') + '">' + (up ? '+' : '−') + '$' + Math.abs(pnl).toFixed(2) + '</b></span><span class="co-go">›</span></button>' : '') +
       '<div class="co-a"><button data-act="coShare" data-arg="' + esc(key) + '" title="Share"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8h16v-8M12 3v13M7 8l5-5 5 5"/></svg></button>' +
         '<button class="' + (c.rtd ? 'on rt' : '') + '" data-act="coRT" data-arg="' + esc(key) + '" title="Repost"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 2l4 4-4 4M3 11V9a3 3 0 013-3h15M7 22l-4-4 4-4M21 13v2a3 3 0 01-3 3H3"/></svg>' + (c.rt || '') + '</button>' +
         '<button class="' + (c.liked ? 'on lk' : '') + '" data-act="coLike" data-arg="' + esc(key) + '" title="Like"><svg viewBox="0 0 24 24" fill="' + (c.liked ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="2"><path d="M12 21s-8-5.2-8-11a4.5 4.5 0 018-2.8A4.5 4.5 0 0120 10c0 5.8-8 11-8 11z"/></svg>' + (c.likes || '') + '</button>' +
@@ -2536,6 +2552,7 @@
         '<button class="iconbtn" data-act="star" data-arg="' + id + '" aria-label="Watchlist" aria-pressed="' + on + '">' + I.star(on) + '</button><button class="iconbtn" data-act="share" aria-label="Copy link"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8h16v-8M12 3v13M7 8l5-5 5 5"/></svg></button></div></div>' +
       '<div class="tp-key">' + (trapLeft(t) > 0 ? trapBox(t, 'head') : '') + '<div class="tax" style="background:' + taxBg(tmax) + ';padding:9px 14px"><small>TAX</small><b style="font-size:24px">' + tmax + '%</b><small style="letter-spacing:.04em;font-size:9px">BUY & SELL</small>' + (splitOf(t) ? splitBar(splitOf(t), 'mini') : '') + '</div>' +
         (tmax > 0 || (t.live && t.qMint) ? '<button class="pairbig" data-act="pairOpen" data-arg="' + esc(t.pair) + '">' + coinHTML(t.pair, 42) + '<div><small>PAIRED WITH</small><b>' + esc(pairLabel(t.pair)) + '</b><span>' + esc(pairInfo(t.pair).name) + '</span></div></button>' : '<div class="pairbig plain">' + coinHTML('SOL', 42) + '<div><small>NO PAIR</small><b>Plain coin</b><span>0% tax · trades in SOL</span></div></div>') + '</div></section>';
+    var vo = vampOf(t), vampWarn = vo ? '<div class="vamp-warn">🧛 <span><b>Possible copy.</b> An older coin, <b>$' + esc(vo.tick) + '</b>' + (vo.name ? ' (' + esc(vo.name) + ')' : '') + ', uses the same ticker or name. Check the contract address before you buy.</span>' + (vo.tick && find(vo.tick) ? '<button class="btn sec" data-act="open" data-arg="' + esc(vo.tick) + '">Open original</button>' : '') + '</div>' : '';
     var kstats = '<section class="card-s kst">' + [['Market cap', '<span data-mc="' + id + '" data-v="' + fmtK(t.mcN) + '">' + fmtK(t.mcN) + '</span> <span class="chgpill ' + (c >= 0 ? 'up' : 'down') + '" data-chg="' + id + '">' + chgTxt(c) + '</span>', 'big'], ['24h vol', fmtK(t.vol)], ['Liquidity', fmtK(liqK(t))], ['Holders', fmtNum(t.holders)], ['ATH', fmtK(ath)]].map(function (r) { return '<div class="' + (r[2] || '') + '"><small>' + r[0] + '</small><b class="mono">' + r[1] + '</b></div>'; }).join('') + '</section>';
     var bp = nb + ns ? nb / (nb + ns) * 100 : 50, vp = vb + vs ? vb / (vb + vs) * 100 : 50, offAth = (1 - t.mcN / ath) * 100;
     var activity = '<section class="card-s panel actbox">' +
@@ -2655,7 +2672,7 @@
       '<span class="muted" style="font-size:12.5px;line-height:1.55">' + (t.prog >= 100 ? 'Liquidity is live on Meteora.' : curveSol + ' ' + esc(qSymT(t)) + ' in the curve. Graduates to Meteora at 100%.') + '</span></section>';
     var mbuy = '<button class="m-buy" data-act="mBuy">Buy / Sell $' + id + (trapLeft(t) > 0 ? ' · 🪤 ' + snipeNow(t) + '%' : ' · tax ' + tmax + '%') + '</button>';
     return mbuy + '<main class="wrap tp-env" style="padding-top:14px;--coin:' + ((t.spec && t.spec.bg) || '#2A2418') + '"><div class="tp-glow" aria-hidden="true">' + avatarHTML(t, 300) + '</div><button class="link" data-act="home">' + I.back + 'Back to board</button>' + head +
-      '<div class="tp-grid3">' + thread + '<div class="tp-main">' + kstats + chart + tabsHTML + '</div><aside class="tp-side">' + panel + posCard + activity + (t.desc ? '<section class="card-s panel about-b"><div class="ab-h">' + avatarHTML(t, 26) + '<b>About $' + id + '</b></div><p class="ab-t' + (t.desc.length > 220 && !S.descOpen ? ' clamp' : '') + '">' + esc(t.desc) + '</p>' + (t.desc.length > 220 ? '<button class="ab-more" data-act="descToggle">' + (S.descOpen ? 'Show less' : 'Show more') + '</button>' : '') + '</section>' : '') + taxSplitPanel(t) + crPanel(t) + safety + curve + '</aside></div></main>';
+      '<div class="tp-grid3">' + thread + '<div class="tp-main">' + vampWarn + kstats + chart + tabsHTML + '</div><aside class="tp-side">' + panel + posCard + activity + (t.desc ? '<section class="card-s panel about-b"><div class="ab-h">' + avatarHTML(t, 26) + '<b>About $' + id + '</b></div><p class="ab-t' + (t.desc.length > 220 && !S.descOpen ? ' clamp' : '') + '">' + esc(t.desc) + '</p>' + (t.desc.length > 220 ? '<button class="ab-more" data-act="descToggle">' + (S.descOpen ? 'Show less' : 'Show more') + '</button>' : '') + '</section>' : '') + taxSplitPanel(t) + crPanel(t) + safety + curve + '</aside></div></main>';
   }
   // give seeded trades real makers / prices
   S.trades.forEach(function (tr) { var t = find(tr.tick); tr.wallet = pickWallet(); tr.price = t ? price(t) * (1 + (Math.random() - 0.5) * 0.12) : 0; tr.tokens = tr.sol * SOL_USD / (tr.price || 1); tr.sig = b58(64); });
@@ -2924,7 +2941,17 @@
     var vest = state === 'cto' && cto ? Math.max(0, Math.min(1, (now - cto.at) / (DR.vestDays * 864e5))) : 0;
     return { state: state, why: why, sold: sold, last: last, idle: idle, outAt: outAt, cut: cut, earned: earned, claimable: claimable, burned: burned, fund: fund, fundEnds: fundEnds, cto: cto, vest: vest, mine: mine };
   }
-  function crBadge(t) { var d = devStatus(t); return d.state === 'out' ? '<span class="crb out" title="Dev is out — open for community takeover">DEV OUT</span>' : d.state === 'cto' ? '<span class="crb cto" title="Community takeover">CTO</span>' : d.state === 'inactive' ? '<span class="crb idle" title="Dev inactive for 48h+ — rewards frozen">DEV AWAY</span>' : ''; }
+  // copycat ("vamp") flag: same folded ticker / name as an OLDER coin — flagged with a 🧛 badge, never blocked
+  var VLEET = { '0': 'o', '1': 'i', '3': 'e', '4': 'a', '5': 's', '7': 't', '8': 'b', '$': 's', '@': 'a', '!': 'i' };
+  function vfold(x) { var v = String(x || '').replace(/^\s*\$+/, '').toLowerCase(); try { v = v.normalize('NFKD').replace(/[\u0300-\u036f]/g, ''); } catch (e) {} v = v.replace(/[0134578$@!]/g, function (ch) { return VLEET[ch]; }).replace(/[^a-z0-9]/g, '');
+    for (var i = 0; i < 3; i++) v = v.replace(/^(the|real|official|new)/, '').replace(/(official|real|new|v2|v3|ii|2|3|coin|token|onsol|sol)$/, ''); return v; }
+  function vampMatch(tick, name, born, self) { var keys = [vfold(tick), vfold(name)].filter(function (k) { return k.length >= 2; }); if (!keys.length) return null; var best = null;
+    all().concat(S.live || []).forEach(function (o) { if (o === self || o.archived || (born && o.born >= born)) return; var ok = [vfold(o.tick), vfold(o.name)]; if (keys.some(function (k) { return ok.indexOf(k) >= 0; }) && (!best || o.born < best.born)) best = o; }); return best; }
+  function vampOf(t) { if (t.live) { if (!t.vamp || !t.vamp.mint) return null; var o = S.live.filter(function (x) { return x.ca === t.vamp.mint; })[0]; return o || { tick: String(t.vamp.symbol || '?'), name: String(t.vamp.name || ''), ca: t.vamp.mint }; } if (t._vamp === undefined) t._vamp = vampMatch(t.tick, t.name, t.born, t); return t._vamp; }
+  function vampBadge(t) { var o = vampOf(t); return o ? '<span class="vampb" title="Possible copy of $' + esc(o.tick) + ' — an older coin uses the same ticker or name. Check the contract address before buying.">🧛 Possible copy</span>' : ''; }
+  function vampNote(c) { var o = vampMatch(c.tick, c.name, 0, null); return o ? '🧛 <b>$' + esc(o.tick) + '</b> (' + esc(o.name) + ') already exists on treid. You can still launch, but your coin will show a <b>“Possible copy”</b> badge.' : ''; }
+  function crBadge(t) { return crBadge0(t) + vampBadge(t); }
+  function crBadge0(t) { var d = devStatus(t); return d.state === 'out' ? '<span class="crb out" title="Dev is out — open for community takeover">DEV OUT</span>' : d.state === 'cto' ? '<span class="crb cto" title="Community takeover">CTO</span>' : d.state === 'inactive' ? '<span class="crb idle" title="Dev inactive for 48h+ — rewards frozen">DEV AWAY</span>' : ''; }
   function crPanel(t) {
     if (t.live && t.esc && t.esc.escrow) { var E = t.esc, R0 = E.rules || {}, who = function (w) { return S.account && w === S.account ? 'You' : walletName ? walletName(w) : short(w); };
       var mineE = !!(S.account && E.creator && S.account === E.creator), solf = function (v) { return (v > 0 && v < 0.0001 ? '<0.0001' : (+v || 0).toFixed(4)) + ' ' + esc(E.quote || 'SOL'); }, durE = function (ms) { return durH(Math.max(1, ms / 60000)); };
@@ -3223,7 +3250,7 @@
             '<div class="ident-acts">' + (c.img ? '<button class="link" data-act="clearImg">Remove logo</button>' : '<span class="req">logo required</span>') + (c.banner ? '<button class="link" data-act="clearBanner">Remove banner</button>' : '') + '</div></div>' +
           '<input id="c-img" type="file" accept="image/png,image/jpeg,image/gif,image/webp" class="sr"><input id="c-banner" type="file" accept="image/png,image/jpeg,image/gif,image/webp" class="sr">' +
           '<div class="row"><div class="field" style="flex:2 1 220px"><label for="c-name" style="font-weight:700">Name</label><input id="c-name" class="inp" maxlength="32" data-bind="c.name" value="' + esc(c.name) + '" placeholder="e.g. Giga Pug"></div>' +
-            '<div class="field" style="flex:1 1 140px"><label for="c-tick" style="font-weight:700">Ticker</label><span class="tick-in"><em>$</em><input id="c-tick" class="inp mono" data-bind="c.tick" value="' + esc(c.tick) + '" placeholder="DFROG"></span></div></div>' +
+            '<div class="field" style="flex:1 1 140px"><label for="c-tick" style="font-weight:700">Ticker</label><span class="tick-in"><em>$</em><input id="c-tick" class="inp mono" data-bind="c.tick" value="' + esc(c.tick) + '" placeholder="DFROG"></span></div></div>' + '<div class="vamp-note" id="vamp-note"' + (vampNote(c) ? '' : ' hidden') + '>' + vampNote(c) + '</div>' +
           '<div class="field"><label for="c-desc" style="font-weight:700">Description</label><textarea id="c-desc" class="inp" data-bind="c.desc" placeholder="What is this token about?">' + esc(c.desc) + '</textarea></div>' +
           '<div class="fsec"><i>2</i>Market</div>' +
           realPairPicker(c) + taxPicker(c) + splitPicker(c) + devBuyPicker(c) + vanityPicker(c) +
@@ -3312,6 +3339,7 @@
     if (S.screen === 'callout') drawShareCard();
     if (S.share) drawShare();
     if (S.screen === 'token') lwMount();
+    if (S.screen === 'home') tsMount();
     setTimeout(function () { navInd(); labKick(); fwKick(); mbuyWatch(); bnKick(); }, 0);
     mFit(); if (S.screen === 'home') mSetStep(M.step);
   }
@@ -3809,6 +3837,7 @@
   document.addEventListener('change', function (e) { if (e.target && e.target.hasAttribute && e.target.hasAttribute('data-shimg')) { var f = e.target.files && e.target.files[0]; e.target.value = ''; if (!f || !/^image\//.test(f.type) || f.size > 8e6 || !S.share) return; var fr = new FileReader(); fr.onload = function () { if (S.share) { S.share.custom = String(fr.result); S.share.bg = 'custom'; render(); } }; fr.readAsDataURL(f); } });
   document.addEventListener('change', function (e) { if (e.target && e.target.hasAttribute && e.target.hasAttribute('data-coimg')) { coPickImage(e.target.files && e.target.files[0]); e.target.value = ''; } });
   document.addEventListener('input', function (e) {
+    if (e.target && (e.target.id === 'c-tick' || e.target.id === 'c-name')) setTimeout(function () { var vn = document.getElementById('vamp-note'); if (vn && S.c) { var h = vampNote(S.c); vn.innerHTML = h; vn.hidden = !h; } }, 0);
     if (e.target.hasAttribute && e.target.hasAttribute('data-burnpct')) { S.burnPct = +e.target.value; var t = find(S.burnTick), pos = t && position(t); if (!pos) return; var tok = pos.tok * S.burnPct / 100;
       var q = function (id, v) { var x = document.getElementById(id); if (x) x.textContent = v; }; q('bt-tok', fmtNum(Math.round(tok)) + ' $' + t.tick); q('bt-sup', (tok / 1e9 * 100).toFixed(3) + '%'); q('bt-usd', '$' + fmtNum(Math.round(tok * price(t))));
       var g = document.querySelector('.bt-go'); if (g) g.textContent = '🔥 Burn ' + S.burnPct + '% of my $' + t.tick; document.querySelectorAll('.bt-pre button').forEach(function (bb) { bb.classList.toggle('on', +bb.getAttribute('data-arg') === S.burnPct); }); return; }
@@ -4462,6 +4491,7 @@
     if (c.reserve != null) t.reserve = c.reserve;
     if (t.qMint) { if (c.quote_usd) t.qUsd = c.quote_usd; if (c.vol_usd != null) t.vol = c.vol_usd / 1000; }
     liveStat(t, c);
+    if ('vamp' in c) t.vamp = c.vamp && typeof c.vamp.mint === 'string' ? { mint: c.vamp.mint, symbol: String(c.vamp.symbol || ''), name: String(c.vamp.name || '') } : null;
     if (c.uri && !t._uri) { t._uri = 1; var pu = parseUri(c.uri); if (pu.spec) t.spec = pu.spec; if (pu.split) t.split = pu.split; if (pu.rw) t.rw = pu.rw;
       if (pu.x || pu.t || pu.w) { t.soc = true; t.links = { demo: false, x: pu.x ? xLink(pu.x) : null, tg: pu.t ? tgLink(pu.t) : null, web: pu.w ? linkOf(pu.w) : null }; }
       if (!t.img) { try { var cimg = safeImg(localStorage.getItem('dl.img.' + c.mint)); if (cimg) t.img = cimg; } catch (e) {} }
