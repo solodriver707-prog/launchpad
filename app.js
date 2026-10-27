@@ -331,12 +331,26 @@
     return Promise.resolve(f.signTransaction.apply(f, list.map(function (b) { return { account: S.walletAcc, transaction: b, chain: CHAIN_ID }; }))).then(function (r) { return r.map(function (x) { return x.signedTransaction; }); });
   }
   // ===== phones: connect & sign through the Phantom / Solflare app, then come straight back to this browser tab =====
-  var DLP = { phantom: { base: 'https://phantom.app/ul/v1/', pk: 'phantom_encryption_public_key', name: 'Phantom', icon: '👻' }, solflare: { base: 'https://solflare.com/ul/v1/', pk: 'solflare_encryption_public_key', name: 'Solflare', icon: '🔆' } };
+  var WICON = { phantom: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDgiIGhlaWdodD0iMTA4IiB2aWV3Qm94PSIwIDAgMTA4IDEwOCIgZmlsbD0ibm9uZSI+CjxyZWN0IHdpZHRoPSIxMDgiIGhlaWdodD0iMTA4IiByeD0iMjYiIGZpbGw9IiNBQjlGRjIiLz4KPHBhdGggZmlsbC1ydWxlPSJldmVub2RkIiBjbGlwLXJ1bGU9ImV2ZW5vZGQiIGQ9Ik00Ni41MjY3IDY5LjkyMjlDNDIuMDA1NCA3Ni44NTA5IDM0LjQyOTIgODUuNjE4MiAyNC4zNDggODUuNjE4MkMxOS41ODI0IDg1LjYxODIgMTUgODMuNjU2MyAxNSA3NS4xMzQyQzE1IDUzLjQzMDUgNDQuNjMyNiAxOS44MzI3IDcyLjEyNjggMTkuODMyN0M4Ny43NjggMTkuODMyNyA5NCAzMC42ODQ2IDk0IDQzLjAwNzlDOTQgNTguODI1OCA4My43MzU1IDc2LjkxMjIgNzMuNTMyMSA3Ni45MTIyQzcwLjI5MzkgNzYuOTEyMiA2OC43MDUzIDc1LjEzNDIgNjguNzA1MyA3Mi4zMTRDNjguNzA1MyA3MS41NzgzIDY4LjgyNzUgNzAuNzgxMiA2OS4wNzE5IDY5LjkyMjlDNjUuNTg5MyA3NS44Njk5IDU4Ljg2ODUgODEuMzg3OCA1Mi41NzU0IDgxLjM4NzhDNDcuOTkzIDgxLjM4NzggNDUuNjcxMyA3OC41MDYzIDQ1LjY3MTMgNzQuNDU5OEM0NS42NzEzIDcyLjk4ODQgNDUuOTc2OCA3MS40NTU2IDQ2LjUyNjcgNjkuOTIyOVpNODMuNjc2MSA0Mi41Nzk0QzgzLjY3NjEgNDYuMTcwNCA4MS41NTc1IDQ3Ljk2NTggNzkuMTg3NSA0Ny45NjU4Qzc2Ljc4MTYgNDcuOTY1OCA3NC42OTg5IDQ2LjE3MDQgNzQuNjk4OSA0Mi41Nzk0Qzc0LjY5ODkgMzguOTg4NSA3Ni43ODE2IDM3LjE5MzEgNzkuMTg3NSAzNy4xOTMxQzgxLjU1NzUgMzcuMTkzMSA4My42NzYxIDM4Ljk4ODUgODMuNjc2MSA0Mi41Nzk0Wk03MC4yMTAzIDQyLjU3OTVDNzAuMjEwMyA0Ni4xNzA0IDY4LjA5MTYgNDcuOTY1OCA2NS43MjE2IDQ3Ljk2NThDNjMuMzE1NyA0Ny45NjU4IDYxLjIzMyA0Ni4xNzA0IDYxLjIzMyA0Mi41Nzk1QzYxLjIzMyAzOC45ODg1IDYzLjMxNTcgMzcuMTkzMSA2NS43MjE2IDM3LjE5MzFDNjguMDkxNiAzNy4xOTMxIDcwLjIxMDMgMzguOTg4NSA3MC4yMTAzIDQyLjU3OTVaIiBmaWxsPSIjRkZGREY4Ii8+Cjwvc3ZnPg==', solflare: 'data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz48c3ZnIGlkPSJTIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MCA1MCI+PGRlZnM+PHN0eWxlPi5jbHMtMXtmaWxsOiMwMjA1MGE7c3Ryb2tlOiNmZmVmNDY7c3Ryb2tlLW1pdGVybGltaXQ6MTA7c3Ryb2tlLXdpZHRoOi41cHg7fS5jbHMtMntmaWxsOiNmZmVmNDY7fTwvc3R5bGU+PC9kZWZzPjxyZWN0IGNsYXNzPSJjbHMtMiIgeD0iMCIgd2lkdGg9IjUwIiBoZWlnaHQ9IjUwIiByeD0iMTIiIHJ5PSIxMiIvPjxwYXRoIGNsYXNzPSJjbHMtMSIgZD0iTTI0LjIzLDI2LjQybDIuNDYtMi4zOCw0LjU5LDEuNWMzLjAxLDEsNC41MSwyLjg0LDQuNTEsNS40MywwLDEuOTYtLjc1LDMuMjYtMi4yNSw0LjkzbC0uNDYuNS4xNy0xLjE3Yy42Ny00LjI2LS41OC02LjA5LTQuNzItNy40M2wtNC4zLTEuMzhoMFpNMTguMDUsMTEuODVsMTIuNTIsNC4xNy0yLjcxLDIuNTktNi41MS0yLjE3Yy0yLjI1LS43NS0zLjAxLTEuOTYtMy4zLTQuNTF2LS4wOGgwWk0xNy4zLDMzLjA2bDIuODQtMi43MSw1LjM0LDEuNzVjMi44LjkyLDMuNzYsMi4xMywzLjQ2LDUuMThsLTExLjY1LTQuMjJoMFpNMTMuNzEsMjAuOTVjMC0uNzkuNDItMS41NCwxLjEzLTIuMTcuNzUsMS4wOSwyLjA1LDIuMDUsNC4wOSwyLjcxbDQuNDIsMS40Ni0yLjQ2LDIuMzgtNC4zNC0xLjQyYy0yLS42Ny0yLjg0LTEuNjctMi44NC0yLjk2TTI2LjgyLDQyLjg3YzkuMTgtNi4wOSwxNC4xMS0xMC4yMywxNC4xMS0xNS4zMiwwLTMuMzgtMi01LjI2LTYuNDMtNi43MmwtMy4zNC0xLjEzLDkuMTQtOC43Ny0xLjg0LTEuOTYtMi43MSwyLjM4LTEyLjgxLTQuMjJjLTMuOTcsMS4yOS04Ljk3LDUuMDktOC45Nyw4Ljg5LDAsLjQyLjA0LjgzLjE3LDEuMjktMy4zLDEuODgtNC42MywzLjYzLTQuNjMsNS44LDAsMi4wNSwxLjA5LDQuMDksNC41NSw1LjIybDIuNzUuOTItOS41Miw5LjE0LDEuODQsMS45NiwyLjk2LTIuNzEsMTQuNzMsNS4yMmgwWiIvPjwvc3ZnPg==' };   // the wallets' own icons (from their official wallet-adapter packages)
+  var DLP = { phantom: { base: 'https://phantom.app/ul/v1/', pk: 'phantom_encryption_public_key', name: 'Phantom', icon: WICON.phantom }, solflare: { base: 'https://solflare.com/ul/v1/', pk: 'solflare_encryption_public_key', name: 'Solflare', icon: WICON.solflare } };
   function dlGet() { try { return JSON.parse(localStorage.getItem('treid.dl') || 'null'); } catch (e) { return null; } }
   function dlPut(o) { try { if (o) localStorage.setItem('treid.dl', JSON.stringify(o)); else localStorage.removeItem('treid.dl'); } catch (e) {} }
   function dlBack(rid) { return location.origin + location.pathname + '?dlr=' + rid; }
   function dlRid() { return Math.random().toString(36).slice(2, 10); }
-  function dlGo(st, method, params) { location.href = DLP[st.prov].base + method + '?' + Object.keys(params).map(function (k) { return k + '=' + encodeURIComponent(params[k]); }).join('&'); }
+  function dlUrl(st, method, params) { return DLP[st.prov].base + method + '?' + Object.keys(params).map(function (k) { return k + '=' + encodeURIComponent(params[k]); }).join('&'); }
+  function dlGo(st, method, params) { location.href = dlUrl(st, method, params); }
+  // signing: the transaction is built first (async), and iOS won't open the app from a delayed redirect — so one tap on a real link opens the wallet
+  function dlTap(st, method, params) { S.dlTap = { url: dlUrl(st, method, params), name: DLP[st.prov].name, prov: st.prov, label: method === 'signMessage' ? 'Sign in' : (S.busy || 'Approve transaction') }; render(); }
+  function dlTapHTML() { var D = S.dlTap;
+    return '<div class="overlay center"><div class="modal dl-tap" role="dialog" aria-modal="true"><img class="wl-ic" src="' + DLP[D.prov].icon + '" alt=""><b>' + esc(String(D.label).replace(/…$/, '')) + '</b><span class="muted">Ready — approve it in ' + esc(D.name) + ' and you come right back.</span>' +
+      '<a class="wl-one dl-go" href="' + esc(D.url) + '" data-act="dlTapGo"><span class="wl-nm"><b>Open ' + esc(D.name) + '</b></span><span class="wl-go">Approve →</span></a><button class="link" data-act="dlTapX">Cancel</button></div></div>'; }
+  // iOS opens the wallet app straight away only when a real link is tapped (no async work in between) — so the connect link is built before the tap
+  S.dlPre = {};
+  function dlPrep() {
+    var T = window.TreidChain; if (!T) { if (!S._dlLoading) { S._dlLoading = true; chainLib().then(function () { S._dlLoading = false; if (S.walletOpen) render(); }).catch(function () { S._dlLoading = false; }); } return; }
+    ['phantom', 'solflare'].forEach(function (prov) { if (S.dlPre[prov]) return; var kp = T.dl.keyPair(), rid = dlRid(), st = { prov: prov, sk: kp.sk, pk: kp.pk, pend: { rid: rid, kind: 'connect', ret: location.hash } };
+      S.dlPre[prov] = { st: st, url: dlUrl(st, 'connect', { app_url: location.origin + location.pathname, dapp_encryption_public_key: kp.pk, redirect_link: dlBack(rid), cluster: CLUSTER === 'mainnet' ? 'mainnet-beta' : CLUSTER }) }; });
+  }
   function dlWallet(st) { return { name: DLP[st.prov].name, icon: '', dl: true, features: { 'solana:signTransaction': { signTransaction: function () { return Promise.reject(new Error('use walletSign')); } }, 'solana:signMessage': { signMessage: function (o) { return dlSignMsg(o.message); } } } }; }
   function dlUse(st) { S.wallet = dlWallet(st); S.walletAcc = { address: st.account, chains: [CHAIN_ID] }; S.account = st.account; S.balance = null; refreshBalance(); }
   function dlConnect(prov) {
@@ -348,7 +362,7 @@
     var st = dlGet(), T = window.TreidChain; if (!st || !st.session || !T) return Promise.reject(new Error('Reconnect your wallet'));
     var rid = dlRid(), sealed = T.dl.seal({ transactions: bytes.map(function (x) { return T.dl.enc(x instanceof Uint8Array ? x : Uint8Array.from(x)); }), session: st.session }, st.wpk, st.sk);
     st.pend = { rid: rid, kind: 'tx', label: S.busy || 'Transaction', ret: location.hash, cos: (b && b.cosigners) || [], lvbh: b && b.lastValidBlockHeight, mint: (b && b.mint) || null, tick: S.tick, side: S.side }; dlPut(st);
-    dlGo(st, 'signAllTransactions', { dapp_encryption_public_key: st.pk, nonce: sealed.nonce, redirect_link: dlBack(rid), payload: sealed.payload });
+    dlTap(st, 'signAllTransactions', { dapp_encryption_public_key: st.pk, nonce: sealed.nonce, redirect_link: dlBack(rid), payload: sealed.payload });
     return new Promise(function () {});   // the page continues when the wallet sends us back
   }
   function dlSignMsg(message) {
@@ -357,7 +371,7 @@
     if (!st || !st.session || !T) return Promise.reject(new Error('Reconnect your wallet'));
     var rid = dlRid(), sealed = T.dl.seal({ message: T.dl.enc(message), session: st.session, display: 'utf8' }, st.wpk, st.sk);
     st.pend = { rid: rid, kind: 'msg', ret: location.hash, after: after }; dlPut(st);
-    dlGo(st, 'signMessage', { dapp_encryption_public_key: st.pk, nonce: sealed.nonce, redirect_link: dlBack(rid), payload: sealed.payload });
+    dlTap(st, 'signMessage', { dapp_encryption_public_key: st.pk, nonce: sealed.nonce, redirect_link: dlBack(rid), payload: sealed.payload });
     return new Promise(function () {});
   }
   // runs before the first route: read the wallet's reply from the URL, put the page back where it was
@@ -3409,19 +3423,20 @@
   }
 
   function walletModal() {
+    if (S.dlTap) return dlTapHTML();
     if (!S.walletOpen) return '';
     var opts = S.wallets.length ? S.wallets.map(function (w) {
       var busy = S.connecting === w.name;
       return '<button class="wopt" data-act="pickWallet" data-arg="' + esc(w.name) + '"' + (S.connecting ? ' disabled' : '') + '>' + (w.icon ? '<img src="' + esc(w.icon) + '" alt="">' : '') +
         '<span style="flex:1">' + esc(w.name) + '</span><span class="muted" style="font-size:12.5px;font-weight:600">' + (busy ? 'Approve in wallet…' : 'Detected') + '</span></button>';
     }).join('') : (isMob() || /iPhone|iPad|Android/i.test(navigator.userAgent) ? (function () { var here = encodeURIComponent(location.href), ref = encodeURIComponent(location.origin);   // phones: wallets have no browser extension — open this page inside the wallet app
-      return '<div class="wl-mob"><b>Connect your wallet app</b><span class="muted">Your wallet opens, you approve, and you come right back here.</span>' +
-        '<button class="wl-deep ph" data-act="dlConnect" data-arg="phantom"><span class="wl-di">👻</span><b>Connect Phantom</b><span>→</span></button>' +
-        '<button class="wl-deep sf" data-act="dlConnect" data-arg="solflare"><span class="wl-di">🔆</span><b>Connect Solflare</b><span>→</span></button>' +
-        '<small class="muted wl-or">or open treid inside the wallet’s own browser:</small>' +
-        '<a class="wl-deep ph" href="https://phantom.app/ul/browse/' + here + '?ref=' + ref + '"><span class="wl-di">👻</span><b>Open in Phantom browser</b><span>→</span></a>' +
-        '<a class="wl-deep sf" href="https://solflare.com/ul/v1/browse/' + here + '?ref=' + ref + '"><span class="wl-di">🔆</span><b>Open in Solflare browser</b><span>→</span></a>' +
-        '<a class="wl-deep bp" href="https://backpack.app/ul/v1/browse/' + here + '?ref=' + ref + '"><span class="wl-di">🎒</span><b>Open in Backpack</b><span>→</span></a>' +
+      dlPrep(); var row = function (prov, sub) { var P = S.dlPre[prov], inner = '<img class="wl-ic" src="' + DLP[prov].icon + '" alt=""><span class="wl-nm"><b>' + DLP[prov].name + '</b><small>' + sub + '</small></span><span class="wl-go">Connect</span>';
+        return P ? '<a class="wl-one" href="' + esc(P.url) + '" data-act="dlArm" data-arg="' + prov + '">' + inner + '</a>' : '<button class="wl-one" data-act="dlConnect" data-arg="' + prov + '">' + inner + '</button>'; };
+      return '<div class="wl-mob">' + row('phantom', 'Opens the app · approve · back here') + row('solflare', 'Opens the app · approve · back here') +
+        '<details class="wl-more"><summary>More options</summary><small class="muted wl-or">Open treid inside the wallet’s own browser:</small>' +
+        '<a class="wl-deep" href="https://phantom.app/ul/browse/' + here + '?ref=' + ref + '"><img class="wl-ic sm" src="' + WICON.phantom + '" alt=""><b>Phantom browser</b><span>→</span></a>' +
+        '<a class="wl-deep" href="https://solflare.com/ul/v1/browse/' + here + '?ref=' + ref + '"><img class="wl-ic sm" src="' + WICON.solflare + '" alt=""><b>Solflare browser</b><span>→</span></a>' +
+        '<a class="wl-deep" href="https://backpack.app/ul/v1/browse/' + here + '?ref=' + ref + '"><span class="wl-di">🎒</span><b>Backpack browser</b><span>→</span></a></details>' +
         '<small class="muted">No wallet yet? <a href="https://phantom.com/download" target="_blank" rel="noopener">Get Phantom</a></small></div>'; })() :
       '<div class="card-s" style="padding:16px;display:flex;flex-direction:column;gap:10px"><b>No Solana wallet found</b><span class="muted" style="font-size:13.5px;line-height:1.55">Install Phantom, Solflare or Backpack and reload.</span><a href="https://phantom.com/download" target="_blank" rel="noopener">Get Phantom →</a></div>');
     return '<div class="overlay center" data-act="bg"><div class="modal" role="dialog" aria-modal="true" aria-label="Connect a wallet">' +
@@ -3635,7 +3650,7 @@
     if (!el) return;
     var act = el.getAttribute('data-act'), arg = el.getAttribute('data-arg');
     if (/^(home|create|leaders|trendList|burnPage|watchPage|open|coPage|lbCo)$/.test(act) || (el.closest('.mnav') && act !== 'coToggle')) { S.coOpen = false; S.walletView = null; S.hmap = null; S.share = null; S.walletMenu = false; S.palOpen = false; S.coModal = null; S.burnOpen = false; S.mFilt = false; pvClose && pvClose(); }   // going somewhere closes every panel and sheet
-    if (el.tagName === 'A' && act !== 'how') e.preventDefault();
+    if (el.tagName === 'A' && act !== 'how' && act !== 'dlArm' && act !== 'dlTapGo') e.preventDefault();
     switch (act) {
       case 'bg': if (e.target === el) set({ walletOpen: false, palOpen: false, walletView: null }); break;
       case 'railHide': S.railHidden = true; S.railNew = 0; try { localStorage.setItem('dl.rail', '0'); } catch (er) {} render(); break;
@@ -3710,6 +3725,9 @@
       case 'paySol': S.amount = ''; set({ paySol: arg === '1' }); break;
       case 'preset': if (arg === 'reset') { set({ amount: '' }); break; } set({ pctAmt: 0, amount: arg === 'max' ? Math.max(0, S.balance - 0.01).toFixed(3) : arg }); break;
       case 'dlConnect': dlConnect(arg); break;
+      case 'dlTapGo': setTimeout(function () { S.dlTap = null; render(); }, 600); break;
+      case 'dlTapX': { var stx = dlGet(); if (stx) { stx.pend = null; dlPut(stx); } S.dlTap = null; S.busy = null; render(); break; }
+      case 'dlArm': if (S.dlPre[arg]) dlPut(S.dlPre[arg].st); S.dlPre = {}; break;   // the link itself opens the wallet
       case 'openWallet': set({ walletOpen: true }); break;
       case 'closeWallet': set({ walletOpen: false }); break;
       case 'walletMenu': set({ walletMenu: !S.walletMenu }); break;
