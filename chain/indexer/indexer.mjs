@@ -205,10 +205,12 @@ function dbcIxs(tx, keys, pid0 = DBC_ID) {   // every instruction of one program
   for (const g of tx.meta.innerInstructions || []) for (const ix of g.instructions) { try { add(ix.programIdIndex, ix.accounts, Buffer.from(bs58.decode(ix.data))); } catch {} }
   return out;
 }
+const retryN = new Map();
 async function handle(sig) {
   if (q1('SELECT 1 FROM seen WHERE sig=?', sig)) return;
   const tx = await conn.getTransaction(sig, { commitment: 'confirmed', maxSupportedTransactionVersion: 0 }).catch(() => null);
-  if (!tx) return;   // not marked seen → picked up again by the next sync
+  if (!tx) { const n = (retryN.get(sig) || 0) + 1; if (n <= 6) { retryN.set(sig, n); setTimeout(() => enqueue(sig), 2000 * n); } else retryN.delete(sig); return; }   // the RPC can lag the websocket by a few seconds: look again
+  retryN.delete(sig);
   if (tx.meta?.err) { run('INSERT OR IGNORE INTO seen VALUES(?)', sig); return; }
   const keys = tx.transaction.message.getAccountKeys({ accountKeysFromLookups: tx.meta.loadedAddresses }), ts = (tx.blockTime || Math.floor(Date.now() / 1000)) * 1000, ixs = dbcIxs(tx, keys);
   for (const x of ixs) if (CFG_DISCS.has(x.disc) && x.accts[0]) await addConfig(x.accts[0]);   // a new treid config: account 0 of create_config
@@ -263,6 +265,7 @@ function enqueue(sig) { if (queue.length >= MAXQ) return; queue.push(sig); pump(
 function pump() { while (active < 4 && queue.length) { const s = queue.shift(); active++; handle(s).catch((e) => console.log('err', String(e?.message || e).slice(0, 120))).finally(() => { active--; pump(); }); } }
 async function backfill() {   // rebuilds everything from chain, so the server can run without a persistent disk
   await loadConfigs();
+  for (const w of PARTNERS) await syncAddress(w, 2000).catch(() => {});   // configs created recently (also found by the scan above)
   for (const k of configs) await syncAddress(k, 1e9);   // FULL history (paged); with a persistent disk only the new part is fetched
   for (const c of q(`SELECT c.* FROM coins c WHERE c.damm IS NOT NULL OR (SELECT progress FROM trades t WHERE t.mint=c.mint ORDER BY ts DESC, slot DESC LIMIT 1) >= 99`)) { const k = c.damm || await checkGrad(c).catch(() => null); if (k) await syncAddress(k, 1e9); }   // graduated coins' DAMM trades
   // user burns made through treid carry a "treid:burn" memo: find them in each coin's history so the 70% rule never mistakes a burn for a sale
@@ -431,7 +434,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let syncing = false; const lastSync = new Map();
 async function syncAll() {   // safety net for missed websocket messages: every config, 3 at a time, never overlapping runs
   if (syncing) return; syncing = true;
-  try { const act = retier(), now = Date.now();   // live (48h): every 5 min · quiet (30d): every 30 min · dead: every 6h
+  try { for (const w of PARTNERS) await syncAddress(w, 100).catch(() => {});   // new configs/coins mention the treid wallets
+    const act = retier(), now = Date.now();   // live (48h): every 5 min · quiet (30d): every 30 min · dead: every 6h
     const list = [...act].filter(([k, t]) => { const age = now - t, every = age < LIVE_MS ? 5 * 60e3 : age < 30 * 864e5 ? 30 * 60e3 : 6 * 36e5; return now - (lastSync.get(k) || 0) >= every; }).map((x) => x[0]);
     for (let i = 0; i < list.length; i += 3) await Promise.all(list.slice(i, i + 3).map((k) => syncAddress(k, 200).then(() => lastSync.set(k, now)).catch(() => {})));
     for (const c of q(`SELECT c.* FROM coins c WHERE c.damm IS NULL AND (SELECT progress FROM trades t WHERE t.mint=c.mint ORDER BY ts DESC, slot DESC LIMIT 1) >= 99`)) await checkGrad(c).catch(() => {});   // a migration we missed
@@ -443,6 +447,7 @@ async function start() {
   ready = true; setInterval(solPrice, 60e3); setInterval(() => quotePrices().catch(() => {}), 60e3);
   for (const w of PARTNERS) conn.onLogs(new PublicKey(w), (l) => { if (!l.err) enqueue(l.signature); }, 'confirmed');
   setInterval(() => syncAll().catch(() => {}), 5 * 60e3);
+  setInterval(() => { for (const w of PARTNERS) syncAddress(w, 50).catch(() => {}); }, 60e3);   // a new coin shows up within a minute even if its stream message was missed
   retier(); setInterval(() => loadConfigs().catch(() => {}), 24 * 36e5);   // full config rescan only daily (new configs are picked up from their own create tx)
   console.log('watching', configs.size, 'treid configs (partners', PARTNERS.join(', '), ')');
   if (!OPS) return;
