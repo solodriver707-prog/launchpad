@@ -5135,3 +5135,38 @@ body.on-site{background:#08080a}
 .cs-more:hover{transform:translateY(-2px);background:color-mix(in srgb,var(--cc) 22%,transparent)}
 .cs-paper .cs-more,.cs-meme .cs-more{border-color:var(--fg);background:transparent}
 @media (max-width:760px){.cs-ig{grid-template-columns:1fr 1fr}.cs-glow{width:600px;height:500px}}
+.wpv{width:330px}
+.pv-tr{display:flex;flex-direction:column;gap:6px;padding:10px 12px;border-radius:12px;background:rgba(255,255,255,.035);border:1px solid var(--line)}
+.pv-th{font-size:11px;font-weight:800;letter-spacing:.06em;color:var(--muted);text-transform:uppercase}
+.pv-tl{display:grid;grid-template-columns:76px 1fr auto auto;gap:8px;align-items:center;font-size:12.5px}
+.pv-tl span{color:var(--muted)}.pv-tl b{font-size:13.5px}.pv-tl b.up,.pv-tl em.up{color:var(--up)}.pv-tl b.down,.pv-tl em.down{color:var(--down)}
+.pv-tl em{font-style:normal;color:var(--soft);font-size:12px;text-align:right}.pv-tl i{font-style:normal;color:var(--muted);font-size:11.5px;text-align:right;min-width:52px}
+.pv-ub{display:block;width:60px;height:5px;border-radius:99px;background:rgba(255,255,255,.1);overflow:hidden}.pv-ub u{display:block;height:100%;background:var(--up)}
+.pv-tl.tot{padding-top:6px;border-top:1px solid var(--line)}
+.pv-cur .av,.pv-cur .av img{border-radius:50%!important;object-fit:cover}
+.pv-tl i{white-space:nowrap}.pv-tl{grid-template-columns:72px auto 1fr auto}.pv-tl em{justify-self:end}
+/* ===== phones: coin header rebuilt as a clean card (banner on top, logo overlapping, info below) ===== */
+@media (max-width:760px){
+  .tp-banner{display:grid!important;grid-template-columns:1fr!important;grid-template-areas:none!important;padding:0!important;gap:0!important;min-height:0!important;align-items:stretch!important;overflow:hidden!important;border-radius:20px!important}
+  .tp-banner::after{display:none!important}
+  .tp-banner>.tb-bg{position:relative!important;inset:auto!important;grid-area:auto!important;width:100%!important;height:auto!important;aspect-ratio:3/1;transform:none!important;filter:blur(30px) saturate(1.5)!important;opacity:.9!important;overflow:hidden;z-index:0!important}
+  .tp-banner>.tb-bg.ban{filter:none!important;opacity:1!important}
+  .tp-banner>.tb-bg::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,transparent 40%,rgba(13,13,15,.85))}
+  .tp-banner>.tb-bg .av{position:absolute!important;left:0!important;top:50%!important;width:100%!important;height:auto!important;aspect-ratio:1;transform:translateY(-50%)!important}
+  .tp-banner .tb-av{grid-area:auto!important;position:relative;z-index:2;margin:-38px 0 0 14px!important;justify-self:start;animation:none!important}
+  .tp-banner .tb-av .av{width:76px!important;height:76px!important;box-shadow:0 0 0 4px #0d0d0f!important}
+  .tp-banner .tp-id{grid-area:auto!important;position:relative;z-index:1;padding:8px 14px 0!important;min-width:0!important;flex:none!important}
+  .tp-banner .title-xl{font-size:22px!important;line-height:1.2!important;text-shadow:none!important;display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+  .tp-banner .title-xl .tk{font-size:13px!important;padding:3px 9px!important}
+  .tp-banner .hs-pills{display:flex!important;flex-wrap:wrap!important;gap:6px!important;margin:10px 0 0!important;padding:0!important;width:auto!important;overflow:visible!important}
+  .tp-banner .hs-pills .pill{min-height:32px!important;font-size:12px!important;padding:0 10px!important}
+  .tp-banner .hs-pills .iconbtn{width:32px!important;height:32px!important;min-height:0!important}
+  .tp-banner .hs-pills .soc{display:flex;gap:6px}
+  .tp-banner .tp-key{grid-area:auto!important;position:relative;z-index:1;display:grid!important;grid-template-columns:auto 1fr!important;gap:8px!important;padding:12px 14px 14px!important;width:auto!important;margin:0!important}
+  .tp-banner .tp-key .tax{padding:8px 12px!important;border-radius:12px!important}
+  .tp-banner .tp-key .tax b{font-size:20px!important}
+  .tp-banner .tp-key .tax .splitbar,.tp-banner .tp-key .tax>div:last-child{display:none}
+  .tp-banner .pairbig{min-width:0!important;padding:8px 12px!important;border-radius:12px!important;gap:10px}
+  .tp-banner .pairbig .coin{width:30px!important;height:30px!important}
+  .tp-banner .pairbig b{font-size:15px!important}.tp-banner .pairbig span{display:none}
+}

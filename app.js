@@ -1945,7 +1945,7 @@
   function tierSVG(c, k) { var sc = [0.7, 0.85, 1, 1.15][k]; return '<svg viewBox="0 0 32 32" width="' + Math.round(26 * sc) + '" height="' + Math.round(26 * sc) + '"><path fill="' + c + '" d="M4 17c3-6 9-9 15-8 3 .5 5 2 7 4l3-3v12l-3-3c-2 2-4 3.5-7 4-6 1-12-2-15-6z"/><circle cx="21" cy="15" r="1.4" fill="#0b0b0d"/></svg>'; }
   function traderStats(t, addr) {
     var o = { bU: 0, bT: 0, bN: 0, sU: 0, sT: 0, sN: 0, first: 0 }, px = price(t);
-    S.trades.forEach(function (x) { if (x.tick !== t.tick || x.wallet !== addr) return; var tok = x.tokens || (x.sol * SOL_USD / (x.price || px)), usd = x.sol * SOL_USD;
+    S.trades.forEach(function (x) { if (x.tick !== t.tick || x.wallet !== addr) return; var usd = x.usd != null ? +x.usd : x.sol * SOL_USD, tok = x.tokens || (usd / (x.price || px));
       if (x.side === 'buy') { o.bU += usd; o.bT += tok; o.bN++; if (!o.first || x.t < o.first) o.first = x.t; } else { o.sU += usd; o.sT += tok; o.sN++; } });
     var held = Math.max(0, o.bT - o.sT); if (t.live && t.lh) { var h = t.lh.filter(function (q) { return q.wallet === addr; })[0]; held = h ? h.pct / 100 * 1e9 : 0; } else if (S.account === addr && S.pos[t.tick]) held = S.pos[t.tick].tok;
     o.held = held; o.unreal = held * px; o.pnl = o.sU - o.bU; var vol = o.bU + o.sU; o.tier = 0; while (vol >= TIERS[o.tier][0]) o.tier++; return o;
@@ -2386,7 +2386,13 @@
       (dev ? '<div class="pv-note">Creator of $' + esc(t.tick) + ' · holds ' + hp.toFixed(hp < 1 ? 2 : 1) + '% of supply</div>' : hp > 0 ? '<div class="pv-note">Holds ' + hp.toFixed(hp < 1 ? 2 : 1) + '% of $' + esc(t.tick) + '</div>' : '') +
       (P.loading ? '<div class="pv-load"><span class="gr-sp"></span>Loading wallet…</div>' :
         row('SOL balance', P.sol != null ? P.sol.toFixed(4) : '—') + row('Portfolio', '$' + money(sm.port)) + row('Holding', sm.open + (sm.open === 1 ? ' token' : ' tokens')) + row('PnL', usdP(sm.profit), sm.profit >= 0 ? 'up' : 'down') +
-        (cur ? '<div class="pv-cur">' + avatarHTML(cur.t, 18) + '<span>On $' + esc(cur.t.tick) + '</span><b class="mono ' + (cur.profit >= 0 ? 'up' : 'down') + '">' + usdP(cur.profit) + ' <i>' + (cur.profitPct >= 0 ? '+' : '') + cur.profitPct.toFixed(1) + '%</i></b></div>' : '')) +
+        (t ? (function () { var o = traderStats(t, addr); if (!o.bN && !o.sN) return ''; var u = function (v) { return '$' + money(v); }, pn = o.sU + o.unreal - o.bU, pct = o.bT > 0 ? Math.min(100, o.held / o.bT * 100) : 0;
+          return '<div class="pv-tr"><div class="pv-th">On $' + esc(t.tick) + '</div>' +
+            '<div class="pv-tl"><span>Bought</span><b class="mono down">' + u(o.bU) + '</b><em class="mono">' + fmtNum(o.bT) + '</em><i class="mono">' + o.bN + ' txn' + (o.bN === 1 ? '' : 's') + '</i></div>' +
+            '<div class="pv-tl"><span>Sold</span><b class="mono up">' + u(o.sU) + '</b><em class="mono">' + fmtNum(o.sT) + '</em><i class="mono">' + o.sN + ' txn' + (o.sN === 1 ? '' : 's') + '</i></div>' +
+            '<div class="pv-tl"><span>Unrealized</span><b class="mono">' + u(o.unreal) + '</b><em class="pv-ub"><u style="width:' + pct.toFixed(0) + '%"></u></em><i class="mono">' + fmtNum(o.held) + ' of ' + fmtNum(o.bT) + '</i></div>' +
+            '<div class="pv-tl tot"><span>PnL</span><b class="mono ' + (pn >= 0 ? 'up' : 'down') + '">' + (pn >= 0 ? '+' : '−') + u(Math.abs(pn)) + '</b><em class="mono ' + (pn >= 0 ? 'up' : 'down') + '">' + (o.bU ? (pn >= 0 ? '+' : '') + (pn / o.bU * 100).toFixed(1) + '%' : '') + '</em><i></i></div></div>'; })() : '') +
+        (cur && !(t && (traderStats(t, addr).bN || traderStats(t, addr).sN)) ? '<div class="pv-cur">' + avatarHTML(cur.t, 18) + '<span>On $' + esc(cur.t.tick) + '</span><b class="mono ' + (cur.profit >= 0 ? 'up' : 'down') + '">' + usdP(cur.profit) + ' <i>' + (cur.profitPct >= 0 ? '+' : '') + cur.profitPct.toFixed(1) + '%</i></b></div>' : '')) +
       '<div class="pv-f"><button class="btn sec" data-act="wallet" data-arg="' + esc(addr) + '">View profile</button><button class="iconbtn" data-act="copyW" data-arg="' + esc(addr) + '" title="Copy address">' + I.copy + '</button></div>';
   }
   function pvFill() { if (pvEl && pvFor) pvEl.innerHTML = pvHTML(pvFor); }
