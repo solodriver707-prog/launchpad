@@ -442,15 +442,19 @@
     var right;
     if (S.account) {
       var icon = S.wallet && S.wallet.icon ? '<img src="' + esc(S.wallet.icon) + '" alt="">' : '<span class="dot"></span>';
-      right = '<div style="position:relative"><button class="wpill" data-act="walletMenu" aria-expanded="' + S.walletMenu + '">' + icon +
-        '<span class="mono" style="font-size:13px">' + esc(short(S.account)) + '</span>' +
-        '<span class="mono" style="font-size:13px;color:var(--ice)">' + balTxt() + ' SOL</span><span class="net">' + CLUSTER + '</span></button>' +
-        (S.walletMenu ? '<div class="card-s" style="position:absolute;right:0;top:calc(100% + 8px);width:280px;padding:14px;display:flex;flex-direction:column;gap:8px;z-index:30;animation:pop .15s ease-out">' +
-          '<div class="muted" style="font-size:12px">Connected with ' + esc(S.wallet ? S.wallet.name : '') + '</div>' +
-          '<button class="btn sec" data-act="copyAddr" style="justify-content:space-between"><span class="mono">' + esc(short(S.account)) + '</span>' + I.copy + '</button>' +
-          (CHAIN_ID !== 'solana:mainnet' ? '<button class="btn sec" data-act="airdrop"' + (S.airdropping ? ' disabled' : '') + '>' + (S.airdropping ? 'Requesting…' : 'Get 1 ' + NET + 'SOL') + '</button>' : '') +
-          '<button class="btn sec" data-act="refresh">Refresh balance</button>' +
-          '<button class="btn sec" data-act="disconnect" style="color:var(--down)">Disconnect</button></div>' : '') + '</div>';
+      var WP = wprof(S.account), WS = wsum(WP), solB = typeof S.balance === 'number' ? S.balance : (WP.sol || 0), totU = solB * SOL_USD + WS.value;
+      var wbOpen = WP.coins.filter(function (c) { return S.wbTab === 'closed' ? c.held <= 1 : c.held > 1; }).sort(function (a, z) { return S.wbTab === 'closed' ? z.profit - a.profit : z.value - a.value; });
+      right = '<div class="wb-wrap"><button class="wpill wb-pill" data-act="walletMenu" aria-expanded="' + S.walletMenu + '"><span class="mono wb-tot">$' + money(totU) + '</span><span class="wb-car">' + (S.walletMenu ? '▴' : '▾') + '</span><span class="av" style="width:28px;height:28px">' + A.svg(walletSpec(S.account)) + '</span>' + (CLUSTER !== 'mainnet' ? '<span class="net">' + CLUSTER + '</span>' : '') + '</button>' +
+        (S.walletMenu ? '<div class="wbal"><div class="wb-h"><b>Your balance</b><button class="wb-addr mono" data-act="copyAddr">' + esc(short(S.account)) + ' ' + I.copy + '</button></div>' +
+          '<div class="wb-big mono">$' + money(totU) + '</div>' +
+          '<div class="wb-sol">' + coinHTML('SOL', 26) + '<b>SOL</b><span class="mono">' + solB.toFixed(4) + ' SOL</span><small class="muted mono">$' + money(solB * SOL_USD) + '</small></div>' +
+          '<div class="wb-acts"><button class="btn pri" data-act="wbDeposit">Deposit</button><button class="btn sec" data-act="wallet" data-arg="' + esc(S.account) + '">Profile</button>' + (CHAIN_ID !== 'solana:mainnet' ? '<button class="btn sec" data-act="airdrop"' + (S.airdropping ? ' disabled' : '') + '>' + (S.airdropping ? 'Requesting…' : 'Get 1 ' + NET + 'SOL') + '</button>' : '') + '</div>' +
+          (S.wbDep ? '<div class="wb-dep">Send SOL to your wallet address from an exchange or another wallet:<button class="mono" data-act="copyAddr">' + esc(S.account) + ' ' + I.copy + '</button></div>' : '') +
+          '<div class="wb-con">' + (S.wallet && S.wallet.icon ? '<img src="' + esc(S.wallet.icon) + '" alt="">' : '<span class="wb-wi">◎</span>') + '<span><small class="muted">Connected with</small><b>' + esc(S.wallet ? S.wallet.name : 'Wallet') + ' <span class="muted">· external wallet</span></b></span><button class="link wb-dc" data-act="disconnect">Disconnect</button></div>' +
+          '<div class="wb-tabs"><div class="seg sm"><button class="' + (S.wbTab !== 'closed' ? 'on' : '') + '" data-act="wbTab" data-arg="open">Open</button><button class="' + (S.wbTab === 'closed' ? 'on' : '') + '" data-act="wbTab" data-arg="closed">Closed</button></div><button class="link" data-act="refresh">↻ Refresh</button></div>' +
+          '<div class="wb-list">' + (WP.loading ? '<div class="muted wb-empty"><span class="gr-sp"></span> Loading…</div>' : wbOpen.length ? wbOpen.map(function (c) { var up = c.profit >= 0, my = (S.comments[c.t.tick] || []).filter(function (x) { return x.w === S.account && x.reply == null && x.text; }).sort(function (a, z) { return z.t - a.t; })[0];
+            return '<div class="wb-pos"><button class="wb-pt" data-act="open" data-arg="' + esc(c.t.tick) + '">' + avatarHTML(c.t, 42) + '<span class="wb-pn"><b>$' + esc(c.t.tick) + '</b><small class="muted">' + esc(c.t.name) + '</small></span><span class="wb-pv"><small>Position</small><b class="mono">$' + money(S.wbTab === 'closed' ? c.got : c.value) + '</b></span><span class="wb-pv"><small>Profit</small><b class="mono ' + (up ? 'up' : 'down') + '">' + (up ? '+' : '−') + '$' + money(c.profit) + '</b></span></button>' +
+              '<div class="wb-pm"><span>Spent <b class="mono">$' + moneyS(c.spent) + '</b></span><span>Avg entry <b class="mono">' + (c.avgEntryMc ? fmtK(c.avgEntryMc / 1000) : '—') + '</b> → <b class="mono">' + fmtK(c.t.mcN) + ' MC</b></span></div>' + (my ? '<div class="wb-co">' + esc(my.text.length > 110 ? my.text.slice(0, 110) + '…' : my.text) + '</div>' : '') + '</div>'; }).join('') : '<div class="muted wb-empty">' + (S.wbTab === 'closed' ? 'No closed positions yet.' : 'No open positions on treid yet.') + '</div>') + '</div></div>' : '') + '</div>';
     } else {
       right = '<button class="btn sec" data-act="openWallet">Connect wallet</button>';
     }
@@ -3446,7 +3450,7 @@
   document.addEventListener('click', function (e) {
     var el = e.target.closest('[data-act]');
     if (S.fpop && !e.target.closest('.fdrop')) { S.fpop = null; if (!el) { render(); return; } }
-    if (S.walletMenu && !e.target.closest('.wpill') && !(el && /airdrop|refresh|copyAddr|disconnect/.test(el.getAttribute('data-act')))) { S.walletMenu = false; if (!el) { render(); return; } }
+    if (S.walletMenu && !e.target.closest('.wpill') && !e.target.closest('.wbal') && !(el && /airdrop|refresh|copyAddr|disconnect/.test(el.getAttribute('data-act')))) { S.walletMenu = false; if (!el) { render(); return; } }
     if (S.coMenu && !e.target.closest('.co-mw')) { S.coMenu = null; if (!el) { render(); return; } }
     if (!el) return;
     var act = el.getAttribute('data-act'), arg = el.getAttribute('data-arg');
@@ -3530,7 +3534,7 @@
       case 'pickWallet': var w = S.wallets.filter(function (x) { return x.name === arg; })[0]; if (w) connect(w, false); break;
       case 'disconnect': disconnect(); break;
       case 'airdrop': airdrop(); break;
-      case 'refresh': refreshBalance(); toast('Balance refreshed'); break;
+      case 'refresh': refreshBalance(); if (S.account && S.wprof[S.account]) S.wprof[S.account].at = 0; toast('Balance refreshed'); break;
       case 'spec': var k = el.getAttribute('data-k'), spc = {}; for (var x in S.c.spec) spc[x] = S.c.spec[x]; spc[k] = arg; setC({ spec: spc }); break;
       case 'randomLogo': setC({ img: null, spec: { kind: pick(A.KINDS), skin: pick(A.SKINS), bg: pick(A.BGS), eyes: pick(A.EYES), mouth: pick(A.MOUTHS), acc: pick(A.ACCS) } }); break;
       case 'clearImg': setC({ img: null }); break;
@@ -3602,9 +3606,11 @@
       case 'lbper': set({ lbPer: arg }); break;
       case 'walletAny': S.hmap = null;
       case 'walletAnyX': S.tick = (S.trades.filter(function (x) { return x.wallet === arg; })[0] || {}).tick || S.tick; set({ walletView: arg }); break;
-      case 'wallet': set({ walletView: arg }); break;
+      case 'wallet': set({ walletView: arg, walletMenu: false }); break;
       case 'closeW': set({ walletView: null }); break;
       case 'wTab': set({ wTab: arg }); break;
+      case 'wbTab': set({ wbTab: arg }); break;
+      case 'wbDeposit': S.wbDep = !S.wbDep; render(); break;
       case 'copyW': copy(arg, 'Wallet address copied'); break;
       case 'trackW': var ti = S.trackWallets.indexOf(arg); if (ti === -1) S.trackWallets.push(arg); else S.trackWallets.splice(ti, 1); try { localStorage.setItem('gp.track', JSON.stringify(S.trackWallets)); } catch (er) {} render(); toast(ti === -1 ? 'Tracking ' + walletName(arg) : 'Stopped tracking'); break;
       case 'tpf': set({ tpFilter: arg, tpQueue: 0 }); break;
