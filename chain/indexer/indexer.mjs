@@ -343,24 +343,25 @@ async function handleReq(req, res) {
       res.writeHead(200, { 'content-type': 'text/event-stream', 'access-control-allow-origin': '*', 'cache-control': 'no-cache' }); res.write(': hi\n\n'); clients.add(res); req.on('close', () => clients.delete(res)); return; }
     if (p[1] === 'qprice' && !rate('qp|' + ip(req), 30, 6e4)) { res.writeHead(429, { 'access-control-allow-origin': '*' }); return res.end('{}'); }
     if (p[1] === 'ticon') {   // logo of a verified token by exact symbol (e.g. tokenized stocks), fetched once and served from here — raster images only
-      const sym = String(u.searchParams.get('sym') || ''); if (!/^[A-Za-z0-9]{2,12}$/.test(sym)) { res.writeHead(404); return res.end(); }
-      let h = iconC.get(sym.toLowerCase());
+      const sym = String(u.searchParams.get('sym') || ''), mintQ = String(u.searchParams.get('mint') || '');
+      if (!/^[A-Za-z0-9]{2,12}$/.test(sym) && !/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(mintQ)) { res.writeHead(404); return res.end(); }
+      const ik = mintQ || sym.toLowerCase(); let h = iconC.get(ik);
       if (!h || Date.now() - h.at > 864e5) { if (!rate('ti|' + ip(req), 60, 6e4)) { res.writeHead(429); return res.end(); } h = { at: Date.now(), buf: null, ct: null };
-        try { const j = await (await fetchT('https://lite-api.jup.ag/tokens/v2/search?query=' + encodeURIComponent(sym))).json(), t = (Array.isArray(j) ? j : []).find((x) => x && (x.isVerified || (x.tags || []).includes('verified')) && String(x.symbol).toLowerCase() === sym.toLowerCase());
+        try { const j = await (await fetchT('https://lite-api.jup.ag/tokens/v2/search?query=' + encodeURIComponent(mintQ || sym))).json(), t = (Array.isArray(j) ? j : []).find((x) => x && (mintQ ? x.id === mintQ : (x.isVerified || (x.tags || []).includes('verified')) && String(x.symbol).toLowerCase() === sym.toLowerCase()));
           const url = t && typeof t.icon === 'string' ? new URL(t.icon) : null;
           if (url && url.protocol === 'https:' && !/^(\d+\.){3}\d+$|^\[|localhost|\.internal$|\.local$/i.test(url.hostname)) { const r = await fetchT(url.href), ct = String(r.headers.get('content-type') || '').split(';')[0];
             if (r.ok && /^image\/(png|jpeg|webp|gif)$/.test(ct)) { const buf = Buffer.from(await r.arrayBuffer()); if (buf.length <= 400e3) { h.buf = buf; h.ct = ct; } } } } catch {}
-        iconC.set(sym.toLowerCase(), h); if (iconC.size > 500) iconC.delete(iconC.keys().next().value); }
+        iconC.set(ik, h); if (iconC.size > 500) iconC.delete(iconC.keys().next().value); }
       if (!h.buf) { res.writeHead(404, { 'access-control-allow-origin': '*' }); return res.end(); }
       res.writeHead(200, { 'content-type': h.ct, 'cache-control': 'public, max-age=86400', 'access-control-allow-origin': '*', 'x-content-type-options': 'nosniff', 'content-security-policy': "default-src 'none'" }); return res.end(h.buf); }
     if (p[1] === 'tsearch') {   // token search by name / ticker / address — verified Jupiter tokens only, for the pair & holder-reward pickers
       if (!rate('ts|' + ip(req), 40, 6e4)) { res.writeHead(429, { 'access-control-allow-origin': '*' }); return res.end('[]'); }
       const qs = String(u.searchParams.get('q') || '').trim().slice(0, 50); if (qs.length < 2) return J([]);
       const k = 'ts|' + qs.toLowerCase(), h = lbCache.get(k); if (h && Date.now() - h.at < 3e5) return J(h.v);
-      let out = []; try { const j = await (await fetchT('https://lite-api.jup.ag/tokens/v2/search?query=' + encodeURIComponent(qs))).json();
+      let out = [], okRes = false; try { const j = await (await fetchT('https://lite-api.jup.ag/tokens/v2/search?query=' + encodeURIComponent(qs))).json(); okRes = Array.isArray(j);
         out = (Array.isArray(j) ? j : []).filter((t) => t && t.id && (t.isVerified || (t.tags || []).includes('verified'))).slice(0, 8)
           .map((t) => ({ mint: String(t.id), symbol: String(t.symbol || '').slice(0, 12), name: String(t.name || '').slice(0, 40), icon: typeof t.icon === 'string' ? t.icon : null, usd: +t.usdPrice || 0, liq: +t.liquidity || 0, verified: true })); } catch {}
-      lbCache.set(k, { at: Date.now(), v: out }); return J(out); }
+      if (okRes) lbCache.set(k, { at: Date.now(), v: out }); return J(out); }
     if (p[1] === 'qprice') { const m = String(u.searchParams.get('mint') || ''); if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(m)) return J({ usd: 0 });   // pair-token price for the Create page
       let usd = quoteUsd(m, KNOWN_Q[m]), symbol = KNOWN_Q[m] || null, name = null, icon = null, verified = m === WSOL || STABLE.has(m);
       try { const r = await fetchT('https://lite-api.jup.ag/tokens/v2/search?query=' + m); const j = await r.json(); const t = Array.isArray(j) ? j.find((x) => x.id === m) : null; if (t) { symbol = symbol || t.symbol; name = t.name; icon = t.icon || null; verified = verified || !!(t.isVerified || (t.tags || []).includes('verified')); if (!QUOTE_OVERRIDE[m] && t.usdPrice) { usd = +t.usdPrice * (await qMult(m)); qPrice.set(m, usd); } } } catch {}   // per on-chain unit (scaled-UI tokens: × multiplier)

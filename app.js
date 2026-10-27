@@ -346,24 +346,30 @@
   S.rwq = ''; S.rwBusy = null; S.rwErr = ''; S.rwTab = 'memes';
   var RW_TABS = [['memes', 'Memes'], ['crypto', 'Crypto'], ['stocks', 'Stocks'], ['fx', 'Stablecoins']];
   var RW_PRE = {   // [label, search symbol, logo]
-    memes: [['BONK', 'BONK', 'memes/bonk.webp'], ['WIF', 'WIF', 'memes/wif.webp'], ['POPCAT', 'POPCAT', 'memes/popcat.webp'], ['MEW', 'MEW', 'memes/mew.webp'], ['BOME', 'BOME', 'memes/bome.webp'], ['PNUT', 'Pnut', 'memes/pnut.webp'], ['GOAT', 'GOAT', 'memes/goat.webp'], ['FARTCOIN', 'Fartcoin', 'memes/fartcoin.webp'], ['MOODENG', 'MOODENG', 'memes/moodeng.webp'], ['CHILLGUY', 'CHILLGUY', 'memes/chillguy.webp'], ['GIGA', 'GIGA', 'memes/giga.webp'], ['PONKE', 'PONKE', 'memes/ponke.webp'], ['MICHI', 'michi', 'memes/michi.webp'], ['MYRO', 'MYRO', 'memes/myro.webp'], ['SLERF', 'SLERF', 'memes/slerf.webp'], ['RETARDIO', 'RETARDIO', 'memes/retardio.webp']],
-    crypto: [['SOL', 'SOL', 'icons/sol.svg'], ['BTC', 'cbBTC', 'icons/btc.svg'], ['ETH', 'ETH', 'icons/eth.svg'], ['JUP', 'JUP', 'icons/jup.webp'], ['RAY', 'RAY', 'icons/ray.svg'], ['PYTH', 'PYTH', 'icons/pyth.webp'], ['JTO', 'JTO', 'icons/jto.webp'], ['LINK', 'LINK', 'icons/link.svg']],
+    memes: [['BONK', 'BONK', 'memes/bonk.webp', 'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263'], ['WIF', 'WIF', 'memes/wif.webp', 'EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm'], ['POPCAT', 'POPCAT', 'memes/popcat.webp', '7GCihgDB8fe6KNjn2MYtkzZcRjQy3t9GHdC8uHYmW2hr'], ['MEW', 'MEW', 'memes/mew.webp', 'MEW1gQWJ3nEXg2qgERiKu7FAFj79PHvQVREQUzScPP5'], ['BOME', 'BOME', 'memes/bome.webp', 'ukHH6c7mMyiWCf1b9pnWe25TSpkDDt3H5pQZgZ74J82'], ['PNUT', 'Pnut', 'memes/pnut.webp', '2qEHjDLDLbuBgRYvsxhc5D6uDWAivNFZGan56P1tpump'], ['GOAT', 'GOAT', 'memes/goat.webp', 'CzLSujWBLFsSjncfkh59rUFqvafWcY5tzedWJSuypump'], ['FARTCOIN', 'Fartcoin', 'memes/fartcoin.webp', '9BB6NFEcjBCtnNLFko2FqVQBq8HHM13kCyYcdQbgpump'], ['MOODENG', 'MOODENG', 'memes/moodeng.webp', 'ED5nyyWEzpPPiWimP8vYm7sD7TD3LAt3Q3gRTWHzPJBY'], ['CHILLGUY', 'CHILLGUY', 'memes/chillguy.webp', 'Df6yfrKC8kZE3KNkrHERKzAetSxbrWeniQfyJY4Jpump'], ['GIGA', 'GIGA', 'memes/giga.webp', '63LfDmNb3MQ8mw9MtZ2To9bEA2M71kZUUGq5tiJxcqj9'], ['PONKE', 'PONKE', 'memes/ponke.webp', '5z3EqYQo9HiCEs3R84RCDMu2n7anpDMxRhdK8PSWmrRC'], ['MICHI', 'michi', 'memes/michi.webp', '5mbK36SZ7J19An8jFochhQS4of8g6BwUjbeCSxBSoWdp'], ['MYRO', 'MYRO', 'memes/myro.webp', 'HhJpBhRRn4g56VsyLuT8DL5Bv31HkXqsrahTTUCZeZg4'], ['SLERF', 'SLERF', 'memes/slerf.webp', '7BgBvyjrZX1YKz4oh9mjb8ZScatkkwb8DzFx7LoiVkM3'], ['RETARDIO', 'RETARDIO', 'memes/retardio.webp', '6ogzHhzdrQr9Pgv6hZ2MNze7UrzBMAFyBBWUYp1Fhitx']],
+    crypto: [['SOL', 'SOL', 'icons/sol.svg'], ['BTC', 'cbBTC', 'icons/btc.svg', 'cbbtcf3aa214zXHbiAZQwf4122FBYbraNdFqgw4iMij'], ['ETH', 'ETH', 'icons/eth.svg', '7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs'], ['JUP', 'JUP', 'icons/jup.webp', 'JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN'], ['RAY', 'RAY', 'icons/ray.svg', '4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R'], ['PYTH', 'PYTH', 'icons/pyth.webp', 'HZ1JovNiVvGrGNiiYvEozEVgZ58xaU3RKwX8eACQBCt3'], ['JTO', 'JTO', 'icons/jto.webp', 'jtojtomepa8beP8AuQc6eXt5FriJwfFMwQx2v2f9mCL'], ['LINK', 'LINK', 'icons/link.svg']],
     stocks: [['SPYx', 'SPYx', null], ['NVDAx', 'NVDAx', null], ['TSLAx', 'TSLAx', null], ['AAPLx', 'AAPLx', null], ['MSFTx', 'MSFTx', null], ['GOOGLx', 'GOOGLx', null], ['METAx', 'METAx', null], ['AMZNx', 'AMZNx', null]],
-    fx: [['USDC', 'USDC', 'icons/usdc.svg'], ['USDT', 'USDT', 'icons/usdt.svg'], ['EURC', 'EURC', 'icons/eur.svg'], ['PYUSD', 'PYUSD', 'icons/pyusd.webp']] };
+    fx: [['USDC', 'USDC', 'icons/usdc.svg'], ['USDT', 'USDT', 'icons/usdt.svg', 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB'], ['EURC', 'EURC', 'icons/eur.svg', 'HzwqbKZw8HxMN6bF2yFZNrht3c2iXXzpKcFu7uBEDKtr'], ['PYUSD', 'PYUSD', 'icons/pyusd.webp', '2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo']] };
   function preIcon(p, size) { if (!p[2] && API) p = [p[0], p[1], API + '/api/ticon?sym=' + encodeURIComponent(p[1])];   // the token's own logo (e.g. xStocks), served by the treid server
     return p[2] ? '<img class="coin rwp-ic" src="' + esc(p[2]) + '" alt="" data-ini="' + esc(p[0].slice(0, 2)) + '" style="width:' + size + 'px;height:' + size + 'px">' : '<span class="coin rwp-ic" style="width:' + size + 'px;height:' + size + 'px;background:#2E2E33;font-size:' + Math.round(size * .42) + 'px">' + esc(p[0].slice(0, 2)) + '</span>'; }
-  function rwPreset(sym) {   // a shortcut chip: find the real verified token with exactly this symbol, then check it like any other
+  function preOf(sym) { for (var t in RW_PRE) for (var i = 0; i < RW_PRE[t].length; i++) if (RW_PRE[t][i][1] === sym) return RW_PRE[t][i]; return null; }
+  function tokImg(mint) { return API ? API + '/api/ticon?mint=' + mint : null; }   // logos come through the treid server (outside hosts are often slow or blocked)
+  function rwPreset(sym) {   // a shortcut chip: its known address (verified + same symbol required), else find the verified token with exactly this symbol
     if (sym === 'SOL') return rwSelect(WSOL); if (sym === 'USDC') return rwSelect(USDC_MINT);
+    var pp = preOf(sym); if (pp && pp[3]) return rwSelect(pp[3], { sym: pp[1], img: pp[2], retry: function () { rwPresetSearch(sym); } });
+    rwPresetSearch(sym);
+  }
+  function rwPresetSearch(sym) {
     if (!API) { S.rwErr = 'Token search needs the treid server'; render(); return; }
     S.rwBusy = sym; S.rwErr = ''; render();
     apiGet('/api/tsearch?q=' + encodeURIComponent(sym)).then(function (list) { var t = (list || []).filter(function (x) { return String(x.symbol).toLowerCase() === sym.toLowerCase(); })[0];
-      if (S.rwBusy !== sym) return; S.rwBusy = null; if (!t) { S.rwErr = 'Couldn’t find verified ' + sym + ' right now — try the search'; render(); return; } qReg(t.symbol, t.mint, t.icon, t.name); rwSelect(t.mint); })
+      if (S.rwBusy !== sym) return; S.rwBusy = null; if (!t) { S.rwErr = 'Couldn’t find verified ' + sym + ' right now — try the search'; render(); return; } var pp = preOf(sym); rwSelect(t.mint, { sym: sym, img: pp && pp[2] }); })
       .catch(function () { S.rwBusy = null; S.rwErr = 'Token search is unavailable — try again'; render(); });
   }
   function rwOf(c) { return c && c.rw && c.rw.mint ? c.rw : null; }   // null = the coin itself
   function rwUri(c) { var r = rwOf(c); return r ? (r.mint === qOf(c).mint ? 'p' : r.mint) : ''; }
   function tokDrop(list, act, q) {
-    return (list || []).map(function (t) { var k = qReg(t.symbol, t.mint, t.icon, t.name); return '<button class="cpp-it" data-act="' + act + '" data-arg="' + esc(t.mint) + '">' + coinHTML(k, 26) + '<span><b>' + esc(t.symbol || k) + ' <em class="rwp-v">✓</em></b><small>' + esc(t.name || '') + ' · ' + esc(short(t.mint)) + '</small></span></button>'; }).join('') ||
+    return (list || []).map(function (t) { var k = qReg(t.symbol, t.mint, tokImg(t.mint) || t.icon, t.name); return '<button class="cpp-it" data-act="' + act + '" data-arg="' + esc(t.mint) + '">' + coinHTML(k, 26) + '<span><b>' + esc(t.symbol || k) + ' <em class="rwp-v">✓</em></b><small>' + esc(t.name || '') + ' · ' + esc(short(t.mint)) + '</small></span></button>'; }).join('') ||
       (isCA(q) ? '<button class="cpp-it ca" data-act="' + act + '" data-arg="' + esc(q) + '"><span class="coin" style="width:26px;height:26px;background:#3A3A3D;font-size:12px">?</span><span><b>Use this contract</b><small class="mono">' + esc(short(q)) + '</small></span></button>' : '<div class="muted cpp-none">No verified token found — try the ticker or paste the contract address.</div>');
   }
   function tokSearch(q, dropId, act) {   // name / ticker search through the server (verified tokens only), results drawn without re-rendering the page
@@ -371,7 +377,7 @@
     if (q.length < 2) { if (el()) el().style.display = 'none'; return; }
     S.tsT = setTimeout(function () { (API ? apiGet('/api/tsearch?q=' + encodeURIComponent(q)) : Promise.resolve([])).catch(function () { return []; }).then(function (list) { var d = el(); if (!d) return; d.innerHTML = tokDrop(list, act, q); d.style.display = 'flex'; }); }, 250);
   }
-  function rwSelect(mint) {
+  function rwSelect(mint, pre) {
     if (mint === 'coin') { setC({ rw: 'coin' }); S.rwErr = ''; return; }
     if (mint === WSOL || mint === USDC_MINT) { var kk = mint === WSOL ? 'SOL' : 'USDC'; S.c.rw = { mint: mint, sym: kk, key: kk }; S.rwq = ''; S.rwErr = ''; render(); return; }
     if (mint === qOf(S.c).mint) { var q0 = qOf(S.c); S.c.rw = { mint: mint, sym: q0.sym, key: q0.key }; S.rwq = ''; S.rwErr = ''; render(); return; }
@@ -380,8 +386,9 @@
       var qi = r[0], pr = r[1] || {}; if (S.rwBusy !== mint) return; S.rwBusy = null;
       if (!qi.ok && CHAIN_ID === 'solana:devnet' && pr.verified && /No token found/.test(qi.reason || '')) qi = { ok: true, warn: 'Test network: holders get SOL here — ' + (pr.symbol || 'this token') + ' payouts start on mainnet' };
       if (!qi.ok) { S.rwErr = qi.reason || 'This token can’t be paid out'; render(); return; }
+      if (pre && (!pr.verified || String(pr.symbol || '').toLowerCase() !== pre.sym.toLowerCase())) { if (pre.retry) return pre.retry(); S.rwErr = 'That shortcut didn’t check out — try the search'; render(); return; }
       if (!pr.verified) { S.rwErr = 'Only verified tokens can be holder rewards (so holders never get a fake).'; render(); return; }
-      var k = qReg(pr.symbol, mint, pr.icon, pr.name); S.c.rw = { mint: mint, sym: pr.symbol || k, key: k, warn: qi.warn || null }; S.rwq = ''; render();
+      var k = qReg(pr.symbol, mint, tokImg(mint) || pr.icon, pr.name); if (pre && pre.img) PAIR_INFO[k].img = pre.img; S.c.rw = { mint: mint, sym: pr.symbol || k, key: k, warn: qi.warn || null }; S.rwq = ''; render();
     }).catch(function (e) { S.rwBusy = null; S.rwErr = 'Couldn’t check this token: ' + chainErr(e); render(); });
   }
   function rewardPick(c) {
@@ -2789,23 +2796,28 @@
     if (safeImg(icon) && !PAIR_INFO[k].img) PAIR_INFO[k].img = safeImg(icon);
     return k;
   }
-  function qSelect(mint) {
+  function qSelect(mint, pre) {
     if (mint === WSOL) { S.c.q = null; S.c.pair = 'SOL'; S.qErr = ''; S.cpq = ''; render(); return; }
     S.qBusy = mint; S.qErr = ''; render();
     Promise.all([chainLib().then(function (T) { return T.quoteInfo({ rpc: RPC, mint: mint }); }), API ? apiGet('/api/qprice?mint=' + mint).catch(function () { return {}; }) : Promise.resolve({})]).then(function (r) {
       var qi = r[0], pr = r[1] || {}; if (S.qBusy !== mint) return; S.qBusy = null;
       if (!qi.ok) { S.qErr = CHAIN_ID === 'solana:devnet' && /No token found/.test(qi.reason || '') ? 'This pair opens on mainnet — on the test network only SOL and USDC exist' : (qi.reason || 'This token can’t be used as a pair'); render(); return; }
+      if (pre && String(pr.symbol || '').toLowerCase() !== pre.sym.toLowerCase()) { if (pre.retry) return pre.retry(); S.qErr = 'That shortcut didn’t check out — try the search'; render(); return; }
       if (!(pr.usd > 0)) { S.qErr = 'No market price found for this token, so a fair starting price can’t be set. Pick a token that trades on Jupiter.'; render(); return; }
-      var k = qReg(pr.symbol, mint, pr.icon, pr.name);
+      var k = qReg(pr.symbol, mint, tokImg(mint) || pr.icon, pr.name); if (pre && pre.img) PAIR_INFO[k].img = pre.img;
       S.c.q = { mint: mint, sym: pr.symbol || k, dec: qi.decimals, usd: pr.usd, warn: qi.warn || null, key: k }; S.c.pair = k; S.cpq = ''; S.c.devBuy = ''; render();   // the holder-reward choice stays as picked
     }).catch(function (e) { S.qBusy = null; S.qErr = 'Couldn’t check this token: ' + chainErr(e); render(); });
   }
-  function qPreset(sym) {   // shortcut chip → the verified token with exactly this symbol → the normal pair checks
+  function qPreset(sym) {   // shortcut chip → its known address (or the verified token with exactly this symbol) → the normal pair checks
     if (sym === 'SOL') return qSelect(WSOL); if (sym === 'USDC') return qSelect(USDC_MINT);
+    var pp = preOf(sym); if (pp && pp[3]) return qSelect(pp[3], { sym: pp[1], img: pp[2], retry: function () { qPresetSearch(sym); } });
+    qPresetSearch(sym);
+  }
+  function qPresetSearch(sym) {
     if (!API) { S.qErr = 'Token search needs the treid server'; render(); return; }
     S.qBusy = sym; S.qErr = ''; render();
     apiGet('/api/tsearch?q=' + encodeURIComponent(sym)).then(function (list) { var t = (list || []).filter(function (x) { return String(x.symbol).toLowerCase() === sym.toLowerCase(); })[0];
-      if (S.qBusy !== sym) return; S.qBusy = null; if (!t) { S.qErr = 'Couldn’t find verified ' + sym + ' right now — try the search'; render(); return; } qReg(t.symbol, t.mint, t.icon, t.name); qSelect(t.mint); })
+      if (S.qBusy !== sym) return; S.qBusy = null; if (!t) { S.qErr = 'Couldn’t find verified ' + sym + ' right now — try the search'; render(); return; } var pp = preOf(sym); qSelect(t.mint, { sym: sym, img: pp && pp[2] }); })
       .catch(function () { S.qBusy = null; S.qErr = 'Token search is unavailable — try again'; render(); });
   }
   function realPairPicker(c) {
@@ -3385,7 +3397,9 @@
   document.addEventListener('click', function (e) { var b = e.target.closest && e.target.closest('.tc-ca'); if (!b) return; b.classList.add('ok'); var h = b.innerHTML; b.innerHTML = 'Copied ✓'; setTimeout(function () { if (b.isConnected) { b.innerHTML = h; b.classList.remove('ok'); } }, 1200); }, true);
   document.addEventListener('scroll', function (e) { if (e.target && e.target.id === 'cmts' && e.target.scrollTop < 20) { var np = document.getElementById('tt-new'); if (np && np._n) { np._n = 0; np.style.display = 'none'; } } }, true);
   document.addEventListener('error', function (e) {   // a logo that can't load turns into initials
-    var im = e.target; if (!im || im.tagName !== 'IMG' || !im.classList.contains('rwp-ic')) return; var sp = document.createElement('span'); sp.className = 'coin rwp-ic'; sp.textContent = im.getAttribute('data-ini') || '?';
+    var im = e.target; if (!im || im.tagName !== 'IMG') return;
+    if (im.parentNode && im.parentNode.classList && im.parentNode.classList.contains('img') && im.parentNode.classList.contains('coin')) { var w = im.parentNode; w.classList.remove('img'); w.style.background = '#3A3A40'; w.style.fontSize = Math.round(parseInt(w.style.width, 10) * .38) + 'px'; w.textContent = String(im.alt || '?').replace(/[^A-Za-z0-9]/g, '').slice(0, 2).toUpperCase() || '?'; return; }
+    if (!im.classList.contains('rwp-ic')) return; var sp = document.createElement('span'); sp.className = 'coin rwp-ic'; sp.textContent = im.getAttribute('data-ini') || '?';
     sp.style.cssText = 'width:' + im.style.width + ';height:' + im.style.height + ';background:#2E2E33;font-size:9px'; im.replaceWith(sp); }, true);
   document.addEventListener('input', function (e) {
     if (e.target.hasAttribute && e.target.hasAttribute('data-burnpct')) { S.burnPct = +e.target.value; var t = find(S.burnTick), pos = t && position(t); if (!pos) return; var tok = pos.tok * S.burnPct / 100;
