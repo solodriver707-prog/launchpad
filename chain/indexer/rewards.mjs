@@ -17,7 +17,7 @@ import { CpAmm, getUnClaimLpFee } from '@meteora-ag/cp-amm-sdk';
 import { ed25519 } from '@noble/curves/ed25519';
 import bs58 from 'bs58';
 import BN from 'bn.js';
-import { withLock } from './lock.mjs';
+import { withLock , HALT, halt, canWrite } from './lock.mjs';
 import { sendTx, getTxRetry } from './txutil.mjs';
 import { rwOut } from './ops.mjs';
 import { verifySig } from './sig.mjs';
@@ -43,7 +43,7 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, q
   run(`CREATE TABLE IF NOT EXISTS rpeak(mint TEXT, wallet TEXT, since INT, peak REAL, PRIMARY KEY(mint, wallet, since))`);   // biggest bag seen per era (kept on a persistent disk)
   run('CREATE TABLE IF NOT EXISTS rscan(sig TEXT PRIMARY KEY)');   // ops-wallet txs already read by the ledger rebuild
   run(`CREATE TABLE IF NOT EXISTS ctovotes(mint TEXT, round INT, voter TEXT, applicant TEXT, ts INT, sig TEXT, PRIMARY KEY(mint, round, voter))`);   // off-chain: votes cost ops nothing
-  const record = (sig, items) => items.forEach((it, i) => run('INSERT OR IGNORE INTO rlog(sig,i,mint,kind,lamports,ts,extra) VALUES(?,?,?,?,?,?,?)', sig, i, it.mint, it.kind, it.lamports, Date.now(), it.extra ?? null));
+  const record = (sig, items) => { try { items.forEach((it, i) => run('INSERT OR IGNORE INTO rlog(sig,i,mint,kind,lamports,ts,extra) VALUES(?,?,?,?,?,?,?)', sig, i, it.mint, it.kind, it.lamports, Date.now(), it.extra ?? null)); } catch (e) { halt(e.message); throw e; } };
   const stamp = async (mint, kind, lamports = 0, extra = null, more = []) => { const s = await sendTx(conn, [...more, memo(`treid:${kind}:${mint}:${lamports}` + (extra ? ':' + extra : ''))], [ops]); record(s, [{ mint, kind, lamports, extra }]); return s; };
   const verify = (msg, sig, wallet, ts) => verifySig(msg, sig, wallet, ts);   // site line + legacy window (sig.mjs)
   const fresh = (ts) => { if (!(Math.abs(Date.now() - ts) <= 2 * 60e3)) throw new Error('signature expired — try again'); };
@@ -132,7 +132,7 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, q
   }
   // how much a confirmed claim actually moved into ops (SOL: lamport change + fee; tokens: ops' token balance change)
   async function claimedBy(c, sig, src = 'dbc') {   // exactly what left the pool's quote vault in that claim tx
-    const t = await getTxRetry(conn, sig); if (!t || t.meta.err) return 0;
+    const t = await getTxRetry(conn, sig); if (!t) throw new Error('claim receipt not readable yet — retry later'); if (t.meta.err) return 0;   // unread ≠ empty: never mark a real claim as done
     let vault; if (src === 'dbc') { const vpw = await dbc.state.getPool(new PublicKey(c.pool)); vault = (vpw.poolState || vpw).quoteVault.toBase58(); } else vault = (await dammCtx(c)).ps.tokenBVault.toBase58();
     const keys = t.transaction.message.getAccountKeys({ accountKeysFromLookups: t.meta.loadedAddresses }), idx = [...Array(keys.length).keys()].find((i) => keys.get(i).toBase58() === vault);
     if (idx == null) return 0; const amt = (arr) => Number((arr || []).find((b) => b.accountIndex === idx)?.uiTokenAmount.amount || 0);
@@ -230,6 +230,7 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, q
   async function maybeMigrate(c, vp, cfg) {   // Meteora's keeper normally migrates a finished curve within minutes; ops only steps in when it hasn't
     if (num(vp.isMigrated) > 0 || BigInt(vp.quoteReserve.toString()) < BigInt(cfg.migrationQuoteThreshold.toString())) return false;
     const fin = num(vp.finishCurveTimestamp) * 1000; if (!fin || Date.now() - fin < GRAD_WAIT_MS) return false;
+    const gradUsd = Number(cfg.migrationQuoteThreshold.toString()) / 10 ** (c.quote_dec ?? 9) * (quoteUsd(c) || 0); if (gradUsd < 3000) return false;   // ops only pays the migration rent for real graduations, never for a toy curve
     const r = await dbc.migration.migrateToDammV2({ pool: new PublicKey(c.pool), dammConfig: DAMM_CFG, payer: ops.publicKey });
     const s = await sendTx(conn, r.transaction, [ops, r.firstPositionNftKeypair, r.secondPositionNftKeypair]);   // no memo: the migration tx is already at the size limit
     record(s, [{ mint: c.mint, kind: 'migrate', lamports: 0 }]); log('rewards migrated', c.symbol, 'to DAMM v2'); return true;
@@ -291,7 +292,7 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, q
     lastDone.set(c.mint, Date.now()); lastDone.set(c.mint + '|st', state(c).state);
   }
   let cycQueued = false;
-  const cycle = () => { if (!READY || cycQueued) return; cycQueued = true; return withLock(async () => {
+  const cycle = () => { if (!READY || cycQueued || HALT.on || !canWrite(run)) return; cycQueued = true; return withLock(async () => {
     try { await reconcile(); } catch (e) { log('rewards reconcile err', e.message.slice(0, 120)); }
     for (const c of q('SELECT * FROM coins')) { try { if (due(c)) await cycleCoin(c); } catch (e) { log('rewards err', c.symbol, e.message.slice(0, 140)); } }
   }).finally(() => { cycQueued = false; }); };

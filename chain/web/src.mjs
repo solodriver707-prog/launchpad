@@ -126,12 +126,15 @@ export async function quote({ rpc, pool, side, amount, slippageBps = 500, expect
     const { ps } = damm, q = ammC(rpc).getQuote2({ inputTokenMint: sell ? ps.tokenAMint : ps.tokenBMint, slippage: slippageBps, poolState: ps, currentPoint: damm.cp, hasReferral: false, tokenADecimal: RULES.decimals, tokenBDecimal: qd,
       swapMode: 0, amountIn, inputTokenInfo: sell ? damm.coin : undefined, outputTokenInfo: sell ? undefined : damm.coin });
     const outRaw = sell ? new BN(q.outputAmount.toString()) : calculateTransferFeeExcludedAmount(new BN(q.outputAmount.toString()), damm.coin.mint, damm.coin.currentEpoch).amount, minRaw = new BN(q.minimumAmountOut.toString()), fee = ['claimingFee', 'protocolFee', 'compoundingFee', 'referralFee'].reduce((a, k) => a + Number(q[k]?.toString?.() || 0), 0);
-    return { out: Number(outRaw.toString()) / div, minOut: Number(minRaw.toString()) / div, feeSol: fee / 10 ** qd, quoteDecimals: qd, quoteMint: cfg.quoteMint.toBase58(), amountIn: amountIn.toString(), minRaw: minRaw.toString(), graduated: true };
+    let impact = 0; try { impact = Number(q.priceImpact?.toString?.() || 0); } catch {}
+    return { out: Number(outRaw.toString()) / div, minOut: Number(minRaw.toString()) / div, feeSol: fee / 10 ** qd, quoteDecimals: qd, quoteMint: cfg.quoteMint.toBase58(), amountIn: amountIn.toString(), minRaw: minRaw.toString(), graduated: true, net: true, impact };
   }
   const mode = sell ? SwapMode.ExactIn : SwapMode.PartialFill;   // a buy that would overfill the curve fills it exactly and refunds the rest
   const q = cl.pool.swapQuote2({ virtualPool: vpw, config: cfg, swapBaseForQuote: sell, amountIn, slippageBps, hasReferral: false, currentPoint: cp, swapMode: mode });
-  const outRaw = q.outputAmount || q.amountOut || new BN(0), minRaw = q.minimumAmountOut || new BN(0), fee = q.tradingFee || q.fee || new BN(0);
-  return { out: Number(outRaw.toString()) / div, minOut: Number(minRaw.toString()) / div, feeSol: Number(fee.toString()) / 10 ** qd, quoteDecimals: qd, quoteMint: cfg.quoteMint.toBase58(), amountIn: amountIn.toString(), minRaw: minRaw.toString(), mode };
+  const outRaw = q.excludedTransferFeeAmountOut || q.outputAmount || q.amountOut || new BN(0), minRaw = q.minimumAmountOut || new BN(0);   // what actually lands in the wallet (after the coin's transfer tax)
+  const fee = ['tradingFee', 'protocolFee', 'referralFee'].reduce((a, k) => a + Number(q[k]?.toString?.() || 0), 0) || Number((q.fee || 0).toString());   // the whole pool fee, not just the part after Meteora's cut
+  let impact = 0; try { const s0 = Number((vpw.poolState || vpw).sqrtPrice.toString()), s1 = Number((q.nextSqrtPrice || 0).toString()); if (s0 > 0 && s1 > 0) impact = Math.abs(1 - (s1 / s0) ** 2) * 100; } catch {}
+  return { out: Number(outRaw.toString()) / div, minOut: Number(minRaw.toString()) / div, feeSol: fee / 10 ** qd, quoteDecimals: qd, quoteMint: cfg.quoteMint.toBase58(), amountIn: amountIn.toString(), minRaw: minRaw.toString(), mode, net: true, impact };
 }
 export async function buildSwap({ rpc, owner, pool, side, amount, slippageBps = 500, expect = null }) {
   owner = pk(owner); const q = await quote({ rpc, pool, side, amount, slippageBps, expect }), cl = client(rpc);

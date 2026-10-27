@@ -2310,9 +2310,9 @@
       var key = t.tick + '|' + S.side + '|' + amt + '|' + S.slip, L = S.lq && S.lq.k === key ? S.lq.r : null;
       if (!L) { if (S.lqWant !== key) { S.lqWant = key; clearTimeout(S.lqT); S.lqT = setTimeout(function () { chainLib().then(function (T) { return T.quote({ rpc: RPC, expect: { mint: t.ca, partners: [PARTNER, TREASURY] }, pool: t.pool, side: isBuy ? 'buy' : 'sell', amount: amt, slippageBps: Math.round(S.slip * 100) }); }).then(function (r) { S.lq = { k: key, r: r }; if (S.lqWant === key && S.screen === 'token' && S.tick === t.tick) render(); }).catch(function () {}); }, 300); } res.pending = true; }
       else { var ct = Math.max(t.buy, t.sell) / 100; res.pct = ct * 100; res.fee = L.feeSol; res.fp = sol > 0 ? L.feeSol / sol * 100 : 0;
-        if (isBuy) { res.out = L.out * (1 - ct); res.min = L.minOut; res.tax = sol * ct; }
+        if (isBuy) { res.out = L.net ? L.out : L.out * (1 - ct); res.min = L.minOut; res.tax = sol * ct; }   // the chain quote already takes the transfer tax off
         else { res.out = L.out; res.min = L.minOut; res.tax = L.out * ct / Math.max(1e-9, 1 - ct); res.sol = L.out + L.feeSol; }
-        res.impact = 0; res.exact = true; }
+        res.grad = !!L.graduated; res.impact = typeof L.impact === 'number' && isFinite(L.impact) ? Math.min(99, L.impact) : 0; res.exact = true; }
     }
     return res;
   }
@@ -2784,7 +2784,7 @@
       '<div class="presets">' + presets + '</div>' +
       (PS ? '<div class="quote"><div><span class="muted">Route</span><span>SOL → ' + esc(qSymT(t)) + ' (Jupiter) → $' + id + '</span></div><div><span class="muted">Fees</span><span>coin tax ' + q.pct + '% + trading fee + Jupiter route</span></div><div style="padding-top:9px;border-top:1px solid var(--line)"><span class="muted">You receive ≈</span><span style="font-weight:800;font-size:15px">' + fmtNum(q.out) + ' $' + id + (outUsd > 0 ? ' <small class="q-usd">' + usdS(outUsd) + '</small>' : '') + '</span></div></div>' :
       '<div class="quote">' + (q.pct > 0 ? '<div><span class="muted">Coin ' + (q.isBuy ? 'buy' : 'sell') + ' tax (' + q.pct + '%)</span><span style="color:' + taxBg(q.pct) + '">' + f4(q.tax) + ' ' + esc(QS) + '</span></div>' : '') +
-        '<div><span class="muted">Trading fee (' + (+q.fp.toFixed(2)) + '%)' + ' <em class="q-cr">' + (q.pct > 0 ? FEE.creatorTaxed : FEE.creatorPlain) + '% to creator</em></span><span>' + f4(q.fee) + ' ' + esc(QS) + '</span></div>' +
+        '<div><span class="muted">Trading fee (' + (+q.fp.toFixed(2)) + '%)' + (q.grad ? '' : ' <em class="q-cr">' + (q.exact ? +(q.fp * 0.4).toFixed(2) : (q.pct > 0 ? FEE.creatorTaxed : FEE.creatorPlain)) + '% to creator</em>') + '</span><span>' + f4(q.fee) + ' ' + esc(QS) + '</span></div>' +
         '<div class="q-tot"><span class="muted">Total cost</span><span class="mono">' + (+(q.pct + q.fp).toFixed(2)) + '% · ' + f4((q.tax + q.fee)) + ' ' + esc(QS) + '</span></div>' +
         '<div><span class="muted">Price impact</span><span class="' + (q.impact > 5 ? 'down' : '') + '">' + q.impact.toFixed(2) + '%</span></div>' +
         '<div><span class="muted">Min received (' + S.slip + '% slip)</span><span>' + (q.isBuy ? fmtNum(q.min) + ' $' + id : q.min.toFixed(4) + ' ' + esc(QS)) + '</span></div>' +
