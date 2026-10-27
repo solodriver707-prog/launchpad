@@ -724,7 +724,7 @@
       '<div class="hs-left">' +
         '<span class="kicker"><span class="livedot"></span><span class="rank">#' + (rank + 1) + '</span> TOP MEME</span>' +
         '<div class="title-xl hs-title">' + esc(t.name) + ' <span class="tk">$' + id + '</span></div>' +
-        '<div class="hs-pills"><span class="pill" style="padding-left:11px">' + fmtNum(t.holders) + ' holders</span>' +
+        '<div class="hs-pills"><span class="pill" style="padding-left:11px">' + fmtNum(t.holders) + (t.holders === 1 ? ' holder' : ' holders') + '</span>' +
           '<button class="pill copy2" data-act="ca" data-arg="' + id + '">' + esc(short(t.ca)) + ' ' + I.copy + '</button>' + (t.rewards ? '<span class="pill i">' + I.gift + ' Rewards</span>' : '') + (t.burn ? '<span class="pill i">' + I.flame + ' Burn</span>' : '') + '</div>' +
         '<div class="hs-stats"><div class="tax" style="background:' + taxBg(tmax) + ';padding:9px 14px"><small>TAX</small><b style="font-size:26px">' + tmax + '%</b></div>' +
           '<div class="pairbig" data-act="pairOpen" data-arg="' + esc(t.pair) + '">' + coinHTML(t.pair, 46) + '<div><small>PAIRED WITH</small><b>' + esc(pairLabel(t.pair)) + '</b><span>' + esc(pairInfo(t.pair).name) + '</span></div></div>' +
@@ -2795,7 +2795,7 @@
     var posCard = pos ? (function () {
       var ps = t.live && S.myPs && S.myPs[t.ca] && S.myPs[t.ca].trades > 0 ? S.myPs[t.ca] : null, U2 = qUsdT(t);
       var val = ps ? ps.value : pos.val * U2, pr = ps ? ps.profit : pos.pnl * U2, prp = ps ? ps.profitPct : pos.pct, up = pr >= 0;
-      var spent = ps ? ps.spent : pos.cost * U2, avg = ps ? ps.avgEntryMc : 0, sup = ps ? ps.supplyPct : pos.tok / 1e7, sold = ps ? ps.soldPct : 0;
+      var spent = ps ? ps.spent : pos.cost * U2, avg = ps ? ps.avgEntryMc : ((lwAvg(t) || {}).en || 0), sup = ps ? ps.supplyPct : pos.tok / 1e7, sold = ps ? ps.soldPct : 0;
       var cell = function (k, v) { return '<div class="pc-c"><small>' + k + '</small><b class="mono">' + v + '</b></div>'; };
       return '<section class="card-s panel poscard pc2"><div class="pc-h"><b>Your position</b><span class="pc-hr">' + (sold > 0.5 ? '<span class="pc-sold">Sold ' + Math.round(sold) + '%</span>' : '') + '<button class="pc-share" data-act="shPos" data-arg="' + id + '" title="Share your PnL"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8h16v-8M12 3v13M7 8l5-5 5 5"/></svg></button></span></div>' +
         '<div class="pc-top"><div><small>Value</small><b class="mono pc-big">$' + money(val) + '</b><span class="mono muted">' + pos.val.toFixed(4) + ' ' + esc(QS) + '</span></div>' +
@@ -2988,7 +2988,7 @@
       stats4: function () { return '<section class="cs-stats"><div><span class="cs-si">📈</span><small>Market cap</small><b class="mono">' + P.mc + '</b><em class="' + (up ? 'up' : 'down') + '">' + P.chg + ' 24h</em></div><div><span class="cs-si">👥</span><small>Holders</small><b class="mono">' + P.hold + '</b><em class="mut">vol ' + P.vol + '</em></div><div><span class="cs-si">🧾</span><small>Tax</small><b class="mono">' + P.tax + '</b><em class="mut">' + (tm ? 'buy & sell' : 'no tax') + '</em></div><div><span class="cs-si">' + (P.grad ? '🎓' : '⛰️') + '</span><small>' + (P.grad ? 'Status' : 'Bonding curve') + '</small><b class="mono">' + (P.grad ? 'Graduated' : P.prog.toFixed(0) + '%') + '</b><i class="cs-bar"><u style="width:' + P.prog.toFixed(0) + '%"></u></i></div></section>'; }
     };
     var body = (SITE_LAY[lay] || SITE_LAY.classic)(t, P, id);
-    return '<div class="cs cs-' + th + ' csl-' + lay + '" style="--cc:' + esc(col) + '">' + body + '</div>';
+    return '<div class="cs cs-' + th + ' csl-' + lay + '" style="--cc:' + esc(col) + '">' + body + '<button class="cs-back" data-act="open" data-arg="' + id + '">← Trade on treid</button></div>';
   }
   function csMarquee(items) { var row = items.map(function (x) { return '<span>' + x + '</span>'; }).join('<i>✦</i>'); return '<div class="cs-mq" aria-hidden="true"><div>' + row + '<i>✦</i>' + row + '<i>✦</i></div></div>'; }
   function csBurst(n) { var p = []; for (var i = 0; i < n * 2; i++) { var a = i / (n * 2) * Math.PI * 2, r = i % 2 ? 38 : 50; p.push((50 + r * Math.cos(a)).toFixed(1) + '% ' + (50 + r * Math.sin(a)).toFixed(1) + '%'); } return 'polygon(' + p.join(',') + ')'; }

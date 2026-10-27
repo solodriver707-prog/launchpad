@@ -5522,3 +5522,58 @@ body.on-site{background:#08080a}
 .xp-pop .xp-img{max-height:380px;border-color:#cfd9de}
 .xp-pop .xp-q .xp-t{font-size:15px;color:#0f1419}
 @keyframes xpIn{from{opacity:0;transform:translateY(4px)}}
+
+/* ===== overnight mobile pass ===== */
+@media (max-width:760px){
+  /* coin header: compact — price and chart come into view sooner */
+  html body .tp-banner{grid-template-columns:auto 1fr!important;grid-template-areas:"bg bg" "av id" "key key"!important}
+  html body .tp-banner>.tb-bg{grid-area:bg!important;aspect-ratio:auto!important;height:64px!important}
+  html body .tp-banner>.tb-bg.ban{height:86px!important}
+  html body .tp-banner>.tb-bg img{width:100%;height:100%;object-fit:cover}
+  html body .tp-banner .tb-av{grid-area:av!important;margin:-26px 0 0 12px!important;align-self:start}
+  html body .tp-banner .tb-av .av{width:64px!important;height:64px!important;box-shadow:0 0 0 3px #0d0d0f!important}
+  html body .tp-banner .tp-id{grid-area:id!important;padding:8px 12px 0 10px!important}
+  html body .tp-banner .title-xl{font-size:19px!important}
+  html body .tp-banner .hs-pills{flex-wrap:nowrap!important;overflow-x:auto!important;scrollbar-width:none;margin:8px -12px 0 -76px!important;padding:0 12px!important;-webkit-mask:linear-gradient(90deg,#000 92%,transparent)}
+  html body .tp-banner .hs-pills::-webkit-scrollbar{display:none}
+  html body .tp-banner .hs-pills>*{flex:none}
+  html body .tp-banner .tp-key{grid-area:key!important;padding:10px 12px 12px!important}
+  html body .tp-banner .tp-key .tax{padding:6px 12px!important}
+  html body .tp-banner .tp-key .tax b{font-size:18px!important}
+  html body .tp-banner .pairbig{padding:6px 10px!important}
+  html body .tp-banner .pairbig .coin{width:26px!important;height:26px!important}
+  /* inputs: 16px so iPhone Safari doesn't zoom in on tap */
+  input,textarea,select{font-size:16px!important}
+  /* callout actions: finger-sized */
+  .co-ic,.co-a button{min-width:38px;min-height:38px;display:inline-flex;align-items:center;justify-content:center}
+  .co-more{padding:8px 0;min-height:34px}
+  .tf,.ctog{min-height:36px}
+  .trow{min-height:44px}
+  .tpf{white-space:nowrap}
+  /* callouts card on the coin page */
+  .tp-thread .co-gate{padding-left:14px;padding-right:14px;box-sizing:border-box;flex-wrap:wrap;gap:8px}
+  .tp-thread .co-gate .btn{max-width:100%}
+  /* ranks: crown no longer covers the leader */
+  .lb-pod{margin-top:26px}
+  .crown{transform:scale(.8);top:-30px!important}
+  /* small secondary text stays readable */
+  .co small,.co-h small,.trow small{font-size:11px}
+  .mnav button span{font-size:10.5px}
+}
+/* the Launch pill keeps its dark icon when its screen is open */
+.mnav button.pri.on{color:#0A0A0B!important}
+/* jump links land below the sticky header */
+html{scroll-padding-top:76px}
+/* iPhone home bar: the bottom nav grows by the safe area instead of being squashed */
+@supports (padding:env(safe-area-inset-bottom)){
+  @media (max-width:760px){ .mnav{height:calc(64px + env(safe-area-inset-bottom))!important;padding-bottom:env(safe-area-inset-bottom)!important} body{padding-bottom:calc(72px + env(safe-area-inset-bottom))} }
+}
+/* coin sites: no app padding, readable headers, a way back */
+body.on-site{padding-bottom:0!important}
+.cs-comic .cs-brand b,.cs-meme .cs-brand b{color:#111!important}
+.cs-comic .cs-top,.cs-meme .cs-top{background:color-mix(in srgb,var(--bg) 92%,transparent)!important}
+.cs-back{position:fixed;left:14px;bottom:16px;z-index:50;min-height:40px;padding:0 14px;border-radius:99px;border:1px solid rgba(255,255,255,.25);background:rgba(10,10,12,.78);color:#fff;font:700 13px Manrope,sans-serif;backdrop-filter:blur(10px);cursor:pointer}
+.cs-cab{min-height:36px!important}.cs-soc{min-height:40px}
+@media (max-width:760px){.ms-top>span:last-child .cs-buy{padding:0 12px!important;letter-spacing:.16em}.ms-mark{font-size:13px!important;letter-spacing:.22em!important;white-space:nowrap;overflow:hidden}.cs-arcade .cs-buy.sm{font-size:8px!important;padding:0 10px}}
+.cs>.cs-back{position:fixed!important;z-index:60!important;max-width:none!important;margin:0!important}
+@media (max-width:760px){.ms-top{grid-template-columns:1fr auto!important}.ms-top>span:last-child .cs-buy{width:auto!important}}
