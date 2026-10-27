@@ -34,3 +34,5 @@ services:
         sync: false
       - key: PUBLIC_URL          # this service's own https URL
         sync: false
+      - key: JUP_API_KEY         # free key from developers.jup.ag (lite-api is being retired)
+        sync: false

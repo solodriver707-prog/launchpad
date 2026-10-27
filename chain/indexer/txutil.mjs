@@ -4,7 +4,10 @@ import bs58 from 'bs58';
 
 export const PRIO = Math.max(0, +(process.env.OPS_PRIORITY_MICROLAMPORTS || 0));   // e.g. 20000 on mainnet (~0.000004 SOL per tx at 200k CU)
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-export const fetchT = (url, opts = {}, ms = 8000) => fetch(url, { ...opts, signal: AbortSignal.timeout(ms) });   // every outbound call has a timeout
+// Jupiter: api.jup.ag with a (free) key when JUP_API_KEY is set; the older lite-api host otherwise (being retired)
+export const JUP = process.env.JUP_API_KEY ? 'https://api.jup.ag' : 'https://lite-api.jup.ag';
+export const fetchT = (url, opts = {}, ms = 8000) => { const h = { ...(opts.headers || {}) }; if (process.env.JUP_API_KEY && String(url).startsWith('https://api.jup.ag')) h['x-api-key'] = process.env.JUP_API_KEY;
+  return fetch(url, { ...opts, headers: h, signal: AbortSignal.timeout(ms) }); };   // every outbound call has a timeout
 
 // send + confirm; if confirmation times out, look the signature up before reporting failure (a "failed" send that actually
 // landed must never be retried blindly — that's how double payments happen)

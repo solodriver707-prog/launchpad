@@ -11,7 +11,7 @@ import http from 'node:http';
 import { opsKeypair, startOps } from './ops.mjs';
 import { startRewards } from './rewards.mjs';
 import { startCallouts } from './callouts.mjs';
-import { fetchT } from './txutil.mjs';
+import { fetchT, JUP } from './txutil.mjs';
 import { verifySig, SITES } from './sig.mjs';
 import { ed25519 } from '@noble/curves/ed25519';
 
@@ -45,7 +45,8 @@ const STABLE = new Set(['EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', 'Es9vMFr
 function quoteUsd(mint, symbol) { if (!mint || mint === WSOL) return SOL_USD; if (QUOTE_OVERRIDE[mint] != null) return +QUOTE_OVERRIDE[mint]; const p = qPrice.get(mint); if (p) return p; return STABLE.has(mint) ? 1 : 0; }
 async function quotePrices() {
   const ms = q('SELECT DISTINCT quote_mint m FROM coins WHERE quote_mint IS NOT NULL AND quote_mint != ?', WSOL).map((r) => r.m).filter((m) => QUOTE_OVERRIDE[m] == null); if (!ms.length) return;
-  try { const r = await fetchT('https://lite-api.jup.ag/price/v3?ids=' + ms.slice(0, 50).join(',')); const j = await r.json(); for (const m of ms) if (j?.[m]?.usdPrice) qPrice.set(m, +j[m].usdPrice * (await qMult(m))); } catch {}
+  for (let i = 0; i < ms.length; i += 50) { const part = ms.slice(i, i + 50);   // every pair token, 50 per request
+    try { const r = await fetchT(JUP + '/price/v3?ids=' + part.join(',')); const j = await r.json(); for (const m of part) if (j?.[m]?.usdPrice) qPrice.set(m, +j[m].usdPrice * (await qMult(m))); } catch {} }
 }
 const multC = new Map();
 async function qMult(m) {   // current UI multiplier of a scaled-UI-amount token (1 for everything else)
@@ -144,7 +145,7 @@ async function hasBadge(qm) { const h = badgeC.get(qm); if (h && Date.now() - h.
   const ok = !!ai && ai.owner.equals(DYNAMIC_BONDING_CURVE_PROGRAM_ID); badgeC.set(qm, { ok, at: Date.now() }); return ok; }
 async function quoteAllowed(qm) {
   if (qm === WSOL || STABLE.has(qm) || QUOTE_OVERRIDE[qm] != null) return true; if (await hasBadge(qm)) return true; if (!MAINNET) return false; const h = qOk.get(qm); if (h && Date.now() - h.at < 864e5) return h.ok;
-  let ok = false, got = false; try { const j = await (await fetchT('https://lite-api.jup.ag/tokens/v2/search?query=' + qm)).json(), t = Array.isArray(j) ? j.find((x) => x.id === qm) : null; got = Array.isArray(j); ok = !!(t && (t.isVerified || (t.tags || []).includes('verified')) && (t.liquidity || 0) >= 1e5); } catch {}
+  let ok = false, got = false; try { const j = await (await fetchT(JUP + '/tokens/v2/search?query=' + qm)).json(), t = Array.isArray(j) ? j.find((x) => x.id === qm) : null; got = Array.isArray(j); ok = !!(t && (t.isVerified || (t.tags || []).includes('verified')) && (t.liquidity || 0) >= 1e5); } catch {}
   if (got) qOk.set(qm, { ok, at: Date.now() }); else if (!ok) throw new Error('pair check unavailable');   // a failed lookup is retried, never cached as "not allowed"
   return ok;
 }
@@ -362,7 +363,7 @@ async function handleReq(req, res) {
       if (!/^[A-Za-z0-9]{2,12}$/.test(sym) && !/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(mintQ)) { res.writeHead(404); return res.end(); }
       const ik = mintQ || sym.toLowerCase(); let h = iconC.get(ik);
       if (!h || Date.now() - h.at > 864e5) { if (!rate('ti|' + ip(req), 60, 6e4)) { res.writeHead(429); return res.end(); } h = { at: Date.now(), buf: null, ct: null };
-        try { const j = await (await fetchT('https://lite-api.jup.ag/tokens/v2/search?query=' + encodeURIComponent(mintQ || sym))).json(), t = (Array.isArray(j) ? j : []).find((x) => x && (mintQ ? x.id === mintQ : (x.isVerified || (x.tags || []).includes('verified')) && String(x.symbol).toLowerCase() === sym.toLowerCase()));
+        try { const j = await (await fetchT(JUP + '/tokens/v2/search?query=' + encodeURIComponent(mintQ || sym))).json(), t = (Array.isArray(j) ? j : []).find((x) => x && (mintQ ? x.id === mintQ : (x.isVerified || (x.tags || []).includes('verified')) && String(x.symbol).toLowerCase() === sym.toLowerCase()));
           const url = t && typeof t.icon === 'string' ? new URL(t.icon) : null;
           if (url && url.protocol === 'https:' && !/^(\d+\.){3}\d+$|^\[|localhost|\.internal$|\.local$/i.test(url.hostname)) { const r = await fetchT(url.href), ct = String(r.headers.get('content-type') || '').split(';')[0];
             if (r.ok && /^image\/(png|jpeg|webp|gif)$/.test(ct)) { const buf = Buffer.from(await r.arrayBuffer()); if (buf.length <= 400e3) { h.buf = buf; h.ct = ct; } } } } catch {}
@@ -373,13 +374,13 @@ async function handleReq(req, res) {
       if (!rate('ts|' + ip(req), 40, 6e4)) { res.writeHead(429, { 'access-control-allow-origin': '*' }); return res.end('[]'); }
       const qs = String(u.searchParams.get('q') || '').trim().slice(0, 50); if (qs.length < 2) return J([]);
       const k = 'ts|' + qs.toLowerCase(), h = lbCache.get(k); if (h && Date.now() - h.at < 3e5) return J(h.v);
-      let out = [], okRes = false; try { const j = await (await fetchT('https://lite-api.jup.ag/tokens/v2/search?query=' + encodeURIComponent(qs))).json(); okRes = Array.isArray(j);
+      let out = [], okRes = false; try { const j = await (await fetchT(JUP + '/tokens/v2/search?query=' + encodeURIComponent(qs))).json(); okRes = Array.isArray(j);
         out = (Array.isArray(j) ? j : []).filter((t) => t && t.id && (t.isVerified || (t.tags || []).includes('verified'))).slice(0, 8)
           .map((t) => ({ mint: String(t.id), symbol: String(t.symbol || '').slice(0, 12), name: String(t.name || '').slice(0, 40), icon: typeof t.icon === 'string' ? t.icon : null, usd: +t.usdPrice || 0, liq: +t.liquidity || 0, verified: true })); } catch {}
       if (okRes) lbCache.set(k, { at: Date.now(), v: out }); return J(out); }
     if (p[1] === 'qprice') { const m = String(u.searchParams.get('mint') || ''); if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(m)) return J({ usd: 0 });   // pair-token price for the Create page
       let usd = quoteUsd(m, KNOWN_Q[m]), symbol = KNOWN_Q[m] || null, name = null, icon = null, verified = m === WSOL || STABLE.has(m);
-      try { const r = await fetchT('https://lite-api.jup.ag/tokens/v2/search?query=' + m); const j = await r.json(); const t = Array.isArray(j) ? j.find((x) => x.id === m) : null; if (t) { symbol = symbol || t.symbol; name = t.name; icon = t.icon || null; verified = verified || !!(t.isVerified || (t.tags || []).includes('verified')); if (!QUOTE_OVERRIDE[m] && t.usdPrice) { usd = +t.usdPrice * (await qMult(m)); qPrice.set(m, usd); } } } catch {}   // per on-chain unit (scaled-UI tokens: × multiplier)
+      try { const r = await fetchT(JUP + '/tokens/v2/search?query=' + m); const j = await r.json(); const t = Array.isArray(j) ? j.find((x) => x.id === m) : null; if (t) { symbol = symbol || t.symbol; name = t.name; icon = t.icon || null; verified = verified || !!(t.isVerified || (t.tags || []).includes('verified')); if (!QUOTE_OVERRIDE[m] && t.usdPrice) { usd = +t.usdPrice * (await qMult(m)); qPrice.set(m, usd); } } } catch {}   // per on-chain unit (scaled-UI tokens: × multiplier)
       return J({ mint: m, usd, symbol, name, icon, verified }); }
     if (p[1] === 'coins') { if (!coinsSnap || Date.now() - coinsSnap.at > 10e3) coinsSnap = { at: Date.now(), v: q('SELECT mint FROM coins ORDER BY created_slot DESC LIMIT 2000').filter((r) => !HIDDEN.has(r.mint)).map((r) => stats(r.mint, true)) }; return J(coinsSnap.v); }
     if (p[1] === 'coin') return J(HIDDEN.has(p[2]) ? null : stats(p[2]));

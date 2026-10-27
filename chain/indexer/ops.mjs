@@ -12,7 +12,7 @@ import { createHash } from 'node:crypto';
 import { withLock } from './lock.mjs';
 import { SwapMode, getCurrentPoint, deriveDammV2PoolAddress, DAMM_V2_MIGRATION_FEE_ADDRESS } from '@meteora-ag/dynamic-bonding-curve-sdk';
 import { CpAmm } from '@meteora-ag/cp-amm-sdk';
-import { sendTx, getTxRetry, fetchT, landOrExpire } from './txutil.mjs';
+import { sendTx, getTxRetry, fetchT, landOrExpire, JUP } from './txutil.mjs';
 
 // OPS_SECRET: a real keypair (JSON array or base58). A plain string is accepted ONLY off mainnet (seeded key, for dev/test).
 export function opsKeypair(secret, { mainnet = false } = {}) {
@@ -51,9 +51,9 @@ export function startOps({ conn, dbc, ops, treasury, q, q1, run, mainnet = false
   async function convertTo(c, rw) {
     if (!mainnet) throw new Error('reward-token swaps need Jupiter (mainnet)'); if (!(await rewardOk(rw))) throw new Error('reward token not allowed');
     const amt = pendingPair(c.mint), inM = qmOf(c).toBase58(); if (amt <= 0) return 0;
-    const qr = await (await fetchT(`https://lite-api.jup.ag/swap/v1/quote?inputMint=${inM}&outputMint=${rw}&amount=${amt}&slippageBps=300&maxAccounts=40`)).json();
+    const qr = await (await fetchT(`${JUP}/swap/v1/quote?inputMint=${inM}&outputMint=${rw}&amount=${amt}&slippageBps=300&maxAccounts=40`)).json();
     if (!qr?.outAmount || qr.outputMint !== rw || qr.inputMint !== inM || String(qr.inAmount) !== String(amt)) throw new Error('no route');
-    const sw = await (await fetchT('https://lite-api.jup.ag/swap/v1/swap', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ quoteResponse: qr, userPublicKey: ops.publicKey.toBase58(), wrapAndUnwrapSol: true, dynamicComputeUnitLimit: true }) })).json();
+    const sw = await (await fetchT(JUP + '/swap/v1/swap', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ quoteResponse: qr, userPublicKey: ops.publicKey.toBase58(), wrapAndUnwrapSol: true, dynamicComputeUnitLimit: true }) })).json();
     const vt = VersionedTransaction.deserialize(Buffer.from(sw.swapTransaction, 'base64')); if (!vt.message.staticAccountKeys[0].equals(ops.publicKey)) throw new Error('route not paid by ops');
     const luts = (await Promise.all(vt.message.addressTableLookups.map((l) => conn.getAddressLookupTable(l.accountKey)))).map((r) => r.value);
     const msg = TransactionMessage.decompile(vt.message, { addressLookupTableAccounts: luts }); msg.instructions.push(memoIx(`treid:taxconv:${c.mint}:${amt}:${rw}`));
