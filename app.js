@@ -2438,9 +2438,16 @@
   }
   function lbCoCard(x) {
     var c = x.c, t = x.t, up = x.pr >= 0, txt = c.text.length > 220 ? c.text.slice(0, 220) + '…' : c.text;
-    return '<button class="lb3-co" data-act="lbCo" data-arg="' + esc(t.tick + '|' + c.id) + '"><div class="lb3-coh"><span class="av" style="width:38px;height:38px">' + A.svg(walletSpec(c.w)) + '</span><b>' + esc(walletName(c.w)) + '</b><small class="muted">' + ago(c.t) + '</small></div>' +
+    var key = t.tick + '|' + c.id, kids = (DEMO ? seedComments(t) : S.comments[t.tick] || []).filter(function (k) { return k.reply === c.id; }).length, ic = function (d) { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' + d + '</svg>'; };
+    var acts = '<div class="lb3-coa"><button data-act="coShare" data-arg="' + esc(key) + '" title="Share">' + ic('<path d="M4 12v8h16v-8M12 3v13M7 8l5-5 5 5"/>') + '</button>' +
+      '<button class="' + (c.rtd ? 'on rt' : '') + '" data-act="coRT" data-arg="' + esc(key) + '" title="Repost">' + ic('<path d="M17 2l4 4-4 4M3 11V9a3 3 0 013-3h15M7 22l-4-4 4-4M21 13v2a3 3 0 01-3 3H3"/>') + (c.rt || '') + '</button>' +
+      '<button class="' + (c.liked ? 'on lk' : '') + '" data-act="coLike" data-arg="' + esc(key) + '" title="Like"><svg viewBox="0 0 24 24" fill="' + (c.liked ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="2"><path d="M12 21s-8-5.2-8-11a4.5 4.5 0 018-2.8A4.5 4.5 0 0120 10c0 5.8-8 11-8 11z"/></svg>' + (c.likes || '') + '</button>' +
+      '<button data-act="lbCo" data-arg="' + esc(key) + '" title="Comments">' + ic('<path d="M21 12a8 8 0 01-11.6 7.1L4 21l1.9-5.4A8 8 0 1121 12z"/>') + (kids || '') + '</button>' +
+      (c.views ? '<span>' + ic('<path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/>') + fmtNum(c.views) + '</span>' : '') +
+      '<span class="mono lb3-mc">' + fmtK(t.mcN) + ' MC</span></div>';
+    return '<div class="lb3-co"><div class="lb3-cok" data-act="lbCo" data-arg="' + esc(key) + '"><div class="lb3-coh"><span class="av" style="width:38px;height:38px">' + A.svg(walletSpec(c.w)) + '</span><b>' + esc(walletName(c.w)) + '</b><small class="muted">' + ago(c.t) + '</small></div>' +
       '<p>' + esc(txt) + '</p><div class="lb3-cob">' + avatarHTML(t, 34) + '<span class="lb3-cot"><b>$' + esc(t.tick) + '</b><small class="muted">' + esc(t.name) + '</small></span><span class="r"><small>Position</small><b class="mono">$' + money(x.pos) + '</b></span><span class="r"><small>Profit</small><b class="mono ' + (up ? 'up' : 'down') + '">' + (up ? '+' : '−') + '$' + money(x.pr) + '</b></span></div>' +
-      '<div class="lb3-cof muted"><span>' + (c.img ? '🖼 ' : '') + 'called at ' + (c.mc0 ? fmtK(c.mc0) : '—') + ' MC</span><span class="mono">' + fmtK(t.mcN) + ' MC now</span></div></button>';
+      (c.mc0 ? '<div class="lb3-cof muted">called at ' + fmtK(c.mc0) + ' MC</div>' : '') + '</div>' + acts + '</div>';
   }
   function leadersPage() {
     var tabs = [['traders', 'Traders', 'Profit from every buy and sell on treid — realised plus what you still hold.'], ['devs', 'Devs', 'Creators ranked by track record — graduations, best ATH, coins left behind.'], ['callers', 'Callers', 'Whose callouts actually pump — average gain since the call.'], ['hall', 'Hall of fame', 'Coins that hit the biggest milestones.']];

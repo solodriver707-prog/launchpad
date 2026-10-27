@@ -4615,3 +4615,13 @@ button[disabled].big-btn{opacity:.7;cursor:progress}
 .kst .big b{font-size:22px;font-weight:800;display:flex;align-items:center;gap:8px}
 .kst .chgpill{font-size:11px}
 @media (max-width:900px){.kst{grid-template-columns:repeat(3,1fr)}.kst>div:nth-child(4){border-left:0}.kst>div:nth-child(n+4){border-top:1px solid var(--line)}}
+.lb3-co{cursor:default}
+.lb3-cok{display:flex;flex-direction:column;gap:10px;cursor:pointer}
+.lb3-coa{margin-left:48px;display:flex;align-items:center;gap:16px;color:var(--muted);font-size:12.5px}
+.lb3-coa button,.lb3-coa span{min-height:0;padding:0;border:0;background:none;color:inherit;display:inline-flex;align-items:center;gap:5px;cursor:pointer;font-size:12.5px}
+.lb3-coa span{cursor:default}
+.lb3-coa svg{width:15px;height:15px}
+.lb3-coa button:hover{color:#fff}
+.lb3-coa .on.lk{color:var(--down)}.lb3-coa .on.rt{color:var(--up)}
+.lb3-coa .lb3-mc{margin-left:auto}
+@media (max-width:640px){.lb3-coa{margin-left:0}}
