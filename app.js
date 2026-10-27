@@ -542,6 +542,12 @@
     if (!t.soc && t.prog > 20) f.push('No socials');
     return f;
   }
+  // phones: pump.fun-style coin rows — square logo, name + ticker + age, big market cap and a % pill, row tinted by direction
+  function mrow(t) { var c = chg(t), up = c >= 0, tm = Math.max(t.buy, t.sell), id = esc(t.tick), hot = Math.abs(c) >= 25 || (t.vol > 50 && up), age = ago(t.born), vo = vampOf(t);
+    return '<button class="mrow ' + (up ? 'up' : 'dn') + '" data-act="open" data-arg="' + id + '"><span class="mr-pic">' + avatarHTML(t, 60) + '<span class="mr-pair">' + coinHTML(t.pair, 18) + '</span></span>' +
+      '<span class="mr-mid"><span class="mr-n"><b>' + esc(t.name) + '</b>' + (vo ? '<i class="mr-v">🧛</i>' : '') + (hot ? '<em class="mr-hot">HOT</em>' : '') + '</span>' +
+      '<span class="mr-s"><span class="mono">' + id + '</span><span class="mr-age">🌱 ' + age + '</span>' + (tm > 0 ? '<span class="mr-tax" style="background:' + taxBg(tm) + '">' + tm + '%</span>' : '') + (t.prog >= 100 ? '<span class="mr-g">🎓</span>' : '') + '</span></span>' +
+      '<span class="mr-r"><b class="mono" data-mc="' + id + '" data-v="' + fmtK(t.mcN) + '">' + fmtK(t.mcN) + '</b><span class="chgpill ' + (up ? 'up' : 'down') + '" data-chg="' + id + '">' + (up ? '↑ ' : '↓ ') + chgTxt(Math.abs(c)).replace('+', '') + '</span></span></button>'; }
   function card(t, opts) {
     opts = opts || {};
     var tmax = Math.max(t.buy, t.sell), on = S.watch.indexOf(t.tick) !== -1, c = chg(t), done = t.prog >= 100, fr = freshness(t), fl = redFlags(t);
@@ -1656,7 +1662,7 @@
       var ir = e && e.closest('.irange'); if (ir) ir.classList.toggle('on', l !== 'Any');
     });
     if (S.view === 'orbit') raceRefresh();
-    if (g && S.view !== 'bubbles' && S.view !== 'list') g.innerHTML = list.length ? list.map(function (t) { return card(t); }).join('') : '<div class="empty"><b style="font-size:19px">No coins in this range</b><span class="muted">Widen a slider or hit Reset.</span><button class="btn pri" data-act="reset">Reset filters</button></div>';
+    if (g && S.view !== 'bubbles' && S.view !== 'list') g.innerHTML = list.length ? list.map(function (t) { return isMob() ? mrow(t) : card(t); }).join('') : '<div class="empty"><b style="font-size:19px">No coins in this range</b><span class="muted">Widen a slider or hit Reset.</span><button class="btn pri" data-act="reset">Reset filters</button></div>';
   }
   var SLOGANS = ['The market', 'is yours.'];
   var KIN = DEMO ? [['GOLD', 'gold'], ['$NFROG', 'frogs'], ['TSLAx', 'tesla'], ['SOL', 'solana'], ['$CHAD', 'chads'], ['EUR', 'euros'], ['BTC', 'bitcoin'], ['', 'anything.']] : [['SOL', 'solana'], ['USDC', 'dollars'], ['BTC', 'bitcoin'], ['', 'anything.']];
@@ -1707,7 +1713,7 @@
     if (!DEMO && S.view === 'orbit') S.view = 'grid';
 
     var list = filtered(), PAGE = window.matchMedia && window.matchMedia('(max-width: 760px)').matches ? 8 : 12, fkey = [S.sort, S.view, S.pair, S.cat, S.maxTax, S.minProg, S.minMc, S.zeroOnly, S.gradOnly, S.rewardsOnly, S.watchOnly].join('|');
-    if (S.shownKey !== fkey) { S.shownKey = fkey; S.shown = PAGE; }
+    if (S.shownKey !== fkey) { S.shownKey = fkey; S.shown = isMob() ? 25 : PAGE; }
     var shown = list.slice(0, S.shown || PAGE), more = list.length > shown.length ? '<div class="more-wrap"><button class="btn sec more-btn" data-act="showMore">Show more<span class="mono">' + shown.length + ' of ' + list.length + '</span></button>' + (list.length - shown.length > PAGE ? '<button class="link more-all" data-act="showAll">Show all</button>' : '') + '</div>' : '';
     var toolbar = '<div class="toolbar"><h2 class="h2">Tokens</h2>' + (DEMO ? '<span class="demo" data-tip="Market data is simulated until on-chain launch goes live.">DEMO DATA</span><button class="demo-img-btn" data-act="demoImgs">🖼 Try real images</button>' : '') + '<div class="seg">' + SORTS.map(function (s) {
       return '<button class="' + (S.sort === s[0] ? 'on' : '') + '" aria-pressed="' + (S.sort === s[0]) + '" data-act="sort" data-arg="' + s[0] + '">' + s[1] + '</button>';
@@ -1716,7 +1722,7 @@
 
     var filters = filterBar();
 
-    var grid = (!S.loading && S.view === 'list') ? listHTML(shown, true) + more : (!S.loading && S.view === 'orbit') ? (function () { var a = list; return '<div class="orb-inline">' + orbitStage(a, a.filter(function (t) { return t.prog < 100; }), a.filter(function (t) { return t.prog >= 100; })) + '</div>'; })() : (!S.loading && S.view === 'bubbles') ? bubblesHTML(list) : '<section class="grid" id="grid">' + (S.loading ? [0, 1, 2, 3, 4, 5].map(skeletonCard).join('') : list.length ? shown.map(function (t) { return card(t); }).join('') :
+    var grid = (!S.loading && S.view === 'list') ? listHTML(shown, true) + more : (!S.loading && S.view === 'orbit') ? (function () { var a = list; return '<div class="orb-inline">' + orbitStage(a, a.filter(function (t) { return t.prog < 100; }), a.filter(function (t) { return t.prog >= 100; })) + '</div>'; })() : (!S.loading && S.view === 'bubbles') ? bubblesHTML(list) : '<section class="grid" id="grid">' + (S.loading ? [0, 1, 2, 3, 4, 5].map(skeletonCard).join('') : list.length ? shown.map(function (t) { return isMob() ? mrow(t) : card(t); }).join('') :
       (!DEMO && S.pair !== 'All' && !all().some(function (x) { return pairLabel(x.pair) === S.pair || x.pair === S.pair; }) ? '<div class="empty"><b style="font-size:19px">No coins paired with ' + esc(S.pair) + ' yet</b><span class="muted">Be the first — launch a coin that trades against ' + esc(S.pair) + '.</span><span style="display:flex;gap:8px;justify-content:center"><button class="btn pri" data-act="launchPair" data-arg="' + esc(S.pair) + '">Launch paired with ' + esc(S.pair) + '</button><button class="btn sec" data-act="pclear">Show all</button></span></div>' :
       '<div class="empty"><b style="font-size:19px">No tokens match these filters</b><span class="muted">Loosen the tax or market cap filters.</span><button class="btn pri" data-act="reset">Reset filters</button></div>')) + '</section>' + (S.loading ? '' : more);
 
@@ -3416,7 +3422,7 @@
     var c = chg(t), cls = c >= 0 ? 'up' : 'down';
     q(attr('data-mc', t.tick)).forEach(function (el) { roll(el, fmtK(t.mcN), dir); });
     q(attr('data-price', t.tick)).forEach(function (el) { roll(el, fmtPrice(price(t)), dir); });
-    q(attr('data-chg', t.tick)).forEach(function (el) { el.textContent = chgTxt(c); el.className = 'chgpill ' + cls; });
+    q(attr('data-chg', t.tick)).forEach(function (el) { el.textContent = el.closest('.mr-r') ? (c >= 0 ? '↑ ' : '↓ ') + chgTxt(Math.abs(c)).replace('+', '') : chgTxt(c); el.className = 'chgpill ' + cls; var row = el.closest('.mrow'); if (row) { row.classList.toggle('up', c >= 0); row.classList.toggle('dn', c < 0); } });
     q(attr('data-chg2', t.tick)).forEach(function (el) { el.textContent = chgTxt(c); el.classList.remove('up', 'down'); el.classList.add(cls); });
     q(attr('data-chg3', t.tick)).forEach(function (el) { el.textContent = chgTxt(c); el.className = 'bc ' + cls; var b = el.parentNode; if (b) { b.classList.toggle('pos', c >= 0); b.classList.toggle('neg', c < 0); b.classList.remove('hit'); void b.offsetWidth; b.classList.add('hit'); } });
     q(attr('data-tape', t.tick)).forEach(function (el) { el.textContent = chgTxt(c); el.className = cls; });
@@ -3766,7 +3772,7 @@
           .then(function (b) { confettiSmall(); toast('Claimed ' + b.amount.toFixed(4) + ' ' + qSymT(tc) + ' to your wallet ✓', tc); tc.crFees && (tc.crFees.unclaimed = 0); render(); setTimeout(function () { liveLoad(tc); }, 1500); })
           .catch(function (e) { if (e && e.message !== 'busy') toast('Claim failed: ' + chainErr(e)); });
         break;
-      case 'showMore': S.shown = (S.shown || 12) + (window.matchMedia('(max-width: 760px)').matches ? 8 : 12); render(); break;
+      case 'showMore': S.shown = (S.shown || 12) + (window.matchMedia('(max-width: 760px)').matches ? 25 : 12); render(); break;
       case 'showAll': S.shown = 9999; render(); break;
       case 'mlaunch': newLaunch(); break;
       case 'trade':

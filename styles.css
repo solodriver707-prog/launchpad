@@ -4992,3 +4992,28 @@ button[disabled].big-btn{opacity:.7;cursor:progress}
   .bn-lh{flex-wrap:wrap;gap:8px}.bn-lh .seg{max-width:100%;overflow-x:auto;scrollbar-width:none;flex-wrap:nowrap}.bn-lh .seg button{flex:none;white-space:nowrap}
   .devb-in{flex:1 1 140px;min-width:0}.devb-in input{min-width:0;width:100%}
 }
+/* phones: pump.fun-style coin list */
+@media (max-width:760px){
+  #grid.grid,section.grid{display:flex!important;flex-direction:column;gap:0!important;margin:0 -10px}
+  .mrow{display:grid;grid-template-columns:60px minmax(0,1fr) auto;gap:14px;align-items:center;width:100%;min-height:0;padding:14px 14px;border:0;border-bottom:1px solid rgba(255,255,255,.06);color:#fff;text-align:left;cursor:pointer;background:linear-gradient(90deg,transparent 35%,rgba(61,220,151,.07))}
+  .mrow.dn{background:linear-gradient(90deg,transparent 35%,rgba(242,112,138,.09))}
+  .mrow:active{background-color:rgba(255,255,255,.04)}
+  .mr-pic{position:relative;width:60px;height:60px}
+  .mr-pic>.av{width:60px!important;height:60px!important;border-radius:14px!important;overflow:hidden}
+  .mr-pic>.av img,.mr-pic>.av svg{border-radius:14px}
+  .mr-pair{position:absolute;right:-5px;bottom:-5px;border-radius:50%;box-shadow:0 0 0 3px #0a0a0c;line-height:0}
+  .mr-mid{display:flex;flex-direction:column;gap:5px;min-width:0}
+  .mr-n{display:flex;align-items:center;gap:7px;min-width:0}
+  .mr-n b{font-size:17px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .mr-hot{flex:none;font-style:normal;font-size:10px;font-weight:800;color:#FF6B8B;border:1.5px solid #FF6B8B;border-radius:99px;padding:1px 6px}
+  .mr-v{font-style:normal;font-size:13px}
+  .mr-s{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--muted);min-width:0;white-space:nowrap}
+  .mr-s .mono{overflow:hidden;text-overflow:ellipsis;max-width:90px}
+  .mr-age{color:#7ee2a8}
+  .mr-tax{color:#111;font-weight:800;font-size:11px;padding:1px 6px;border-radius:6px}
+  .mr-r{display:flex;flex-direction:column;align-items:flex-end;gap:7px}
+  .mr-r b{font-size:20px;font-weight:800;letter-spacing:-.01em}
+  .mr-r .chgpill{font-size:12.5px;font-weight:800;padding:3px 9px;border-radius:7px}
+  .mr-r .chgpill.up{background:rgba(61,220,151,.16);color:#3DDC97}
+  .mr-r .chgpill.down{background:rgba(242,112,138,.18);color:#F2708A}
+}
