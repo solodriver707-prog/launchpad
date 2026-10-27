@@ -150,6 +150,21 @@ async function quoteAllowed(qm) {
   if (got) qOk.set(qm, { ok, at: Date.now() }); else if (!ok) throw new Error('pair check unavailable');   // a failed lookup is retried, never cached as "not allowed"
   return ok;
 }
+// coin images: fetched once from IPFS (slow public gateways) and served from here with a long browser cache
+run('CREATE TABLE IF NOT EXISTS cimg(mint TEXT, b INT, ct TEXT, data BLOB, at INT, PRIMARY KEY(mint, b))');
+const imgBusy = new Map();
+function ipfsUrls(u) { const m = String(u || '').match(/\/ipfs\/([A-Za-z0-9]+)(\/[^?#]*)?/) || String(u || '').match(/^ipfs:\/\/([A-Za-z0-9]+)(\/[^?#]*)?/); if (!m) return /^https:\/\//.test(u) ? [u] : []; const path = m[1] + (m[2] || ''); return [PINATA_GW + '/ipfs/' + path, 'https://ipfs.io/ipfs/' + path, 'https://gateway.pinata.cloud/ipfs/' + path].filter((x, i, a) => a.indexOf(x) === i); }
+async function fetchAny(urls, ms = 12e3) { for (const x of urls) { try { const h = new URL(x).hostname; if (/^(\d+\.){3}\d+$|^\[|localhost|\.internal$|\.local$/i.test(h)) continue; const r = await fetch(x, { signal: AbortSignal.timeout(ms) }); if (r.ok) return r; } catch {} } return null; }
+function coinImage(mint, ban) {
+  const row = q1('SELECT ct, data, at FROM cimg WHERE mint=? AND b=?', mint, ban); if (row && row.data) return Promise.resolve({ ct: row.ct, data: Buffer.from(row.data) }); if (row && Date.now() - row.at < 10 * 60e3) return Promise.resolve(null);   // remembered miss: retry in 10 min
+  const k = mint + '|' + ban; if (imgBusy.has(k)) return imgBusy.get(k);
+  const pr = (async () => { const c = q1('SELECT uri FROM coins WHERE mint=?', mint); if (!c?.uri) return null;
+    const mr = await fetchAny(ipfsUrls(c.uri)); let meta = null; try { meta = mr && await mr.json(); } catch {} const src = meta && (ban ? meta.banner : meta.image); if (typeof src !== 'string') { run('INSERT OR REPLACE INTO cimg(mint,b,ct,data,at) VALUES(?,?,?,?,?)', mint, ban, null, null, Date.now()); return null; }
+    const r = await fetchAny(ipfsUrls(src), 20e3); const ct = r && String(r.headers.get('content-type') || '').split(';')[0];
+    if (!r || !/^image\/(png|jpe?g|gif|webp)$/.test(ct)) { run('INSERT OR REPLACE INTO cimg(mint,b,ct,data,at) VALUES(?,?,?,?,?)', mint, ban, null, null, Date.now()); return null; }
+    const buf = Buffer.from(await r.arrayBuffer()); if (buf.length > 6e6) return null; run('INSERT OR REPLACE INTO cimg(mint,b,ct,data,at) VALUES(?,?,?,?,?)', mint, ban, ct, buf, Date.now()); return { ct, data: buf }; })().catch(() => null).finally(() => imgBusy.delete(k));
+  imgBusy.set(k, pr); return pr;
+}
 // copycat ("vamp") detection: a coin whose ticker or name folds to the same thing as an OLDER treid coin gets flagged, never blocked
 const LEET = { '0': 'o', '1': 'i', '3': 'e', '4': 'a', '5': 's', '7': 't', '8': 'b', '$': 's', '@': 'a', '!': 'i' };
 function fold(x) { return String(x || '').replace(/^\s*\$+/, '').trim().toLowerCase().replace(/\s+/g, ' '); }   // 1:1 only (case and spaces ignored)
@@ -194,6 +209,7 @@ async function addCoin0(mint, slot, ts, creator, poolAddr, softErr) {
   if (qm !== WSOL) { const qa = await conn.getAccountInfo(new PublicKey(qm)).catch(softErr); if (qa?.owner?.equals(TOKEN_2022_PROGRAM_ID)) { const qmi = await getMint(conn, new PublicKey(qm), 'confirmed', TOKEN_2022_PROGRAM_ID).catch(softErr); const QOK = new Set([ExtensionType.MetadataPointer, ExtensionType.TokenMetadata, ExtensionType.ImmutableOwner]); const tfq = qmi && getTransferFeeConfig(qmi), taxed = tfq && (tfq.newerTransferFee.transferFeeBasisPoints > 0 || tfq.olderTransferFee.transferFeeBasisPoints > 0);
     if (!qmi || taxed || getExtensionTypes(qmi.tlvData).includes(ExtensionType.TransferHook) || (getExtensionTypes(qmi.tlvData).some((e) => !QOK.has(e)) && !(await hasBadge(qm)))) { console.log('skip  pair token not allowed', mint); return false; } } }   // extra features only with Meteora's badge; never taxed or hooked
   const ins = run('INSERT OR IGNORE INTO coins(mint,pool,config,creator,name,symbol,uri,tax_bps,created_slot,created_at,trap_bps,trap_secs,trap_steps,quote_mint,quote_dec,quote_symbol) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', mint, ps.publicKey.toBase58(), cfg, creator || pst.creator.toBase58(), md?.name || '', md?.symbol || '', md?.uri || '', tf ? tf.newerTransferFee.transferFeeBasisPoints : 0, creator ? slot : 0, creator || !cf || Number(cf.activationType) !== 1 ? ts : Number(pst.activationPoint) * 1000, trap.bps, trap.secs, trap.steps, qm, qd, qs || 'SOL');
+  if (ins.changes) setTimeout(() => { coinImage(mint, 0); coinImage(mint, 1); }, 4000);   // warm the image cache so the first visitor doesn't wait on IPFS
   if (ins.changes) { push({ type: 'coin', mint, name: md?.name, symbol: md?.symbol }); console.log('coin  ', md?.symbol, mint); } return true;
 }
 // pool creations, read from the DBC instruction itself (accounts: 2 = creator, 3 = base_mint) — never from fee payer / logs / balances
@@ -373,7 +389,9 @@ async function handleReq(req, res) {
   if (p[1] === 'meta' && p[2]) { const m = q1('SELECT * FROM meta WHERE mint=?', p[2]), c = q1('SELECT name, symbol FROM coins WHERE mint=?', p[2]); if (!m && !c) { res.writeHead(404, { 'access-control-allow-origin': '*' }); return res.end('{}'); }
     const base = PUBLIC_URL;
     return J({ name: m?.name || c?.name, symbol: m?.symbol || c?.symbol, description: m?.description || '', image: m?.image ? base + '/api/img/' + p[2] : null, banner: m?.banner ? base + '/api/img/' + p[2] + '?b=1' : null }); }
-  if (p[1] === 'img' && p[2]) { const m = q1('SELECT image, banner FROM meta WHERE mint=?', p[2]), d = u.searchParams.get('b') ? m?.banner : m?.image; if (!d) { res.writeHead(404); return res.end(); }
+  if (p[1] === 'img' && p[2]) { const ban = u.searchParams.get('b') ? 1 : 0, m = q1('SELECT image, banner FROM meta WHERE mint=?', p[2]), d = ban ? m?.banner : m?.image;
+    if (!d || !String(d).startsWith('data:')) { const im = await coinImage(p[2], ban); if (!im) { res.writeHead(404, { 'access-control-allow-origin': '*', 'cache-control': 'public, max-age=300' }); return res.end(); }
+      res.writeHead(200, { 'content-type': im.ct, 'x-content-type-options': 'nosniff', 'access-control-allow-origin': '*', 'cache-control': 'public, max-age=604800, immutable' }); return res.end(im.data); }
     const [h, b64] = d.split(','), ct = h.slice(5, h.indexOf(';')); if (!/^image\/(png|jpe?g|gif|webp)$/.test(ct)) { res.writeHead(404); return res.end(); }   // never serve svg (script)
     res.writeHead(200, { 'content-type': ct, 'x-content-type-options': 'nosniff', 'access-control-allow-origin': '*', 'cache-control': 'public, max-age=86400' }); return res.end(Buffer.from(b64, 'base64')); }
   if (!p.length || p[1] === 'health') return J({ ok: true, coins: q1('SELECT COUNT(*) n FROM coins').n, trades: q1('SELECT COUNT(*) n FROM trades').n, configs: configs.size, partner: PARTNER || null, ops: OPS?.publicKey.toBase58() || null, ipfs: !!PINATA_JWT, sol_usd: SOL_USD, ready, cluster: MAINNET ? 'mainnet' : 'devnet', db_persistent: DB_PATH.startsWith('/data/'), ops_sol: opsSolC.v, sites: SITES });
@@ -477,6 +495,7 @@ let ready = false;
 if (!PARTNER) { console.error('Set PARTNER=<treid fee-claimer wallet>'); process.exit(1); }
 if (MAINNET && !(+process.env.OPS_PRIORITY_MICROLAMPORTS > 0)) console.error('!! OPS_PRIORITY_MICROLAMPORTS is 0 on mainnet — ops transactions may not land');
 if (MAINNET && OPS && PARTNER === OPS.publicKey.toBase58()) { console.error('On mainnet the treasury (PARTNER) must be a separate cold wallet, not the hot ops wallet'); process.exit(1); }
+setTimeout(async () => { for (const c of q('SELECT mint FROM coins ORDER BY created_at DESC LIMIT 300')) { if (!q1('SELECT 1 FROM cimg WHERE mint=? AND b=0', c.mint)) await coinImage(c.mint, 0); } }, 20e3);   // warm missing images after a restart
 BUB = startBubbles({ conn, q, q1, run, holdersCached });
 CO = startCallouts({ q, q1, run, push, rate, pinJSON, pinFile, pinataJwt: PINATA_JWT, gateway: PINATA_GW,
   coinStats: async (mint, wallet) => { const last = q1('SELECT mcap_usd, price_usd FROM trades WHERE mint=? ORDER BY ts DESC, slot DESC LIMIT 1', mint) || {}; let pos = 0;

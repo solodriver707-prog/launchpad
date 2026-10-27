@@ -50,9 +50,10 @@
     var h = Math.floor(m / 60); if (h < 24) return h + 'h'; return Math.floor(h / 24) + 'd';
   }
   function fmtNum(n) { if (!isFinite(n)) n = 0; var sg = n < 0 ? '-' : '', a = Math.abs(n); return sg + (a >= 1e9 - 5e5 ? (a / 1e9).toFixed(2) + 'B' : a >= 999950 ? (a / 1e6).toFixed(2) + 'M' : a >= 999.5 ? (a / 1e3).toFixed(1) + 'K' : Math.round(a).toString()); }
+  var BADIMG = {}; document.addEventListener('error', function (e) { var im = e.target; if (!im || im.tagName !== 'IMG' || !im.closest('.av')) return; var src = im.getAttribute('src'); if (BADIMG[src]) return; BADIMG[src] = 1; im.style.visibility = 'hidden'; }, true);   // a missing logo hides instead of showing a broken image
   function avatarHTML(t, size) {
     if (!t || (!t.img && !t.spec)) t = { img: t && t.img, spec: { kind: 'frog', skin: A.SKINS[0], bg: A.BGS[0], eyes: 'normal', mouth: 'smile', acc: 'none' } };
-    var inner = t.img ? '<img src="' + esc(t.img) + '" alt="">' : A.svg(t.spec);
+    var inner = t.img && !BADIMG[t.img] ? '<img src="' + esc(t.img) + '" alt="" decoding="async"' + (size < 120 ? ' loading="lazy"' : '') + '>' : A.svg(t.spec);
     return '<span class="av" style="width:' + size + 'px;height:' + size + 'px">' + inner + '</span>';
   }
   function copy(text, label) {
@@ -1732,10 +1733,11 @@
     var slot = document.getElementById('ts-slot'); if (!slot) return;
     if (!TS.el) { TS.el = document.createElement('div'); TS.el.className = 'ts-track'; TS.el.addEventListener('mouseenter', function () { TS.hover = true; }); TS.el.addEventListener('mouseleave', function () { TS.hover = false; }); requestAnimationFrame(tsTick); }
     var L = tsList(), key = L.map(function (t) { return t.tick; }).join(',');
-    if (key !== TS.key || Date.now() - TS.at > 45e3) { var h = L.map(tsCard).join(''); TS.el.innerHTML = h + h; TS.key = key; TS.at = Date.now(); }
+    if (key !== TS.key || Date.now() - TS.at > 45e3) { var h = L.map(tsCard).join(''); TS.few = L.length < 6; TS.el.innerHTML = TS.few ? h : h + h; TS.key = key; TS.at = Date.now(); if (TS.few) { TS.x = 0; TS.el.style.transform = ''; } }
+    var sec = slot.closest('.ts'); if (sec) sec.style.display = L.length ? '' : 'none';
     if (TS.el.parentNode !== slot) slot.appendChild(TS.el);
   }
-  function tsTick(now) { if (TS.el && TS.el.isConnected) { var dt = Math.min(64, now - (TS.last || now)); if (!TS.hover && !document.hidden) { TS.x -= dt * .045; var half = TS.el.scrollWidth / 2; if (half > 0 && -TS.x >= half) TS.x += half; TS.el.style.transform = 'translate3d(' + TS.x.toFixed(1) + 'px,0,0)'; } } TS.last = now; requestAnimationFrame(tsTick); }
+  function tsTick(now) { if (TS.el && TS.el.isConnected) { var dt = Math.min(64, now - (TS.last || now)); if (!TS.hover && !document.hidden && !TS.few) { TS.x -= dt * .045; var half = TS.el.scrollWidth / 2; if (half > 0 && -TS.x >= half) TS.x += half; TS.el.style.transform = 'translate3d(' + TS.x.toFixed(1) + 'px,0,0)'; } } TS.last = now; requestAnimationFrame(tsTick); }
   function trendStrip() { return '<section class="ts"><div class="ts-h"><b>🔥 trending now</b><span class="muted">point at it to stop it</span><button class="link" data-act="trendList">See all →</button></div><div class="ts-view" id="ts-slot"></div></section>'; }
   // ================= PRO TOKEN PAGE (pump.fun / dexscreener style) =================
   // ===== time-based chart engine (1m … 1d candles, zoom, pan, line/candles, MA, trade markers) =====
@@ -4492,9 +4494,10 @@
     if ('vamp' in c) t.vamp = c.vamp && typeof c.vamp.mint === 'string' ? { mint: c.vamp.mint, symbol: String(c.vamp.symbol || ''), name: String(c.vamp.name || '') } : null;
     if (c.uri && !t._uri) { t._uri = 1; var pu = parseUri(c.uri); if (pu.spec) t.spec = pu.spec; if (pu.split) t.split = pu.split; if (pu.rw) t.rw = pu.rw;
       if (pu.x || pu.t || pu.w) { t.soc = true; t.links = { demo: false, x: pu.x ? xLink(pu.x) : null, tg: pu.t ? tgLink(pu.t) : null, web: pu.w ? linkOf(pu.w) : null }; }
+      if (!t.img && API) t.img = API + '/api/img/' + c.mint;   // served + cached by our server (IPFS gateways are slow)
       if (!t.img) { try { var cimg = safeImg(localStorage.getItem('dl.img.' + c.mint)); if (cimg) t.img = cimg; } catch (e) {} }
       var viaApi = function () { return API ? apiGet('/api/meta/' + c.mint) : Promise.reject(); };
-      (trustedMeta(c.uri) ? fetch(c.uri.split('?')[0]).then(function (r) { if (!r.ok) throw new Error('meta ' + r.status); return r.json(); }).catch(viaApi) : viaApi()).then(function (m) { var ch = false; if (m && safeImg(m.image)) { try { localStorage.setItem('dl.img.' + c.mint, safeImg(m.image)); } catch (e) {} } if (m && safeImg(m.image) && !t.img) { t.img = safeImg(m.image); ch = true; } if (m && m.description && !t.desc) { t.desc = m.description; ch = true; } if (m && safeImg(m.banner) && !t.banner) { t.banner = safeImg(m.banner); ch = true; } if (ch) render(); }).catch(function () { setTimeout(function () { t._uri = 0; }, 15000); }); }
+      (trustedMeta(c.uri) ? fetch(c.uri.split('?')[0]).then(function (r) { if (!r.ok) throw new Error('meta ' + r.status); return r.json(); }).catch(viaApi) : viaApi()).then(function (m) { var ch = false; if (m && safeImg(m.image)) { try { localStorage.setItem('dl.img.' + c.mint, safeImg(m.image)); } catch (e) {} } if (m && safeImg(m.image) && !t.img) { t.img = safeImg(m.image); ch = true; } if (m && m.description && !t.desc) { t.desc = m.description; ch = true; } if (m && safeImg(m.banner) && !t.banner) { t.banner = API ? API + '/api/img/' + c.mint + '?b=1' : safeImg(m.banner); ch = true; } if (ch) render(); }).catch(function () { setTimeout(function () { t._uri = 0; }, 15000); }); }
     return t;
   }
   function liveLoad(t) {
