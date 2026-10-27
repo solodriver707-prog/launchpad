@@ -2422,23 +2422,41 @@
       box.prepend(el); while (box.children.length > 3) box.removeChild(box.lastChild);
     }, 2600);
   }
+  S.lbOpen = null; S.lbCoPer = '1d';
+  function lbBestCallouts() {   // top callouts by the caller's profit on that coin
+    var span = S.lbCoPer === '1w' ? 6048e5 : 864e5, out = [];
+    (DEMO ? all() : S.live).forEach(function (t) { (DEMO ? seedComments(t) : S.comments[t.tick] || []).forEach(function (c) { if (c.reply != null || Date.now() - c.t > span) return; if (!DEMO && !c.real) return; coMeta(c, t);
+      var ps = c.ps && c.ps.trades > 0 ? c.ps : null, pos = ps ? ps.value : c.pos || 0, pr = ps ? ps.profit : (c.pos || 0) * (t.mcN / (c.mc0 || t.mcN) - 1); out.push({ c: c, t: t, pos: pos, pr: pr }); }); });
+    return out.sort(function (a, z) { return z.pr - a.pr; }).slice(0, 12);
+  }
+  function lbCoCard(x) {
+    var c = x.c, t = x.t, up = x.pr >= 0, txt = c.text.length > 220 ? c.text.slice(0, 220) + '…' : c.text;
+    return '<button class="lb3-co" data-act="lbCo" data-arg="' + esc(t.tick + '|' + c.id) + '"><div class="lb3-coh"><span class="av" style="width:38px;height:38px">' + A.svg(walletSpec(c.w)) + '</span><b>' + esc(walletName(c.w)) + '</b><small class="muted">' + ago(c.t) + '</small></div>' +
+      '<p>' + esc(txt) + '</p><div class="lb3-cob">' + avatarHTML(t, 34) + '<span class="lb3-cot"><b>$' + esc(t.tick) + '</b><small class="muted">' + esc(t.name) + '</small></span><span class="r"><small>Position</small><b class="mono">$' + money(x.pos) + '</b></span><span class="r"><small>Profit</small><b class="mono ' + (up ? 'up' : 'down') + '">' + (up ? '+' : '−') + '$' + money(x.pr) + '</b></span></div>' +
+      '<div class="lb3-cof muted"><span>' + (c.img ? '🖼 ' : '') + 'called at ' + (c.mc0 ? fmtK(c.mc0) : '—') + ' MC</span><span class="mono">' + fmtK(t.mcN) + ' MC now</span></div></button>';
+  }
   function leadersPage() {
-    setTimeout(lbMovesKick, 50);
-    var tabs = [['traders', 'Traders', 'Best profit from trading on treid'], ['devs', 'Devs', 'Creators ranked by track record — graduations, best ATH, rugs'], ['callers', 'Callers', 'Whose callouts actually pump — avg gain since the call'], ['hall', 'Hall of fame', 'Coins that hit the biggest milestones']];
+    var tabs = [['traders', 'Traders', 'Profit from every buy and sell on treid — realised plus what you still hold.'], ['devs', 'Devs', 'Creators ranked by track record — graduations, best ATH, coins left behind.'], ['callers', 'Callers', 'Whose callouts actually pump — average gain since the call.'], ['hall', 'Hall of fame', 'Coins that hit the biggest milestones.']];
     if (!tabs.some(function (x) { return x[0] === S.lbTab; })) S.lbTab = 'traders';
-    var cur = tabs.filter(function (x) { return x[0] === S.lbTab; })[0], tab = cur[0], rows = lbData(tab).slice(0, 50), hall = tab === 'hall';
-    var heads = { traders: ['Profit', 'Win rate', 'Trades', 'Best trade'], devs: ['Launches', 'Graduated', 'Rugs', 'Best ATH', 'Record'], callers: ['Avg gain', 'Hit rate', 'Calls', 'Best call'], hall: ['ATH', 'Milestones', 'Now', 'From ATH', 'Age'] }[tab];
-    var who = function (r) { return hall ? '<span class="lb2-w">' + avatarHTML(r.t, 30) + '<b>' + esc(r.t.name) + '</b><small class="mono">$' + esc(r.t.tick) + '</small></span>' : walletPill(r.a); };
-    var act = function (r) { return hall ? 'data-act="open" data-arg="' + esc(r.t.tick) + '"' : 'data-act="walletAny" data-arg="' + esc(r.a) + '"'; };
-    var pod = '<div class="lb2-stage"><div class="lb2-spot"></div><div class="lb2-moves" id="lb2-moves"></div><div class="lb2-pod">' + [1, 0, 2].filter(function (i) { return rows[i]; }).map(function (i) { var r = rows[i]; return '<button class="lb2-p p' + (i + 1) + '" ' + act(r) + '><span class="lb2-pr">' + ['🥇', '🥈', '🥉'][i] + '</span>' + (hall ? avatarHTML(r.t, i ? 54 : 70) : '<span class="av" style="width:' + (i ? 54 : 70) + 'px;height:' + (i ? 54 : 70) + 'px">' + A.svg(walletSpec(r.a)) + '</span>') + '<b>' + esc(hall ? '$' + r.t.tick : walletName(r.a)) + '</b><strong class="mono">' + r.main + '</strong><small>' + r.sub + '</small><span class="lb2-ped"><em>' + (i + 1) + '</em></span></button>'; }).join('') + '</div></div>';
-    var gcols = hall ? '44px minmax(200px,1.6fr) 110px minmax(150px,1.4fr) 100px 100px 70px' : tab === 'devs' ? '44px minmax(200px,1.6fr) 90px 120px 70px 110px 140px' : '44px minmax(200px,1.6fr) 130px 100px 90px minmax(150px,1.2fr)';
-    var table = '<div class="lb2-t" style="--gc:' + gcols + '"><div class="lb2-r lb2-h"><span>#</span><span>' + (hall ? 'Coin' : 'Wallet') + '</span>' + heads.map(function (h, i) { return '<span class="' + (i === heads.length - 1 && !hall ? '' : 'r') + '">' + h + '</span>'; }).join('') + '</div>' +
-      (rows.length ? rows.map(function (r, i) { return '<button class="lb2-r" ' + act(r) + ' style="--d:' + Math.min(i, 20) * 25 + 'ms"><span class="lb2-rk mono' + (i < 3 ? ' top' : '') + '">' + (i + 1) + '</span>' + who(r) + r.cols.map(function (c, j) { return '<span class="' + (j === r.cols.length - 1 && !hall ? '' : 'r ') + 'mono ' + (c.c || '') + (c.big ? ' big' : '') + '">' + c.v + '</span>'; }).join('') + '</button>'; }).join('') : '<div class="muted" style="padding:40px;text-align:center">Nothing here yet for this period.</div>') + '</div>';
-    var you = tab === 'traders' ? lbYou((function () { var p = 0; Object.keys(S.pos).forEach(function (k) { var t = find(k), q = t && position(t); if (q) p += q.pnl; }); return 'PnL ' + (p >= 0 ? '+' : '') + p.toFixed(2) + ' SOL · not ranked yet'; })()) : tab === 'devs' ? lbYou(S.created.filter(function (t) { return t.creator === S.account; }).length + ' coins launched') : tab === 'callers' ? lbYou('post callouts to get ranked') : '';
-    return '<main class="wrap lb2"><div class="lb2-head"><div><span class="kicker">LEADERBOARD</span><h1 class="tr-h">Leaderboard</h1><p class="muted">' + cur[2] + '</p></div>' +
-      (hall ? '' : '<div class="seg">' + [['24h', '24h'], ['7d', '7 days'], ['all', 'All time']].map(function (x) { return '<button class="' + (S.lbPer === x[0] ? 'on' : '') + '" data-act="lbper" data-arg="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div>') + '</div>' +
-      '<div class="lb2-tabs">' + tabs.map(function (x) { return '<button class="' + (tab === x[0] ? 'on' : '') + '" data-act="lbtab" data-arg="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div>' +
-      pod + you + table + '</main>';
+    var cur = tabs.filter(function (x) { return x[0] === S.lbTab; })[0], tab = cur[0], full = lbData(tab), rows = full.slice(0, 50), hall = tab === 'hall';
+    var heads = { traders: ['Profit', 'Win rate', 'Trades', 'Best trade'], devs: ['Launches', 'Graduated', 'Left', 'Best ATH', 'Record'], callers: ['Avg gain', 'Hit rate', 'Calls', 'Best call'], hall: ['ATH', 'Milestones', 'Now', 'From ATH', 'Age'] }[tab];
+    var nm = function (r) { return hall ? '$' + r.t.tick : walletName(r.a); }, pic = function (r, sz) { return hall ? avatarHTML(r.t, sz) : '<span class="av" style="width:' + sz + 'px;height:' + sz + 'px">' + A.svg(walletSpec(r.a)) + '</span>'; };
+    var key = function (r) { return hall ? r.t.tick : r.a; }, go = function (r) { return hall ? 'data-act="open" data-arg="' + esc(r.t.tick) + '"' : 'data-act="walletAny" data-arg="' + esc(r.a) + '"'; };
+    var hero = rows[0] ? '<div class="lb3-hero"><div class="lb3-one"><span class="lb3-n1">1</span><b>' + esc(nm(rows[0])) + '</b><strong class="mono ' + (rows[0].cols[0].c || '') + '">' + rows[0].main + '</strong></div><div class="lb3-stage">' +
+      '<i class="lb3-star s1">★</i><i class="lb3-star s2">★</i><i class="lb3-star s3">★</i><i class="lb3-star s4">★</i>' +
+      [1, 2, 0, 3].filter(function (i) { return rows[i]; }).map(function (i) { var r = rows[i]; return '<button class="lb3-card c' + (i + 1) + '" ' + go(r) + ' title="' + esc(nm(r) + ' · ' + r.sub) + '">' + (i === 0 ? '<span class="lb3-crown">👑</span>' : '') + '<span class="lb3-num">' + (i + 1) + '</span><span class="lb3-pic">' + pic(r, i ? 120 : 190) + '</span><span class="lb3-cap"><b>' + esc(nm(r)) + '</b><em class="mono">' + r.main + '</em></span></button>'; }).join('') + '</div></div>' : '';
+    var myI = S.account && !hall ? full.map(function (r) { return r.a; }).indexOf(S.account) : -1;
+    var you = hall ? '' : S.account ? '<div class="lb3-you"><span class="lb3-yav">' + pic({ a: S.account }, 46) + '<em>YOU</em></span><span class="lb3-yn"><b>' + esc(short(S.account)) + '</b><small class="muted">' + (myI >= 0 ? 'Rank <b class="up">#' + (myI + 1) + '</b>' : tab === 'callers' ? 'Post a callout to get ranked' : 'Not ranked yet — trade to climb') + '</small></span><span class="lb3-yv r"><small>' + heads[0].toUpperCase() + '</small><b class="mono ' + (myI >= 0 ? full[myI].cols[0].c || '' : '') + '">' + (myI >= 0 ? full[myI].main : '—') + '</b></span></div>' : '<div class="lb3-you off"><span class="muted">Connect a wallet to see your rank</span><button class="btn sec" data-act="openWallet">Connect</button></div>';
+    var list = rows.length ? rows.map(function (r, i) { var k = key(r), open = S.lbOpen === k;
+      return '<div class="lb3-row' + (open ? ' open' : '') + '" style="--d:' + Math.min(i, 20) * 22 + 'ms"><button class="lb3-rm" data-act="lbOpen" data-arg="' + esc(k) + '"><span class="lb3-rk mono r' + Math.min(i + 1, 4) + '">' + (i + 1) + '</span>' + pic(r, 44) + '<span class="lb3-who"><b>' + esc(nm(r)) + (i === 0 ? ' <i class="lb3-cr">👑</i>' : '') + '</b><small class="mono muted">' + (hall ? esc(r.t.name) : short(r.a)) + '</small></span><strong class="mono ' + (r.cols[0].c || '') + '">' + r.main + '</strong><span class="lb3-chev">' + (open ? '▴' : '▾') + '</span></button>' +
+        (open ? '<div class="lb3-det">' + heads.map(function (h, j) { var c = r.cols[j]; return c ? '<div><small>' + h + '</small><b class="mono ' + (c.c || '') + '">' + c.v + '</b></div>' : ''; }).join('') + '<button class="btn sec lb3-go" ' + go(r) + '>' + (hall ? 'Open coin' : 'Open wallet') + ' →</button></div>' : '') + '</div>'; }).join('') : '<div class="muted lb3-empty">Nothing here yet for this period.</div>';
+    var co = lbBestCallouts();
+    var right = '<aside class="lb3-side"><h2>Best callouts</h2><div class="seg lb3-cper">' + [['1d', '1D'], ['1w', '1W']].map(function (x) { return '<button class="' + (S.lbCoPer === x[0] ? 'on' : '') + '" data-act="lbCoPer" data-arg="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div>' +
+      '<div class="lb3-cos">' + (co.length ? co.map(lbCoCard).join('') : '<div class="muted lb3-empty">No callouts in this period yet. Hold a coin and post one.</div>') + '</div></aside>';
+    return '<main class="wrap lb3"><div class="lb3-main"><h1 class="lb3-h">Leaderboard</h1><div class="lb3-tabs">' + tabs.map(function (x) { return '<button class="' + (tab === x[0] ? 'on' : '') + '" data-act="lbtab" data-arg="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div>' +
+      '<div class="lb3-info">ⓘ ' + cur[2] + '</div>' + hero +
+      '<div class="lb3-bar">' + (hall ? '<span></span>' : '<div class="seg">' + [['24h', '1D'], ['7d', '1W'], ['all', 'All']].map(function (x) { return '<button class="' + (S.lbPer === x[0] ? 'on' : '') + '" data-act="lbper" data-arg="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div>') + '<span class="lb3-sort muted">↓ ' + heads[0] + '</span></div>' +
+      '<div class="lb3-list">' + you + list + '</div></div>' + right + '</main>';
   }
 
 
@@ -3450,6 +3468,9 @@
       case 'wlClear': if (!S.wlConfirm) { set({ wlConfirm: true }); setTimeout(function () { if (S.wlConfirm) set({ wlConfirm: false }); }, 3000); break; }
         S.watch = []; S.wlConfirm = false; try { localStorage.setItem(LS.watch, '[]'); } catch (er) {} render(); toast('Watchlist cleared'); break;
       case 'lbtab': set({ lbTab: arg }); break;
+      case 'lbOpen': S.lbOpen = S.lbOpen === arg ? null : arg; render(); break;
+      case 'lbCoPer': set({ lbCoPer: arg }); break;
+      case 'lbCo': var lp = String(arg).split('|'), lt = find(lp[0]), lc = lt && (S.comments[lt.tick] || []).filter(function (c) { return String(c.id) === lp[1]; })[0]; if (lt && lc && lc.real) set({ screen: 'callout', coView: { tick: lt.tick, id: lc.id } }); else if (lt) { openToken(lt.tick); set({ tpTab: 'thread' }); } break;
       case 'lbper': set({ lbPer: arg }); break;
       case 'walletAny': S.hmap = null;
       case 'walletAnyX': S.tick = (S.trades.filter(function (x) { return x.wallet === arg; })[0] || {}).tick || S.tick; set({ walletView: arg }); break;
