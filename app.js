@@ -4139,8 +4139,11 @@
     FXP.hits++; if (FXP.hits >= 3 && Date.now() > FXP.hold) setTimeout(function () { fxpShow(FXP.k + 1); }, 900); }
   function fxpTick(now) { FXP.raf = requestAnimationFrame(fxpTick); var box = document.getElementById('fxp-coins'); if (!box || document.hidden || !box.offsetParent) { FXP.last = now; return; }
     var W = box.clientWidth, dt = Math.min(60, now - (FXP.last || now)); FXP.last = now; if (now < (FXP.stop || 0)) { FXP.spawn += dt; return; }   // the belt halts while the press comes down, so it lands dead centre
-    if (!FXP.coins.length || now - FXP.spawn > 1500) { FXP.spawn = now; fxpSpawn(box); }
-    FXP.coins = FXP.coins.filter(function (c) { c.x += dt * .085; if (!c.hit && c.x >= W / 2) { var over = c.x - W / 2; FXP.coins.forEach(function (o) { o.x -= over; o.el.style.transform = 'translateX(' + (o.x - 23).toFixed(1) + 'px)'; }); c.hit = true; FXP.stop = now + 560; fxpHit(c, W); } c.el.style.transform = 'translateX(' + (c.x - 23).toFixed(1) + 'px)'; if (c.x > W + 40) { c.el.remove(); return false; } return true; }); }
+    // a re-render swaps in a fresh #fxp-coins box: drop coins left behind in the old one, or they keep riding invisibly and fire the press with no coin under it
+    FXP.coins = FXP.coins.filter(function (c) { if (c.el.parentNode === box) return true; c.el.remove(); return false; });
+    var lastC = FXP.coins[FXP.coins.length - 1];   // never drop a new coin on top of one still near the start (e.g. after scrolling back) — that made back-to-back double presses
+    if (!FXP.coins.length || (now - FXP.spawn > 1500 && lastC.x > 90)) { FXP.spawn = now; fxpSpawn(box); }
+    FXP.coins = FXP.coins.filter(function (c) { c.x += dt * .085; if (!c.hit && c.x >= W / 2 && now >= (FXP.stop || 0)) { var over = c.x - W / 2; FXP.coins.forEach(function (o) { o.x -= over; o.el.style.transform = 'translateX(' + (o.x - 23).toFixed(1) + 'px)'; }); c.hit = true; FXP.stop = now + 560; fxpHit(c, W); } c.el.style.transform = 'translateX(' + (c.x - 23).toFixed(1) + 'px)'; if (c.x > W + 40) { c.el.remove(); return false; } return true; }); }
   requestAnimationFrame(fxpTick);
   (function () { var sx = null; document.addEventListener('touchstart', function (e) { if (e.target.closest && e.target.closest('#fxp')) { sx = e.touches[0].clientX; } }, { passive: true });
     document.addEventListener('touchend', function (e) { if (sx == null) return; var dx = e.changedTouches[0].clientX - sx; sx = null; if (Math.abs(dx) > 40) { FXP.hold = Date.now() + 9000; fxpShow(FXP.k + (dx < 0 ? 1 : -1)); } }, { passive: true }); })();
