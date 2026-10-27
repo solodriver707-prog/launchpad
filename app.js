@@ -2446,12 +2446,15 @@
   }
   // ===== WALLET PROFILE: hover preview on any wallet + full profile (positions, closed, created, this coin) =====
   S.wprof = {}; S.wTab = 'open';
-  function rwCoinHTML(t, taxed) {   // total holder rewards this wallet got from this coin
+  function rwUsd(t, tok, amt) { return tok === t.ca ? amt * price(t) : tok === WSOL ? amt * SOL_USD : tok === t.qMint ? amt * qUsdT(t) : 0; }
+  function rwCoinHTML(t, taxed) {   // total holder rewards this wallet got from this coin, in the token they were paid in
     var L = (S.rw.acc === S.account ? S.rw.list : []).filter(function (r) { return r.mint === t.ca; });
     if (!L.length && !taxed) return '';
-    var by = {}; L.forEach(function (r) { by[r.tokenSymbol] = (by[r.tokenSymbol] || 0) + r.amount; });
-    var tot = Object.keys(by).map(function (k) { return '+' + fmtNum(by[k]) + ' $' + esc(k); }).join(' · ');
-    return '<button class="pc-rw" data-act="rwOpen"><span class="pc-rw-i">🎁</span><span class="pc-rw-t"><small>Rewards received</small><b class="mono">' + (L.length ? tot : '—') + '</b></span><span class="pc-rw-m muted">' + (L.length ? L.length + ' payout' + (L.length > 1 ? 's' : '') + ' · last ' + ago(L[0].ts) + ' ›' : 'Paid to holders as tax builds up') + '</span></button>';
+    var by = {}, usd = 0; L.forEach(function (r) { var k = r.token; (by[k] = by[k] || { sym: r.tokenSymbol, amt: 0 }).amt += r.amount; usd += rwUsd(t, k, r.amount); });
+    var rw = rwOf(t), keys = Object.keys(by); if (!keys.length) { var dm = rw ? rw.mint : t.ca; by[dm] = { sym: rw ? rw.sym : t.tick, amt: 0 }; keys = [dm]; }
+    var ic = function (k) { return k === t.ca ? avatarHTML(t, 30) : coinHTML(k === WSOL ? 'SOL' : by[k].sym, 30); };
+    return '<button class="pc-rw" data-act="rwOpen"><span class="pc-rw-ic">' + ic(keys[0]) + '</span><span class="pc-rw-t"><small>Rewards received</small><b class="mono">' + keys.map(function (k) { return fmtNum(by[k].amt) + ' $' + esc(by[k].sym); }).join(' + ') + '</b></span>' +
+      '<span class="pc-rw-r"><b class="mono">$' + money(usd) + '</b><small>' + (L.length ? L.length + ' payout' + (L.length > 1 ? 's' : '') : 'no payouts yet') + '</small></span></button>';
   }
   function rwListHTML() {
     var L = S.rw.acc === S.account ? S.rw.list : [], cl = CHAIN_ID === 'solana:devnet' ? '?cluster=devnet' : '';
