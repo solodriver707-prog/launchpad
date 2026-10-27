@@ -2120,6 +2120,7 @@
   }
   var isMob = function () { return window.matchMedia && window.matchMedia('(max-width: 760px)').matches; };
   function coPeek(c, t) {
+    if (S.screen === 'site') return;
     if (isMob()) { if (S.coOpen) return; S.mCo = (S.mCo || 0) + 1; var mb = document.getElementById('mn-co'); if (mb) { mb.textContent = S.mCo > 99 ? '99+' : S.mCo; mb.style.display = ''; } return; }
     if (S.coPeekMute || S.coOpen || S.screen === 'token' || (railOn() && !S.railHidden) || document.hidden || document.querySelector('.hm-ov')) return; var now = Date.now(); if (now - (S.coPeekAt || 0) < 9000) return; S.coPeekAt = now;
     var box = document.getElementById('toasts'); if (!box) return; var el = document.createElement('button'); el.className = 'toast co-peek'; el.setAttribute('data-act', 'coToggle');
@@ -2568,7 +2569,7 @@
       '<div class="tp-id"><div class="title-xl" style="margin:0;font-size:30px">' + esc(t.name) + ' <span class="tk">$' + id + '</span>' + crBadge(t) + '</div>' + msBadges(t, 'lg') + (t.archived ? '<div class="arch-note ' + t.archived + '">' + (t.archived === 'rug' ? '⚠ Past coin · dev sold after ' + durH(t.devSoldAfter) : t.archived === 'dead' ? '💤 Past coin · inactive, faded on the curve' : '🎓 Past coin · graduated') + '</div>' : '') +
         '<div class="hs-pills" style="margin-top:8px"><button class="pill copy2" data-act="ca" data-arg="' + id + '">CA ' + esc(short(t.ca)) + ' ' + I.copy + '</button><span class="pill" style="padding-left:11px">created <span data-t="' + t.born + '">&nbsp;' + ago(t.born) + '</span>&nbsp;ago by&nbsp;' + makerHTML(devOf(t), t) + '</span>' +
         socialsHTML(t, true) +
-        '<button class="iconbtn" data-act="star" data-arg="' + id + '" aria-label="Watchlist" aria-pressed="' + on + '">' + I.star(on) + '</button><button class="iconbtn" data-act="share" aria-label="Copy link"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8h16v-8M12 3v13M7 8l5-5 5 5"/></svg></button></div></div>' +
+        '<button class="pill cs-pill" data-act="siteShow" data-arg="' + id + '">🌐 Coin site</button><button class="iconbtn" data-act="star" data-arg="' + id + '" aria-label="Watchlist" aria-pressed="' + on + '">' + I.star(on) + '</button><button class="iconbtn" data-act="share" aria-label="Copy link"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8h16v-8M12 3v13M7 8l5-5 5 5"/></svg></button></div></div>' +
       '<div class="tp-key">' + (trapLeft(t) > 0 ? trapBox(t, 'head') : '') + '<div class="tax" style="background:' + taxBg(tmax) + ';padding:9px 14px"><small>TAX</small><b style="font-size:24px">' + tmax + '%</b><small style="letter-spacing:.04em;font-size:9px">BUY & SELL</small>' + (splitOf(t) ? splitBar(splitOf(t), 'mini') : '') + '</div>' +
         (tmax > 0 || (t.live && t.qMint) ? '<button class="pairbig" data-act="pairOpen" data-arg="' + esc(t.pair) + '">' + coinHTML(t.pair, 42) + '<div><small>PAIRED WITH</small><b>' + esc(pairLabel(t.pair)) + '</b><span>' + esc(pairInfo(t.pair).name) + '</span></div></button>' : '<div class="pairbig plain">' + coinHTML('SOL', 42) + '<div><small>NO PAIR</small><b>Plain coin</b><span>0% tax · trades in SOL</span></div></div>') + '</div></section>';
     var vo = vampOf(t), vampWarn = vo ? '<div class="vamp-warn">🧛 <span><b>Possible copy.</b> An older coin, <b>$' + esc(vo.tick) + '</b>' + (vo.name ? ' (' + esc(vo.name) + ')' : '') + ', uses the same ticker or name. Check the contract address before you buy.</span>' + (vo.tick && find(vo.tick) ? '<button class="btn sec" data-act="open" data-arg="' + esc(vo.tick) + '">Open original</button>' : '') + '</div>' : '';
@@ -2822,6 +2823,34 @@
       g.textAlign = 'right'; g.fillStyle = '#fff'; g.font = '800 40px Manrope, system-ui, sans-serif'; g.fillText('treid', W - 44 - g.measureText('.fun').width, H - 40); g.fillStyle = ac; g.fillText('.fun', W - 44, H - 40); g.textAlign = 'left';
       g.restore();
     }); }); });
+  }
+  // ===== COIN SITE: a free, shareable website for every coin (#/c/<CA or TICK>/<theme>) =====
+  var SITE_TH = [['dark', 'Dark'], ['neon', 'Neon'], ['paper', 'Paper'], ['meme', 'Meme']];
+  function siteUrl(t, th) { return location.href.split('#')[0] + '#/c/' + encodeURIComponent(t.live ? t.ca : t.tick) + (th && th !== 'dark' ? '/' + th : ''); }
+  function sitePage() {
+    var v = S.site || {}, t = find(v.tick); if (!t) return '<main class="wrap"><div class="route-wait"><span class="gr-sp"></span><b>Loading…</b></div></main>';
+    var th = SITE_TH.some(function (x) { return x[0] === v.th; }) ? v.th : 'dark', id = esc(t.tick), c = chg(t), up = c >= 0, tm = Math.max(t.buy, t.sell), rm = riskMetrics(t), vo = vampOf(t), ds = devStatus(t), so = socialsOf(t);
+    var ch = heroChart(t, 600, 160), col = (t.spec && t.spec.bg) || '#3DDC97'; (function () { var m = /^#?([0-9a-f]{6})$/i.exec(col); var n = m ? parseInt(m[1], 16) : 0, L = ((n >> 16) * .299 + ((n >> 8) & 255) * .587 + (n & 255) * .114) / 255; if (!m || L < .5) col = '#3DDC97'; })();
+    var soc = [['x', 'X', I.x], ['tg', 'Telegram', I.tg], ['web', 'Website', I.web]].filter(function (x) { return so[x[0]]; }).map(function (x) { return '<button class="cs-soc" data-act="soc" data-arg="' + id + '|' + x[0] + '">' + x[2] + '<span>' + x[1] + '</span></button>'; }).join('');
+    var warn = (vo ? '<div class="cs-warn">🧛 Same name as an older coin, $' + esc(vo.tick) + ' — check the contract address before you buy.</div>' : '') + (ds.state === 'out' ? '<div class="cs-warn">The creator is no longer active on this coin.</div>' : '') + (rm.some(function (m) { return m.lv === 'r'; }) ? '<div class="cs-warn">⚠ Risk flags: ' + rm.filter(function (m) { return m.lv === 'r'; }).map(function (m) { return m.lab + ' ' + m.val; }).join(' · ') + '</div>' : '');
+    return '<div class="cs cs-' + th + '" style="--cc:' + esc(col) + '">' +
+      '<header class="cs-top"><span class="cs-brand">' + avatarHTML(t, 28) + '<b>$' + id + '</b></span><span class="cs-tr">' + soc + '<button class="cs-buy sm" data-act="open" data-arg="' + id + '">Buy $' + id + '</button></span></header>' +
+      '<section class="cs-hero">' + (t.banner ? '<div class="cs-ban"><img src="' + esc(t.banner) + '" alt=""></div>' : '') +
+        '<div class="cs-id"><span class="cs-logo">' + avatarHTML(t, 150) + '</span><h1>' + esc(t.name) + '</h1><span class="cs-tk mono">$' + id + '</span>' +
+        (t.desc ? '<p class="cs-desc">' + esc(t.desc) + '</p>' : '') +
+        '<div class="cs-ctas"><button class="cs-buy" data-act="open" data-arg="' + id + '">Buy $' + id + ' on treid</button><button class="cs-ca mono" data-act="ca" data-arg="' + id + '"><small>CA</small> ' + esc(short(t.ca)) + ' ' + I.copy + '</button></div></div></section>' + warn +
+      '<section class="cs-stats"><div><small>Market cap</small><b class="mono">' + fmtK(t.mcN) + '</b><em class="' + (up ? 'up' : 'down') + '">' + chgTxt(c) + '</em></div><div><small>Holders</small><b class="mono">' + fmtNum(t.holders) + '</b></div><div><small>Tax</small><b class="mono">' + tm + '%</b></div><div><small>' + (t.prog >= 100 ? 'Status' : 'Bonding curve') + '</small><b class="mono">' + (t.prog >= 100 ? '🎓 Graduated' : t.prog.toFixed(0) + '%') + '</b></div></section>' +
+      '<section class="cs-chart"><svg viewBox="0 0 600 160" preserveAspectRatio="none"><defs><linearGradient id="csg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--cc)" stop-opacity=".35"/><stop offset="1" stop-color="var(--cc)" stop-opacity="0"/></linearGradient></defs><path d="' + ch.area + '" fill="url(#csg)"/><path d="' + ch.line + '" fill="none" stroke="var(--cc)" stroke-width="3" vector-effect="non-scaling-stroke"/></svg><button class="cs-chartbtn" data-act="open" data-arg="' + id + '">Open live chart →</button></section>' +
+      '<section class="cs-safe"><h2>On-chain, in the open</h2><div class="cs-rk">' + rm.map(function (m) { return '<div class="lv-' + m.lv + '"><small>' + m.lab + '</small><b class="mono">' + m.val + '</b></div>'; }).join('') + '</div><p>Live from the chain. Paired with ' + esc(pairLabel(t.pair)) + (tm ? ' · every trade pays a ' + tm + '% tax, split as the creator set it' : ' · no tax') + '.</p></section>' +
+      '<section class="cs-how"><h2>How to buy $' + id + '</h2><ol><li><b>Get a wallet</b><span>Phantom, Solflare or Backpack.</span></li><li><b>Add some SOL</b><span>From an exchange or a card.</span></li><li><b>Open $' + id + ' on treid</b><span>Pick an amount and confirm in your wallet.</span></li></ol><button class="cs-buy" data-act="open" data-arg="' + id + '">Buy $' + id + '</button></section>' +
+      '<footer class="cs-foot"><span>Launched on <b>treid</b> — launch fair, trade safer.</span><button class="link" data-act="home">Explore more coins →</button><small>Nothing here is financial advice. Memecoins are risky.</small></footer></div>';
+  }
+  function siteModal() {
+    if (!S.siteShare) return ''; var t = find(S.siteShare); if (!t) return ''; var th = S.siteTh || 'dark';
+    return '<div class="modal-bg" data-act="siteClose"></div><div class="sh-modal site-m" role="dialog" aria-label="Coin website"><div class="sh-top"><b style="font-size:17px">Your coin’s website</b><button class="co-x" data-act="siteClose" aria-label="Close">✕</button></div>' +
+      '<p class="muted" style="margin:0;font-size:13.5px">Every coin on treid gets a free website. Pick a look and share the link on X and Telegram.</p>' +
+      '<div class="site-ths">' + SITE_TH.map(function (x) { return '<button class="site-th st-' + x[0] + (th === x[0] ? ' on' : '') + '" data-act="siteTh" data-arg="' + x[0] + '"><i></i><span>' + x[1] + '</span></button>'; }).join('') + '</div>' +
+      '<div class="site-link mono">' + esc(siteUrl(t, th)) + '</div><div class="sh-acts"><button class="btn sec" data-act="siteCopy">🔗 Copy link</button><button class="btn pri" data-act="siteOpen">Open site →</button></div></div>';
   }
   function coModal() {
     if (!S.coModal) return ''; var t = find(S.tick); if (!t) return ''; var upd = S.coModal.upd, n = (S.cmtDraft || '').length;
@@ -3336,12 +3365,14 @@
   var firstCount = true;
   // ================= URL ROUTING (refresh / share / back button keep your place) =================
   var ROUTES = { create: 'create', burn: 'burnery', leaders: 'leaderboard', trend: 'trending', watch: 'watchlist' }, routeReady = false;
-  function routeOf() { if (S.screen === 'callout' && S.coView) { var tv = find(S.coView.tick); return '#/callout/' + encodeURIComponent(tv && tv.live ? tv.ca : S.coView.tick) + '/' + S.coView.id; } if (S.screen === 'token' && S.tick) { var t0 = find(S.tick); return '#/coin/' + encodeURIComponent(t0 && t0.live ? t0.ca : S.tick); } return ROUTES[S.screen] ? '#/' + ROUTES[S.screen] : ''; }
+  function routeOf() { if (S.screen === 'site' && S.site) { var tsv = find(S.site.tick); return '#/c/' + encodeURIComponent(tsv && tsv.live ? tsv.ca : S.site.tick) + (S.site.th && S.site.th !== 'dark' ? '/' + S.site.th : ''); } if (S.screen === 'callout' && S.coView) { var tv = find(S.coView.tick); return '#/callout/' + encodeURIComponent(tv && tv.live ? tv.ca : S.coView.tick) + '/' + S.coView.id; } if (S.screen === 'token' && S.tick) { var t0 = find(S.tick); return '#/coin/' + encodeURIComponent(t0 && t0.live ? t0.ca : S.tick); } return ROUTES[S.screen] ? '#/' + ROUTES[S.screen] : ''; }
   function syncRoute() { if (!routeReady) return; var r = routeOf(), cur = location.hash || ''; if (cur === r) return; try { history.pushState(null, '', r || (location.pathname + location.search)); } catch (e) {} }
   function applyRoute() {
     var h = ''; try { h = decodeURIComponent((location.hash || '').replace(/^#\/?/, '')); } catch (e) { h = ''; } var parts = h.split('/');
     if (parts[0] === 'coin' && parts[1]) { var id = parts[1], t1 = find(id) || S.live.filter(function (x) { return x.ca === id; })[0];
       if (t1) { if (S.screen !== 'token' || S.tick !== t1.tick) openToken(t1.tick); } else if (API) { S.pendingRoute = id; S.screen = 'pending'; setTimeout(function () { if (S.screen === 'pending') { S.pendingRoute = null; set({ screen: 'home' }); toast('Couldn\'t load that coin — the server may be waking up, try again'); } }, 45000); } else set({ screen: 'home' }); return; }
+    if (parts[0] === 'c' && parts[1]) { var ts = find(parts[1]) || S.live.filter(function (x) { return x.ca === parts[1]; })[0];
+      if (ts) { if (ts.live) liveLoad(ts); set({ screen: 'site', site: { tick: ts.tick, th: parts[2] || 'dark' } }); window.scrollTo(0, 0); } else if (API) { setTimeout(applyRoute, 2500); } else set({ screen: 'home' }); return; }
     if (parts[0] === 'callout' && parts[1] && parts[2]) { var tc = find(parts[1]) || S.live.filter(function (x) { return x.ca === parts[1]; })[0];
       if (tc) { if (tc.live) liveLoad(tc); S.tick = tc.tick; set({ screen: 'callout', coView: { tick: tc.tick, id: +parts[2] } }); } else if (API) { setTimeout(applyRoute, 2500); } else set({ screen: 'home' }); return; }
     for (var k in ROUTES) if (ROUTES[k] === parts[0]) { if (S.screen !== k) set({ screen: k, palOpen: false }); return; }
@@ -3351,9 +3382,10 @@
   function render() {
     var ae = document.activeElement, fid = ae && ae.id, ss = null, se = null;
     try { if (fid && ae.selectionStart != null) { ss = ae.selectionStart; se = ae.selectionEnd; } } catch (e) {}
-    var body = S.screen === 'pending' ? '<main class="wrap"><div class="route-wait"><span class="gr-sp"></span><b>Loading coin…</b><small class="muted">fetching live data from the chain</small></div></main>' : S.screen === 'token' ? tokenPage() : S.screen === 'create' ? createPage() : S.screen === 'leaders' ? leadersPage() : S.screen === 'watch' ? watchPage() : S.screen === 'burn' ? burnPage() : S.screen === 'trend' ? trendPage() : S.screen === 'callout' ? calloutPage() : home();
+    var body = S.screen === 'pending' ? '<main class="wrap"><div class="route-wait"><span class="gr-sp"></span><b>Loading coin…</b><small class="muted">fetching live data from the chain</small></div></main>' : S.screen === 'token' ? tokenPage() : S.screen === 'create' ? createPage() : S.screen === 'leaders' ? leadersPage() : S.screen === 'watch' ? watchPage() : S.screen === 'burn' ? burnPage() : S.screen === 'trend' ? trendPage() : S.screen === 'callout' ? calloutPage() : S.screen === 'site' ? sitePage() : home();
     var detOpen = [].map.call(document.querySelectorAll('#app details'), function (d) { return d.open ? (d.className || 'd') : null; });
-    document.getElementById('app').innerHTML = (RPC_DEV || API_DEV ? '<div class="devbar">⚠ Developer mode — custom ' + [RPC_DEV ? 'RPC' : '', API_DEV ? 'server' : ''].filter(Boolean).join(' + ') + ' (this tab only)</div>' : '') + '<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="ccUp" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3DDC97" stop-opacity=".28"/><stop offset="1" stop-color="#3DDC97" stop-opacity="0"/></linearGradient><linearGradient id="ccDn" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F2708A" stop-opacity=".26"/><stop offset="1" stop-color="#F2708A" stop-opacity="0"/></linearGradient></defs></svg>' + tape() + header() + body + footer() + walletModal() + demoImgModal() + termsModal() + calloutDrawer() + calloutRail() + palette() + walletDrawer() + holderMap() + burnModal() + ctoModal() + coModal() + shareModal();
+    if (S.screen === 'site') { document.getElementById('app').innerHTML = body + siteModal() + walletModal(); document.body.classList.add('on-site'); return; } document.body.classList.remove('on-site');
+    document.getElementById('app').innerHTML = (RPC_DEV || API_DEV ? '<div class="devbar">⚠ Developer mode — custom ' + [RPC_DEV ? 'RPC' : '', API_DEV ? 'server' : ''].filter(Boolean).join(' + ') + ' (this tab only)</div>' : '') + '<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="ccUp" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3DDC97" stop-opacity=".28"/><stop offset="1" stop-color="#3DDC97" stop-opacity="0"/></linearGradient><linearGradient id="ccDn" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F2708A" stop-opacity=".26"/><stop offset="1" stop-color="#F2708A" stop-opacity="0"/></linearGradient></defs></svg>' + tape() + header() + body + footer() + walletModal() + demoImgModal() + termsModal() + calloutDrawer() + calloutRail() + palette() + walletDrawer() + holderMap() + burnModal() + ctoModal() + coModal() + shareModal() + siteModal();
     document.body.classList.toggle('has-rail', S.screen === 'home' && !S.coOpen && !S.railHidden); document.body.classList.toggle('has-rail-min', S.screen === 'home' && !S.coOpen && !!S.railHidden);
     if (fid) { var el = document.getElementById(fid); if (el) { el.focus({ preventScroll: true }); try { if (ss != null) el.setSelectionRange(ss, se); } catch (e) {} } }
     if (S.palOpen && !fid) { var p = document.getElementById('pal'); if (p) p.focus(); }
@@ -3600,6 +3632,11 @@
       case 'tcat': S.tcat = arg; render(); break;
       case 'tpreset': S.lsort = arg; S.ldir = -1; render(); break;
       case 'fxpGo': FXP.hold = Date.now() + 9000; fxpShow(+arg); break;
+      case 'siteShow': S.siteShare = arg; S.siteTh = 'dark'; render(); break;
+      case 'siteClose': S.siteShare = null; render(); break;
+      case 'siteTh': S.siteTh = arg; render(); break;
+      case 'siteCopy': var tsc = find(S.siteShare); if (tsc) copy(siteUrl(tsc, S.siteTh), 'Website link copied'); break;
+      case 'siteOpen': var tso = find(S.siteShare); S.siteShare = null; if (tso) set({ screen: 'site', site: { tick: tso.tick, th: S.siteTh || 'dark' } }); window.scrollTo(0, 0); break;
       case 'mFilt': S.mFilt = !S.mFilt; render(); break;
       case 'mSide': S.side = arg; render(); setTimeout(function () { var tb = document.querySelector('.tradebox'); if (tb) tb.scrollIntoView({ behavior: 'smooth', block: 'start' }); var inp = document.getElementById('amt'); if (inp) setTimeout(function () { inp.focus({ preventScroll: true }); }, 450); }, 30); break;
       case 'mBuy': var tbx = document.querySelector('.tradebox'); if (tbx) tbx.scrollIntoView({ behavior: 'smooth', block: 'center' }); break;
