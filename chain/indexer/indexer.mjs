@@ -331,11 +331,11 @@ function candles(mint, tf) {
 // a wallet's position in a coin, like pump.fun shows it: value now, spent, received, avg entry market cap, % of its buys sold, supply held, profit
 function posStats(mint, wallet, held = null) {
   const r = q1(`SELECT COALESCE(SUM(CASE WHEN side='buy' THEN usd END),0) spent, COALESCE(SUM(CASE WHEN side='sell' THEN usd END),0) got, COALESCE(SUM(CASE WHEN side='buy' THEN tokens END),0) bought,
-    COALESCE(SUM(CASE WHEN side='sell' THEN tokens END),0) sold, COALESCE(SUM(CASE WHEN side='buy' THEN usd*mcap_usd END),0) wmc, COUNT(*) n FROM trades WHERE mint=? AND wallet=?`, mint, wallet);
+    COALESCE(SUM(CASE WHEN side='sell' THEN tokens END),0) sold, COALESCE(SUM(CASE WHEN side='buy' THEN usd*mcap_usd END),0) wmc, COALESCE(SUM(CASE WHEN side='sell' THEN tokens*mcap_usd END),0) smc, COUNT(*) n FROM trades WHERE mint=? AND wallet=?`, mint, wallet);
   const px = q1('SELECT price_usd p FROM trades WHERE mint=? ORDER BY ts DESC, slot DESC LIMIT 1', mint)?.p || 0;
   if (held == null) { const lh = hCache.get(mint)?.list; const h = lh && lh.find((x) => x.wallet === wallet); held = h ? h.pct / 100 * SUPPLY : Math.max(0, r.bought - r.sold); }
   const value = held * px, profit = value + r.got - r.spent;
-  return { value, spent: r.spent, got: r.got, profit, profitPct: r.spent > 0 ? profit / r.spent * 100 : 0, avgEntryMc: r.spent > 0 ? r.wmc / r.spent : 0,
+  return { value, spent: r.spent, got: r.got, profit, profitPct: r.spent > 0 ? profit / r.spent * 100 : 0, avgEntryMc: r.spent > 0 ? r.wmc / r.spent : 0, avgExitMc: r.sold > 0 ? r.smc / r.sold : 0,
     soldPct: r.bought > 0 ? Math.min(100, r.sold / r.bought * 100) : 0, supplyPct: held / SUPPLY * 100, held, trades: r.n };
 }
 async function holders(mint) {   // one row per OWNER (all their token accounts added up) — a dust account can't fake someone's balance

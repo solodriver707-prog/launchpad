@@ -1909,7 +1909,7 @@
   function lwAvg(t) {   // your average entry / exit market cap in USD (server stats first, then your own trades)
     if (!S.account) return null; var b = { u: 0, k: 0 }, s = { u: 0, k: 0 };
     S.trades.forEach(function (x) { if (x.tick !== t.tick || !(x.mine || x.wallet === S.account)) return; var px = x.price || price(t), usd = x.usd != null ? x.usd : x.sol * SOL_USD, tok = x.tokens || usd / px; var o = x.side === 'buy' ? b : s; o.u += usd; o.k += tok; });
-    var ps = t.ca && S.myPs && S.myPs[t.ca], en = ps && ps.avgEntryMc > 0 ? ps.avgEntryMc : b.k > 0 ? b.u / b.k * 1e9 : 0, ex = s.k > 0 ? s.u / s.k * 1e9 : 0;
+    var ps = t.ca && S.myPs && S.myPs[t.ca], en = ps && ps.avgEntryMc > 0 ? ps.avgEntryMc : b.k > 0 ? b.u / b.k * 1e9 : 0, ex = ps && ps.avgExitMc > 0 ? ps.avgExitMc : s.k > 0 ? s.u / s.k * 1e9 : 0;   // exit at the market cap you sold at (not net of sell tax/fees)
     return en || ex ? { en: en, ex: ex } : null;
   }
   function lwMarks(t, bars) {
