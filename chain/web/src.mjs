@@ -236,3 +236,13 @@ export async function buildClaimCreator({ rpc, creator, pool }) {
   const out = await finish(rpc, [tx], creator, []), cfg = await client(rpc).state.getPoolConfig(vp.config), qi = await quoteInfo({ rpc, mint: cfg.quoteMint.toBase58() }); return { ...out, amount: Number(amt.toString()) / 10 ** qi.decimals };
 }
 export const b58 = (bytes) => bs58enc(bytes);
+
+// ---- phone wallets without a browser extension: Phantom / Solflare deeplink protocol (x25519 box, base58) ----
+import nacl from 'tweetnacl';
+const bs58dec = (s) => (bs58lib.default || bs58lib).decode(s);
+export const dl = {
+  keyPair() { const k = nacl.box.keyPair(); return { pk: bs58enc(k.publicKey), sk: bs58enc(k.secretKey) }; },
+  open(data, nonce, theirPk, mySk) { const shared = nacl.box.before(bs58dec(theirPk), bs58dec(mySk)), out = nacl.box.open.after(bs58dec(data), bs58dec(nonce), shared); if (!out) throw new Error('could not read the wallet reply'); return JSON.parse(new TextDecoder().decode(out)); },
+  seal(obj, theirPk, mySk) { const shared = nacl.box.before(bs58dec(theirPk), bs58dec(mySk)), nonce = nacl.randomBytes(24), box = nacl.box.after(new TextEncoder().encode(JSON.stringify(obj)), nonce, shared); return { nonce: bs58enc(nonce), payload: bs58enc(box) }; },
+  dec: bs58dec, enc: bs58enc,
+};

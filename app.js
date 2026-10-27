@@ -278,7 +278,7 @@
   }
   function disconnect() {
     var w = S.wallet;
-    try { localStorage.removeItem(LS.wallet); } catch (e) {}
+    try { localStorage.removeItem(LS.wallet); } catch (e) {} if (w && w.dl) dlPut(null);
     if (off) { try { off(); } catch (e) {} off = null; }
     set({ wallet: null, account: null, balance: null, walletMenu: false });
     if (w && w.features['standard:disconnect']) Promise.resolve(w.features['standard:disconnect'].disconnect()).catch(function () {});
@@ -309,10 +309,64 @@
     if (window.TreidChain) return Promise.resolve(window.TreidChain);
     return chainP || (chainP = new Promise(function (res, rej) { var sc = document.createElement('script'); sc.src = 'chain.js?v=' + ((document.querySelector('script[src*="app.js"]') || {}).src || '').split('v=')[1]; sc.onload = function () { res(window.TreidChain); }; sc.onerror = function () { chainP = null; rej(new Error('Could not load chain module')); }; document.head.appendChild(sc); }));
   }
-  function walletSign(list) {
+  function walletSign(list, b) {
+    if (S.wallet && S.wallet.dl) return dlSignTx(list, b);
     var w = S.wallet, f = w && w.features && w.features['solana:signTransaction'];
     if (!f) return Promise.reject(new Error('This wallet can\'t sign transactions here — try Phantom, Solflare or Backpack'));
     return Promise.resolve(f.signTransaction.apply(f, list.map(function (b) { return { account: S.walletAcc, transaction: b, chain: CHAIN_ID }; }))).then(function (r) { return r.map(function (x) { return x.signedTransaction; }); });
+  }
+  // ===== phones: connect & sign through the Phantom / Solflare app, then come straight back to this browser tab =====
+  var DLP = { phantom: { base: 'https://phantom.app/ul/v1/', pk: 'phantom_encryption_public_key', name: 'Phantom', icon: '👻' }, solflare: { base: 'https://solflare.com/ul/v1/', pk: 'solflare_encryption_public_key', name: 'Solflare', icon: '🔆' } };
+  function dlGet() { try { return JSON.parse(localStorage.getItem('treid.dl') || 'null'); } catch (e) { return null; } }
+  function dlPut(o) { try { if (o) localStorage.setItem('treid.dl', JSON.stringify(o)); else localStorage.removeItem('treid.dl'); } catch (e) {} }
+  function dlBack(rid) { return location.origin + location.pathname + '?dlr=' + rid; }
+  function dlRid() { return Math.random().toString(36).slice(2, 10); }
+  function dlGo(st, method, params) { location.href = DLP[st.prov].base + method + '?' + Object.keys(params).map(function (k) { return k + '=' + encodeURIComponent(params[k]); }).join('&'); }
+  function dlWallet(st) { return { name: DLP[st.prov].name, icon: '', dl: true, features: { 'solana:signTransaction': { signTransaction: function () { return Promise.reject(new Error('use walletSign')); } }, 'solana:signMessage': { signMessage: function (o) { return dlSignMsg(o.message); } } } }; }
+  function dlUse(st) { S.wallet = dlWallet(st); S.walletAcc = { address: st.account, chains: [CHAIN_ID] }; S.account = st.account; S.balance = null; refreshBalance(); }
+  function dlConnect(prov) {
+    var go = function (T) { var kp = T.dl.keyPair(), rid = dlRid(), st = { prov: prov, sk: kp.sk, pk: kp.pk, pend: { rid: rid, kind: 'connect', ret: location.hash } }; dlPut(st);
+      dlGo(st, 'connect', { app_url: location.origin + location.pathname, dapp_encryption_public_key: kp.pk, redirect_link: dlBack(rid), cluster: CLUSTER === 'mainnet' ? 'mainnet-beta' : CLUSTER }); };
+    if (window.TreidChain) go(window.TreidChain); else chainLib().then(go);
+  }
+  function dlSignTx(bytes, b) {
+    var st = dlGet(), T = window.TreidChain; if (!st || !st.session || !T) return Promise.reject(new Error('Reconnect your wallet'));
+    var rid = dlRid(), sealed = T.dl.seal({ transactions: bytes.map(function (x) { return T.dl.enc(x instanceof Uint8Array ? x : Uint8Array.from(x)); }), session: st.session }, st.wpk, st.sk);
+    st.pend = { rid: rid, kind: 'tx', label: S.busy || 'Transaction', ret: location.hash, cos: (b && b.cosigners) || [], lvbh: b && b.lastValidBlockHeight, mint: (b && b.mint) || null, tick: S.tick, side: S.side }; dlPut(st);
+    dlGo(st, 'signAllTransactions', { dapp_encryption_public_key: st.pk, nonce: sealed.nonce, redirect_link: dlBack(rid), payload: sealed.payload });
+    return new Promise(function () {});   // the page continues when the wallet sends us back
+  }
+  function dlSignMsg(message) {
+    var st = dlGet(), T = window.TreidChain, after = S._dlAfter; S._dlAfter = null;
+    if (!after) return Promise.reject(new Error('On a phone this action needs the wallet’s own browser — open treid in the ' + (st ? DLP[st.prov].name : 'wallet') + ' app'));
+    if (!st || !st.session || !T) return Promise.reject(new Error('Reconnect your wallet'));
+    var rid = dlRid(), sealed = T.dl.seal({ message: T.dl.enc(message), session: st.session, display: 'utf8' }, st.wpk, st.sk);
+    st.pend = { rid: rid, kind: 'msg', ret: location.hash, after: after }; dlPut(st);
+    dlGo(st, 'signMessage', { dapp_encryption_public_key: st.pk, nonce: sealed.nonce, redirect_link: dlBack(rid), payload: sealed.payload });
+    return new Promise(function () {});
+  }
+  // runs before the first route: read the wallet's reply from the URL, put the page back where it was
+  var DLQ = (function () { var q; try { q = new URLSearchParams(location.search); } catch (e) { return null; } var rid = q.get('dlr'), st = dlGet();
+    if (!rid) return st && st.account && st.session ? { restore: st } : null;
+    var p = st && st.pend && st.pend.rid === rid ? st.pend : null; try { history.replaceState(null, '', location.pathname + ((p && p.ret) || '')); } catch (e) {}
+    return { q: q, st: st, p: p }; })();
+  function dlResume() {
+    if (!DLQ) return; var R = DLQ; DLQ = null;
+    if (R.restore) { dlUse(R.restore); return; }
+    var st = R.st, p = R.p, q = R.q; if (!st || !p) return; st.pend = null; dlPut(st);
+    if (q.get('errorCode')) { if (st.account) dlUse(st); toast(/reject|cancel|4001/i.test(q.get('errorMessage') + q.get('errorCode')) ? 'Cancelled in wallet' : 'Wallet: ' + (q.get('errorMessage') || 'error')); render(); return; }
+    chainLib().then(function (T) {
+      if (p.kind === 'connect') { var wpk = q.get(DLP[st.prov].pk), d = T.dl.open(q.get('data'), q.get('nonce'), wpk, st.sk); st.wpk = wpk; st.session = d.session; st.account = d.public_key; dlPut(st); dlUse(st); set({ walletOpen: false }); toast(DLP[st.prov].name + ' connected · ' + short(st.account)); return; }
+      var r = T.dl.open(q.get('data'), q.get('nonce'), st.wpk, st.sk); dlUse(st);
+      if (p.kind === 'tx') { S.busy = 'Confirming on-chain…'; render();
+        return T.sendAll({ rpc: RPC, signed: T.cosign(r.transactions.map(T.dl.dec), p.cos || []), lastValidBlockHeight: p.lvbh }).then(function () { S.busy = null; toast('✓ ' + String(p.label).replace(/…$/, '') + ' — done'); render(); setTimeout(refreshBalance, 1500);
+          [2500, 8000].forEach(function (ms) { setTimeout(function () { var tt = S.screen === 'token' && find(S.tick); if (tt && tt.live) livePos(tt); }, ms); }); })
+          .catch(function (e) { S.busy = null; render(); toast(e && e.expired ? 'That took too long and the transaction expired — please try again' : chainErr(e)); }); }
+      if (p.kind === 'msg' && p.after && p.after.type === 'session') { var a = p.after;
+        return fetch(API + '/api/session', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ wallet: a.who, ts: a.ts, sig: r.signature }) }).then(function (x) { return x.json(); }).then(function (j) { if (!j || !j.token) throw new Error((j && j.error) || 'sign-in failed');
+          S.sess = { w: a.who, token: j.token, exp: j.exp }; try { localStorage.setItem('treid.sess.' + a.who, JSON.stringify({ token: j.token, exp: j.exp })); } catch (e) {}
+          if (a.draft) S.cmtDraft = a.draft; if (a.modal) S.coModal = a.modal; toast('Signed in for 24 h — tap Post'); render(); }); }
+    }).catch(function (e) { S.busy = null; render(); toast('Couldn’t read the wallet reply: ' + ((e && e.message) || e)); });
   }
   function chainErr(e) {
     var m = String((e && e.message) || e || 'Unknown error');
@@ -326,7 +380,7 @@
     if (S.busy) { toast('Finish the current transaction first'); return Promise.reject(new Error('busy')); }
     S.busy = label; render(); toast(label + ' — confirm in your wallet');
     return chainLib().then(function (T) {
-      return build(T).then(function (b) { return walletSign(b.bytes).then(function (signed) { S.busy = 'Confirming on-chain…'; render(); return T.sendAll({ rpc: RPC, signed: T.cosign(signed, b.cosigners), lastValidBlockHeight: b.lastValidBlockHeight }); }).then(function (sigs) { b.sigs = sigs; return b; }); });
+      return build(T).then(function (b) { return walletSign(b.bytes, b).then(function (signed) { S.busy = 'Confirming on-chain…'; render(); return T.sendAll({ rpc: RPC, signed: T.cosign(signed, b.cosigners), lastValidBlockHeight: b.lastValidBlockHeight }); }).then(function (sigs) { b.sigs = sigs; return b; }); });
     }).then(function (b) { S.busy = null; render(); setTimeout(refreshBalance, 1500); [2500, 8000].forEach(function (ms) { setTimeout(function () { var tt = S.screen === 'token' && find(S.tick); if (tt && tt.live) livePos(tt); }, ms); }); return b; }, function (e) { S.busy = null; render();
       // the transaction expired before it was sent (a wallet window open for over ~60 s) and nothing went through: build a fresh one and ask once more
       if (e && e.expired && !e.sent && !again) { toast('That took a bit long and the transaction expired — please sign the fresh one'); return chainRun(label, build, true); }
@@ -2161,7 +2215,7 @@
   // ---- Buy with SOL on pair coins: SOL → pair token via Jupiter, then the normal pool buy (mainnet only — Jupiter has no devnet) ----
   var JUP = 'https://lite-api.jup.ag/swap/v1';
   function jupOn(t) { return CHAIN_ID === 'solana:mainnet' && !!(t && t.live && t.qMint); }
-  function paySol(t) { return jupOn(t) && S.side === 'buy' && !!S.paySol; }
+  function paySol(t) { return jupOn(t) && S.side === 'buy' && !!S.paySol && !(S.wallet && S.wallet.dl); }
   function b64Bytes(x) { var b = atob(x), u = new Uint8Array(b.length); for (var i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u; }
   function bytesB64(u) { var s0 = ''; for (var i = 0; i < u.length; i++) s0 += String.fromCharCode(u[i]); return btoa(s0); }
   // waits for a FINAL answer: confirmed, failed, or expired (blockhash past its last valid height — it can never land). Never "gave up while it could still land".
@@ -2892,6 +2946,7 @@
     var f = S.wallet && S.wallet.features['solana:signMessage']; if (!f) return Promise.reject(new Error('This wallet can’t sign messages — try Phantom or Solflare'));
     var ts = Date.now(), who = S.account, m = 'treid: sign in \u2014 ' + who + ' \u2014 ' + ts;   // must match indexer sig.mjs signInMessage
     toast('Sign in once — no more wallet popups for the next 24 h');
+    if (S.wallet && S.wallet.dl) S._dlAfter = { type: 'session', who: who, ts: ts, draft: S.cmtDraft || '', modal: S.coModal || null };
     return Promise.resolve(f.signMessage({ account: S.walletAcc, message: new TextEncoder().encode(siteMsg(m)) })).then(function (r) { var sg = (Array.isArray(r) ? r[0] : r).signature;
       return chainLib().then(function (T) { return fetch(API + '/api/session', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ wallet: who, ts: ts, sig: T.b58(sg) }) }).then(function (x) { return x.json(); }); }); })
       .then(function (j) { if (!j || !j.token) throw new Error((j && j.error) || 'sign-in failed'); S.sess = { w: who, token: j.token, exp: j.exp }; try { localStorage.setItem('treid.sess.' + who, JSON.stringify({ token: j.token, exp: j.exp })); } catch (e) {} return j.token; });
@@ -3332,9 +3387,12 @@
       return '<button class="wopt" data-act="pickWallet" data-arg="' + esc(w.name) + '"' + (S.connecting ? ' disabled' : '') + '>' + (w.icon ? '<img src="' + esc(w.icon) + '" alt="">' : '') +
         '<span style="flex:1">' + esc(w.name) + '</span><span class="muted" style="font-size:12.5px;font-weight:600">' + (busy ? 'Approve in wallet…' : 'Detected') + '</span></button>';
     }).join('') : (isMob() || /iPhone|iPad|Android/i.test(navigator.userAgent) ? (function () { var here = encodeURIComponent(location.href), ref = encodeURIComponent(location.origin);   // phones: wallets have no browser extension — open this page inside the wallet app
-      return '<div class="wl-mob"><b>Open treid in your wallet app</b><span class="muted">On a phone, wallets connect inside their own app. Tap yours — this page opens there, ready to connect.</span>' +
-        '<a class="wl-deep ph" href="https://phantom.app/ul/browse/' + here + '?ref=' + ref + '"><span class="wl-di">👻</span><b>Open in Phantom</b><span>→</span></a>' +
-        '<a class="wl-deep sf" href="https://solflare.com/ul/v1/browse/' + here + '?ref=' + ref + '"><span class="wl-di">🔆</span><b>Open in Solflare</b><span>→</span></a>' +
+      return '<div class="wl-mob"><b>Connect your wallet app</b><span class="muted">Your wallet opens, you approve, and you come right back here.</span>' +
+        '<button class="wl-deep ph" data-act="dlConnect" data-arg="phantom"><span class="wl-di">👻</span><b>Connect Phantom</b><span>→</span></button>' +
+        '<button class="wl-deep sf" data-act="dlConnect" data-arg="solflare"><span class="wl-di">🔆</span><b>Connect Solflare</b><span>→</span></button>' +
+        '<small class="muted wl-or">or open treid inside the wallet’s own browser:</small>' +
+        '<a class="wl-deep ph" href="https://phantom.app/ul/browse/' + here + '?ref=' + ref + '"><span class="wl-di">👻</span><b>Open in Phantom browser</b><span>→</span></a>' +
+        '<a class="wl-deep sf" href="https://solflare.com/ul/v1/browse/' + here + '?ref=' + ref + '"><span class="wl-di">🔆</span><b>Open in Solflare browser</b><span>→</span></a>' +
         '<a class="wl-deep bp" href="https://backpack.app/ul/v1/browse/' + here + '?ref=' + ref + '"><span class="wl-di">🎒</span><b>Open in Backpack</b><span>→</span></a>' +
         '<small class="muted">No wallet yet? <a href="https://phantom.com/download" target="_blank" rel="noopener">Get Phantom</a></small></div>'; })() :
       '<div class="card-s" style="padding:16px;display:flex;flex-direction:column;gap:10px"><b>No Solana wallet found</b><span class="muted" style="font-size:13.5px;line-height:1.55">Install Phantom, Solflare or Backpack and reload.</span><a href="https://phantom.com/download" target="_blank" rel="noopener">Get Phantom →</a></div>');
@@ -3623,6 +3681,7 @@
       case 'termsClose': if (e.target.closest('[data-stop]') && !e.target.closest('.iconbtn')) break; set({ termsOpen: false }); break;
       case 'paySol': S.amount = ''; set({ paySol: arg === '1' }); break;
       case 'preset': if (arg === 'reset') { set({ amount: '' }); break; } set({ pctAmt: 0, amount: arg === 'max' ? Math.max(0, S.balance - 0.01).toFixed(3) : arg }); break;
+      case 'dlConnect': dlConnect(arg); break;
       case 'openWallet': set({ walletOpen: true }); break;
       case 'closeWallet': set({ walletOpen: false }); break;
       case 'walletMenu': set({ walletMenu: !S.walletMenu }); break;
@@ -4654,6 +4713,7 @@
   liveStart();
   if (!RPC_DEV) rpc('getGenesisHash', []).then(function (g) { if (g !== GENESIS[CHAIN_ID]) { S.netBad = true; render(); console.warn('[treid] RPC network mismatch'); } }).catch(function () {});
   setInterval(function () { if (S.screen === 'burn' && !document.hidden) burnsLoad(); }, 30000);
+  dlResume(); if (isMob() && !window.TreidChain) setTimeout(function () { chainLib().catch(function () {}); }, 1500);   // phones: preload so the wallet hand-off starts instantly
   applyRoute(); render();   // same tick as the first paint → no flash of the board on refresh
 
   setTimeout(function () { S.loading = false; render(); routeReady = true; syncRoute(); }, 850);
