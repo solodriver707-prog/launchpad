@@ -51,7 +51,8 @@ const parseSplit = (uri) => { let pair = false, rw = null; try { const u = new U
     if (s) { const p = s.split('.').map(Number); if (p.length === 3 && p.every((x) => Number.isInteger(x) && x >= 0 && x <= 100) && p[0] + p[1] + p[2] === 100) { const d = Math.min(50, p[2]); return { h: p[0], b: p[1] + p[2] - d, d, pair, rw }; } /* dev share capped at 50% on the server too (the rest is burned) */ } } catch {} return { h: 70, b: 20, d: 10, pair, rw }; };
 
 export function startOps({ conn, dbc, ops, treasury, q, q1, run, mainnet = false, rewardOk = async () => false, quoteUsd = () => 150, poolAuthority, log = console.log, everyMs = 10 * 60e3, liabilities = () => 0, devState = (c) => ({ state: 'active', creator: c.creator }), ready = () => true }) {
-  const send = (ixs) => sendTx(conn, ixs, [ops]), amm = new CpAmm(conn), DAMM_CFG = DAMM_V2_MIGRATION_FEE_ADDRESS[6];
+  const send = (ixs) => { if (HALT.on) throw new Error('ops halted'); return sendTx(conn, ixs, [ops]); },   // nothing leaves the ops wallet once the ledger is broken
+    amm = new CpAmm(conn), DAMM_CFG = DAMM_V2_MIGRATION_FEE_ADDRESS[6];
   const rec = (sig, i, mint, kind, amt, extra = null) => { try { run('INSERT OR IGNORE INTO rlog(sig,i,mint,kind,lamports,ts,extra) VALUES(?,?,?,?,?,?,?)', sig, i, mint, kind, Number(amt), Date.now(), extra); } catch (e) { halt(e.message); throw e; } };
   // a transaction that may have landed but whose receipt we couldn't read: stop, and restart the server so the startup ledger
   // rebuild (from our on-chain memos) records it — retrying blindly could pay or swap the same amount twice
@@ -89,7 +90,7 @@ export function startOps({ conn, dbc, ops, treasury, q, q1, run, mainnet = false
     const vt2 = new VersionedTransaction(msg.compileToV0Message(luts)); vt2.sign([ops]);
     const pre = await conn.getBalance(ops.publicKey), sim = await conn.simulateTransaction(vt2, { sigVerify: false, accounts: { encoding: 'base64', addresses: [ops.publicKey.toBase58()] } });
     if (sim.value.err) throw new Error('$TREID buyback simulation failed'); const post = sim.value.accounts?.[0]?.lamports ?? 0; if (pre - post > lam + 0.01e9) throw new Error('$TREID route would spend too much SOL — refused');
-    const sig = await landOrExpire(conn, vt2.serialize(), bs58.encode(vt2.signatures[0]), sw.lastValidBlockHeight);
+    if (HALT.on) throw new Error('ops halted'); const sig = await landOrExpire(conn, vt2.serialize(), bs58.encode(vt2.signatures[0]), sw.lastValidBlockHeight);
     const t = await getTxRetry(conn, sig); if (!t) { unknown('$TREID buyback ' + sig); throw new Error('receipt unread'); } if (t.meta.err) throw new Error('$TREID buyback failed');
     rec(sig, 0, TREID, 'tbuy', lam); rec(sig, 1, TREID, 'tburn', minOut); rec(sig, 2, TREID, 'tleft', rwOut(t, ops.publicKey, TREID));
     log('ops   $TREID buyback', (lam / 1e9).toFixed(4), 'SOL → burned', minOut.toString());
@@ -112,7 +113,7 @@ export function startOps({ conn, dbc, ops, treasury, q, q1, run, mainnet = false
     // never sign away more SOL than the swap itself can need (the route comes from an outside API)
     const pre = await conn.getBalance(ops.publicKey), sim = await conn.simulateTransaction(vt2, { sigVerify: false, accounts: { encoding: 'base64', addresses: [ops.publicKey.toBase58()] } });
     if (sim.value.err) throw new Error('route simulation failed'); const post = sim.value.accounts?.[0]?.lamports ?? 0, maxLoss = (inM === WSOL ? amt : 0) + 0.01e9; if (pre - post > maxLoss) throw new Error('route would spend too much SOL — refused');
-    const sig = await landOrExpire(conn, vt2.serialize(), bs58.encode(vt2.signatures[0]), sw.lastValidBlockHeight);   // final answer only: landed, or expired and can never land
+    if (HALT.on) throw new Error('ops halted'); const sig = await landOrExpire(conn, vt2.serialize(), bs58.encode(vt2.signatures[0]), sw.lastValidBlockHeight);   // final answer only: landed, or expired and can never land
     const t = await getTxRetry(conn, sig); if (!t) { unknown('reward swap ' + sig); const e = new Error('receipt unread'); e.unconfirmed = true; throw e; } if (t.meta.err) throw new Error('reward swap failed');
     const out = rwOut(t, ops.publicKey, rw); rec(sig, 0, c.mint, 'taxconv', amt, rw); rec(sig, 1, c.mint, 'taxrw', out, rw);
     log('ops   swapped', amt, c.quote_symbol || 'SOL', 'units →', out, 'of', rw.slice(0, 6), '(holder reward)', c.symbol); return out;
@@ -152,7 +153,7 @@ export function startOps({ conn, dbc, ops, treasury, q, q1, run, mainnet = false
     let paid = 0n, n = 0;
     const kind = rw ? 'taxholdr' : 'taxholdq', batchSend = async (b) => { const amt = b.reduce((a, x) => a + x.amt, 0n), sg = await send([...b.map(ix), memoIx(`treid:${kind}:${c.mint}:${amt}:${b.length}`)]); rec(sg, 0, c.mint, kind, amt, String(b.length)); hrec(sg, b, QM.toBase58(), qd); paid += amt; n += b.length; };
     for (let i = 0; i < shares.length; i += 16) { const b = shares.slice(i, i + 16);
-      try { await batchSend(b); } catch (e) { if (e.unconfirmed) { unknown('pair payout ' + c.symbol); break; }
+      try { await batchSend(b); } catch (e) { if (HALT.on) throw e; if (e.unconfirmed) { unknown('pair payout ' + c.symbol); break; }
         for (const x of b) { try { await batchSend([x]); } catch (e2) { if (e2.unconfirmed) { unknown('pair payout ' + c.symbol); return { paid, n }; } } } } }   // a share that can't be paid (e.g. empty wallet) waits for the next round
     log('ops   holders paid', (Number(paid) / 10 ** qd).toFixed(6), rw ? rw.slice(0, 6) : (c.quote_symbol || 'SOL'), 'to', n, c.symbol); return { paid, n };
   }
@@ -197,8 +198,8 @@ export function startOps({ conn, dbc, ops, treasury, q, q1, run, mainnet = false
     const opsAcc = accs.find((a) => a.address.equals(opsAta)), stranded = opsAcc ? opsAcc.amount : 0n;   // tokens left in ops from an interrupted cycle are distributed now
     const total = withheld.reduce((s, a) => s + wa(a), 0n) + inMint + stranded;
     if (Number(total) / 10 ** DEC * px < HARVEST_USD) return null;   // not worth the transactions yet
-    const realTax = (q1('SELECT COALESCE(SUM(usd),0) v FROM trades WHERE mint=? AND ts>? AND wallet<>?', c.mint, Date.now() - 7 * 864e5, ops.publicKey.toBase58())?.v || 0) * (c.tax_bps || 0) / 1e4;
-    if (realTax < HARVEST_USD) return null;   // the price above comes from the coin's own curve; this checks real money actually traded (a toy curve can't make ops spend fees)
+    const lastH = q1("SELECT MAX(ts) t FROM rlog WHERE mint=? AND kind='taxburn'", c.mint)?.t || 0, realTax = (q1('SELECT COALESCE(SUM(usd),0) v FROM trades WHERE mint=? AND ts>? AND wallet<>?', c.mint, lastH, ops.publicKey.toBase58())?.v || 0) * (c.tax_bps || 0) / 1e4;
+    if (realTax < HARVEST_USD && !(carryGet(c.mint) > 0n) && Date.now() - lastH < 7 * 864e5) return null;   // the price above comes from the coin's own curve; this checks real money actually traded (a toy curve can't make ops spend fees)
     if (!opsAcc) await send([createAssociatedTokenAccountIdempotentInstruction(ops.publicKey, opsAta, ops.publicKey, mint, TOKEN_2022_PROGRAM_ID)]);
     for (let i = 0; i < withheld.length; i += 24) await send([createWithdrawWithheldTokensFromAccountsInstruction(mint, opsAta, ops.publicKey, [], withheld.slice(i, i + 24).map((a) => a.address), TOKEN_2022_PROGRAM_ID)]);   // 24 accounts per tx (size limit)
     if (inMint > 0n) await send([createWithdrawWithheldTokensFromMintInstruction(mint, opsAta, ops.publicKey, [], TOKEN_2022_PROGRAM_ID)]);
@@ -235,7 +236,7 @@ export function startOps({ conn, dbc, ops, treasury, q, q1, run, mainnet = false
     ixs.push(...[['taxburn', toBurn, null], ['taxdev', devPaid, devBurn ? null : devTo], ['taxhold', paid, String(n)]].map(([k, a, x]) => memoIx(`treid:${k}:${c.mint}:${a}` + (x ? ':' + x : ''))));
     const sg = await send(ixs);
     [['taxburn', toBurn, null], ['taxdev', devPaid, devBurn ? null : devTo], ['taxhold', paid, String(n)]].forEach(([k, a, x], i) => rec(sg, i, c.mint, k, a, x));
-    try { carrySet(c.mint, aborted && !saleUnsure ? holdAll - paid : 0n); } catch (e) { halt(e.message); }   // holders' unpaid part waits for the next round, unsplit
+    try { carrySet(c.mint, aborted && !saleUnsure ? now - toBurn : 0n); } catch (e) { halt(e.message); }   // exactly what is still in ops' account (a batch that did land isn't counted again)   // holders' unpaid part waits for the next round, unsplit
     try { const a = await getAccount(conn, opsAta, 'confirmed', TOKEN_2022_PROGRAM_ID); if (a.amount === 0n && !(getTransferFeeAmount(a)?.withheldAmount > 0n)) await send([createCloseAccountInstruction(opsAta, ops.publicKey, ops.publicKey, [], TOKEN_2022_PROGRAM_ID)]); } catch {}   // rent back to ops
     const f = (x) => (Number(x) / 10 ** DEC).toFixed(0);
     log('ops   tax', c.symbol, 'harvested', f(got), 'burn', f(toBurn), 'dev', devBurn ? 'burned' : f(devAmt), 'holders', f(paid), 'to', n);
@@ -251,11 +252,11 @@ export function startOps({ conn, dbc, ops, treasury, q, q1, run, mainnet = false
     try { await claimFees();
       const bal = await conn.getBalance(ops.publicKey), need = 0.05e9 + liabilities() + pendingSol(); status.bal = bal / 1e9; status.low = bal < need;
       if (status.low) { log('!! ops balance low:', (bal / 1e9).toFixed(4), 'SOL (needs', (need / 1e9).toFixed(4), ') — tax rounds and buybacks paused until it is topped up'); return; }   // never spend SOL that is owed to creators or holders
-      for (const c of q('SELECT * FROM coins WHERE tax_bps > 0')) {
+      for (const c of q('SELECT * FROM coins WHERE tax_bps > 0')) { if (HALT.on) return;
         const lt = lastTradeTs(c.mint), ls = seenTax.get(c.mint) || 0; if (!(lt > ls && Date.now() - ls > 6e5) && Date.now() - ls < 7 * 864e5) continue;   // every 10 min at most, only after new trades (weekly fallback: plain wallet-to-wallet transfers pay tax too)
         try { const cfg = await dbc.state.getPoolConfig(new PublicKey(c.config)); if (cfg.feeClaimer.toBase58() === ops.publicKey.toBase58()) await taxCycle(c); seenTax.set(c.mint, Date.now()); } catch (e) { log('ops   tax err', c.symbol, e.message.slice(0, 140)); } }
-      try { await treidBuyback(); } catch (e) { log('ops   $TREID buyback err', e.message.slice(0, 140)); }
-      await sweep();
+      if (HALT.on) return; try { await treidBuyback(); } catch (e) { log('ops   $TREID buyback err', e.message.slice(0, 140)); }
+      if (!HALT.on) await sweep();
     } catch (e) { log('ops   cycle err', e.message); } finally { busy = false; }
   }
   let queued = false; const locked = () => { if (queued) return; queued = true; withLock(cycle).finally(() => { queued = false; }); }; setTimeout(locked, 30e3); setInterval(locked, everyMs);

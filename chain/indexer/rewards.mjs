@@ -18,7 +18,8 @@ import { ed25519 } from '@noble/curves/ed25519';
 import bs58 from 'bs58';
 import BN from 'bn.js';
 import { withLock , HALT, halt, canWrite } from './lock.mjs';
-import { sendTx, getTxRetry } from './txutil.mjs';
+import { sendTx as sendTx0, getTxRetry } from './txutil.mjs';
+const sendTx = (...a) => { if (HALT.on) throw new Error('ops halted'); return sendTx0(...a); };   // nothing leaves the ops wallet once the ledger is broken
 import { rwOut } from './ops.mjs';
 import { verifySig } from './sig.mjs';
 

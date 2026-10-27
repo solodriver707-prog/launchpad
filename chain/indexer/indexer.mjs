@@ -15,6 +15,7 @@ import { startCallouts } from './callouts.mjs';
 import { startBubbles } from './bubbles.mjs';
 import { fetchT, JUP } from './txutil.mjs';
 import { HALT } from './lock.mjs';
+let OPS_ST = null;
 import { verifySig, SITES, issueSession } from './sig.mjs';
 import { ed25519 } from '@noble/curves/ed25519';
 
@@ -435,7 +436,7 @@ async function handleReq(req, res) {
       res.writeHead(200, { 'content-type': im.ct, 'x-content-type-options': 'nosniff', 'access-control-allow-origin': '*', 'cache-control': 'public, max-age=604800, immutable' }); return res.end(im.data); }
     const [h, b64] = d.split(','), ct = h.slice(5, h.indexOf(';')); if (!/^image\/(png|jpe?g|gif|webp)$/.test(ct)) { res.writeHead(404); return res.end(); }   // never serve svg (script)
     res.writeHead(200, { 'content-type': ct, 'x-content-type-options': 'nosniff', 'access-control-allow-origin': '*', 'cache-control': 'public, max-age=86400' }); return res.end(Buffer.from(b64, 'base64')); }
-  if (!p.length || p[1] === 'health') return J({ ok: true, coins: q1('SELECT COUNT(*) n FROM coins').n, trades: q1('SELECT COUNT(*) n FROM trades').n, configs: configs.size, partner: PARTNER || null, ops: OPS?.publicKey.toBase58() || null, ipfs: !!PINATA_JWT, sol_usd: SOL_USD, ready, cluster: MAINNET ? 'mainnet' : 'devnet', db_persistent: DB_PATH.startsWith('/data/'), ops_sol: opsSolC.v, ops_halted: HALT.on ? HALT.why : false, sites: SITES });
+  if (!p.length || p[1] === 'health') return J({ ok: true, coins: q1('SELECT COUNT(*) n FROM coins').n, trades: q1('SELECT COUNT(*) n FROM trades').n, configs: configs.size, partner: PARTNER || null, ops: OPS?.publicKey.toBase58() || null, ipfs: !!PINATA_JWT, sol_usd: SOL_USD, ready, cluster: MAINNET ? 'mainnet' : 'devnet', db_persistent: DB_PATH.startsWith('/data/'), ops_sol: opsSolC.v, ops_halted: HALT.on ? HALT.why : false, ops_low: !!OPS_ST?.status?.low, sites: SITES });
   try {
     if (p[1] === 'stream') { const ipx = ip(req), nIp = sseByIp.get(ipx) || 0; if (clients.size >= 3000 || nIp >= 6) { res.writeHead(429, { 'access-control-allow-origin': '*' }); return res.end(); }
       sseByIp.set(ipx, nIp + 1); req.on('close', () => { const v = (sseByIp.get(ipx) || 1) - 1; if (v > 0) sseByIp.set(ipx, v); else sseByIp.delete(ipx); });
@@ -492,7 +493,7 @@ async function handleReq(req, res) {
       const created = q('SELECT mint, symbol, name, created_at FROM coins WHERE creator=? ORDER BY created_at DESC LIMIT 50', w).filter((r) => !HIDDEN.has(r.mint));
       const v = { wallet: w, sol, first: rows.length ? Math.min(...rows.map((r) => r.f)) : null, coins, created }; walC.set(w, { ts: Date.now(), v }); if (walC.size > 3000) walC.delete(walC.keys().next().value); return J(v); }
     if (p[1] === 'vampcheck') { const sym = fold(u.searchParams.get('symbol')), nm = fold(u.searchParams.get('name')); const hits = q('SELECT mint, symbol, name, created_at FROM coins ORDER BY created_at ASC LIMIT 20000').filter((c) => !HIDDEN.has(c.mint) && ((sym.length >= 2 && (fold(c.symbol) === sym || fold(c.name) === sym)) || (nm.length >= 2 && (fold(c.name) === nm || fold(c.symbol) === nm)))).slice(0, 3); return J({ hits }); }
-    if (p[1] === 'xpost' && /^\d{5,25}$/.test(p[2] || '')) { if (!q1('SELECT 1 FROM xposts WHERE id=?', p[2]) && !rate('xp|' + ip(req), 30, 60e3)) return J(null, 429); return J(await xPost(p[2])); }
+    if (p[1] === 'xpost' && /^\d{5,25}$/.test(p[2] || '')) { if (!q1('SELECT 1 FROM xposts WHERE id=?', p[2]) && !rate('xp|' + ip(req), 30, 60e3)) { res.writeHead(429, { 'access-control-allow-origin': '*', 'content-type': 'application/json' }); return res.end('null'); } return J(await xPost(p[2])); }
     if (p[1] === 'rewards' && p[2]) { const w = String(p[2]); if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(w)) return J([]); let rows = []; try { rows = q('SELECT sig, mint, token, amt, dec, ts FROM hpay WHERE wallet=? ORDER BY ts DESC LIMIT 100', w); } catch {}
       return J(rows.filter((r) => !HIDDEN.has(r.mint) || true).map((r) => { const c = q1('SELECT symbol FROM coins WHERE mint=?', r.mint) || {}, tk = r.token === r.mint ? c.symbol : (r.token === WSOL ? 'SOL' : (q1('SELECT symbol FROM coins WHERE mint=?', r.token) || {}).symbol || null);
         return { sig: r.sig, mint: r.mint, symbol: c.symbol || '', token: r.token, tokenSymbol: tk || r.token.slice(0, 4), amount: r.amt / 10 ** (r.dec ?? 6), ts: r.ts }; })); }
@@ -577,7 +578,7 @@ async function start() {
   REW = startRewards({ conn, dbc, ops: OPS, treasury: PARTNER, q, q1, run, mainnet: MAINNET, quoteUsd: (c) => quoteUsd(c.quote_mint, c.quote_symbol), balances: async (mint) => new Map((await holders(mint)).filter((h) => !h.curve).map((h) => [h.wallet, h.pct / 100 * SUPPLY])) });
   for (let i = 1; ; i++) { try { await REW.rebuild(); break; } catch (e) { console.log('rewards rebuild retry', i, String(e?.message || e).slice(0, 120)); await sleep(Math.min(60e3, 5e3 * i)); } }   // a hole in the ledger could pay the wrong person
   setTimeout(() => REW.cycle(), 30e3); setInterval(() => REW.cycle(), +(process.env.OPS_EVERY_MIN || 10) * 60e3);
-  startOps({ conn, dbc, ops: OPS, treasury: PARTNER, q, q1, run, mainnet: MAINNET, rewardOk: (m) => quoteAllowed(m), quoteUsd: (c) => quoteUsd(c.quote_mint, c.quote_symbol), devState: (c) => REW.state(c), liabilities: () => REW.liabilities(), ready: () => REW.ready(), poolAuthority: deriveDbcPoolAuthority().toBase58(), everyMs: +(process.env.OPS_EVERY_MIN || 10) * 60e3 });
+  OPS_ST = startOps({ conn, dbc, ops: OPS, treasury: PARTNER, q, q1, run, mainnet: MAINNET, rewardOk: (m) => quoteAllowed(m), quoteUsd: (c) => quoteUsd(c.quote_mint, c.quote_symbol), devState: (c) => REW.state(c), liabilities: () => REW.liabilities(), ready: () => REW.ready(), poolAuthority: deriveDbcPoolAuthority().toBase58(), everyMs: +(process.env.OPS_EVERY_MIN || 10) * 60e3 });
   const opsBal = () => conn.getBalance(OPS.publicKey).then((b) => { opsSolC.v = b / 1e9; if (MAINNET && b < 0.05e9) console.error('!! ops wallet low on SOL:', b / 1e9); }).catch(() => {}); opsBal(); setInterval(opsBal, 10 * 60e3);
   console.log('ops wallet', OPS.publicKey.toBase58(), '→ treasury', PARTNER);
 }
