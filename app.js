@@ -3591,7 +3591,7 @@
       case 'bsort': S.bsort = arg; render(); break;
       case 'tcat': S.tcat = arg; render(); break;
       case 'tpreset': S.lsort = arg; S.ldir = -1; render(); break;
-      case 'fxpGo': FXP.hold = Date.now() + 8000; fxpShow(+arg); break;
+      case 'fxpGo': FXP.hold = Date.now() + 9000; fxpShow(+arg); break;
       case 'mFilt': S.mFilt = !S.mFilt; render(); break;
       case 'mSide': S.side = arg; render(); setTimeout(function () { var tb = document.querySelector('.tradebox'); if (tb) tb.scrollIntoView({ behavior: 'smooth', block: 'start' }); var inp = document.getElementById('amt'); if (inp) setTimeout(function () { inp.focus({ preventScroll: true }); }, 450); }, 30); break;
       case 'mBuy': var tbx = document.querySelector('.tradebox'); if (tbx) tbx.scrollIntoView({ behavior: 'smooth', block: 'center' }); break;
@@ -4073,18 +4073,31 @@
   (function () { var t0 = null; document.addEventListener('touchstart', function (e) { var b = e.target.closest && e.target.closest('.mnav button, .m-bar button'); t0 = b ? { b: b, x: e.touches[0].clientX, y: e.touches[0].clientY } : null; }, { passive: true });
     document.addEventListener('touchend', function (e) { if (!t0) return; var b = e.target.closest && e.target.closest('.mnav button, .m-bar button'), c = e.changedTouches[0]; if (b && b === t0.b && Math.abs(c.clientX - t0.x) < 12 && Math.abs(c.clientY - t0.y) < 12) { e.preventDefault(); b.click(); } t0 = null; }, { passive: false }); })();
   // phones: the factory plays by itself — the belt slides station to station while the screen stays put; swipe to jump
-  var FXP = { k: 0, hold: 0 }, FXB = ['minted ✓', '🤖 bots pay 80% · 🙂 you pay 2%', '▲ price up the curve', '✓ dev · ⚠ top10 · ✓ bundles', '🎓 graduated → Meteora', '💎 holders · 🔥 burn · 👤 creator'];
-  function fxPlayer() { var t = all()[3] || all()[0];
-    return '<div class="fxp" id="fxp"><div class="fxp-view"><div class="fxp-track" id="fxp-track" style="transform:translateX(' + (-FXP.k * 100) + '%)">' + STS.map(function (x, k) {
-      return '<div class="fxp-p' + (k === FXP.k ? ' on' : '') + '" style="--sc:' + FST[k][2] + '"><div class="fxp-stage"><div class="fxp-st"><span class="fxp-ic">' + FICO[k] + '</span>' + fxMini(k) + '</div>' +
-        '<span class="fxp-coin">' + (t ? avatarHTML(t, 46) : '') + '</span><span class="fxp-badge">' + FXB[k] + '</span><span class="fxp-belt"></span></div>' +
-        '<div class="fxp-txt"><span class="mono">0' + (k + 1) + ' / 06</span><b>' + x[0] + '</b><small>' + x[1] + '</small></div></div>'; }).join('') + '</div></div>' +
+  var FXP = { k: 0, hold: 0, coins: [], last: 0, spawn: 0, hits: 0, raf: 0 }, FXB = ['minted ✓', '🤖 −80% · you −2%', '▲ price up', 'scanned', '🎓 → Meteora', '💎 🔥 👤'];
+  function fxPlayer() {
+    return '<div class="fxp" id="fxp"><div class="fxp-view"><div class="fxp-stage" id="fxp-stage" style="--sc:' + FST[FXP.k][2] + '"><div class="fxp-st" id="fxp-st">' + fxpStation(FXP.k) + '</div><span class="fxp-piston" id="fxp-piston"><i></i></span><div class="fxp-coins" id="fxp-coins"></div><span class="fxp-belt"></span></div>' +
+      '<div class="fxp-txt" id="fxp-txt">' + fxpTxt(FXP.k) + '</div></div>' +
       '<div class="fxp-dots">' + STS.map(function (x, k) { return '<button class="' + (k === FXP.k ? 'on' : '') + '" data-act="fxpGo" data-arg="' + k + '" aria-label="Step ' + (k + 1) + '"><i></i></button>'; }).join('') + '</div></div>'; }
-  function fxpShow(k) { FXP.k = (k + 6) % 6; var tr = document.getElementById('fxp-track'); if (!tr) return; tr.style.transform = 'translateX(' + (-FXP.k * 100) + '%)';
-    tr.querySelectorAll('.fxp-p').forEach(function (p, i) { p.classList.toggle('on', i === FXP.k); }); document.querySelectorAll('.fxp-dots button').forEach(function (b, i) { b.classList.toggle('on', i === FXP.k); }); }
-  setInterval(function () { var el = document.getElementById('fxp'); if (!el || document.hidden || Date.now() < FXP.hold || !el.offsetParent) return; var r = el.getBoundingClientRect(); if (r.bottom < 0 || r.top > window.innerHeight) return; fxpShow(FXP.k + 1); }, 3800);
-  (function () { var sx = null; document.addEventListener('touchstart', function (e) { if (e.target.closest && e.target.closest('#fxp')) { sx = e.touches[0].clientX; FXP.hold = Date.now() + 8000; } }, { passive: true });
-    document.addEventListener('touchend', function (e) { if (sx == null) return; var dx = e.changedTouches[0].clientX - sx; sx = null; if (Math.abs(dx) > 40) fxpShow(FXP.k + (dx < 0 ? 1 : -1)); }, { passive: true }); })();
+  function fxpStation(k) { return '<span class="fxp-ic">' + FICO[k] + '</span><b class="fxp-sn">' + FST[k][0] + '</b>' + fxMini(k); }
+  function fxpTxt(k) { return '<span class="mono">0' + (k + 1) + ' / 06</span><b>' + STS[k][0] + '</b><small>' + STS[k][1] + '</small>'; }
+  function fxpShow(k) { FXP.k = (k + 6) % 6; FXP.hits = 0; if (FXP.k !== 0) document.querySelectorAll('.fxp-c.blank').forEach(function (e) { e.classList.remove('blank'); }); var st = document.getElementById('fxp-st'), sg = document.getElementById('fxp-stage'), tx = document.getElementById('fxp-txt'); if (!st) return;
+    sg.style.setProperty('--sc', FST[FXP.k][2]); st.classList.add('swap'); setTimeout(function () { st.innerHTML = fxpStation(FXP.k); tx.innerHTML = fxpTxt(FXP.k); st.classList.remove('swap'); }, 220);
+    document.querySelectorAll('.fxp-dots button').forEach(function (b, i) { b.classList.toggle('on', i === FXP.k); }); }
+  function fxpSpawn(box) { var t = pick(all()) || BASE[0], blank = FXP.k === 0, el = document.createElement('span'); el.className = 'fxp-c' + (blank ? ' blank' : '');
+    el.innerHTML = '<span class="fxp-cf">' + avatarHTML(t, 44) + '</span><span class="fxp-cq">?</span><span class="fxp-tag"></span>'; box.appendChild(el); FXP.coins.push({ el: el, x: -30, hit: false, k: FXP.k }); }
+  function fxpHit(c, W) { var k = FXP.k, el = c.el, pi = document.getElementById('fxp-piston'), tag = el.querySelector('.fxp-tag');
+    if (pi) { pi.classList.remove('down'); void pi.offsetWidth; pi.classList.add('down'); }
+    var st = document.getElementById('fxp-st'); if (st) { st.classList.remove('hit'); void st.offsetWidth; st.classList.add('hit'); }
+    setTimeout(function () { if (!el.isConnected) return; el.classList.add('fx' + k); el.classList.remove('blank');
+      var txt = k === 0 ? 'minted' : k === 1 ? (Math.random() < .5 ? '🤖 −80%' : '🙂 −2%') : k === 2 ? '▲' : k === 3 ? (Math.random() < .3 ? '⚠' : '✓') : k === 4 ? '🎓' : '💎🔥👤';
+      tag.textContent = txt; tag.className = 'fxp-tag on' + (k === 1 && txt.indexOf('80') > 0 ? ' r' : k === 3 && txt === '⚠' ? ' y' : ''); }, 230);
+    FXP.hits++; if (FXP.hits >= 3 && Date.now() > FXP.hold) setTimeout(function () { fxpShow(FXP.k + 1); }, 900); }
+  function fxpTick(now) { FXP.raf = requestAnimationFrame(fxpTick); var box = document.getElementById('fxp-coins'); if (!box || document.hidden || !box.offsetParent) { FXP.last = now; return; }
+    var W = box.clientWidth, dt = Math.min(60, now - (FXP.last || now)); FXP.last = now; if (!FXP.coins.length || now - FXP.spawn > 1500) { FXP.spawn = now; fxpSpawn(box); }
+    FXP.coins = FXP.coins.filter(function (c) { c.x += dt * .085; if (!c.hit && c.x >= W / 2) { c.hit = true; fxpHit(c, W); } c.el.style.transform = 'translateX(' + (c.x - 23).toFixed(1) + 'px)'; if (c.x > W + 40) { c.el.remove(); return false; } return true; }); }
+  requestAnimationFrame(fxpTick);
+  (function () { var sx = null; document.addEventListener('touchstart', function (e) { if (e.target.closest && e.target.closest('#fxp')) { sx = e.touches[0].clientX; } }, { passive: true });
+    document.addEventListener('touchend', function (e) { if (sx == null) return; var dx = e.changedTouches[0].clientX - sx; sx = null; if (Math.abs(dx) > 40) { FXP.hold = Date.now() + 9000; fxpShow(FXP.k + (dx < 0 ? 1 : -1)); } }, { passive: true }); })();
   function machineSection() {
     FW.cnt[2] = FW.cnt[2] || 1840.5; FW.cnt[5] = FW.cnt[5] || 58210;
     var st = FST.map(function (x, k) { return '<div class="fx-st fx-s' + k + '" data-fst="' + k + '" style="--sc:' + x[2] + ';left:calc(2% + ' + (FSX[k] * .96).toFixed(2) + '%)"><div class="fx-house"><div class="fx-hd"><span class="fx-ico">' + FICO[k] + '</span><span class="fx-n mono">0' + (k + 1) + '</span></div><b class="fx-t">' + x[0] + '</b><small class="fx-sub">' + x[1] + '</small>' +
