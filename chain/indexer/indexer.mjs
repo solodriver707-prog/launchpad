@@ -12,6 +12,7 @@ import { opsKeypair, startOps } from './ops.mjs';
 import { startRewards } from './rewards.mjs';
 import { startCallouts } from './callouts.mjs';
 import { fetchT } from './txutil.mjs';
+import { verifySig } from './sig.mjs';
 import { ed25519 } from '@noble/curves/ed25519';
 
 const RPC = process.env.RPC || 'http://127.0.0.1:8899';
@@ -316,7 +317,7 @@ async function handleReq(req, res) {
     let body = ''; req.on('data', (d) => { body += d; if (body.length > 3e6) req.destroy(); });
     req.on('end', async () => { try { if (!PINATA_JWT) return J({ uri: null });
       const m = JSON.parse(body), wl = String(m.wallet || ''), wts = +m.ts;   // only a real wallet with SOL can pin (protects the IPFS account)
-      if (!(Math.abs(Date.now() - wts) <= 5 * 60e3) || !ed25519.verify(bs58.decode(String(m.sig || '')), new TextEncoder().encode(`treid: upload — ${wl} — ${wts}`), new PublicKey(wl).toBytes())) throw new Error('sign the upload with your wallet');
+      if (!(Math.abs(Date.now() - wts) <= 5 * 60e3) || !verifySig(`treid: upload — ${wl} — ${wts}`, m.sig, wl, wts)) throw new Error('sign the upload with your wallet');
       if (!rate('upw|' + wl, 10, 864e5)) throw new Error('upload limit reached for today'); if ((await conn.getBalance(new PublicKey(wl))) < 0.02e9) throw new Error('your wallet needs a little SOL to launch');
       const ok = (v) => typeof v === 'string' && /^data:image\/(png|jpe?g|gif|webp);base64,/.test(v) && v.length < 1.5e6, tag = String(m.symbol || 'coin').replace(/[^A-Za-z0-9]/g, '').slice(0, 10) + '-' + Date.now().toString(36);
       const image = ok(m.image) ? await pinFile(m.image, tag) : null, banner = ok(m.banner) ? await pinFile(m.banner, tag + '-banner') : null;

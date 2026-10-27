@@ -3,12 +3,13 @@ import { PublicKey } from '@solana/web3.js';
 import { ed25519 } from '@noble/curves/ed25519';
 import bs58 from 'bs58';
 
+import { verifySig } from './sig.mjs';
 export const calloutMessage = (mint, ts, reply, text) => `treid: callout — ${mint} — ${ts}${reply != null ? ' — reply ' + reply : ''}\n${text}`;
 const clean = (t) => String(t || '').replace(/[\u0000-\u0008\u000B-\u001F\u007F‪-‮⁦-⁩]/g, '').replace(/\n{3,}/g, '\n\n').trim().slice(0, 280);
 
 export function startCallouts({ q, q1, run, push, rate, coinStats, pinJSON, pinataJwt, gateway, log = console.log }) {
   run(`CREATE TABLE IF NOT EXISTS callouts(id INTEGER PRIMARY KEY AUTOINCREMENT, mint TEXT, wallet TEXT, text TEXT, ts INT, sig TEXT UNIQUE, reply INT, mc REAL, pos REAL)`);
-  const verify = (c) => { try { return ed25519.verify(bs58.decode(c.sig), new TextEncoder().encode(calloutMessage(c.mint, c.ts, c.reply, c.text)), new PublicKey(c.wallet).toBytes()); } catch { return false; } };
+  const verify = (c) => verifySig(calloutMessage(c.mint, c.ts, c.reply, c.text), c.sig, c.wallet, c.ts);   // site line + legacy window (sig.mjs)
   const row = (r) => ({ id: r.id, mint: r.mint, wallet: r.wallet, text: r.text, ts: r.ts, reply: r.reply, mc: r.mc, pos: r.pos });
 
   async function post(body, ipAddr) {

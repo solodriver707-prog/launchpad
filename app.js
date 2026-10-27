@@ -2461,6 +2461,7 @@
   // ---- compact pair picker with search by name / ticker / contract address ----
   S.cpq = ''; S.cpTab = 'crypto';
   try { var CP = JSON.parse(localStorage.getItem('dl.cpairs') || '{}'); Object.keys(CP).forEach(function (k) { PAIR_INFO[k] = CP[k]; }); } catch (e) {}
+  function siteMsg(m) { return location.host + ' wants you to sign:\n' + m; }   // wallets show this first line: a look-alike site can't reuse your signature here
   function isCA(q) { return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(q); }
   function pairSearch(q) {
     q = q.trim(); var ql = q.toLowerCase().replace(/^\$/, ''), out = [];
@@ -2793,17 +2794,27 @@
     S.qBusy = mint; S.qErr = ''; render();
     Promise.all([chainLib().then(function (T) { return T.quoteInfo({ rpc: RPC, mint: mint }); }), API ? apiGet('/api/qprice?mint=' + mint).catch(function () { return {}; }) : Promise.resolve({})]).then(function (r) {
       var qi = r[0], pr = r[1] || {}; if (S.qBusy !== mint) return; S.qBusy = null;
-      if (!qi.ok) { S.qErr = qi.reason || 'This token can’t be used as a pair'; render(); return; }
+      if (!qi.ok) { S.qErr = CHAIN_ID === 'solana:devnet' && /No token found/.test(qi.reason || '') ? 'This pair opens on mainnet — on the test network only SOL and USDC exist' : (qi.reason || 'This token can’t be used as a pair'); render(); return; }
       if (!(pr.usd > 0)) { S.qErr = 'No market price found for this token, so a fair starting price can’t be set. Pick a token that trades on Jupiter.'; render(); return; }
       var k = qReg(pr.symbol, mint, pr.icon, pr.name);
       S.c.q = { mint: mint, sym: pr.symbol || k, dec: qi.decimals, usd: pr.usd, warn: qi.warn || null, key: k }; S.c.pair = k; S.cpq = ''; S.c.devBuy = ''; render();   // the holder-reward choice stays as picked
     }).catch(function (e) { S.qBusy = null; S.qErr = 'Couldn’t check this token: ' + chainErr(e); render(); });
+  }
+  function qPreset(sym) {   // shortcut chip → the verified token with exactly this symbol → the normal pair checks
+    if (sym === 'SOL') return qSelect(WSOL); if (sym === 'USDC') return qSelect(USDC_MINT);
+    if (!API) { S.qErr = 'Token search needs the treid server'; render(); return; }
+    S.qBusy = sym; S.qErr = ''; render();
+    apiGet('/api/tsearch?q=' + encodeURIComponent(sym)).then(function (list) { var t = (list || []).filter(function (x) { return String(x.symbol).toLowerCase() === sym.toLowerCase(); })[0];
+      if (S.qBusy !== sym) return; S.qBusy = null; if (!t) { S.qErr = 'Couldn’t find verified ' + sym + ' right now — try the search'; render(); return; } qReg(t.symbol, t.mint, t.icon, t.name); qSelect(t.mint); })
+      .catch(function () { S.qBusy = null; S.qErr = 'Token search is unavailable — try again'; render(); });
   }
   function realPairPicker(c) {
     var q = qOf(c), cur = q.mint, custom = cur !== WSOL && cur !== USDC_MINT;
     return '<div class="field rpp"><div class="lbl"><b>Buyers pay with</b> <span class="muted" style="font-weight:500;font-size:12px">· the token your coin trades against</span></div>' +
       '<div class="rpp-opts">' + [[WSOL, 'SOL', 'Solana'], [USDC_MINT, 'USDC', 'USD Coin']].map(function (o) { return '<button class="rpp-o' + (cur === o[0] ? ' on' : '') + '" data-act="qpick" data-arg="' + o[0] + '">' + coinHTML(o[1], 26) + '<span><b>' + o[1] + '</b><small>' + o[2] + '</small></span></button>'; }).join('') +
         (custom ? '<button class="rpp-o on" data-act="qpick" data-arg="' + esc(cur) + '">' + coinHTML(q.key, 26) + '<span><b>' + esc(q.sym) + '</b><small class="mono">' + esc(short(cur)) + '</small></span></button>' : '') + '</div>' +
+      '<div class="cpp-tabs">' + RW_TABS.map(function (x) { return '<button class="' + ((S.qTab || 'crypto') === x[0] ? 'on' : '') + '" data-act="qTab" data-arg="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div>' +
+      '<div class="cpp-quick drag-scroll">' + (RW_PRE[S.qTab || 'crypto'] || []).map(function (p) { var on = String(q.sym).toLowerCase() === p[1].toLowerCase() || (p[0] === 'SOL' && cur === WSOL) || (p[0] === 'USDC' && cur === USDC_MINT); return '<button class="cpp-q' + (on ? ' on' : '') + '" data-act="qPre" data-arg="' + esc(p[1]) + '">' + preIcon(p, 20) + '$' + esc(p[0]) + '</button>'; }).join('') + '</div>' +
       '<div class="rpp-s">' + I.search + '<input id="c-qmint" data-qmint value="' + esc(S.cpq) + '" placeholder="Search name, ticker or paste contract address" autocomplete="off" spellcheck="false"><div class="cpp-drop" id="q-drop" style="display:none"></div></div>' +
       (S.qBusy ? '<small class="rpp-st">Checking token…</small>' : S.qErr ? '<small class="rpp-st bad">' + esc(S.qErr) + '</small>' : q.warn ? '<small class="rpp-st warn">⚠ ' + esc(q.warn) + '</small>' : '') +
       '<small class="rpp-note">Buyers pay in <b>' + esc(q.sym) + '</b>. Price, trading fees and your creator rewards are all in ' + esc(q.sym) + (q.sol ? '' : ' · 1 ' + esc(q.sym) + ' ≈ $' + usdTxt(q.usd)) + '.</small></div>';
@@ -3156,6 +3167,8 @@
       case 'devbuy': setC({ devBuy: arg === '0' ? '' : arg }); break;
       case 'ctax': setC(+arg > 0 ? { buy: +arg, sell: +arg } : { buy: 0, sell: 0 }); break;
       case 'qpick': qSelect(arg); break;
+      case 'qTab': S.qTab = arg; render(); break;
+      case 'qPre': qPreset(arg); break;
       case 'vanMode': S.c.van = S.c.van || { mode: 'treid', suf: '' }; S.c.van.mode = arg; render(); setTimeout(function () { var vi = document.getElementById('van-suf'); if (vi) vi.focus(); }, 30); break;
       case 'rwPick': S.rwq = ''; rwSelect(arg); break;
       case 'rwPre': S.rwq = ''; rwPreset(arg); break;
@@ -3238,7 +3251,7 @@
           if (!S.account || !S.wallet) { set({ walletOpen: true }); break; } var fco = S.wallet.features['solana:signMessage']; if (!fco) { toast('This wallet can’t sign messages — try Phantom or Solflare'); break; }
           var txC = coClean(txt), tsC = Date.now(), rpC = S.replyTo != null ? S.replyTo : null, msgC = 'treid: callout \u2014 ' + tp0.ca + ' \u2014 ' + tsC + (rpC != null ? ' \u2014 reply ' + rpC : '') + '\n' + txC;   // must match indexer calloutMessage
           if (S.busy) break; S.busy = 'Posting'; render();
-          Promise.resolve(fco.signMessage({ account: S.walletAcc, message: new TextEncoder().encode(msgC) })).then(function (r) { var sg = (Array.isArray(r) ? r[0] : r).signature; return chainLib().then(function (T) { return fetch(API + '/api/callout', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mint: tp0.ca, wallet: S.account, ts: tsC, reply: rpC, text: txC, sig: T.b58(sg) }) }).then(function (x) { return x.json(); }); }); })
+          Promise.resolve(fco.signMessage({ account: S.walletAcc, message: new TextEncoder().encode(siteMsg(msgC)) })).then(function (r) { var sg = (Array.isArray(r) ? r[0] : r).signature; return chainLib().then(function (T) { return fetch(API + '/api/callout', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mint: tp0.ca, wallet: S.account, ts: tsC, reply: rpC, text: txC, sig: T.b58(sg) }) }).then(function (x) { return x.json(); }); }); })
             .then(function (j) { S.busy = null; if (!j || !j.ok) throw new Error((j && j.error) || 'posting failed'); coMerge([j.callout]); devPing(tp0); set({ cmtDraft: '', replyTo: null }); toast('Callout posted ✓'); })
             .catch(function (e) { S.busy = null; render(); toast(chainErr(e)); });
           break; }
@@ -3253,7 +3266,7 @@
       case 'devHere': var th = find(arg); if (!th || !S.wallet) break; var fsm = S.wallet.features['solana:signMessage'];
         if (!fsm) { toast('This wallet can’t sign messages — try Phantom or Solflare'); break; }
         var tsH = Date.now(), msgH = 'treid: I\'m still here \u2014 ' + th.ca + ' \u2014 ' + tsH;   // must match indexer/rewards.mjs pingMessage
-        Promise.resolve(fsm.signMessage({ account: S.walletAcc, message: new TextEncoder().encode(msgH) })).then(function (r) { var sg = (Array.isArray(r) ? r[0] : r).signature; return chainLib().then(function (T) { return fetch(API + '/api/ping', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mint: th.ca, wallet: S.account, ts: tsH, sig: T.b58(sg) }) }).then(function (x) { return x.json(); }); }); })
+        Promise.resolve(fsm.signMessage({ account: S.walletAcc, message: new TextEncoder().encode(siteMsg(msgH)) })).then(function (r) { var sg = (Array.isArray(r) ? r[0] : r).signature; return chainLib().then(function (T) { return fetch(API + '/api/ping', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mint: th.ca, wallet: S.account, ts: tsH, sig: T.b58(sg) }) }).then(function (x) { return x.json(); }); }); })
           .then(function (j) { if (!j || !j.ok) throw new Error((j && j.error) || 'check-in failed'); toast('Checked in ✓ — your activity timer is reset', th); setTimeout(function () { liveLoad(th); }, 2500); })
           .catch(function (e) { toast(chainErr(e)); });
         break;
@@ -3265,7 +3278,7 @@
         var ts0 = Date.now(), plan = act === 'ctoApply' ? ((document.getElementById('cto-plan') || {}).value || '').replace(/["\\\n\r]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 240) : '';
         if (act === 'ctoApply' && plan.length < 10) { toast('Write a short plan (10+ characters)'); return; }
         var msg = act === 'ctoApply' ? 'treid: lead takeover — ' + tk.ca + ' — ' + ts0 + '\n' + plan : 'treid: support takeover by ' + parts[1] + ' — ' + tk.ca + ' — ' + ts0;   // must match indexer/rewards.mjs
-        Promise.resolve(fsg.signMessage({ account: S.walletAcc, message: new TextEncoder().encode(msg) })).then(function (r) { var sg = (Array.isArray(r) ? r[0] : r).signature; return chainLib().then(function (T) {
+        Promise.resolve(fsg.signMessage({ account: S.walletAcc, message: new TextEncoder().encode(siteMsg(msg)) })).then(function (r) { var sg = (Array.isArray(r) ? r[0] : r).signature; return chainLib().then(function (T) {
           var body = act === 'ctoApply' ? { mint: tk.ca, wallet: S.account, ts: ts0, sig: T.b58(sg), plan: plan } : { mint: tk.ca, applicant: parts[1], wallet: S.account, ts: ts0, sig: T.b58(sg) };
           return fetch(API + '/api/cto/' + (act === 'ctoApply' ? 'apply' : 'vote'), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then(function (x) { return x.json(); }); }); })
           .then(function (j) { if (!j || !j.ok) throw new Error((j && j.error) || 'failed'); S.ctoForm = null; toast(act === 'ctoApply' ? 'Application sent ✓ — holders can now support you' : j.approved ? 'Takeover approved! 🎉' : 'Support counted ✓', tk); if (j.approved) confetti(); setTimeout(function () { liveLoad(tk); }, 2000); })
@@ -3275,7 +3288,7 @@
         if (!fsq) { toast('This wallet can’t sign messages — try Phantom or Solflare'); break; }
         var tsQ = Date.now(), msgQ = 'treid: claim — ' + tq.ca + ' — ' + tsQ;   // must match indexer/rewards.mjs claimMessage
         S.busy = 'Claiming'; render();
-        Promise.resolve(fsq.signMessage({ account: S.walletAcc, message: new TextEncoder().encode(msgQ) })).then(function (r) { var sg = (Array.isArray(r) ? r[0] : r).signature; return chainLib().then(function (T) { return fetch(API + '/api/claim', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mint: tq.ca, wallet: S.account, ts: tsQ, sig: T.b58(sg) }) }).then(function (x) { return x.json(); }); }); })
+        Promise.resolve(fsq.signMessage({ account: S.walletAcc, message: new TextEncoder().encode(siteMsg(msgQ)) })).then(function (r) { var sg = (Array.isArray(r) ? r[0] : r).signature; return chainLib().then(function (T) { return fetch(API + '/api/claim', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mint: tq.ca, wallet: S.account, ts: tsQ, sig: T.b58(sg) }) }).then(function (x) { return x.json(); }); }); })
           .then(function (j) { S.busy = null; if (!j || !j.ok) throw new Error((j && j.error) || 'claim failed'); confettiSmall(); toast('Paid ' + j.sol.toFixed(4) + ' ' + qSymT(tq) + ' to your wallet ✓', tq); setTimeout(function () { liveLoad(tq); refreshBalance(); }, 2000); render(); })
           .catch(function (e) { S.busy = null; render(); toast(chainErr(e)); });
         break;
@@ -3342,7 +3355,7 @@
           .then(function (T) { return T.grind(suf1, { onProgress: function (n, exp) { var el = document.getElementById('gr-n'); if (!el) return; var rate = n / Math.max(0.2, (Date.now() - gStart) / 1000), left = Math.max(0, (exp - n) / rate); el.textContent = fmtNum(n) + ' tried · ' + (n >= exp ? 'any moment now — it\'s luck' : left < 5 ? 'almost there' : '~' + (left < 90 ? Math.ceil(left) + 's' : Math.ceil(left / 60) + ' min') + ' left'); } }); })
           .then(function (g) { gEl.remove(); grindT = g; S.busy = 'Saving logo…'; render();
             var fsU = S.wallet && S.wallet.features['solana:signMessage'], tsU = Date.now(), whoU = S.account;   // the upload is signed by your wallet (protects the IPFS account from spam)
-            var up = API ? (fsU ? Promise.resolve(fsU.signMessage({ account: S.walletAcc, message: new TextEncoder().encode('treid: upload \u2014 ' + whoU + ' \u2014 ' + tsU) })) : Promise.reject(new Error('This wallet can’t sign messages — try Phantom or Solflare'))).then(function (r) { var sg = (Array.isArray(r) ? r[0] : r).signature; return chainLib().then(function (T) { return T.b58(sg); }); }).then(function (sigU) { return Promise.race([fetch(API + '/api/upload', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ wallet: whoU, ts: tsU, sig: sigU, name: cc0.name, symbol: cc0.tick, description: (cc0.desc || '').trim(), image: cc0.img || null, banner: cc0.banner || null, x: cc0.x, tg: cc0.tg, web: cc0.web }) }).then(function (r) { return r.json(); }), new Promise(function (r) { setTimeout(function () { r({}); }, 25000); })]); }).catch(function (e) { return { error: e && e.message }; }) : Promise.resolve({});
+            var up = API ? (fsU ? Promise.resolve(fsU.signMessage({ account: S.walletAcc, message: new TextEncoder().encode(siteMsg('treid: upload \u2014 ' + whoU + ' \u2014 ' + tsU)) })) : Promise.reject(new Error('This wallet can’t sign messages — try Phantom or Solflare'))).then(function (r) { var sg = (Array.isArray(r) ? r[0] : r).signature; return chainLib().then(function (T) { return T.b58(sg); }); }).then(function (sigU) { return Promise.race([fetch(API + '/api/upload', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ wallet: whoU, ts: tsU, sig: sigU, name: cc0.name, symbol: cc0.tick, description: (cc0.desc || '').trim(), image: cc0.img || null, banner: cc0.banner || null, x: cc0.x, tg: cc0.tg, web: cc0.web }) }).then(function (r) { return r.json(); }), new Promise(function (r) { setTimeout(function () { r({}); }, 25000); })]); }).catch(function (e) { return { error: e && e.message }; }) : Promise.resolve({});
             return up; }).then(function (up) { S.busy = null; if (API && !API_DEV && !(up && up.uri)) throw new Error((up && up.error) || 'Couldn’t save your logo to IPFS — please try again'); var g = grindT; return chainRun('Launching $' + c.tick, function (T) {
             return T.buildCreate({ rpc: RPC, payer: S.account, partner: PARTNER, treasury: TREASURY, mintSecret: g.secret, extraFeeSol: vf1, escrow: S.escrowWallet || null, name: cc0.name, symbol: cc0.tick, uri: coinUri('MINT'.repeat(11), cc0, up && up.uri), taxBps: tax0 * 100, trapBps: Math.max(50, sn0.start || 50) * 100, trapSecs: Math.max(30, sn0.dur || 30), devBuySol: dq2.sol, quoteMint: qq1.sol ? null : qq1.mint, mc0: qq1.sol ? null : 20 * SOL_USD / qq1.usd, mc1: qq1.sol ? null : 60 * SOL_USD / qq1.usd });
           }); }).then(function (b) {

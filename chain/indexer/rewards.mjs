@@ -20,6 +20,7 @@ import BN from 'bn.js';
 import { withLock } from './lock.mjs';
 import { sendTx, getTxRetry } from './txutil.mjs';
 import { rwOut } from './ops.mjs';
+import { verifySig } from './sig.mjs';
 
 export const RULES = { idleFreezeMs: 48 * 3600e3, idleOutMs: 7 * 864e5, soldOut: 70, ctoApplyPct: 1, ctoSupportPct: 10, ctoHoldMs: 24 * 36e5 };
 const SUPPLY = 1e9, MEMO = new PublicKey('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr');
@@ -43,7 +44,7 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, q
   run(`CREATE TABLE IF NOT EXISTS ctovotes(mint TEXT, round INT, voter TEXT, applicant TEXT, ts INT, sig TEXT, PRIMARY KEY(mint, round, voter))`);   // off-chain: votes cost ops nothing
   const record = (sig, items) => items.forEach((it, i) => run('INSERT OR IGNORE INTO rlog(sig,i,mint,kind,lamports,ts,extra) VALUES(?,?,?,?,?,?,?)', sig, i, it.mint, it.kind, it.lamports, Date.now(), it.extra ?? null));
   const stamp = async (mint, kind, lamports = 0, extra = null, more = []) => { const s = await sendTx(conn, [...more, memo(`treid:${kind}:${mint}:${lamports}` + (extra ? ':' + extra : ''))], [ops]); record(s, [{ mint, kind, lamports, extra }]); return s; };
-  const verify = (msg, sig, wallet) => { try { return ed25519.verify(bs58.decode(sig), new TextEncoder().encode(msg), new PublicKey(wallet).toBytes()); } catch { return false; } };
+  const verify = (msg, sig, wallet, ts) => verifySig(msg, sig, wallet, ts);   // site line + legacy window (sig.mjs)
   const fresh = (ts) => { if (!(Math.abs(Date.now() - ts) <= 2 * 60e3)) throw new Error('signature expired — try again'); };
   const usedSig = new Map(), lastAct = new Map();
   const guard = (kind, wallet, sig) => { const now = Date.now(); for (const [k, t] of usedSig) if (now - t > 5 * 60e3) usedSig.delete(k);
@@ -294,13 +295,13 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, q
   const coin = (mint) => { const c = q1('SELECT * FROM coins WHERE mint=?', mint); if (!c) throw new Error('unknown coin'); return c; };
 
   async function ping({ mint, wallet, ts, sig }) {
-    needReady(); const c = coin(mint), st = state(c); fresh(ts); if (!verify(pingMessage(mint, ts), sig, wallet)) throw new Error('bad signature'); guard('ping', wallet, sig);
+    needReady(); const c = coin(mint), st = state(c); fresh(ts); if (!verify(pingMessage(mint, ts), sig, wallet, ts)) throw new Error('bad signature'); guard('ping', wallet, sig);
     if (st.era === 'out' || st.state === 'out') throw new Error('creator is already out'); if (wallet !== st.creator) throw new Error('only the current creator can check in');
     const lastP = q1(`SELECT MAX(ts) t FROM rlog WHERE mint=? AND kind='ping'`, mint).t || 0; if (st.state === 'active' && Date.now() - lastP < 12 * 36e5) return { ok: true, already: true };   // on-chain at most every 12h while active
     await withLock(() => stamp(mint, 'ping', 0, wallet)); lastDone.delete(mint); return { ok: true };
   }
   async function claimNow({ mint, wallet, ts, sig }) {
-    needReady(); const c = coin(mint); fresh(ts); if (!verify(claimMessage(mint, ts), sig, wallet)) throw new Error('bad signature'); guard('claim', wallet, sig);
+    needReady(); const c = coin(mint); fresh(ts); if (!verify(claimMessage(mint, ts), sig, wallet, ts)) throw new Error('bad signature'); guard('claim', wallet, sig);
     return withLock(async () => { const st = state(c); if (wallet !== st.creator) throw new Error('only the current creator can claim');
       if (st.state !== 'active') throw new Error(st.state === 'frozen' ? 'payouts are paused — tap “I’m still here” first' : 'creator is out');
       const vpw = await dbc.state.getPool(new PublicKey(c.pool)), src = await creatorSources(c, vpw.poolState || vpw), inPool = src.list.reduce((a, x) => a + x[1], 0);
@@ -310,14 +311,14 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, q
   }
   async function ctoApply({ mint, wallet, ts, sig, plan }) {
     needReady(); const c = coin(mint), p = cleanPlan(plan); fresh(ts); if (p.length < 10) throw new Error('write a short plan (10+ characters)');
-    if (!verify(applyMessage(mint, ts, String(plan || '').slice(0, 240)), sig, wallet) && !verify(applyMessage(mint, ts, p), sig, wallet)) throw new Error('bad signature'); guard('apply', wallet, sig);
+    if (!verify(applyMessage(mint, ts, String(plan || '').slice(0, 240)), sig, wallet, ts) && !verify(applyMessage(mint, ts, p), sig, wallet, ts)) throw new Error('bad signature'); guard('apply', wallet, sig);
     const e = era(c); if (e.type !== 'out') throw new Error('takeovers open only when the creator is out'); if (pastLeads(c).has(wallet)) throw new Error('this wallet can’t lead this coin');
     if (q1(`SELECT 1 FROM rlog WHERE mint=? AND kind='ctoapply' AND ts>=? AND extra LIKE ?`, mint, e.start, wallet + '|%')) throw new Error('you already applied');
     const own = (await bals(mint)).get(wallet) || 0; if (own / SUPPLY * 100 < RULES.ctoApplyPct) throw new Error(`you need at least ${RULES.ctoApplyPct}% of the supply to apply`);
     await withLock(() => stamp(mint, 'ctoapply', 0, wallet + '|' + p)); return { ok: true };
   }
   async function ctoVote({ mint, applicant, wallet, ts, sig }) {
-    needReady(); const c = coin(mint); fresh(ts); if (!verify(voteMessage(mint, applicant, ts), sig, wallet)) throw new Error('bad signature'); guard('vote', wallet, sig);
+    needReady(); const c = coin(mint); fresh(ts); if (!verify(voteMessage(mint, applicant, ts), sig, wallet, ts)) throw new Error('bad signature'); guard('vote', wallet, sig);
     const e = era(c); if (e.type !== 'out') throw new Error('no takeover vote is open'); if (pastLeads(c).has(wallet)) throw new Error('this wallet can’t vote here');
     const prev = q1('SELECT applicant, ts FROM ctovotes WHERE mint=? AND round=? AND voter=?', mint, e.start, wallet);
     if (prev?.applicant === applicant) return { ok: true, approved: false, already: true }; if (prev && Date.now() - prev.ts < 6 * 36e5) throw new Error('you can change your vote once every 6 hours');
