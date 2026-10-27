@@ -153,7 +153,8 @@ export async function sendAll({ rpc, signed, lastValidBlockHeight }) {
   const sigs = [];
   try { for (const b of signed) {
     const raw = b instanceof Uint8Array ? b : Uint8Array.from(b);
-    const sig = await C(rpc).sendRawTransaction(raw, { skipPreflight: false, preflightCommitment: 'confirmed' });
+    let sig; for (let a = 0; ; a++) { try { sig = await C(rpc).sendRawTransaction(raw, { skipPreflight: false, preflightCommitment: 'confirmed' }); break; }
+      catch (e) { if (sigs.length && a < 4 && /AccountNotFound|could not find account|AccountNotInitialized|0xbc4|account.*not.*exist/i.test(String(e?.message || e))) { await new Promise((r) => setTimeout(r, 1500)); continue; } throw e; } }   // the step before may not be visible on this RPC node yet
     const tx = Transaction.from(raw); const r = await C(rpc).confirmTransaction({ signature: sig, blockhash: tx.recentBlockhash, lastValidBlockHeight: lastValidBlockHeight || (await C(rpc).getBlockHeight()) + 150 }, 'confirmed');
     if (r.value.err) throw new Error('Transaction failed: ' + JSON.stringify(r.value.err));
     sigs.push(sig);

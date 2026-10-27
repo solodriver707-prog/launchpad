@@ -41,6 +41,7 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, q
   run(`CREATE TABLE IF NOT EXISTS rlog(sig TEXT, i INT, mint TEXT, kind TEXT, lamports INT, ts INT, PRIMARY KEY(sig, i))`);
   try { run('ALTER TABLE rlog ADD COLUMN extra TEXT'); } catch {}
   run(`CREATE TABLE IF NOT EXISTS rpeak(mint TEXT, wallet TEXT, since INT, peak REAL, PRIMARY KEY(mint, wallet, since))`);   // biggest bag seen per era (kept on a persistent disk)
+  run('CREATE TABLE IF NOT EXISTS rscan(sig TEXT PRIMARY KEY)');   // ops-wallet txs already read by the ledger rebuild
   run(`CREATE TABLE IF NOT EXISTS ctovotes(mint TEXT, round INT, voter TEXT, applicant TEXT, ts INT, sig TEXT, PRIMARY KEY(mint, round, voter))`);   // off-chain: votes cost ops nothing
   const record = (sig, items) => items.forEach((it, i) => run('INSERT OR IGNORE INTO rlog(sig,i,mint,kind,lamports,ts,extra) VALUES(?,?,?,?,?,?,?)', sig, i, it.mint, it.kind, it.lamports, Date.now(), it.extra ?? null));
   const stamp = async (mint, kind, lamports = 0, extra = null, more = []) => { const s = await sendTx(conn, [...more, memo(`treid:${kind}:${mint}:${lamports}` + (extra ? ':' + extra : ''))], [ops]); record(s, [{ mint, kind, lamports, extra }]); return s; };
@@ -57,16 +58,17 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, q
   async function rebuild() {
     let before, n = 0;
     while (true) { const page = await conn.getSignaturesForAddress(ops.publicKey, { limit: 1000, before }, 'confirmed'); if (!page.length) break;
-      for (const x of page) { if (x.err || q1('SELECT 1 FROM rlog WHERE sig=?', x.signature)) continue;
+      for (const x of page) { if (x.err || q1('SELECT 1 FROM rlog WHERE sig=?', x.signature) || q1('SELECT 1 FROM rscan WHERE sig=?', x.signature)) continue;   // each tx is read once, ever (persistent disk)
         const t = await getTxRetry(conn, x.signature, 4); if (!t) throw new Error('ledger rebuild: could not read ' + x.signature.slice(0, 10) + ' — will retry');   // never start with a hole in the ledger
         const msg = t.transaction.message, keys = msg.getAccountKeys ? msg.getAccountKeys({ accountKeysFromLookups: t.meta.loadedAddresses }) : null, key = (i) => (keys ? keys.get(i) : msg.accountKeys[i]);
-        if (!key(0) || !key(0).equals(ops.publicKey)) continue;   // only transactions PAID BY ops
+        if (!key(0) || !key(0).equals(ops.publicKey)) { run('INSERT OR IGNORE INTO rscan VALUES(?)', x.signature); continue; }   // only transactions PAID BY ops
         const items = (msg.compiledInstructions || []).filter((ix) => key(ix.programIdIndex)?.equals(MEMO)).map((ix) => Buffer.from(ix.data).toString('utf8')).filter((m) => m.startsWith('treid:')).map((m) => { const p = m.split(':'); return { kind: p[1], mint: p[2], lamports: +p[3] || 0, extra: p.length > 4 ? p.slice(4).join(':') : null }; });
         for (const it of items) if (it.kind === 'taxswap' && it.extra) {   // pair-token sale for holders: the receipt is what left the pool's quote vault
           const vi = [...Array(keys ? keys.length : msg.accountKeys.length).keys()].find((i) => key(i)?.toBase58() === it.extra), bal = (arr) => Number((arr || []).find((b) => b.accountIndex === vi)?.uiTokenAmount.amount || 0);
           it.lamports = vi == null ? 0 : Math.max(0, bal(t.meta.preTokenBalances) - bal(t.meta.postTokenBalances)); }
         for (const it of [...items]) if (it.kind === 'taxconv' && it.extra) items.push({ kind: 'taxrw', mint: it.mint, lamports: rwOut(t, ops.publicKey, it.extra), extra: it.extra });   // what that reward swap delivered
-        items.forEach((it, i) => run('INSERT OR IGNORE INTO rlog(sig,i,mint,kind,lamports,ts,extra) VALUES(?,?,?,?,?,?,?)', x.signature, i, it.mint, it.kind, it.lamports, (x.blockTime || 0) * 1000, it.extra)); n += items.length; }
+        items.forEach((it, i) => run('INSERT OR IGNORE INTO rlog(sig,i,mint,kind,lamports,ts,extra) VALUES(?,?,?,?,?,?,?)', x.signature, i, it.mint, it.kind, it.lamports, (x.blockTime || 0) * 1000, it.extra)); n += items.length;
+        run('INSERT OR IGNORE INTO rscan VALUES(?)', x.signature); }
       if (page.length < 1000) break; before = page[page.length - 1].signature; }
     READY = true; log('rewards ledger rebuilt:', n, 'entries');
   }

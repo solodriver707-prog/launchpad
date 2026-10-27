@@ -2042,20 +2042,28 @@
   function paySol(t) { return jupOn(t) && S.side === 'buy' && !!S.paySol; }
   function b64Bytes(x) { var b = atob(x), u = new Uint8Array(b.length); for (var i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u; }
   function bytesB64(u) { var s0 = ''; for (var i = 0; i < u.length; i++) s0 += String.fromCharCode(u[i]); return btoa(s0); }
-  function waitSig(sig) { var t0 = Date.now(); return new Promise(function (res, rej) { (function poll() { rpc('getSignatureStatuses', [[sig]]).then(function (r) { var st = r && r.value && r.value[0]; if (st && st.err) return rej(new Error('Swap failed on-chain')); if (st && (st.confirmationStatus === 'confirmed' || st.confirmationStatus === 'finalized')) return res(sig); if (Date.now() - t0 > 75e3) return rej(new Error('Swap not confirmed in time — check your wallet')); setTimeout(poll, 1500); }).catch(function () { setTimeout(poll, 2000); }); })(); }); }
+  // waits for a FINAL answer: confirmed, failed, or expired (blockhash past its last valid height — it can never land). Never "gave up while it could still land".
+  function waitSig(sig, lvh) { var t0 = Date.now(); return new Promise(function (res, rej) { (function poll() { rpc('getSignatureStatuses', [[sig], { searchTransactionHistory: true }]).then(function (r) { var st = r && r.value && r.value[0]; if (st && st.err) return rej(new Error('Swap failed on-chain')); if (st && (st.confirmationStatus === 'confirmed' || st.confirmationStatus === 'finalized')) return res(sig);
+    return (lvh ? rpc('getBlockHeight', [{ commitment: 'confirmed' }]) : Promise.resolve(null)).then(function (h) { if ((lvh && h > lvh + 5) || (!lvh && Date.now() - t0 > 90e3)) return rej(new Error('The swap expired without going through — nothing was spent')); if (Date.now() - t0 > 600e3) return rej(new Error('Network not responding — check your wallet before trying again')); setTimeout(poll, 1500); }); }).catch(function () { setTimeout(poll, 2000); }); })(); }); }
   function jupSolToPair(t, sol) {   // resolves with the pair-token amount that ACTUALLY arrived (balance before/after, on-chain decimals)
     var lam = Math.floor(sol * 1e9); if (lam <= 0) return Promise.reject(new Error('Enter an amount first'));
     var who = S.account, bal0 = null, qm = null;
     return chainLib().then(function (T) { return T.poolQuote({ rpc: RPC, pool: t.pool, expect: { mint: t.ca, partners: [PARTNER, TREASURY] } }).then(function (pq) { qm = pq.mint; if (qm !== t.qMint) throw new Error('Pair token mismatch — refusing'); return T.tokenBalance({ rpc: RPC, owner: who, mint: qm }); }); }).then(function (b) { bal0 = b; return jupSolToPair0(t, lam); })
-      .then(function () { if (S.account !== who) throw new Error('Wallet account changed — stopped'); return chainLib().then(function (T) { return T.tokenBalance({ rpc: RPC, owner: who, mint: qm }); }); })
-      .then(function (b1) { var got = b1 - bal0; if (!(got > 0)) throw new Error('The swap didn’t deliver ' + qSymT(t) + ' — nothing was bought'); return got; });
+      .then(function (sig) { if (S.account !== who) throw new Error('Wallet account changed — stopped'); return swapDelivered(sig, who, qm); })
+      .then(function (got) { if (!(got > 0)) throw new Error('The swap didn’t deliver ' + qSymT(t) + ' — nothing was bought'); return got; });
+  }
+  function swapDelivered(sig, who, mint) {   // the owner's balance change in this mint, from the confirmed transaction's own meta
+    var tries = 0; return (function get() { return rpc('getTransaction', [sig, { encoding: 'jsonParsed', commitment: 'confirmed', maxSupportedTransactionVersion: 0 }]).then(function (tx) {
+      if (!tx || !tx.meta) { if (++tries > 8) throw new Error('Couldn’t read the swap result — check your wallet balance'); return new Promise(function (r) { setTimeout(r, 1500); }).then(get); }
+      var sum = function (arr) { return (arr || []).filter(function (b) { return b.mint === mint && b.owner === who; }).reduce(function (a, b) { return a + Number(b.uiTokenAmount.amount) / Math.pow(10, b.uiTokenAmount.decimals); }, 0); };   // raw units (not the scaled UI amount)
+      return sum(tx.meta.postTokenBalances) - sum(tx.meta.preTokenBalances); }); })();
   }
   function jupSolToPair0(t, lam) {
     return fetch(JUP + '/quote?inputMint=' + WSOL + '&outputMint=' + t.qMint + '&amount=' + lam + '&slippageBps=' + Math.round(S.slip * 100)).then(function (r) { return r.json(); }).then(function (qr) {
       if (!qr || !qr.outAmount) throw new Error('No Jupiter route from SOL to ' + qSymT(t)); if (qr.inputMint !== WSOL || qr.outputMint !== t.qMint) throw new Error('Jupiter returned a different route — refusing');
       return fetch(JUP + '/swap', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ quoteResponse: qr, userPublicKey: S.account, wrapAndUnwrapSol: true, dynamicComputeUnitLimit: true }) }).then(function (r) { return r.json(); }).then(function (sw) {
         if (!sw || !sw.swapTransaction) throw new Error('Jupiter couldn’t build the swap');
-        var raw = b64Bytes(sw.swapTransaction); return chainLib().then(function (T) { return T.checkSwapTx(raw, S.account, RPC).then(function () { return walletSign([raw]); }); }).then(function (signed) { return rpc('sendTransaction', [bytesB64(signed[0]), { encoding: 'base64', preflightCommitment: 'confirmed', maxRetries: 3 }]); }).then(waitSig);
+        var raw = b64Bytes(sw.swapTransaction); return chainLib().then(function (T) { return T.checkSwapTx(raw, S.account, RPC).then(function () { return walletSign([raw]); }); }).then(function (signed) { return rpc('sendTransaction', [bytesB64(signed[0]), { encoding: 'base64', preflightCommitment: 'confirmed', maxRetries: 3 }]); }).then(function (sig) { return waitSig(sig, sw.lastValidBlockHeight); });
       }); });
   }
   function qSymT(t) { return t && t.live && t.qMint ? (t.qSym || t.pair) : 'SOL'; }
