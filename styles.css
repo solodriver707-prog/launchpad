@@ -4895,5 +4895,39 @@ button[disabled].big-btn{opacity:.7;cursor:progress}
   .wp-tabs{gap:16px;overflow-x:auto;scrollbar-width:none}.wp-tabs button{white-space:nowrap}
   .sh-modal{width:calc(100vw - 16px);padding:12px}
   .sh-th{width:48px;height:48px}
-  .co-modal{left:8px!important;right:8px!important;width:auto!important;max-height:calc(100vh - 24px);overflow-y:auto}
+  .co-modal{left:8px!important;right:8px!important;width:auto!important;top:auto!important;bottom:8px!important;transform:none!important;max-height:calc(100dvh - 90px);overflow-y:auto;border-radius:20px}
+  .sh-modal{left:8px!important;right:8px!important;width:auto!important;transform:none!important;top:auto!important;bottom:8px!important;max-height:calc(100dvh - 24px)}
 }
+/* factory player (phones) */
+.fxp{display:none}
+@media (max-width:760px){
+  .fx-mlist{display:none!important}
+  .fxp{display:block;margin-top:14px}
+  .fxp-view{overflow:hidden;border-radius:18px;border:1px solid var(--line);background:radial-gradient(ellipse at 50% 30%,#1a1a1d,#0e0e10)}
+  .fxp-track{display:flex;transition:transform .7s cubic-bezier(.65,0,.35,1)}
+  .fxp-p{flex:0 0 100%;display:flex;flex-direction:column}
+  .fxp-stage{position:relative;height:230px;overflow:hidden;background-image:linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px);background-size:22px 22px}
+  .fxp-st{position:absolute;left:50%;top:22px;transform:translateX(-50%);width:200px;padding:14px;border-radius:16px;border:2px solid var(--sc);background:linear-gradient(160deg,color-mix(in srgb,var(--sc) 16%,#151517),#121214);box-shadow:0 0 30px -8px var(--sc);display:flex;flex-direction:column;align-items:center;gap:10px}
+  .fxp-ic{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;background:color-mix(in srgb,var(--sc) 24%,transparent);color:var(--sc)}
+  .fxp-ic svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  .fxp-st .fm{transform:scale(1.15)}
+  .fxp-belt{position:absolute;left:0;right:0;bottom:20px;height:14px;background:repeating-linear-gradient(90deg,#2a2a2f 0 18px,#1c1c20 18px 30px);border-top:1px solid #333;border-bottom:1px solid #000;animation:fxpBelt .9s linear infinite}
+  @keyframes fxpBelt{to{background-position:30px 0}}
+  .fxp-coin{position:absolute;bottom:36px;left:50%;margin-left:-23px;transform:translateX(-160px);opacity:0;filter:drop-shadow(0 6px 10px rgba(0,0,0,.6))}
+  .fxp-p.on .fxp-coin{animation:fxpCoin 1s cubic-bezier(.2,.9,.3,1) .35s forwards}
+  @keyframes fxpCoin{to{transform:translateX(0);opacity:1}}
+  .fxp-badge{position:absolute;left:50%;bottom:92px;transform:translate(-50%,8px) scale(.9);opacity:0;white-space:nowrap;padding:5px 11px;border-radius:99px;font:800 12px var(--mono);background:rgba(10,10,12,.92);border:1px solid var(--sc);color:#fff}
+  .fxp-p.on .fxp-badge{animation:fxpBadge .45s ease-out 1.25s forwards}
+  @keyframes fxpBadge{to{transform:translate(-50%,0) scale(1);opacity:1}}
+  .fxp-txt{padding:14px 16px 16px;display:flex;flex-direction:column;gap:4px;min-height:118px}
+  .fxp-txt .mono{font-size:11px;color:var(--sc)}.fxp-txt b{font-size:19px}.fxp-txt small{font-size:13.5px;color:var(--soft);line-height:1.45}
+  .fxp-dots{display:flex;justify-content:center;gap:4px;margin-top:10px}
+  .fxp-dots button{min-height:0;padding:8px 4px;border:0;background:none}
+  .fxp-dots i{display:block;width:8px;height:8px;border-radius:99px;background:#3a3a40;transition:width .3s,background .3s}
+  .fxp-dots button.on i{width:24px;background:#F5D9A8}
+}
+.mnav,.mnav button,.m-bar button{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+@media (max-width:760px){.fx .fxp{position:relative!important;inset:auto!important;transform:none!important}}
+@media (max-width:760px){.fx .fxp{opacity:1!important;padding:0!important;margin:14px 0 0!important;border:0!important;background:none!important;box-shadow:none!important;height:auto!important;animation:none!important}.fxp-p{min-width:0;width:100%}.fxp-txt{min-width:0}}
+@media (max-width:760px){.fxp-p{overflow:hidden}.fxp-p *{white-space:normal}.fxp-badge{white-space:nowrap!important}.fxp-txt b{color:#fff}}
+@media (max-width:760px){.fxp-stage{height:270px}.fxp-badge{bottom:98px}}

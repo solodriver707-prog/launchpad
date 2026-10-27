@@ -3591,6 +3591,7 @@
       case 'bsort': S.bsort = arg; render(); break;
       case 'tcat': S.tcat = arg; render(); break;
       case 'tpreset': S.lsort = arg; S.ldir = -1; render(); break;
+      case 'fxpGo': FXP.hold = Date.now() + 8000; fxpShow(+arg); break;
       case 'mFilt': S.mFilt = !S.mFilt; render(); break;
       case 'mSide': S.side = arg; render(); setTimeout(function () { var tb = document.querySelector('.tradebox'); if (tb) tb.scrollIntoView({ behavior: 'smooth', block: 'start' }); var inp = document.getElementById('amt'); if (inp) setTimeout(function () { inp.focus({ preventScroll: true }); }, 450); }, 30); break;
       case 'mBuy': var tbx = document.querySelector('.tradebox'); if (tbx) tbx.scrollIntoView({ behavior: 'smooth', block: 'center' }); break;
@@ -4068,6 +4069,22 @@
     '<svg viewBox="0 0 24 24"><path d="M2 9l10-5 10 5-10 5z"/><path d="M6 11v5c3 2 9 2 12 0v-5"/></svg>',
     '<svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9"/><path d="M21 3l-9 9M15 3h6v6"/></svg>'
   ];
+  // iOS: a tap on the fixed bottom nav sometimes never becomes a click (hover emulation / toolbar resizing) — fire it ourselves on touchend
+  (function () { var t0 = null; document.addEventListener('touchstart', function (e) { var b = e.target.closest && e.target.closest('.mnav button, .m-bar button'); t0 = b ? { b: b, x: e.touches[0].clientX, y: e.touches[0].clientY } : null; }, { passive: true });
+    document.addEventListener('touchend', function (e) { if (!t0) return; var b = e.target.closest && e.target.closest('.mnav button, .m-bar button'), c = e.changedTouches[0]; if (b && b === t0.b && Math.abs(c.clientX - t0.x) < 12 && Math.abs(c.clientY - t0.y) < 12) { e.preventDefault(); b.click(); } t0 = null; }, { passive: false }); })();
+  // phones: the factory plays by itself — the belt slides station to station while the screen stays put; swipe to jump
+  var FXP = { k: 0, hold: 0 }, FXB = ['minted ✓', '🤖 bots pay 80% · 🙂 you pay 2%', '▲ price up the curve', '✓ dev · ⚠ top10 · ✓ bundles', '🎓 graduated → Meteora', '💎 holders · 🔥 burn · 👤 creator'];
+  function fxPlayer() { var t = all()[3] || all()[0];
+    return '<div class="fxp" id="fxp"><div class="fxp-view"><div class="fxp-track" id="fxp-track" style="transform:translateX(' + (-FXP.k * 100) + '%)">' + STS.map(function (x, k) {
+      return '<div class="fxp-p' + (k === FXP.k ? ' on' : '') + '" style="--sc:' + FST[k][2] + '"><div class="fxp-stage"><div class="fxp-st"><span class="fxp-ic">' + FICO[k] + '</span>' + fxMini(k) + '</div>' +
+        '<span class="fxp-coin">' + (t ? avatarHTML(t, 46) : '') + '</span><span class="fxp-badge">' + FXB[k] + '</span><span class="fxp-belt"></span></div>' +
+        '<div class="fxp-txt"><span class="mono">0' + (k + 1) + ' / 06</span><b>' + x[0] + '</b><small>' + x[1] + '</small></div></div>'; }).join('') + '</div></div>' +
+      '<div class="fxp-dots">' + STS.map(function (x, k) { return '<button class="' + (k === FXP.k ? 'on' : '') + '" data-act="fxpGo" data-arg="' + k + '" aria-label="Step ' + (k + 1) + '"><i></i></button>'; }).join('') + '</div></div>'; }
+  function fxpShow(k) { FXP.k = (k + 6) % 6; var tr = document.getElementById('fxp-track'); if (!tr) return; tr.style.transform = 'translateX(' + (-FXP.k * 100) + '%)';
+    tr.querySelectorAll('.fxp-p').forEach(function (p, i) { p.classList.toggle('on', i === FXP.k); }); document.querySelectorAll('.fxp-dots button').forEach(function (b, i) { b.classList.toggle('on', i === FXP.k); }); }
+  setInterval(function () { var el = document.getElementById('fxp'); if (!el || document.hidden || Date.now() < FXP.hold || !el.offsetParent) return; var r = el.getBoundingClientRect(); if (r.bottom < 0 || r.top > window.innerHeight) return; fxpShow(FXP.k + 1); }, 3800);
+  (function () { var sx = null; document.addEventListener('touchstart', function (e) { if (e.target.closest && e.target.closest('#fxp')) { sx = e.touches[0].clientX; FXP.hold = Date.now() + 8000; } }, { passive: true });
+    document.addEventListener('touchend', function (e) { if (sx == null) return; var dx = e.changedTouches[0].clientX - sx; sx = null; if (Math.abs(dx) > 40) fxpShow(FXP.k + (dx < 0 ? 1 : -1)); }, { passive: true }); })();
   function machineSection() {
     FW.cnt[2] = FW.cnt[2] || 1840.5; FW.cnt[5] = FW.cnt[5] || 58210;
     var st = FST.map(function (x, k) { return '<div class="fx-st fx-s' + k + '" data-fst="' + k + '" style="--sc:' + x[2] + ';left:calc(2% + ' + (FSX[k] * .96).toFixed(2) + '%)"><div class="fx-house"><div class="fx-hd"><span class="fx-ico">' + FICO[k] + '</span><span class="fx-n mono">0' + (k + 1) + '</span></div><b class="fx-t">' + x[0] + '</b><small class="fx-sub">' + x[1] + '</small>' +
@@ -4076,7 +4093,7 @@
     var cap = STS.map(function (x, k) { return '<button class="fx-cap" data-act="fwGo" data-arg="' + k + '" data-fcap="' + k + '"><span class="mono">0' + (k + 1) + '</span><b>' + x[0] + '</b><small>' + x[1] + '</small>' +
       (k === 5 ? '<span class="fx-jars">' + [['Creator', '#F5D9A8'], ['Holders', '#7FB6FF'], ['Burn', '#FF8A5B']].map(function (j, q) { return '<span class="fx-jar" style="--c:' + j[1] + '"><i data-jar="' + q + '"></i><em>' + j[0] + '</em></span>'; }).join('') + '</span>' : '') + '</button>'; }).join('');
     return '<section class="story card-s fx" id="machine"><div class="st2-head"><div><span class="kicker">HOW IT WORKS</span><h2 class="title-xl lab-title">The treid factory</h2></div><span class="muted st2-hint">watch a coin go from launch to tax payouts</span></div>' +
-      '<div class="fx-mlist">' + STS.map(function (x, k) { return '<div class="fx-mi" style="--sc:' + FST[k][2] + '"><span class="fx-mic">' + FICO[k] + '</span><span class="fx-mt"><span class="mono">0' + (k + 1) + '</span><b>' + x[0] + '</b><small>' + x[1] + '</small></span></div>'; }).join('') + '</div>' +
+      fxPlayer() +
       '<div class="fx-scroll"><div class="fx-floor" id="fw-wheel"><div class="fx-belt"><span class="fx-tread"></span><span class="fx-roll l"></span><span class="fx-roll r"></span></div><div class="fx-coins" id="fx-coins"></div>' + st + '</div>' +
       '</div></section>';
   }
