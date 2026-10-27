@@ -3285,7 +3285,13 @@
       var busy = S.connecting === w.name;
       return '<button class="wopt" data-act="pickWallet" data-arg="' + esc(w.name) + '"' + (S.connecting ? ' disabled' : '') + '>' + (w.icon ? '<img src="' + esc(w.icon) + '" alt="">' : '') +
         '<span style="flex:1">' + esc(w.name) + '</span><span class="muted" style="font-size:12.5px;font-weight:600">' + (busy ? 'Approve in wallet…' : 'Detected') + '</span></button>';
-    }).join('') : '<div class="card-s" style="padding:16px;display:flex;flex-direction:column;gap:10px"><b>No Solana wallet found</b><span class="muted" style="font-size:13.5px;line-height:1.55">Install Phantom, Solflare or Backpack and reload. On mobile, open this site in your wallet app’s browser.</span><a href="https://phantom.com/download" target="_blank" rel="noopener">Get Phantom →</a></div>';
+    }).join('') : (isMob() || /iPhone|iPad|Android/i.test(navigator.userAgent) ? (function () { var here = encodeURIComponent(location.href), ref = encodeURIComponent(location.origin);   // phones: wallets have no browser extension — open this page inside the wallet app
+      return '<div class="wl-mob"><b>Open treid in your wallet app</b><span class="muted">On a phone, wallets connect inside their own app. Tap yours — this page opens there, ready to connect.</span>' +
+        '<a class="wl-deep ph" href="https://phantom.app/ul/browse/' + here + '?ref=' + ref + '"><span class="wl-di">👻</span><b>Open in Phantom</b><span>→</span></a>' +
+        '<a class="wl-deep sf" href="https://solflare.com/ul/v1/browse/' + here + '?ref=' + ref + '"><span class="wl-di">🔆</span><b>Open in Solflare</b><span>→</span></a>' +
+        '<a class="wl-deep bp" href="https://backpack.app/ul/v1/browse/' + here + '?ref=' + ref + '"><span class="wl-di">🎒</span><b>Open in Backpack</b><span>→</span></a>' +
+        '<small class="muted">No wallet yet? <a href="https://phantom.com/download" target="_blank" rel="noopener">Get Phantom</a></small></div>'; })() :
+      '<div class="card-s" style="padding:16px;display:flex;flex-direction:column;gap:10px"><b>No Solana wallet found</b><span class="muted" style="font-size:13.5px;line-height:1.55">Install Phantom, Solflare or Backpack and reload.</span><a href="https://phantom.com/download" target="_blank" rel="noopener">Get Phantom →</a></div>');
     return '<div class="overlay center" data-act="bg"><div class="modal" role="dialog" aria-modal="true" aria-label="Connect a wallet">' +
       '<div style="display:flex;justify-content:space-between;align-items:center"><b style="font-family:var(--disp);font-size:18px">Connect wallet</b><button class="iconbtn" aria-label="Close" data-act="closeWallet">✕</button></div>' + opts +
       '<span class="note">Solana ' + CLUSTER + ' · Connecting only shares your public address.</span></div></div>';

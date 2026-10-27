@@ -4761,3 +4761,11 @@ button[disabled].big-btn{opacity:.7;cursor:progress}
 @media (max-width:640px){#tc .tc-n{font-size:19px}#tc .tc-row{font-size:14px}#tc .tc-in{gap:14px;padding:14px}}
 #tc .tc-n{font-size:22px}
 #tc .tc-tk{font-size:13px;color:var(--muted);font-weight:700;margin-top:-4px}
+/* mobile wallet deep links */
+.wl-mob{display:flex;flex-direction:column;gap:10px;padding:4px 0}
+.wl-mob>b{font-size:17px}
+.wl-mob>span{font-size:13.5px;line-height:1.5}
+.wl-deep{display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:14px;border:1px solid var(--line);background:rgba(255,255,255,.03);color:#fff;text-decoration:none;font-size:15px}
+.wl-deep b{flex:1}
+.wl-deep.ph{background:linear-gradient(135deg,#ab9ff2,#7b6cf0);border-color:transparent;color:#120c2c}
+.wl-di{width:32px;height:32px;border-radius:9px;display:grid;place-items:center;background:rgba(255,255,255,.18);font-size:18px}
