@@ -337,6 +337,7 @@
     return chainLib().then(function (T) { return T.tokenBalance({ rpc: RPC, owner: who, mint: t.ca }); }).then(function (bal) {
       if (S.account !== who) return; var cost = 0; S.trades.forEach(function (x) { if (x.tick === t.tick && x.wallet === who) cost += x.side === 'buy' ? x.sol : -x.sol; });
       if (bal > 0) S.pos[t.tick] = { tok: bal, cost: Math.max(0, cost) }; else delete S.pos[t.tick];
+      if (API) apiGet('/api/pos?mint=' + t.ca + '&wallet=' + who).then(function (p) { S.myPs = S.myPs || {}; S.myPs[t.ca] = psClean(p); if (S.screen === 'token' && S.tick === t.tick) render(); }).catch(function () {});
       if (S.screen === 'token' && S.tick === t.tick) render();
     }).catch(function () {});
   }
@@ -1886,7 +1887,7 @@
   function holdersOf(t) {
     if (t.live && !t.lh) return [{ a: 'curve', pct: 100, label: 'Loading holders…', kind: 'curve' }];   // real coins: never invented wallets
     if (t.live && t.lh) { var cv = t.lh.filter(function (x) { return x.curve; }).reduce(function (a, x) { return a + x.pct; }, 0), tagOf = {}; S.trades.forEach(function (x) { if (x.tick === t.tick && x.side === 'buy') { var g = tagOf[x.wallet] || (tagOf[x.wallet] = { first: x.t }); g.first = Math.min(g.first, x.t); if (x.sniper) g.sn = 1; if (x.bundle) g.bu = 1; } });
-      return [{ a: 'curve', pct: cv || Math.max(0, 100 - t.lh.reduce(function (a, x) { return a + (x.curve ? 0 : x.pct); }, 0)), label: 'Bonding curve', kind: 'curve' }].concat(t.lh.filter(function (x) { return !x.curve; }).slice(0, 60).map(function (x) { var g = tagOf[x.wallet] || {}, tg = []; if (x.dev) tg.push('dev'); if (S.account && x.wallet === S.account) tg.push('you'); if (g.sn) tg.push('sniper'); if (g.bu) tg.push('bundle'); return { a: x.wallet, pct: x.pct, tags: tg, first: g.first || t.born }; })); }
+      return [{ a: 'curve', pct: cv || Math.max(0, 100 - t.lh.reduce(function (a, x) { return a + (x.curve ? 0 : x.pct); }, 0)), label: 'Bonding curve', kind: 'curve' }].concat(t.lh.filter(function (x) { return !x.curve; }).slice(0, 60).map(function (x) { var g = tagOf[x.wallet] || {}, tg = []; if (x.dev) tg.push('dev'); if (S.account && x.wallet === S.account) tg.push('you'); if (g.sn) tg.push('sniper'); if (g.bu) tg.push('bundle'); return { a: x.wallet, pct: x.pct, tags: tg, first: g.first || t.born, ps: psClean(x.ps) }; })); }
     var rm = riskMetrics(t), devP = rm[0].val === 'SOLD' ? 0 : parseFloat(rm[0].val), top = parseFloat(rm[1].val), sn = parseFloat(rm[2].val), bu = parseFloat(rm[3].val);
     if (t.devPct != null) { var lb2 = liveBal(t); if (lb2.length) { var held = lb2.reduce(function (a, x) { return a + x.pct; }, 0), o3 = [{ a: 'curve', pct: Math.max(0, 100 - held), label: 'Bonding curve', kind: 'curve' }];
       lb2.slice(0, 40).forEach(function (x) { var tg = []; if (x.a === t.creator) tg.push('dev'); if (S.account && x.a === S.account) tg.push('you'); o3.push({ a: x.a, pct: x.pct, tags: tg, first: (S.trades.filter(function (q) { return q.tick === t.tick && q.wallet === x.a; }).pop() || {}).t || t.born }); }); return o3; } }
@@ -1930,11 +1931,11 @@
         : '<span class="av" style="width:28px;height:28px">' + A.svg(walletSpec(h.a)) + '</span><span class="hw-n"><b class="mono">' + (h.a === S.account ? 'You' : WMAP[h.a] && WMAP[h.a].n ? '@' + WMAP[h.a].n : short(h.a)) + '</b><small>first buy ' + ago(h.first) + ' ago</small></span>' + h.tags.map(function (g) { return '<span class="htag ' + g + '">' + TAG[g] + '</span>'; }).join('');
       return '<div class="hrow2' + (isC ? ' is-curve' : '') + '"><span class="mono muted hr-n">' + (isC ? '—' : i) + '</span><span class="hw">' + who + '</span>' +
         '<span class="hbar2"><i style="width:' + Math.min(100, isC ? h.pct : h.pct / Math.max(1, wallets[0].pct) * 100).toFixed(1) + '%;' + (c === 'curve' ? '' : 'background:' + c) + '" class="' + (c === 'curve' ? 'curve' : '') + '"></i></span>' +
-        '<span class="mono r hr-p">' + h.pct.toFixed(2) + '%</span><span class="mono r muted hr-v">$' + fmtNum(Math.round(val)) + '</span></div>';
+        '<span class="mono r hr-p">' + h.pct.toFixed(2) + '%</span><span class="mono r muted hr-v">$' + fmtNum(Math.round(val)) + '</span>' + (t.live ? '<span class="mono r hr-pf ' + (h.ps ? (h.ps.profit >= 0 ? 'up' : 'down') : '') + '">' + (h.ps && h.ps.trades ? (h.ps.profit >= 0 ? '+' : '−') + '$' + money(h.ps.profit) : '—') + '</span>' : '') + '</div>';
     }).join('');
     return '<div class="htiles">' + tiles.map(function (x) { return '<div class="htile ' + x[2] + '"><small>' + x[0] + '</small><b class="mono">' + x[1] + '</b></div>'; }).join('') + '</div>' +
       '<div class="hdist2">' + segs + '</div><div class="hlegend">' + legend.map(function (l) { return '<span><i class="' + (l[0] === 'curve' ? 'curve' : l[0] === 'rest' ? 'rest' : '') + '" style="' + (l[0][0] === '#' ? 'background:' + l[0] : '') + '"></i>' + l[1] + '</span>'; }).join('') + '</div>' +
-      '<div class="hhead"><span>#</span><span>Holder</span><span>Share</span><span class="r">%</span><span class="r">Value</span></div>' + rows;
+      '<div class="hhead' + (t.live ? ' pf' : '') + '"><span>#</span><span>Holder</span><span>Share</span><span class="r">%</span><span class="r">Value</span>' + (t.live ? '<span class="r">Profit</span>' : '') + '</div><div class="' + (t.live ? 'hpf' : '') + '">' + rows + '</div>';
   }
   function topTraders(t) {
     var m = {}, px = price(t);
@@ -1964,19 +1965,23 @@
       '<span class="co-mw"><button class="co-ic" data-act="coMenu" data-arg="' + esc(key) + '" title="More">⋯</button>' + (S.coMenu === key ? '<span class="co-menu"><button data-act="coCopy" data-arg="' + esc(key) + '">Copy text</button><button data-act="coShare" data-arg="' + esc(key) + '">Copy link</button>' + (me ? '' : '<button data-act="coMute" data-arg="' + esc(c.w) + '">Mute ' + esc(coName(c.w)) + '</button><button data-act="coReport" data-arg="' + esc(key) + '">Report</button>') + '</span>' : '') + '</span></div>' +
       (opts.coinTag && !(c.pos > 0) ? '<button class="co-coin" data-act="open" data-arg="' + esc(t.tick) + '">' + avatarHTML(t, 18) + '<b>$' + esc(t.tick) + '</b><span class="mono">' + fmtK(t.mcN) + '</span></button>' : '') +
       (c.text ? '<div class="co-t' + (long ? ' clamp' : '') + '">' + esc(c.text) + '</div>' : '') + (c.img ? '<a class="co-img" href="' + esc(c.img) + '" target="_blank" rel="noopener noreferrer"><img src="' + esc(c.img) + '" loading="lazy" alt=""></a>' : '') + (long ? '<button class="co-more" data-act="coExpand" data-arg="' + esc(key) + '">Show more</button>' : '') +
-      (c.pos > 0 && !opts.child ? '<button class="co-pos" data-act="open" data-arg="' + esc(t.tick) + '" title="Open $' + esc(t.tick) + '">' + avatarHTML(t, 26) + '<span class="co-pn"><b>' + esc(t.tick) + '</b><small>' + esc(t.name) + '</small></span><span class="co-pv"><small>Position</small><b class="mono">$' + fmtNum(c.pos) + '</b></span><span class="co-pv"><small>PnL</small><b class="mono ' + (up ? 'up' : 'down') + '">' + (up ? '+' : '−') + '$' + Math.abs(pnl).toFixed(2) + '</b></span><span class="co-go">›</span></button>' : '') +
+      (c.real && c.ps && !opts.child ? psBlock(c.ps, key) : '') + (!c.real && c.pos > 0 && !opts.child ? '<button class="co-pos" data-act="open" data-arg="' + esc(t.tick) + '" title="Open $' + esc(t.tick) + '">' + avatarHTML(t, 26) + '<span class="co-pn"><b>' + esc(t.tick) + '</b><small>' + esc(t.name) + '</small></span><span class="co-pv"><small>Position</small><b class="mono">$' + fmtNum(c.pos) + '</b></span><span class="co-pv"><small>PnL</small><b class="mono ' + (up ? 'up' : 'down') + '">' + (up ? '+' : '−') + '$' + Math.abs(pnl).toFixed(2) + '</b></span><span class="co-go">›</span></button>' : '') +
       '<div class="co-a"><button data-act="coShare" data-arg="' + esc(key) + '" title="Share"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8h16v-8M12 3v13M7 8l5-5 5 5"/></svg></button>' +
         '<button class="' + (c.rtd ? 'on rt' : '') + '" data-act="coRT" data-arg="' + esc(key) + '" title="Repost"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 2l4 4-4 4M3 11V9a3 3 0 013-3h15M7 22l-4-4 4-4M21 13v2a3 3 0 01-3 3H3"/></svg>' + (c.rt || '') + '</button>' +
         '<button class="' + (c.liked ? 'on lk' : '') + '" data-act="coLike" data-arg="' + esc(key) + '" title="Like"><svg viewBox="0 0 24 24" fill="' + (c.liked ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="2"><path d="M12 21s-8-5.2-8-11a4.5 4.5 0 018-2.8A4.5 4.5 0 0120 10c0 5.8-8 11-8 11z"/></svg>' + (c.likes || '') + '</button>' +
         '<button data-act="coReply" data-arg="' + esc(key) + '" title="Reply"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a8 8 0 01-11.6 7.1L4 21l1.9-5.4A8 8 0 1121 12z"/></svg>' + (kids.length || '') + '</button>' +
         (c.real ? '' : '<span class="co-v"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>' + (c.views || 0) + '</span>') +
         (opts.child ? '' : '<span class="co-mc mono">' + fmtK(c.mc0 || t.mcN) + ' MC</span>') + '</div>' +
-      (kids.length ? '<div class="co-kids">' + kids.map(function (k) { return commentHTML(k, t, false, { child: true }); }).join('') + '</div>' : '') + '</article>';
+      (opts.pre || '') + (kids.length ? '<div class="co-kids">' + kids.map(function (k) { return commentHTML(k, t, false, { child: true }); }).join('') + '</div>' : '') + '</article>';
   }
   function threadHTML(t, list) {
     var byId = {}; list.forEach(function (c) { byId[c.id] = c; });
     var tops = list.filter(function (c) { return (c.reply == null || !byId[c.reply]) && !S.muted[c.w]; }).sort(function (a, b) { return b.t - a.t; });
-    return tops.map(function (c) { var kids = list.filter(function (k) { return k.reply === c.id && !S.muted[k.w]; }).sort(function (a, b) { return a.t - b.t; }); return commentHTML(c, t, false, { kids: kids }); }).join('');
+    return tops.map(function (c) { var kids = list.filter(function (k) { return k.reply === c.id && !S.muted[k.w]; }).sort(function (a, b) { return a.t - b.t; });
+      var ups = kids.filter(function (k) { return k.w === c.w; }), rest = kids.filter(function (k) { return k.w !== c.w; }), k0 = t.tick + '|' + c.id, all = S.coUpAll && S.coUpAll[k0];
+      var upHTML = ups.length ? '<div class="co-ups">' + (ups.length > 1 && !all ? '<button class="co-upmore" data-act="coUpMore" data-arg="' + esc(k0) + '">Show more updates (' + (ups.length - 1) + ')</button>' : '') + (all ? ups : ups.slice(-1)).map(function (u) { return '<div class="co-up"><small class="muted">Update · ' + ago(u.t) + ' ago</small>' + (u.text ? '<div class="co-t">' + esc(u.text) + '</div>' : '') + (u.img ? '<a class="co-img" href="' + esc(u.img) + '" target="_blank" rel="noopener noreferrer"><img src="' + esc(u.img) + '" loading="lazy" alt=""></a>' : '') + '</div>'; }).join('') + '</div>' : '';
+      var mine = S.account && c.w === S.account && c.real ? '<button class="co-upd" data-act="coUpdate" data-arg="' + c.id + '">✎ Update callout</button>' : '';
+      return commentHTML(c, t, false, { kids: rest, pre: upHTML + mine }); }).join('');
   }
   function coFind(key) { var p = key.split('|'), t = find(p[0]); if (!t) return null; var c = seedComments(t).filter(function (x) { return x.id === +p[1]; })[0]; return c ? { t: t, c: c } : null; }
   function globalCallouts() {
@@ -2021,8 +2026,9 @@
   }, 3500);
   // ---- real callouts: wallet-signed, stored by the indexer ----
   function coClean(x) { return String(x || '').replace(/[\u0000-\u0008\u000B-\u001F\u007F\u202A-\u202E\u2066-\u2069]/g, '').replace(/\n{3,}/g, '\n\n').trim().slice(0, 280); }   // must match indexer/callouts.mjs
-  function coFromRow(r) { return { id: Number(r.id), w: String(r.wallet), text: String(r.text || ''), img: safeImg(r.img) && /^https:/.test(r.img) ? r.img : null, t: Number(r.ts) || 0, likes: 0, liked: false, reply: r.reply == null ? null : Number(r.reply), mc0: (Number(r.mc) || 0) / 1000 || null, pos: Math.round(Number(r.pos) || 0), real: true }; }
-  function coMerge(rows) { var ch = []; rows.forEach(function (r) { var t = S.live.filter(function (x) { return x.ca === r.mint; })[0]; if (!t) return; var list = S.comments[t.tick] || (S.comments[t.tick] = []); if (list.some(function (c) { return c.id === r.id; })) return; var c = coFromRow(r); if (!c.mc0) c.mc0 = t.mcN; list.push(c); ch.push({ c: c, t: t }); }); return ch; }
+  function coFromRow(r) { return { ps: psClean(r.ps), id: Number(r.id), w: String(r.wallet), text: String(r.text || ''), img: safeImg(r.img) && /^https:/.test(r.img) ? r.img : null, t: Number(r.ts) || 0, likes: 0, liked: false, reply: r.reply == null ? null : Number(r.reply), mc0: (Number(r.mc) || 0) / 1000 || null, pos: Math.round(Number(r.pos) || 0), real: true }; }
+  function refreshCallouts() { var t = S.screen === 'token' && find(S.tick); if (!t || !t.live || !API) return; apiGet('/api/callouts?mint=' + t.ca).then(function (rows) { coMerge(rows || []); if (S.screen === 'token' && S.tick === t.tick) render(); }).catch(function () {}); }
+  function coMerge(rows) { var ch = []; rows.forEach(function (r) { var t = S.live.filter(function (x) { return x.ca === r.mint; })[0]; if (!t) return; var list = S.comments[t.tick] || (S.comments[t.tick] = []); var old = list.filter(function (c) { return c.id === r.id; })[0]; if (old) { if (r.ps) old.ps = psClean(r.ps); return; } var c = coFromRow(r); if (!c.mc0) c.mc0 = t.mcN; list.push(c); ch.push({ c: c, t: t }); }); return ch; }
   function coArrive(c, t) {
     coMeta(c, t);
     var tb2 = document.getElementById('cmts'); if (tb2 && S.screen === 'token' && c.reply == null && (S.ttab === 'all' || S.tick === t.tick)) {
@@ -2446,7 +2452,8 @@
       '<span class="note">' + (t.live ? 'Real on-chain coin' + NETP + ' — every buy and sell is signed by your wallet.' : 'Wallet is real (devnet). Trades are simulated in this beta — nothing is sent on-chain.') + '</span></section>';
     var posCard = pos ? '<section class="card-s panel poscard"><div style="display:flex;justify-content:space-between;align-items:center"><b>Your position</b><span style="display:flex;gap:10px">' + (t.creator && t.creator === S.account ? '<button class="link" style="min-height:0;font-size:12.5px;color:#FFB15C" data-act="burnOpen" data-arg="' + id + '">🔥 Burn</button>' : '') + '<button class="link" style="min-height:0;font-size:12.5px;color:var(--down)" data-act="sellall">Sell all</button></span></div>' +
       '<div class="pos-v"><span class="mono" style="font-size:22px;font-weight:700">' + pos.val.toFixed(4) + ' ' + esc(QS) + '</span><span class="chgpill ' + (pos.pnl >= 0 ? 'up' : 'down') + '">' + (pos.pnl >= 0 ? '+' : '') + pos.pct.toFixed(1) + '%</span></div>' +
-      '<div class="muted mono" style="font-size:12px">' + fmtNum(pos.tok) + ' $' + id + ' · cost ' + pos.cost.toFixed(4) + ' ' + esc(QS) + ' · PnL <span class="' + (pos.pnl >= 0 ? 'up' : 'down') + '">' + (pos.pnl >= 0 ? '+' : '') + pos.pnl.toFixed(4) + '</span></div></section>' : '';
+      '<div class="muted mono" style="font-size:12px">' + fmtNum(pos.tok) + ' $' + id + ' · cost ' + pos.cost.toFixed(4) + ' ' + esc(QS) + ' · PnL <span class="' + (pos.pnl >= 0 ? 'up' : 'down') + '">' + (pos.pnl >= 0 ? '+' : '') + pos.pnl.toFixed(4) + '</span></div>' +
+      (t.live && S.myPs && S.myPs[t.ca] ? psBlock(S.myPs[t.ca], null) : '') + (t.live && coCanPost(t) ? '<button class="btn sec add-co" data-act="coNew">⊕ Add your callout</button>' : '') + '</section>' : '';
     var hsS = holdersOf(t), top10S = 0, devPct = 0, devA = devOf(t);
     hsS.slice(1, 11).forEach(function (h) { top10S += h.pct; }); hsS.forEach(function (h) { if (h.a === devA) devPct = h.pct; });
     if (!devPct) devPct = (hash(t.tick) % 40) / 10;
@@ -2481,10 +2488,37 @@
   S.cpq = ''; S.cpTab = 'crypto';
   try { var CP = JSON.parse(localStorage.getItem('dl.cpairs') || '{}'); Object.keys(CP).forEach(function (k) { PAIR_INFO[k] = CP[k]; }); } catch (e) {}
   // ---- sign in once (24 h): the wallet signs one message, the server hands back a session token — no popup for every callout ----
+  function psClean(p) { if (!p || typeof p !== 'object') return null; var o = {}; ['value', 'spent', 'got', 'profit', 'profitPct', 'avgEntryMc', 'soldPct', 'supplyPct', 'held', 'trades'].forEach(function (k) { o[k] = Number(p[k]) || 0; }); return o; }
+  function money(v) { v = Math.abs(v); return v >= 1e6 ? (v / 1e6).toFixed(2) + 'M' : v >= 1e4 ? (v / 1e3).toFixed(1) + 'K' : v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  function moneyS(v) { v = Math.abs(v); return v >= 1e6 ? (v / 1e6).toFixed(2) + 'M' : v >= 1e3 ? (v / 1e3).toFixed(v >= 1e5 ? 0 : 2) + 'K' : v.toFixed(2); }
+  function psStatus(ps) { return ps.held < 1 ? 'Sold all' : ps.soldPct >= 1 ? 'Sold ' + Math.round(ps.soldPct) + '%' : 'Holding'; }
+  function psBlock(ps, key) {   // Position · Profit · Spent · Avg entry · Supply held · View trades
+    if (!ps || !(ps.trades > 0)) return ''; var up = ps.profit >= 0, open = key && S.coTrOpen === key;
+    return '<div class="ps"><div class="ps-r1"><span><small>Position</small><b class="mono">$' + money(ps.value) + '</b><em class="ps-st">' + psStatus(ps) + '</em></span><span class="ps-pr"><small>Profit</small><b class="mono ' + (up ? 'up' : 'down') + '">' + (up ? '+' : '−') + '$' + money(ps.profit) + ' <i>' + (up ? '+' : '') + ps.profitPct.toFixed(1) + '%</i></b></span></div>' +
+      '<div class="ps-r2"><span>Spent <b class="mono">$' + moneyS(ps.spent) + '</b></span><span>Avg entry <b class="mono">$' + moneyS(ps.avgEntryMc) + ' MC</b></span><span>Supply held <b class="mono">' + ps.supplyPct.toFixed(2) + '%</b></span></div>' +
+      (key ? '<button class="ps-tr" data-act="coTrades" data-arg="' + esc(key) + '">View trades ' + (open ? '▴' : '▾') + '</button>' + (open ? psTrades(key) : '') : '') + '</div>';
+  }
+  function psTrades(key) {
+    var L = S.coTr && S.coTr[key]; if (!L) return '<div class="ps-tl muted">Loading trades…</div>'; if (!L.length) return '<div class="ps-tl muted">No trades found</div>';
+    return '<div class="ps-tl">' + L.slice(0, 20).map(function (x) { var b = x.side === 'buy'; return '<div class="ps-t"><span class="' + (b ? 'up' : 'down') + '">' + (b ? 'Buy' : 'Sell') + '</span><span class="mono">$' + money(+x.usd || 0) + '</span><span class="mono muted">at $' + moneyS(+x.mcap_usd || 0) + ' MC</span><span class="muted">' + ago(+x.ts) + ' ago</span></div>'; }).join('') + '</div>';
+  }
   function holdUsd(t) { var p = S.pos[t.tick]; return p && p.tok > 0 ? p.tok * price(t) : 0; }
   function coCanPost(t) { return !!S.account && (!t.live || holdUsd(t) >= 1); }   // like the server: you must hold ≥ $1 of the coin
   function coOpen() { return !!S.coCompose || S.replyTo != null; }
+  function coModal() {
+    if (!S.coModal) return ''; var t = find(S.tick); if (!t) return ''; var upd = S.coModal.upd, n = (S.cmtDraft || '').length;
+    return '<div class="modal-bg co-mbg" data-act="coCancel"></div><div class="co-modal" role="dialog" aria-label="New callout"><div class="co-mh"><b>' + (upd ? 'Update your callout' : 'New callout') + '</b><button class="co-x" data-act="coCancel" aria-label="Close">✕</button></div>' +
+      '<div class="co-mcoin">' + avatarHTML(t, 44) + '<span><b>' + esc(t.name) + '</b><small>$' + esc(t.tick) + '</small></span><span class="co-mcall">Calling at MC <b>' + fmtK(t.mcN) + '</b></span></div>' +
+      '<div class="co-mbody"><textarea id="cmt-in" class="inp" data-bind="cmtDraft" maxlength="2000" placeholder="' + (upd ? 'Add an update to your callout' : 'Create a callout and alert your followers') + '">' + esc(S.cmtDraft || '') + '</textarea><div class="co-cnt muted mono">' + n + ' / 2000</div>' +
+      (S.coImg ? '<div class="co-prev"><img src="' + esc(S.coImg) + '" alt=""><button data-act="coImgDel" title="Remove image">✕</button></div>' : '') +
+      (upd ? '' : '<p class="muted co-req">Posting a callout requires holding $1 of $' + esc(t.tick) + '.</p>') +
+      (S.coErr ? '<small class="co-err">' + esc(S.coErr) + '</small>' : '') + '</div>' +
+      (!upd && !S.coTipOff ? '<div class="co-tip"><div class="co-tiph"><b>Tip</b><button class="link" data-act="coTipOff">Dismiss</button></div><p>Make high-quality callouts: say why you\'re buying and link the sources that back it up.</p><div class="co-tipex"><small class="muted">Example</small><br>Buying because the dev locked their bag and the community is active on X (x.com/…). Locked supply, real team.</div></div>' : '') +
+      '<div class="co-mf"><label class="co-imgb" title="Add an image or GIF"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/></svg><input type="file" accept="image/png,image/jpeg,image/gif,image/webp" data-coimg hidden></label>' +
+      '<button class="btn pri co-call" data-act="post"' + (S.busy === 'Posting' ? ' disabled' : '') + '>' + (S.busy === 'Posting' ? 'Posting…' : upd ? 'Post update' : 'Call $' + esc(t.tick)) + '</button></div></div>';
+  }
   function coComposer(t, id, ph) {
+    if (S.coModal) return '';
     if (!S.account) return '<div class="co-gate"><span class="muted">Connect a wallet to post a callout.</span><button class="btn sec" data-act="openWallet">Connect</button></div>';
     if (!coCanPost(t)) return '<div class="co-gate muted">Hold at least <b>$1</b> of $' + esc(id) + ' to post callouts.</div>';
     if (!coOpen()) return '';
@@ -2983,7 +3017,7 @@
     var ae = document.activeElement, fid = ae && ae.id, ss = null, se = null;
     try { if (fid && ae.selectionStart != null) { ss = ae.selectionStart; se = ae.selectionEnd; } } catch (e) {}
     var body = S.screen === 'pending' ? '<main class="wrap"><div class="route-wait"><span class="gr-sp"></span><b>Loading coin…</b><small class="muted">fetching live data from the chain</small></div></main>' : S.screen === 'token' ? tokenPage() : S.screen === 'create' ? createPage() : S.screen === 'leaders' ? leadersPage() : S.screen === 'watch' ? watchPage() : S.screen === 'burn' ? burnPage() : S.screen === 'trend' ? trendPage() : home();
-    document.getElementById('app').innerHTML = (RPC_DEV || API_DEV ? '<div class="devbar">⚠ Developer mode — custom ' + [RPC_DEV ? 'RPC' : '', API_DEV ? 'server' : ''].filter(Boolean).join(' + ') + ' (this tab only)</div>' : '') + '<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="ccUp" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3DDC97" stop-opacity=".28"/><stop offset="1" stop-color="#3DDC97" stop-opacity="0"/></linearGradient><linearGradient id="ccDn" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F2708A" stop-opacity=".26"/><stop offset="1" stop-color="#F2708A" stop-opacity="0"/></linearGradient></defs></svg>' + tape() + header() + body + footer() + walletModal() + demoImgModal() + termsModal() + calloutDrawer() + calloutRail() + palette() + walletDrawer() + holderMap() + burnModal() + ctoModal();
+    document.getElementById('app').innerHTML = (RPC_DEV || API_DEV ? '<div class="devbar">⚠ Developer mode — custom ' + [RPC_DEV ? 'RPC' : '', API_DEV ? 'server' : ''].filter(Boolean).join(' + ') + ' (this tab only)</div>' : '') + '<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="ccUp" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3DDC97" stop-opacity=".28"/><stop offset="1" stop-color="#3DDC97" stop-opacity="0"/></linearGradient><linearGradient id="ccDn" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F2708A" stop-opacity=".26"/><stop offset="1" stop-color="#F2708A" stop-opacity="0"/></linearGradient></defs></svg>' + tape() + header() + body + footer() + walletModal() + demoImgModal() + termsModal() + calloutDrawer() + calloutRail() + palette() + walletDrawer() + holderMap() + burnModal() + ctoModal() + coModal();
     document.body.classList.toggle('has-rail', S.screen === 'home' && !S.coOpen && !S.railHidden); document.body.classList.toggle('has-rail-min', S.screen === 'home' && !S.coOpen && !!S.railHidden);
     if (fid) { var el = document.getElementById(fid); if (el) { el.focus({ preventScroll: true }); try { if (ss != null) el.setSelectionRange(ss, se); } catch (e) {} } }
     if (S.palOpen && !fid) { var p = document.getElementById('pal'); if (p) p.focus(); }
@@ -3289,8 +3323,13 @@
       case 'sellpct': var tp0 = find(S.tick), ps0 = tp0 && S.pos[tp0.tick]; if (ps0) set({ side: 'sell', amount: (ps0.tok * (+arg) / 100).toFixed(0) }); break;
       case 'sellall': var tp1 = find(S.tick), ps1 = tp1 && S.pos[tp1.tick]; if (ps1) set({ side: 'sell', amount: String(Math.floor(ps1.tok)), sellAll: true }); break;
       case 'coImgDel': S.coImg = null; render(); break;
-      case 'coNew': S.coCompose = true; S.coErr = ''; render(); setTimeout(function () { var x = document.getElementById('cmt-in'); if (x) x.focus(); }, 30); break;
-      case 'coCancel': S.coCompose = false; S.replyTo = null; S.coErr = ''; S.coImg = null; render(); break;
+      case 'coNew': S.coModal = { upd: false }; S.replyTo = null; S.coErr = ''; S.tick = S.tick || arg; render(); setTimeout(function () { var x = document.getElementById('cmt-in'); if (x) x.focus(); }, 30); break;
+      case 'coUpdate': S.coModal = { upd: true }; S.replyTo = +arg; S.coErr = ''; render(); setTimeout(function () { var x = document.getElementById('cmt-in'); if (x) x.focus(); }, 30); break;
+      case 'coCancel': S.coModal = null; S.coCompose = false; S.replyTo = null; S.coErr = ''; S.coImg = null; render(); break;
+      case 'coTipOff': S.coTipOff = true; try { localStorage.setItem('dl.coTipOff', '1'); } catch (er) {} render(); break;
+      case 'coUpMore': S.coUpAll = S.coUpAll || {}; S.coUpAll[arg] = 1; render(); break;
+      case 'coTrades': if (S.coTrOpen === arg) { S.coTrOpen = null; render(); break; } S.coTrOpen = arg; S.coTr = S.coTr || {}; render();
+        (function (k) { var f = coFind(k); if (!f || !API) return; apiGet('/api/mytrades?mint=' + f.t.ca + '&wallet=' + f.c.w).then(function (L) { S.coTr[k] = Array.isArray(L) ? L : []; render(); }).catch(function () { S.coTr[k] = []; render(); }); })(arg); break;
       case 'coToggle': S.mCo = 0; set({ coOpen: !S.coOpen, coQueue: 0 }); break;
       case 'coClose': set({ coOpen: false }); break;
       case 'coPause': S.coPaused = !S.coPaused; if (!S.coPaused) S.coQueue = 0; render(); break;
@@ -3315,7 +3354,7 @@
           if (S.busy) break; S.busy = 'Posting'; render();
           var sendCo = function (tok) { return fetch(API + '/api/callout', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mint: tp0.ca, session: tok, reply: rpC, text: txC, image: imgC }) }).then(function (x) { return x.json(); }); };
           getSession().then(sendCo).then(function (j) { if (j && !j.ok && /sign in again/.test(j.error || '')) { dropSession(); return getSession().then(sendCo); } return j; })   // signed in once per day — no wallet popup per callout
-            .then(function (j) { S.busy = null; if (!j || !j.ok) throw new Error((j && j.error) || 'posting failed'); coMerge([j.callout]); devPing(tp0); S.coImg = null; S.coCompose = false; S.coErr = ''; set({ cmtDraft: '', replyTo: null }); toast('Callout posted ✓'); })
+            .then(function (j) { S.busy = null; if (!j || !j.ok) throw new Error((j && j.error) || 'posting failed'); coMerge([j.callout]); devPing(tp0); S.coImg = null; S.coCompose = false; S.coModal = null; S.coErr = ''; set({ cmtDraft: '', replyTo: null }); toast('Callout posted ✓'); setTimeout(refreshCallouts, 1500); })
             .catch(function (e) { S.busy = null; S.coErr = chainErr(e); render(); toast(S.coErr); });   // the error stays visible under the composer
           break; }
         var cms = seedComments(find(S.tick)); cms.push({ id: cms.length, w: S.account, text: txt, t: Date.now(), likes: 0, liked: false, reply: S.replyTo != null ? S.replyTo : null });
