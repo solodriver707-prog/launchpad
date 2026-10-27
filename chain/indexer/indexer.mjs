@@ -9,7 +9,7 @@ const coder = new anchor.BorshEventCoder(DynamicBondingCurveIdl), ammCoder = new
 import { DatabaseSync } from 'node:sqlite';
 import http from 'node:http';
 import zlib from 'node:zlib';
-import { opsKeypair, startOps } from './ops.mjs';
+import { opsKeypair, startOps, treidCfg } from './ops.mjs';
 import { startRewards } from './rewards.mjs';
 import { startCallouts } from './callouts.mjs';
 import { startBubbles } from './bubbles.mjs';
@@ -459,6 +459,10 @@ async function handleReq(req, res) {
       const created = q('SELECT mint, symbol, name, created_at FROM coins WHERE creator=? ORDER BY created_at DESC LIMIT 50', w).filter((r) => !HIDDEN.has(r.mint));
       const v = { wallet: w, sol, first: rows.length ? Math.min(...rows.map((r) => r.f)) : null, coins, created }; walC.set(w, { ts: Date.now(), v }); if (walC.size > 3000) walC.delete(walC.keys().next().value); return J(v); }
     if (p[1] === 'vampcheck') { const sym = fold(u.searchParams.get('symbol')), nm = fold(u.searchParams.get('name')); const hits = q('SELECT mint, symbol, name, created_at FROM coins ORDER BY created_at ASC LIMIT 20000').filter((c) => !HIDDEN.has(c.mint) && ((sym.length >= 2 && (fold(c.symbol) === sym || fold(c.name) === sym)) || (nm.length >= 2 && (fold(c.name) === nm || fold(c.symbol) === nm)))).slice(0, 3); return J({ hits }); }
+    if (p[1] === 'treid') { const m = treidCfg.mint; if (!m) return J({ mint: null, pct: treidCfg.pct });
+      const sT = (k) => q1('SELECT COALESCE(SUM(lamports),0) s, COUNT(*) n FROM rlog WHERE mint=? AND kind=?', m, k), b = sT('tbuy'), burned = sT('tburn').s + sT('tburnr').s;
+      const recent = q("SELECT sig, kind, lamports, ts FROM rlog WHERE mint=? AND kind IN ('tbuy','tburn','tburnr') ORDER BY ts DESC LIMIT 20", m);
+      return J({ mint: m, pct: treidCfg.pct, solSpent: b.s / 1e9, buys: b.n, burned: burned / 1e6, burnedPct: burned / 1e6 / SUPPLY * 100, recent }); }
     if (p[1] === 'pos') { const m = String(u.searchParams.get('mint') || ''), w = String(u.searchParams.get('wallet') || ''); if (!q1('SELECT 1 FROM coins WHERE mint=?', m) || !/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(w)) return J(null); return J(posStats(m, w)); }
     if (p[1] === 'mytrades') { const m = String(u.searchParams.get('mint') || ''), w = String(u.searchParams.get('wallet') || ''); return J(q('SELECT sig, side, sol, tokens, usd, mcap_usd, ts FROM trades WHERE mint=? AND wallet=? ORDER BY ts DESC LIMIT 100', m, w)); }
     if (p[1] === 'burned' && req.method === 'POST' && !rate('burn|' + ip(req), 30, 36e5)) { res.writeHead(429, { 'access-control-allow-origin': '*' }); return res.end('{"ok":false,"error":"too many requests"}'); }

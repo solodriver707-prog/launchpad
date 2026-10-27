@@ -31,6 +31,8 @@ function rwOut(t, owner, rw) {
   return Math.max(0, tb(t.meta.postTokenBalances) - tb(t.meta.preTokenBalances));
 }
 export { rwOut };
+const TREID = (process.env.TREID_MINT || '').trim(), TREID_BB = Math.min(1, Math.max(0, +(process.env.TREID_BUYBACK_PCT || 60) / 100)), TREID_MIN = +(process.env.TREID_MIN_SOL || 0.05) * 1e9;   // $TREID flywheel: share of treid's SOL fees that buys back + burns $TREID
+export const treidCfg = { mint: TREID, pct: TREID_BB };
 const DEC = 6, HARVEST_USD = 5, SHARE_USD = 0.05, FEE_USD = 1, MAX_ACCTS = 200;
 const parseSplit = (uri) => { let pair = false, rw = null; try { const u = new URL(uri), s = u.searchParams.get('s'), r = u.searchParams.get('r') || ''; pair = r === 'p';   // r=p: holders paid in the pair token · r=<mint>: in that token
     if (/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(r)) rw = r;
@@ -43,6 +45,35 @@ export function startOps({ conn, dbc, ops, treasury, q, q1, run, mainnet = false
   // pair-token payouts: quote that was bought for holders but not yet paid out (from the on-chain receipts → survives restarts)
   const pendingQ = (mint) => pendingPair(mint);
   const sumK = (mint, kind) => q1('SELECT COALESCE(SUM(lamports),0) s FROM rlog WHERE mint=? AND kind=?', mint, kind)?.s || 0;
+  // ---- $TREID flywheel: TREID_BUYBACK_PCT of every SOL platform fee (claimed after TREID_MINT was set) buys $TREID on the open market and burns it ----
+  run('CREATE TABLE IF NOT EXISTS kv(k TEXT PRIMARY KEY, v TEXT)');
+  if (TREID && !q1("SELECT v FROM kv WHERE k='treid_since'")) run("INSERT INTO kv(k,v) VALUES('treid_since',?)", String(Date.now()));
+  const treidSince = () => +(q1("SELECT v FROM kv WHERE k='treid_since'")?.v || Date.now());
+  const sumT = (kind) => q1('SELECT COALESCE(SUM(lamports),0) s FROM rlog WHERE mint=? AND kind=?', TREID, kind)?.s || 0;
+  const treidBudget = () => { if (!TREID) return 0; const fees = q("SELECT r.lamports l FROM rlog r JOIN coins c ON c.mint=r.mint WHERE r.kind='pfee' AND r.ts>=? AND (c.quote_mint IS NULL OR c.quote_mint=?)", treidSince(), WSOL).reduce((a, r) => a + r.l, 0);
+    return Math.max(0, Math.floor(fees * TREID_BB) - sumT('tbuy')); };
+  const treidLeft = () => Math.max(0, sumT('tleft') - sumT('tburnr'));   // bought but not yet burned (the part above the swap's guaranteed minimum)
+  async function treidBuyback() {
+    if (!TREID || !mainnet) return; const tinfo = await conn.getAccountInfo(new PublicKey(TREID)); if (!tinfo) return; const tprog = tinfo.owner, tm = new PublicKey(TREID), ata = getAssociatedTokenAddressSync(tm, ops.publicKey, false, tprog);
+    const left = treidLeft(); if (left > 0) { const ai = await conn.getAccountInfo(ata); const have = ai ? unpackAccount(ata, ai, tprog).amount : 0n, amt = BigInt(left) < have ? BigInt(left) : have;
+      if (amt > 0n) { const sgr = await send([createBurnCheckedInstruction(ata, tm, ops.publicKey, amt, DEC, [], tprog), memoIx(`treid:tburnr:${TREID}:${amt}`)]); rec(sgr, 0, TREID, 'tburnr', amt); log('ops   $TREID residual burned', amt.toString()); } }
+    const lam = treidBudget(); if (lam < TREID_MIN) return;
+    const qr = await (await fetchT(`${JUP}/swap/v1/quote?inputMint=${WSOL}&outputMint=${TREID}&amount=${lam}&slippageBps=300&maxAccounts=40`)).json();
+    if (!qr?.outAmount || qr.outputMint !== TREID || qr.inputMint !== WSOL || String(qr.inAmount) !== String(lam)) throw new Error('no $TREID route');
+    const sw = await (await fetchT(JUP + '/swap/v1/swap', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ quoteResponse: qr, userPublicKey: ops.publicKey.toBase58(), wrapAndUnwrapSol: true, dynamicComputeUnitLimit: true }) })).json();
+    const vt = VersionedTransaction.deserialize(Buffer.from(sw.swapTransaction, 'base64')); if (!vt.message.staticAccountKeys[0].equals(ops.publicKey)) throw new Error('route not paid by ops');
+    const luts = (await Promise.all(vt.message.addressTableLookups.map((l) => conn.getAddressLookupTable(l.accountKey)))).map((r) => r.value);
+    const minOut = BigInt(qr.otherAmountThreshold || 0), msg = TransactionMessage.decompile(vt.message, { addressLookupTableAccounts: luts });
+    if (minOut > 0n) msg.instructions.push(createBurnCheckedInstruction(ata, tm, ops.publicKey, minOut, DEC, [], tprog));   // burned in the same transaction as the buy
+    msg.instructions.push(memoIx(`treid:tbuy:${TREID}:${lam}:${minOut}`));
+    const vt2 = new VersionedTransaction(msg.compileToV0Message(luts)); vt2.sign([ops]);
+    const pre = await conn.getBalance(ops.publicKey), sim = await conn.simulateTransaction(vt2, { sigVerify: false, accounts: { encoding: 'base64', addresses: [ops.publicKey.toBase58()] } });
+    if (sim.value.err) throw new Error('$TREID buyback simulation failed'); const post = sim.value.accounts?.[0]?.lamports ?? 0; if (pre - post > lam + 0.01e9) throw new Error('$TREID route would spend too much SOL — refused');
+    const sig = await landOrExpire(conn, vt2.serialize(), bs58.encode(vt2.signatures[0]), sw.lastValidBlockHeight);
+    const t = await getTxRetry(conn, sig); if (!t || t.meta.err) throw new Error('$TREID buyback failed');
+    rec(sig, 0, TREID, 'tbuy', lam); rec(sig, 1, TREID, 'tburn', minOut); rec(sig, 2, TREID, 'tleft', rwOut(t, ops.publicKey, TREID));
+    log('ops   $TREID buyback', (lam / 1e9).toFixed(4), 'SOL → burned', minOut.toString());
+  }
   const pendingPair = (mint) => Math.max(0, sumK(mint, 'taxswap') - sumK(mint, 'taxholdq') - sumK(mint, 'taxconv'));
   const pendingRw = (mint) => Math.max(0, sumK(mint, 'taxrw') - sumK(mint, 'taxholdr'));
   const pendingSol = () => q(`SELECT DISTINCT mint FROM rlog WHERE kind IN ('taxswap','taxrw')`).reduce((a, r) => { const c = q1('SELECT quote_mint, uri FROM coins WHERE mint=?', r.mint); if (!c) return a;
@@ -117,13 +148,16 @@ export function startOps({ conn, dbc, ops, treasury, q, q1, run, mainnet = false
         // claimed INTO ops (a claim "to the treasury" would open a coin account for the treasury and pay its rent, for every coin), then:
         // SOL → the sweep forwards it; other pair tokens → passed on to the treasury in the same transaction, exact amount
         const amt = BigInt(vp.partnerQuoteFee.toString()), mint = new PublicKey(c.mint), tx = await dbc.partner.claimPartnerTradingFeeToReceiver({ pool: new PublicKey(c.pool), feeClaimer: ops.publicKey, payer: ops.publicKey, maxBaseAmount: new BN(0), maxQuoteAmount: new BN(amt.toString()), receiver: ops.publicKey });
-        const qm = new PublicKey(c.quote_mint || WSOL); if (!qm.equals(new PublicKey(WSOL))) { const qprog = (await conn.getAccountInfo(qm)).owner, dst = getAssociatedTokenAddressSync(qm, new PublicKey(treasury), true, qprog);
-          tx.add(createAssociatedTokenAccountIdempotentInstruction(ops.publicKey, dst, new PublicKey(treasury), qm, qprog), createTransferCheckedInstruction(getAssociatedTokenAddressSync(qm, ops.publicKey, false, qprog), qm, dst, ops.publicKey, amt, c.quote_dec ?? 6, [], qprog)); }
+        const qm = new PublicKey(c.quote_mint || WSOL); let tBurn = 0n; if (!qm.equals(new PublicKey(WSOL))) { const qprog = (await conn.getAccountInfo(qm)).owner, dst = getAssociatedTokenAddressSync(qm, new PublicKey(treasury), true, qprog), src0 = getAssociatedTokenAddressSync(qm, ops.publicKey, false, qprog);
+          if (TREID && c.quote_mint === TREID) { tBurn = amt * BigInt(Math.round(TREID_BB * 1000)) / 1000n; if (tBurn > 0n) tx.add(createBurnCheckedInstruction(src0, qm, ops.publicKey, tBurn, c.quote_dec ?? 6, [], qprog)); }   // coins paired with $TREID burn $TREID directly
+          if (amt - tBurn > 0n) tx.add(createAssociatedTokenAccountIdempotentInstruction(ops.publicKey, dst, new PublicKey(treasury), qm, qprog), createTransferCheckedInstruction(src0, qm, dst, ops.publicKey, amt - tBurn, c.quote_dec ?? 6, [], qprog)); }
+        if (tBurn > 0n) tx.add(memoIx(`treid:tburn:${TREID}:${tBurn}`));
         const ata = getAssociatedTokenAddressSync(mint, ops.publicKey, false, TOKEN_2022_PROGRAM_ID), ai = await conn.getAccountInfo(ata); let closeOk = !ai;
         if (ai) { try { const a = unpackAccount(ata, ai, TOKEN_2022_PROGRAM_ID); closeOk = a.amount === 0n && !(getTransferFeeAmount(a)?.withheldAmount > 0n); } catch {} }
         if (closeOk) tx.add(createCloseAccountInstruction(ata, ops.publicKey, ops.publicKey, [], TOKEN_2022_PROGRAM_ID));   // the claim opens ops' coin account; close it again, rent back
         tx.add(memoIx(`treid:pfee:${c.mint}:${amt}`));
-        await send(tx); seenFee.set(c.mint, Date.now()); log('ops   claimed', fee.toFixed(4), c.quote_symbol || 'SOL', 'from', c.symbol, '→ treasury');
+        const sgf = await send(tx); if (tBurn > 0n) { rec(sgf, 0, TREID, 'tburn', tBurn); rec(sgf, 1, c.mint, 'pfee', amt); } else rec(sgf, 0, c.mint, 'pfee', amt);   // same order as the memos, so a ledger rebuild lands on the same rows
+        seenFee.set(c.mint, Date.now()); log('ops   claimed', fee.toFixed(4), c.quote_symbol || 'SOL', 'from', c.symbol, '→ treasury');
       } catch (e) { log('ops   claim err', c.symbol, e.message.slice(0, 120)); }
     }
   }
@@ -182,7 +216,7 @@ export function startOps({ conn, dbc, ops, treasury, q, q1, run, mainnet = false
     return { got };
   }
   async function sweep() {
-    const bal = await conn.getBalance(ops.publicKey), keep = 0.2e9 + liabilities() + pendingSol();   // never sweep SOL that is owed to creators or holders
+    const bal = await conn.getBalance(ops.publicKey), keep = 0.2e9 + liabilities() + pendingSol() + treidBudget();   // never sweep SOL that is owed to creators or holders
     if (treasury && bal > keep + 0.1e9) { const amt = bal - keep; await send([SystemProgram.transfer({ fromPubkey: ops.publicKey, toPubkey: new PublicKey(treasury), lamports: amt })]); log('ops   swept', (amt / 1e9).toFixed(4), 'SOL to treasury'); }
   }
   let busy = false;
@@ -192,6 +226,7 @@ export function startOps({ conn, dbc, ops, treasury, q, q1, run, mainnet = false
       for (const c of q('SELECT * FROM coins WHERE tax_bps > 0')) {
         const lt = lastTradeTs(c.mint), ls = seenTax.get(c.mint) || 0; if (!(lt > ls && Date.now() - ls > 36e5) && Date.now() - ls < 7 * 864e5) continue;   // hourly at most, only after new trades (weekly fallback: plain wallet-to-wallet transfers pay tax too)
         try { const cfg = await dbc.state.getPoolConfig(new PublicKey(c.config)); if (cfg.feeClaimer.toBase58() === ops.publicKey.toBase58()) await taxCycle(c); seenTax.set(c.mint, Date.now()); } catch (e) { log('ops   tax err', c.symbol, e.message.slice(0, 140)); } }
+      try { await treidBuyback(); } catch (e) { log('ops   $TREID buyback err', e.message.slice(0, 140)); }
       await sweep();
     } catch (e) { log('ops   cycle err', e.message); } finally { busy = false; }
   }

@@ -1205,7 +1205,7 @@
   }
   // ===== THE BURNERY: leaderboard of coins that burned their own supply =====
   var BSRC = { dev: [DEMO ? 'Dev burn' : 'Dev & holder burns', '#F5B14C'], tax: [DEMO ? 'Tax buyback' : 'Tax burn', '#3DDC97'], frozen: [DEMO ? 'Frozen dev rewards' : 'Buyback & burn', '#B48CFF'] };
-  function burnsLoad() { if (!API) return; apiGet('/api/burns').then(function (d) { S.burnData = d; S._burns = null; S._bnAgg = null; if (S.screen === 'burn') render(); }).catch(function () {}); }
+  function burnsLoad() { if (!API) return; apiGet('/api/treid').then(function (d) { S.treidFw = d && d.mint ? d : null; if (S.screen === 'burn') render(); }).catch(function () {}); apiGet('/api/burns').then(function (d) { S.burnData = d; S._burns = null; S._bnAgg = null; if (S.screen === 'burn') render(); }).catch(function () {}); }
   function burnLog() {
     if (S._burns && S._burnsN === all().length) return S._burns;
     var out = [];
@@ -1278,6 +1278,7 @@
       '<div class="bh-stage">' + bhTubes(log) +
       '<div class="bn-fire" id="bn-fire"><canvas id="bn-cv"></canvas><div class="bn-pit"></div><div class="bh-count"><small>SUPPLY DESTROYED</small><b class="mono" id="bh-count">' + (totTok >= 1e9 ? (totTok / 1e9).toFixed(3) + 'B' : fmtNum(Math.round(totTok))) + '</b></div><div class="bn-fly" id="bn-fly"></div><div class="bn-now" id="bn-now"></div></div>' +
       bhGauge(log, totUsd, coins.length) + '</div></section>' + pod +
+      (S.treidFw ? '<section class="card-s tfw"><div class="tfw-h"><span class="tfw-f">🔥</span><div><b>$TREID flywheel</b><small class="muted">' + Math.round(S.treidFw.pct * 100) + '% of treid’s fees buy back $TREID on the open market and burn it — automatically, on-chain</small></div></div><div class="tfw-g"><div><small>$TREID burned</small><b class="mono">' + fmtNum(S.treidFw.burned) + '</b></div><div><small>Of supply</small><b class="mono up">' + S.treidFw.burnedPct.toFixed(3) + '%</b></div><div><small>SOL spent</small><b class="mono">' + S.treidFw.solSpent.toFixed(3) + '</b></div><div><small>Buybacks</small><b class="mono">' + fmtNum(S.treidFw.buys) + '</b></div></div></section>' : '') +
       '<section class="bn-list card-s"><div class="bn-lh"><b>Burn leaderboard</b><div class="bn-leg">' + Object.keys(BSRC).map(function (k) { return '<span><i style="background:' + BSRC[k][1] + '"></i>' + BSRC[k][0] + '</span>'; }).join('') + '</div><div class="seg">' + sorts.map(function (x) { return '<button class="' + (S.bsort === x[0] ? 'on' : '') + '" data-act="bsort" data-arg="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div></div>' +
       '<div class="bn-row bn-head"><span>#</span><span>Coin</span><span>Supply burned</span><span class="r">Tokens</span><span class="r">Value</span><span class="r">Burns</span><span class="r">Last</span></div>' +
       coins.map(function (e, i) { return '<div class="bn-row" data-act="open" data-arg="' + esc(e.t.tick) + '"><span class="mono bn-rk' + (i < 3 ? ' top' : '') + '">' + (i + 1) + '</span><span class="bn-c">' + avatarHTML(e.t, 30) + '<span><b>$' + esc(e.t.tick) + '</b><small>' + esc(e.t.name) + '</small></span></span><span class="bn-bar"><span class="bn-stk">' + srcBar(e) + '</span><b class="mono">' + e.pct.toFixed(2) + '%</b></span><span class="r mono">' + fmtNum(Math.round(e.tok)) + '</span><span class="r mono bn-usd">$' + fmtNum(Math.round(e.usd)) + '</span><span class="r mono">' + e.n + '</span><span class="r mono muted">' + ago(e.last) + '</span></div>'; }).join('') + '</section>' +
@@ -4125,6 +4126,7 @@
     box.appendChild(el); FW.coins.push({ el: el, x: -4, t: t, risky: r < .33, st: -1, mc: 5 });
   }
   function fxPop(c, txt, cls) { var box = document.getElementById('fx-coins'); if (!box) return; var e = document.createElement('span'); e.className = 'fxp ' + (cls || ''); e.textContent = txt; e.style.left = c.x + '%'; box.appendChild(e); setTimeout(function () { e.remove(); }, 1300); }
+  function fxPressAt(c) { var st = document.querySelector('[data-fst="0"] .fx-house'); if (!st || !c.el) return; var sr = st.getBoundingClientRect(), cr = c.el.getBoundingClientRect(); var d = Math.max(10, cr.top - (sr.bottom + 10) + 12); st.style.setProperty('--pd', d.toFixed(0) + 'px'); var box = document.getElementById('fx-coins'), dx = (cr.left + cr.width / 2) - (sr.left + sr.width / 2); if (box && box.clientWidth) { var pc = dx / box.clientWidth * 100; FW.coins.forEach(function (o) { o.x -= pc; o.el.style.left = o.x + '%'; }); } c.el.classList.remove('squash'); void c.el.offsetWidth; c.el.classList.add('squash'); }
   function fxHit(k) { var e = document.querySelector('[data-fst="' + k + '"]'); if (!e) return; e.classList.remove('hit'); void e.offsetWidth; e.classList.add('hit'); var cp = document.querySelector('[data-fcap="' + k + '"]'); if (cp) { cp.classList.remove('hit'); void cp.offsetWidth; cp.classList.add('hit'); } }
   function fxStage(c, k) {
     c.st = k; var el = c.el; el.classList.add('s' + k); fxHit(k);
@@ -4143,10 +4145,11 @@
     var dt = Math.min(64, now - FW.lt); FW.lt = now;
     var cyc = (now % 4600) / 4600, sv = document.querySelector('[data-snv]');
     if (sv) { var k2 = Math.min(1, cyc / .7), tx = Math.round(80 - 78 * (1 - Math.pow(1 - k2, 2))), done = k2 >= 1; sv.textContent = tx + '%'; sv.style.color = done ? '#5BE6A8' : 'hsl(' + (355 + (1 - tx / 80) * 0) + ',90%,' + (62 + (1 - tx / 80) * 10) + '%)'; var sb = document.querySelector('[data-snb]'); sb.style.width = (tx / 80 * 100) + '%'; sb.style.background = done ? '#3DDC97' : ''; document.querySelector('[data-snl]').textContent = done ? 'normal tax ✓' : 'bots pay'; }
-    if (!FW.paused) {
+    if (!FW.paused && now >= (FW.halt || 0)) {
       FW.spawn -= dt; if (FW.spawn <= 0) { fxSpawn(); FW.spawn = 2900 + Math.random() * 900; }
       FW.coins.forEach(function (c) {
         c.x += dt * 0.0072;
+        if (c.st < 0 && c.x >= FSX[0]) { var ov = c.x - FSX[0]; FW.coins.forEach(function (o) { o.x -= ov; }); fxPressAt(c); FW.halt = now + 560; }   // the belt stops while the press comes down: dead centre on the coin
         while (c.st < 5 && c.x >= FSX[c.st + 1]) fxStage(c, c.st + 1);
         var mcEl = c.el.querySelector('.fxc-mc');
         if (c.st >= 2) { var p = c.st >= 4 ? 1 : Math.min(1, (c.x - FSX[2]) / (FSX[4] - FSX[2])); var mc = c.st >= 4 ? gradK() + (c.x - FSX[4]) * 9 : 5 + p * (gradK() - 5); mcEl.textContent = '$' + mc.toFixed(0) + 'K'; c.el.style.setProperty('--p', (p * 100).toFixed(0)); }

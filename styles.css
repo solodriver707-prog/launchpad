@@ -5017,3 +5017,15 @@ button[disabled].big-btn{opacity:.7;cursor:progress}
   .mr-r .chgpill.up{background:rgba(61,220,151,.16);color:#3DDC97}
   .mr-r .chgpill.down{background:rgba(242,112,138,.18);color:#F2708A}
 }
+.tfw{padding:18px 20px;margin:16px 0;border:1px solid rgba(255,138,91,.4)!important;background:linear-gradient(135deg,rgba(255,138,91,.10),transparent 60%)!important;display:flex;flex-direction:column;gap:14px}
+.tfw-h{display:flex;gap:12px;align-items:center}.tfw-f{font-size:28px}.tfw-h b{font-size:18px;display:block}.tfw-h small{font-size:13px}
+.tfw-g{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.tfw-g>div{padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:rgba(0,0,0,.25)}
+.tfw-g small{display:block;font-size:11px;color:var(--muted)}.tfw-g b{font-size:17px}
+@media (max-width:760px){.tfw-g{grid-template-columns:1fr 1fr}}
+/* desktop factory press: travels exactly down to the coin, holds, comes back */
+.fx-s0 .fx-house{--pd:46px}
+@keyframes fxPressD{40%,58%{transform:translateY(var(--pd))}100%{transform:none}}
+.fx-st.hit.fx-s0 .fx-house::after{animation:fxPressD .56s cubic-bezier(.5,0,.3,1)!important}
+.fxc.squash{animation:fxcSquash .56s ease}
+@keyframes fxcSquash{40%,58%{scale:1.08 .86}}
