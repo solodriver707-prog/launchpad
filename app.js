@@ -303,6 +303,21 @@
       .then(function () { set({ airdropping: false }); });
   }
   setInterval(function () { if (S.account && document.visibilityState === 'visible') refreshBalance(); }, 30000);
+  // holder rewards: every payout ops sends you, with its transaction — wallets like Phantom often hide transfers of new tokens, so we show them here
+  S.rw = { acc: null, list: [], at: 0 };
+  function rwTok(m) { var a = all(); for (var i = 0; i < a.length; i++) if (a[i].mint === m) return a[i]; return null; }
+  function rwLoad() {
+    if (DEMO || !API || !S.account) return; var acc = S.account;
+    apiGet('/api/rewards/' + acc).then(function (list) { if (acc !== S.account || !Array.isArray(list)) return;
+      var key = 'treid.rwSeen.' + acc, seen = 0; try { seen = +localStorage.getItem(key) || 0; } catch (e) {}
+      var first = S.rw.acc !== acc, fresh = list.filter(function (r) { return r.ts > seen; });
+      S.rw = { acc: acc, list: list, at: Date.now() };
+      if (fresh.length && seen) fresh.slice(0, 3).forEach(function (r) { toast('🎁 You received ' + fmtNum(r.amount) + ' $' + r.tokenSymbol + ' holder rewards' + (r.symbol && r.symbol !== r.tokenSymbol ? ' from $' + r.symbol : ''), rwTok(r.mint)); });
+      if (list.length) try { localStorage.setItem(key, String(list[0].ts)); } catch (e) {}
+      if (S.walletMenu || first) render(); }).catch(function () {});
+  }
+  setInterval(function () { if (S.account && document.visibilityState === 'visible') rwLoad(); }, 60000);
+  setTimeout(rwLoad, 4000);
   // ================= REAL CHAIN ACTIONS (create / buy / sell) =================
   var chainP = null;
   function chainLib() {
@@ -507,8 +522,8 @@
           '<div class="wb-acts"><button class="btn pri" data-act="wbDeposit">Deposit</button><button class="btn sec" data-act="wallet" data-arg="' + esc(S.account) + '">Profile</button>' + (CHAIN_ID !== 'solana:mainnet' ? '<button class="btn sec" data-act="airdrop"' + (S.airdropping ? ' disabled' : '') + '>' + (S.airdropping ? 'Requesting…' : 'Get 1 ' + NET + 'SOL') + '</button>' : '') + '</div>' +
           (S.wbDep ? '<div class="wb-dep">Send SOL to your wallet address from an exchange or another wallet:<button class="mono" data-act="copyAddr">' + esc(S.account) + ' ' + I.copy + '</button></div>' : '') +
           '<div class="wb-con">' + (S.wallet && S.wallet.icon ? '<img src="' + esc(S.wallet.icon) + '" alt="">' : '<span class="wb-wi">◎</span>') + '<span><small class="muted">Connected with</small><b>' + esc(S.wallet ? S.wallet.name : 'Wallet') + ' <span class="muted">· external wallet</span></b></span><button class="link wb-dc" data-act="disconnect">Disconnect</button></div>' +
-          '<div class="wb-tabs"><div class="seg sm"><button class="' + (S.wbTab !== 'closed' ? 'on' : '') + '" data-act="wbTab" data-arg="open">Open</button><button class="' + (S.wbTab === 'closed' ? 'on' : '') + '" data-act="wbTab" data-arg="closed">Closed</button></div><button class="link" data-act="refresh">↻ Refresh</button></div>' +
-          '<div class="wb-list">' + (WP.loading ? '<div class="muted wb-empty"><span class="gr-sp"></span> Loading…</div>' : wbOpen.length ? wbOpen.map(function (c) { var up = c.profit >= 0, my = (S.comments[c.t.tick] || []).filter(function (x) { return x.w === S.account && x.reply == null && x.text; }).sort(function (a, z) { return z.t - a.t; })[0];
+          '<div class="wb-tabs"><div class="seg sm"><button class="' + (S.wbTab !== 'closed' ? 'on' : '') + '" data-act="wbTab" data-arg="open">Open</button><button class="' + (S.wbTab === 'closed' ? 'on' : '') + '" data-act="wbTab" data-arg="closed">Closed</button><button class="' + (S.wbTab === 'rewards' ? 'on' : '') + '" data-act="wbTab" data-arg="rewards">🎁 Rewards</button></div><button class="link" data-act="refresh">↻ Refresh</button></div>' +
+          '<div class="wb-list">' + (S.wbTab === 'rewards' ? rwListHTML() : WP.loading ? '<div class="muted wb-empty"><span class="gr-sp"></span> Loading…</div>' : wbOpen.length ? wbOpen.map(function (c) { var up = c.profit >= 0, my = (S.comments[c.t.tick] || []).filter(function (x) { return x.w === S.account && x.reply == null && x.text; }).sort(function (a, z) { return z.t - a.t; })[0];
             return '<div class="wb-pos"><button class="wb-pt" data-act="open" data-arg="' + esc(c.t.tick) + '">' + avatarHTML(c.t, 42) + '<span class="wb-pn"><b>$' + esc(c.t.tick) + '</b><small class="muted">' + esc(c.t.name) + '</small></span><span class="wb-pv"><small>Position</small><b class="mono">$' + money(S.wbTab === 'closed' ? c.got : c.value) + '</b></span><span class="wb-pv"><small>Profit</small><b class="mono ' + (up ? 'up' : 'down') + '">' + (up ? '+' : '−') + '$' + money(c.profit) + '</b></span></button>' +
               '<div class="wb-pm"><span>Spent <b class="mono">$' + moneyS(c.spent) + '</b></span><span>Avg entry <b class="mono">' + (c.avgEntryMc ? fmtK(c.avgEntryMc / 1000) : '—') + '</b> → <b class="mono">' + fmtK(c.t.mcN) + ' MC</b></span></div>' + (my ? '<div class="wb-co">' + esc(my.text.length > 110 ? my.text.slice(0, 110) + '…' : my.text) + '</div>' : '') + '</div>'; }).join('') : '<div class="muted wb-empty">' + (S.wbTab === 'closed' ? 'No closed positions yet.' : 'No open positions on treid yet.') + '</div>') + '</div></div>' : '') + '</div>';
     } else {
@@ -2417,6 +2432,12 @@
   }
   // ===== WALLET PROFILE: hover preview on any wallet + full profile (positions, closed, created, this coin) =====
   S.wprof = {}; S.wTab = 'open';
+  function rwListHTML() {
+    var L = S.rw.acc === S.account ? S.rw.list : [], cl = CHAIN_ID === 'solana:devnet' ? '?cluster=devnet' : '';
+    if (!L.length) return '<div class="muted wb-empty">No holder rewards yet. Hold taxed coins — every payout lands here with its transaction.</div>';
+    return '<div class="rw-note muted">Some wallets hide transfers of new tokens. Each reward below links to its transaction on Solscan.</div>' + L.map(function (r) { var t = rwTok(r.mint);
+      return '<a class="rw-row" target="_blank" rel="noopener" href="https://solscan.io/tx/' + esc(r.sig) + cl + '">' + (t ? avatarHTML(t, 34) : '<span class="rw-g">🎁</span>') + '<span class="rw-n"><b>+' + fmtNum(r.amount) + ' $' + esc(r.tokenSymbol) + '</b><small class="muted">' + (r.symbol ? 'Holder reward · $' + esc(r.symbol) : 'Holder reward') + ' · ' + ago(r.ts) + '</small></span><span class="rw-v">Solscan ↗</span></a>'; }).join('');
+  }
   function wprof(addr) {
     if (!DEMO && API) { var e = S.wprof[addr]; if (!e || (Date.now() - e.at > 30e3 && !e.busy)) { e = S.wprof[addr] = e || { at: 0, d: null }; e.busy = true; apiGet('/api/wallet/' + addr).then(function (d) { e.d = d; e.at = Date.now(); e.busy = false; if (S.walletView === addr) render(); if (pvFor === addr) pvFill(); }).catch(function () { e.busy = false; e.at = Date.now(); }); }
       var d = e.d; if (!d) return { loading: true, coins: [], created: [] };
@@ -3774,7 +3795,7 @@
       case 'wallet': set({ walletView: arg, walletMenu: false }); break;
       case 'closeW': set({ walletView: null }); break;
       case 'wTab': set({ wTab: arg }); break;
-      case 'wbTab': set({ wbTab: arg }); break;
+      case 'wbTab': if (arg === 'rewards') rwLoad(); set({ wbTab: arg }); break;
       case 'wbDeposit': S.wbDep = !S.wbDep; render(); break;
       case 'copyW': copy(arg, 'Wallet address copied'); break;
       case 'trackW': var ti = S.trackWallets.indexOf(arg); if (ti === -1) S.trackWallets.push(arg); else S.trackWallets.splice(ti, 1); try { localStorage.setItem('gp.track', JSON.stringify(S.trackWallets)); } catch (er) {} render(); toast(ti === -1 ? 'Tracking ' + walletName(arg) : 'Stopped tracking'); break;

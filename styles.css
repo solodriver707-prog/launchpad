@@ -5174,3 +5174,13 @@ body.on-site{background:#08080a}
 .wl-mob button.wl-deep{width:100%;cursor:pointer;font:inherit;font-weight:700;text-align:left}
 .wl-mob button.wl-deep.sf{background:linear-gradient(135deg,#ffd84d,#ff9f1c);color:#2a1a00;border-color:transparent}
 .wl-or{margin-top:4px}
+
+/* holder rewards in the wallet panel */
+.rw-note{font-size:12px;padding:4px 2px 8px;line-height:1.4}
+.rw-row{display:flex;align-items:center;gap:10px;padding:9px 6px;border-radius:12px;text-decoration:none;color:inherit}
+.rw-row:hover{background:rgba(127,127,127,.08)}
+.rw-n{flex:1;min-width:0;display:flex;flex-direction:column}
+.rw-n b{color:#3fd68a;font-variant-numeric:tabular-nums}
+.rw-n small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rw-v{font-size:12px;opacity:.7;white-space:nowrap}
+.rw-g{width:34px;height:34px;display:grid;place-items:center;font-size:20px}
