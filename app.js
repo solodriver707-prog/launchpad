@@ -1963,7 +1963,7 @@
       (me ? '' : '<button class="co-ic co-fol' + (fol ? ' on' : '') + '" data-act="coFollow" data-arg="' + esc(c.w) + '" title="' + (fol ? 'Following' : 'Follow') + '">' + (fol ? '✓' : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="4"/><path d="M2 21c0-4 3-6 7-6s7 2 7 6M19 8v6M16 11h6"/></svg>') + '</button>') +
       '<span class="co-mw"><button class="co-ic" data-act="coMenu" data-arg="' + esc(key) + '" title="More">⋯</button>' + (S.coMenu === key ? '<span class="co-menu"><button data-act="coCopy" data-arg="' + esc(key) + '">Copy text</button><button data-act="coShare" data-arg="' + esc(key) + '">Copy link</button>' + (me ? '' : '<button data-act="coMute" data-arg="' + esc(c.w) + '">Mute ' + esc(coName(c.w)) + '</button><button data-act="coReport" data-arg="' + esc(key) + '">Report</button>') + '</span>' : '') + '</span></div>' +
       (opts.coinTag && !(c.pos > 0) ? '<button class="co-coin" data-act="open" data-arg="' + esc(t.tick) + '">' + avatarHTML(t, 18) + '<b>$' + esc(t.tick) + '</b><span class="mono">' + fmtK(t.mcN) + '</span></button>' : '') +
-      '<div class="co-t' + (long ? ' clamp' : '') + '">' + esc(c.text) + '</div>' + (long ? '<button class="co-more" data-act="coExpand" data-arg="' + esc(key) + '">Show more</button>' : '') +
+      (c.text ? '<div class="co-t' + (long ? ' clamp' : '') + '">' + esc(c.text) + '</div>' : '') + (c.img ? '<a class="co-img" href="' + esc(c.img) + '" target="_blank" rel="noopener noreferrer"><img src="' + esc(c.img) + '" loading="lazy" alt=""></a>' : '') + (long ? '<button class="co-more" data-act="coExpand" data-arg="' + esc(key) + '">Show more</button>' : '') +
       (c.pos > 0 && !opts.child ? '<button class="co-pos" data-act="open" data-arg="' + esc(t.tick) + '" title="Open $' + esc(t.tick) + '">' + avatarHTML(t, 26) + '<span class="co-pn"><b>' + esc(t.tick) + '</b><small>' + esc(t.name) + '</small></span><span class="co-pv"><small>Position</small><b class="mono">$' + fmtNum(c.pos) + '</b></span><span class="co-pv"><small>PnL</small><b class="mono ' + (up ? 'up' : 'down') + '">' + (up ? '+' : '−') + '$' + Math.abs(pnl).toFixed(2) + '</b></span><span class="co-go">›</span></button>' : '') +
       '<div class="co-a"><button data-act="coShare" data-arg="' + esc(key) + '" title="Share"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8h16v-8M12 3v13M7 8l5-5 5 5"/></svg></button>' +
         '<button class="' + (c.rtd ? 'on rt' : '') + '" data-act="coRT" data-arg="' + esc(key) + '" title="Repost"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 2l4 4-4 4M3 11V9a3 3 0 013-3h15M7 22l-4-4 4-4M21 13v2a3 3 0 01-3 3H3"/></svg>' + (c.rt || '') + '</button>' +
@@ -2021,7 +2021,7 @@
   }, 3500);
   // ---- real callouts: wallet-signed, stored by the indexer ----
   function coClean(x) { return String(x || '').replace(/[\u0000-\u0008\u000B-\u001F\u007F\u202A-\u202E\u2066-\u2069]/g, '').replace(/\n{3,}/g, '\n\n').trim().slice(0, 280); }   // must match indexer/callouts.mjs
-  function coFromRow(r) { return { id: Number(r.id), w: String(r.wallet), text: String(r.text), t: Number(r.ts) || 0, likes: 0, liked: false, reply: r.reply == null ? null : Number(r.reply), mc0: (Number(r.mc) || 0) / 1000 || null, pos: Math.round(Number(r.pos) || 0), real: true }; }
+  function coFromRow(r) { return { id: Number(r.id), w: String(r.wallet), text: String(r.text || ''), img: safeImg(r.img) && /^https:/.test(r.img) ? r.img : null, t: Number(r.ts) || 0, likes: 0, liked: false, reply: r.reply == null ? null : Number(r.reply), mc0: (Number(r.mc) || 0) / 1000 || null, pos: Math.round(Number(r.pos) || 0), real: true }; }
   function coMerge(rows) { var ch = []; rows.forEach(function (r) { var t = S.live.filter(function (x) { return x.ca === r.mint; })[0]; if (!t) return; var list = S.comments[t.tick] || (S.comments[t.tick] = []); if (list.some(function (c) { return c.id === r.id; })) return; var c = coFromRow(r); if (!c.mc0) c.mc0 = t.mcN; list.push(c); ch.push({ c: c, t: t }); }); return ch; }
   function coArrive(c, t) {
     coMeta(c, t);
@@ -2386,7 +2386,7 @@
     var cmAll = seedComments(t);
     var ttAll = S.ttab === 'all';
     var thread = '<aside class="tp-thread card-s"><div class="tt-h"><b>Callouts</b><div class="tt-tabs"><button class="' + (ttAll ? '' : 'on') + '" data-act="ttab" data-arg="coin">$' + id + ' <span class="mono">' + cmAll.length + '</span></button><button class="' + (ttAll ? 'on' : '') + '" data-act="ttab" data-arg="all"><i class="tt-dot"></i>All live</button></div></div>' +
-      '<div class="composer">' + (S.account ? '<textarea id="cmt-in" class="inp" data-bind="cmtDraft" placeholder="' + (S.replyTo != null ? 'Replying to #' + (1000 + S.replyTo) + '…' : 'Call it: what\'s your take on $' + id + '?') + '" maxlength="280">' + esc(S.cmtDraft || '') + '</textarea><button class="btn pri" data-act="post">Post</button>' :
+      '<div class="composer">' + (S.account ? '<textarea id="cmt-in" class="inp" data-bind="cmtDraft" placeholder="' + (S.replyTo != null ? 'Replying to #' + (1000 + S.replyTo) + '…' : 'Call it: what\'s your take on $' + id + '?') + '" maxlength="280">' + esc(S.cmtDraft || '') + '</textarea>' + coImgBar() :
         '<span class="muted">Connect a wallet to post a callout.</span><button class="btn sec" data-act="openWallet">Connect</button>') + '</div>' +
       '<div class="tt-wrap"><button class="tt-new" id="tt-new" data-act="ttNew" style="display:none"></button><div id="cmts" class="tt-list' + (ttAll ? ' all' : '') + '">' + (ttAll ? allLiveHTML() : threadHTML(t, cmAll)) + '</div></div></aside>';
     var body = '';
@@ -2400,7 +2400,7 @@
         '<div id="tp-trades">' + (rows.length ? rows.map(function (x) { return tradeRow(x, t); }).join('') : '<div class="muted" style="padding:24px;text-align:center">No trades match these filters</div>') + '</div></div>';
     } else if (S.tpTab === 'thread') {
       var cm = seedComments(t);
-      body = '<div class="composer">' + (S.account ? '<textarea id="cmt-in" class="inp" data-bind="cmtDraft" placeholder="' + (S.replyTo != null ? 'Replying to #' + (1000 + S.replyTo) + '…' : 'Say something about $' + id + '…') + '" maxlength="280">' + esc(S.cmtDraft || '') + '</textarea><button class="btn pri" data-act="post">Post</button>' :
+      body = '<div class="composer">' + (S.account ? '<textarea id="cmt-in" class="inp" data-bind="cmtDraft" placeholder="' + (S.replyTo != null ? 'Replying to #' + (1000 + S.replyTo) + '…' : 'Say something about $' + id + '…') + '" maxlength="280">' + esc(S.cmtDraft || '') + '</textarea>' + coImgBar() :
         '<span class="muted">Connect a wallet to join the thread.</span><button class="btn sec" data-act="openWallet">Connect wallet</button>') + '</div>' +
         '<div id="cmts">' + cm.slice().sort(function (a, b) { return b.t - a.t; }).map(function (x) { return commentHTML(x, t); }).join('') + '</div>';
     } else if (S.tpTab === 'holders') {
@@ -2482,6 +2482,31 @@
   // ---- compact pair picker with search by name / ticker / contract address ----
   S.cpq = ''; S.cpTab = 'crypto';
   try { var CP = JSON.parse(localStorage.getItem('dl.cpairs') || '{}'); Object.keys(CP).forEach(function (k) { PAIR_INFO[k] = CP[k]; }); } catch (e) {}
+  // ---- sign in once (24 h): the wallet signs one message, the server hands back a session token — no popup for every callout ----
+  function coImgBar() { return (S.coImg ? '<div class="co-prev"><img src="' + esc(S.coImg) + '" alt=""><button data-act="coImgDel" title="Remove image">✕</button></div>' : '') +
+    '<div class="co-bar"><label class="co-imgb" title="Add an image or GIF"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/></svg><input type="file" accept="image/png,image/jpeg,image/gif,image/webp" data-coimg hidden></label><button class="btn pri" data-act="post">Post</button></div>'; }
+  function sessKey() { return 'treid.sess.' + S.account; }
+  function dropSession() { try { localStorage.removeItem(sessKey()); } catch (e) {} S.sess = null; }
+  function getSession() {
+    var s = S.sess && S.sess.w === S.account ? S.sess : null; if (!s) { try { s = JSON.parse(localStorage.getItem(sessKey()) || 'null'); } catch (e) { s = null; } }
+    if (s && s.token && s.exp > Date.now() + 60e3 && s.token.indexOf(S.account + '.') === 0) { S.sess = { w: S.account, token: s.token, exp: s.exp }; return Promise.resolve(s.token); }
+    var f = S.wallet && S.wallet.features['solana:signMessage']; if (!f) return Promise.reject(new Error('This wallet can’t sign messages — try Phantom or Solflare'));
+    var ts = Date.now(), who = S.account, m = 'treid: sign in \u2014 ' + who + ' \u2014 ' + ts;   // must match indexer sig.mjs signInMessage
+    toast('Sign in once — no more wallet popups for the next 24 h');
+    return Promise.resolve(f.signMessage({ account: S.walletAcc, message: new TextEncoder().encode(siteMsg(m)) })).then(function (r) { var sg = (Array.isArray(r) ? r[0] : r).signature;
+      return chainLib().then(function (T) { return fetch(API + '/api/session', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ wallet: who, ts: ts, sig: T.b58(sg) }) }).then(function (x) { return x.json(); }); }); })
+      .then(function (j) { if (!j || !j.token) throw new Error((j && j.error) || 'sign-in failed'); S.sess = { w: who, token: j.token, exp: j.exp }; try { localStorage.setItem('treid.sess.' + who, JSON.stringify({ token: j.token, exp: j.exp })); } catch (e) {} return j.token; });
+  }
+  // callout images: shrunk in the browser (max 1280 px, WEBP), GIFs kept as they are if small enough
+  function coPickImage(file) {
+    if (!file) return; if (!/^image\/(png|jpeg|gif|webp)$/.test(file.type)) { toast('Images: PNG, JPG, GIF or WEBP'); return; }
+    var rd = new FileReader(); rd.onload = function () { var url = String(rd.result);
+      if (file.type === 'image/gif') { if (file.size > 1.5e6) { toast('GIF too big (1.5 MB max)'); return; } S.coImg = url; render(); return; }
+      var im = new Image(); im.onload = function () { var k = Math.min(1, 1280 / Math.max(im.width, im.height)), cv = document.createElement('canvas'); cv.width = Math.round(im.width * k); cv.height = Math.round(im.height * k);
+        cv.getContext('2d').drawImage(im, 0, 0, cv.width, cv.height); var out = cv.toDataURL('image/webp', 0.82); if (out.length > 2.1e6) out = cv.toDataURL('image/webp', 0.6);
+        if (out.indexOf('data:image/webp') !== 0) out = cv.toDataURL('image/jpeg', 0.82); S.coImg = out; render(); }; im.src = url; };
+    rd.readAsDataURL(file);
+  }
   function siteMsg(m) { return location.host + ' wants you to sign:\n' + m; }   // wallets show this first line: a look-alike site can't reuse your signature here
   function isCA(q) { return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(q); }
   function pairSearch(q) {
@@ -3255,6 +3280,7 @@
       case 'share': copy(location.href.split('#')[0] + '#' + (S.tick || ''), 'Link copied'); break;
       case 'sellpct': var tp0 = find(S.tick), ps0 = tp0 && S.pos[tp0.tick]; if (ps0) set({ side: 'sell', amount: (ps0.tok * (+arg) / 100).toFixed(0) }); break;
       case 'sellall': var tp1 = find(S.tick), ps1 = tp1 && S.pos[tp1.tick]; if (ps1) set({ side: 'sell', amount: String(Math.floor(ps1.tok)), sellAll: true }); break;
+      case 'coImgDel': S.coImg = null; render(); break;
       case 'coToggle': S.mCo = 0; set({ coOpen: !S.coOpen, coQueue: 0 }); break;
       case 'coClose': set({ coOpen: false }); break;
       case 'coPause': S.coPaused = !S.coPaused; if (!S.coPaused) S.coQueue = 0; render(); break;
@@ -3272,13 +3298,14 @@
       case 'like': var cl = (S.comments[S.tick] || [])[+arg]; if (cl) { cl.liked = !cl.liked; cl.likes += cl.liked ? 1 : -1; render(); } break;
       case 'replyTo': set({ replyTo: +arg }); setTimeout(function () { var ci = document.getElementById('cmt-in'); if (ci) ci.focus(); }, 20); break;
       case 'post':
-        var txt = (S.cmtDraft || '').trim(); if (!txt) { toast('Write something first'); break; }
+        var txt = (S.cmtDraft || '').trim(); if (!txt && !S.coImg) { toast('Write something first'); break; }
         var tp0 = find(S.tick); if (tp0 && tp0.live) {
-          if (!S.account || !S.wallet) { set({ walletOpen: true }); break; } var fco = S.wallet.features['solana:signMessage']; if (!fco) { toast('This wallet can’t sign messages — try Phantom or Solflare'); break; }
-          var txC = coClean(txt), tsC = Date.now(), rpC = S.replyTo != null ? S.replyTo : null, msgC = 'treid: callout \u2014 ' + tp0.ca + ' \u2014 ' + tsC + (rpC != null ? ' \u2014 reply ' + rpC : '') + '\n' + txC;   // must match indexer calloutMessage
+          if (!S.account || !S.wallet) { set({ walletOpen: true }); break; }
+          var txC = coClean(txt), rpC = S.replyTo != null ? S.replyTo : null, imgC = S.coImg || null;
           if (S.busy) break; S.busy = 'Posting'; render();
-          Promise.resolve(fco.signMessage({ account: S.walletAcc, message: new TextEncoder().encode(siteMsg(msgC)) })).then(function (r) { var sg = (Array.isArray(r) ? r[0] : r).signature; return chainLib().then(function (T) { return fetch(API + '/api/callout', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mint: tp0.ca, wallet: S.account, ts: tsC, reply: rpC, text: txC, sig: T.b58(sg) }) }).then(function (x) { return x.json(); }); }); })
-            .then(function (j) { S.busy = null; if (!j || !j.ok) throw new Error((j && j.error) || 'posting failed'); coMerge([j.callout]); devPing(tp0); set({ cmtDraft: '', replyTo: null }); toast('Callout posted ✓'); })
+          var sendCo = function (tok) { return fetch(API + '/api/callout', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mint: tp0.ca, session: tok, reply: rpC, text: txC, image: imgC }) }).then(function (x) { return x.json(); }); };
+          getSession().then(sendCo).then(function (j) { if (j && !j.ok && /sign in again/.test(j.error || '')) { dropSession(); return getSession().then(sendCo); } return j; })   // signed in once per day — no wallet popup per callout
+            .then(function (j) { S.busy = null; if (!j || !j.ok) throw new Error((j && j.error) || 'posting failed'); coMerge([j.callout]); devPing(tp0); S.coImg = null; set({ cmtDraft: '', replyTo: null }); toast('Callout posted ✓'); })
             .catch(function (e) { S.busy = null; render(); toast(chainErr(e)); });
           break; }
         var cms = seedComments(find(S.tick)); cms.push({ id: cms.length, w: S.account, text: txt, t: Date.now(), likes: 0, liked: false, reply: S.replyTo != null ? S.replyTo : null });
@@ -3415,6 +3442,7 @@
     if (im.parentNode && im.parentNode.classList && im.parentNode.classList.contains('img') && im.parentNode.classList.contains('coin')) { var w = im.parentNode; w.classList.remove('img'); w.style.background = '#3A3A40'; w.style.fontSize = Math.round(parseInt(w.style.width, 10) * .38) + 'px'; w.textContent = String(im.alt || '?').replace(/[^A-Za-z0-9]/g, '').slice(0, 2).toUpperCase() || '?'; return; }
     if (!im.classList.contains('rwp-ic')) return; var sp = document.createElement('span'); sp.className = 'coin rwp-ic'; sp.textContent = im.getAttribute('data-ini') || '?';
     sp.style.cssText = 'width:' + im.style.width + ';height:' + im.style.height + ';background:#2E2E33;font-size:9px'; im.replaceWith(sp); }, true);
+  document.addEventListener('change', function (e) { if (e.target && e.target.hasAttribute && e.target.hasAttribute('data-coimg')) { coPickImage(e.target.files && e.target.files[0]); e.target.value = ''; } });
   document.addEventListener('input', function (e) {
     if (e.target.hasAttribute && e.target.hasAttribute('data-burnpct')) { S.burnPct = +e.target.value; var t = find(S.burnTick), pos = t && position(t); if (!pos) return; var tok = pos.tok * S.burnPct / 100;
       var q = function (id, v) { var x = document.getElementById(id); if (x) x.textContent = v; }; q('bt-tok', fmtNum(Math.round(tok)) + ' $' + t.tick); q('bt-sup', (tok / 1e9 * 100).toFixed(3) + '%'); q('bt-usd', '$' + fmtNum(Math.round(tok * price(t))));

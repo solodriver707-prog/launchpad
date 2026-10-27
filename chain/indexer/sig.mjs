@@ -12,3 +12,18 @@ export function verifySig(msg, sig, wallet, ts) {
   if (SITES.some((d) => ok(signedText(d, msg)))) return true;
   return Number(ts) < LEGACY_UNTIL && ok(msg);
 }
+
+// ---- sign in once: one wallet signature → a 24 h session token (HMAC by the server), so posting doesn't need a wallet popup each time ----
+import { createHmac, createHash } from 'node:crypto';
+const SECRET = process.env.SESSION_SECRET || createHash('sha256').update('treid-session|' + (process.env.OPS_SECRET || '') + '|' + (process.env.PARTNER || '')).digest('hex');
+export const hmac = (s) => createHmac('sha256', SECRET).update(s).digest('base64url');
+export const signInMessage = (wallet, ts) => `treid: sign in — ${wallet} — ${ts}`;
+export function issueSession({ wallet, ts, sig }) {
+  if (!(Math.abs(Date.now() - +ts) <= 2 * 60e3)) throw new Error('signature expired — try again');
+  if (!verifySig(signInMessage(wallet, ts), sig, wallet, ts)) throw new Error('bad signature');
+  const exp = Date.now() + 24 * 36e5; return { token: `${wallet}.${exp}.${hmac(wallet + '|' + exp)}`, exp };
+}
+export function checkSession(token) {   // → wallet, or null
+  const [w, exp, mac] = String(token || '').split('.'); if (!w || !(+exp > Date.now()) || !mac) return null;
+  const want = hmac(w + '|' + exp); return want.length === mac.length && want === mac ? w : null;
+}
