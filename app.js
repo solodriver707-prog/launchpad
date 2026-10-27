@@ -1669,7 +1669,7 @@
   function tcHTML(t, k) {
     var c = chg(t), tm = Math.max(t.buy, t.sell), id = esc(t.tick);
     return '<div class="tc-in" role="button" tabindex="0" data-act="open" data-arg="' + id + '">' +
-      '<span class="tc-av">' + avatarHTML(t, 58) + '<i class="tc-crown">♛</i></span>' +
+      '<span class="tc-av">' + avatarHTML(t, 84) + '<i class="tc-crown">♛</i></span>' +
       '<span class="tc-main"><span class="tc-k">TOP MEME <b>#' + (k + 1) + '</b></span><b class="tc-n">' + esc(t.name) + '</b>' +
         '<span class="tc-row"><span class="mono">' + fmtK(t.mcN) + '</span><span class="mono ' + (c >= 0 ? 'up' : 'down') + '">' + chgTxt(c) + '</span></span>' +
         '<span class="tc-bar"><i style="width:' + Math.min(100, t.prog) + '%"></i></span></span>' +

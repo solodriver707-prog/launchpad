@@ -4744,3 +4744,18 @@ button[disabled].big-btn{opacity:.7;cursor:progress}
 /* hover tooltips only where a real mouse hovers — on phones a tap left them stuck on top of cards */
 @media (hover:none){[data-tip]:hover::after,[data-tip]:hover::before,[data-tip]:focus::after,[data-tip]:focus::before{display:none!important;content:none!important}}
 .prp.zero{opacity:.55}.prp.zero:hover{opacity:1}
+/* top-meme card: bigger, centred */
+#tc{display:flex;flex-direction:column}
+#tc .tc-in{flex:1;gap:20px;padding:18px 22px}
+#tc .tc-main{display:flex;flex-direction:column;gap:6px;flex:1;min-width:0}
+#tc .tc-k{font-size:12px}
+#tc .tc-n{font-size:25px;line-height:1.15}
+#tc .tc-row{font-size:17px;gap:14px;font-weight:700}
+#tc .tc-bar{height:7px;margin-top:6px}
+#tc .tc-side{gap:8px}
+#tc .tc-pair{font-size:15px}
+#tc .tc-side .tax{padding:8px 14px}
+#tc .tc-side .tax small{font-size:10px}
+#tc .tc-side .tax b{font-size:28px}
+#tc .tc-crown{font-size:24px;top:-18px}
+@media (max-width:640px){#tc .tc-n{font-size:19px}#tc .tc-row{font-size:14px}#tc .tc-in{gap:14px;padding:14px}}
