@@ -4743,3 +4743,4 @@ button[disabled].big-btn{opacity:.7;cursor:progress}
 @media (max-width:640px){.ts-card{width:170px;height:214px}.ts-h b{font-size:18px}.ts-h .muted{display:none}}
 /* hover tooltips only where a real mouse hovers — on phones a tap left them stuck on top of cards */
 @media (hover:none){[data-tip]:hover::after,[data-tip]:hover::before,[data-tip]:focus::after,[data-tip]:focus::before{display:none!important;content:none!important}}
+.prp.zero{opacity:.55}.prp.zero:hover{opacity:1}

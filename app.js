@@ -358,6 +358,7 @@
     crypto: [['SOL', 'SOL', 'icons/sol.svg'], ['BTC', 'cbBTC', 'icons/btc.svg', 'cbbtcf3aa214zXHbiAZQwf4122FBYbraNdFqgw4iMij'], ['ETH', 'ETH', 'icons/eth.svg', '7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs'], ['JUP', 'JUP', 'icons/jup.webp', 'JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN'], ['RAY', 'RAY', 'icons/ray.svg', '4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R'], ['PYTH', 'PYTH', 'icons/pyth.webp', 'HZ1JovNiVvGrGNiiYvEozEVgZ58xaU3RKwX8eACQBCt3'], ['JTO', 'JTO', 'icons/jto.webp', 'jtojtomepa8beP8AuQc6eXt5FriJwfFMwQx2v2f9mCL'], ['LINK', 'LINK', 'icons/link.svg']],
     stocks: [['SPYx', 'SPYx', null], ['NVDAx', 'NVDAx', null], ['TSLAx', 'TSLAx', null], ['AAPLx', 'AAPLx', null], ['MSFTx', 'MSFTx', null], ['GOOGLx', 'GOOGLx', null], ['METAx', 'METAx', null], ['AMZNx', 'AMZNx', null]],
     fx: [['USDC', 'USDC', 'icons/usdc.svg'], ['USDT', 'USDT', 'icons/usdt.svg', 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB'], ['EURC', 'EURC', 'icons/eur.svg', 'HzwqbKZw8HxMN6bF2yFZNrht3c2iXXzpKcFu7uBEDKtr'], ['PYUSD', 'PYUSD', 'icons/pyusd.webp', '2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo']] };
+  function liveCat(t) { var L = pairLabel(t.pair); if (L === 'SOL') return 'crypto'; for (var k in RW_PRE) for (var i = 0; i < RW_PRE[k].length; i++) if (RW_PRE[k][i][0] === L || RW_PRE[k][i][1] === L) return k; return 'other'; }
   function preIcon(p, size) { if (!p[2] && API) p = [p[0], p[1], API + '/api/ticon?sym=' + encodeURIComponent(p[1])];   // the token's own logo (e.g. xStocks), served by the treid server
     return p[2] ? '<img class="coin rwp-ic" src="' + esc(p[2]) + '" alt="" data-ini="' + esc(p[0].slice(0, 2)) + '" style="width:' + size + 'px;height:' + size + 'px">' : '<span class="coin rwp-ic" style="width:' + size + 'px;height:' + size + 'px;background:#2E2E33;font-size:' + Math.round(size * .42) + 'px">' + esc(p[0].slice(0, 2)) + '</span>'; }
   function preOf(sym) { for (var t in RW_PRE) for (var i = 0; i < RW_PRE[t].length; i++) if (RW_PRE[t][i][1] === sym) return RW_PRE[t][i]; return null; }
@@ -581,8 +582,8 @@
       if (S.cleanOnly && riskMetrics(d).some(function (m) { return m.lv === 'r'; })) return false;
       var mcr = rv('mc'), pr = rv('prog'), ag = rv('age'), am = (Date.now() - d.born) / 60000;
       if (d.prog < pr[0] || d.prog > pr[1] || d.mcN < mcr[0] || d.mcN > mcr[1] || am < ag[0] || am > ag[1]) return false;
-      if (S.cat !== 'all' && pairInfo(d.pair).cat !== S.cat) return false;
-      if (S.pair !== 'All' && d.pair !== S.pair) return false;
+      if (S.cat !== 'all' && (DEMO ? pairInfo(d.pair).cat : liveCat(d)) !== S.cat) return false;
+      if (S.pair !== 'All' && d.pair !== S.pair && pairLabel(d.pair) !== S.pair) return false;
       return true;
     });
     var sorters = {
@@ -1466,7 +1467,14 @@
     var drop = q ? '<div class="pr-drop">' + (res.length ? res.map(function (id) { var n = cnt[id] || 0;
       return '<button class="pp-item' + (S.pair === id ? ' on' : '') + (n ? '' : ' empty') + '" data-act="ppick2" data-arg="' + esc(id) + '">' + coinHTML(id, 26) + '<span class="pp-n"><b>' + esc(pairLabel(id)) + '</b><small>' + esc(pairInfo(id).name) + ' · ' + (CATS.filter(function (c) { return c[0] === pairInfo(id).cat; })[0] || [0, ''])[1] + '</small></span><span class="pp-c mono">' + n + '</span></button>'; }).join('') : '<div class="muted" style="padding:12px 14px;font-size:13px">No pair called “' + esc(q) + '”</div>') + '</div>' : '';
     var sel = S.pair !== 'All' ? '<button class="pr-sel" data-act="ppick" data-arg="' + esc(S.pair) + '">' + coinHTML(S.pair, 18) + '<b>' + esc(pairLabel(S.pair)) + '</b><span>×</span></button>' : '';
-    return '<div class="pairrow"><span class="pr-l">Paired<br>with</span>' + (DEMO ? '<div class="pr-cats">' + cats + '</div>' : '<div class="pr-cats"><button class="prc' + (S.pair === 'All' ? ' on' : '') + '" data-act="pclear"><span>All</span><small>' + a.length + '</small></button></div>') +
+    if (!DEMO) { var lc = {}; a.forEach(function (x) { var L = pairLabel(x.pair); lc[L] = (lc[L] || 0) + 1; });
+      var ltabs = [['all', 'All', '#E8E8EA']].concat(RW_TABS.map(function (x) { return [x[0], x[1], { memes: '#FF6B8B', crypto: '#A3B1C2', stocks: '#3DDC97', fx: '#7DB8FF' }[x[0]]]; }));
+      cats = ltabs.map(function (c) { var n = c[0] === 'all' ? a.length : a.filter(function (x) { return liveCat(x) === c[0]; }).length; return '<button class="prc' + (S.cat === c[0] ? ' on' : '') + '" style="--cc:' + c[2] + '" data-act="pcat" data-arg="' + c[0] + '"><span>' + c[1] + '</span><small>' + n + '</small></button>'; }).join('');
+      var pres = (S.cat === 'all' ? ['crypto', 'fx', 'memes', 'stocks'] : [S.cat]).reduce(function (acc, k) { return acc.concat(RW_PRE[k] || []); }, []);
+      var seen = {}; pres = pres.filter(function (p) { if (seen[p[0]]) return false; seen[p[0]] = 1; return true; }).sort(function (x, y) { return (lc[y[0]] || 0) - (lc[x[0]] || 0); });
+      rail = pres.map(function (p) { var n = lc[p[0]] || 0, on = S.pair === p[0]; return '<button class="prp' + (on ? ' on' : '') + (n ? '' : ' zero') + '" data-act="ppickL" data-arg="' + esc(p[0]) + '" title="Coins paired with ' + esc(p[0]) + '">' + preIcon(p, 22) + '<b>' + esc(p[0]) + '</b><small>' + n + '</small></button>'; }).join('');
+      sel = ''; }
+    return '<div class="pairrow"><span class="pr-l">Paired<br>with</span><div class="pr-cats">' + cats + '</div>' +
       '<div class="pr-rail drag-scroll">' + rail + '</div>' + sel +
       '<div class="pr-search">' + I.search + '<input id="pairq" data-bind="pairQ" value="' + esc(S.pairQ) + '" placeholder="' + (DEMO ? 'Find pair: Gold, ONDO, $PAWS…' : 'Find pair: SOL, USDC…') + '" autocomplete="off">' + drop + '</div></div>';
   }
@@ -1709,7 +1717,8 @@
     var filters = filterBar();
 
     var grid = (!S.loading && S.view === 'list') ? listHTML(shown, true) + more : (!S.loading && S.view === 'orbit') ? (function () { var a = list; return '<div class="orb-inline">' + orbitStage(a, a.filter(function (t) { return t.prog < 100; }), a.filter(function (t) { return t.prog >= 100; })) + '</div>'; })() : (!S.loading && S.view === 'bubbles') ? bubblesHTML(list) : '<section class="grid" id="grid">' + (S.loading ? [0, 1, 2, 3, 4, 5].map(skeletonCard).join('') : list.length ? shown.map(function (t) { return card(t); }).join('') :
-      '<div class="empty"><b style="font-size:19px">No tokens match these filters</b><span class="muted">Loosen the tax or market cap filters.</span><button class="btn pri" data-act="reset">Reset filters</button></div>') + '</section>' + (S.loading ? '' : more);
+      (!DEMO && S.pair !== 'All' && !all().some(function (x) { return pairLabel(x.pair) === S.pair || x.pair === S.pair; }) ? '<div class="empty"><b style="font-size:19px">No coins paired with ' + esc(S.pair) + ' yet</b><span class="muted">Be the first — launch a coin that trades against ' + esc(S.pair) + '.</span><span style="display:flex;gap:8px;justify-content:center"><button class="btn pri" data-act="launchPair" data-arg="' + esc(S.pair) + '">Launch paired with ' + esc(S.pair) + '</button><button class="btn sec" data-act="pclear">Show all</button></span></div>' :
+      '<div class="empty"><b style="font-size:19px">No tokens match these filters</b><span class="muted">Loosen the tax or market cap filters.</span><button class="btn pri" data-act="reset">Reset filters</button></div>')) + '</section>' + (S.loading ? '' : more);
 
     var how = '<section id="how" style="margin-top:56px"><h2 class="h2" style="margin-bottom:16px">How treid works</h2><div class="row">' +
       [['01', 'Pick a name & logo', 'Use the built-in mascot builder or upload your own image. Takes under a minute.'],
@@ -1734,7 +1743,7 @@
     if (!TS.el) { TS.el = document.createElement('div'); TS.el.className = 'ts-track'; TS.el.addEventListener('mouseenter', function () { TS.hover = true; }); TS.el.addEventListener('mouseleave', function () { TS.hover = false; }); requestAnimationFrame(tsTick); }
     var L = tsList(), key = L.map(function (t) { return t.tick; }).join(',');
     if (key !== TS.key || Date.now() - TS.at > 45e3) { var h = L.map(tsCard).join(''); TS.few = L.length < 6; TS.el.innerHTML = TS.few ? h : h + h; TS.key = key; TS.at = Date.now(); if (TS.few) { TS.x = 0; TS.el.style.transform = ''; } }
-    var sec = slot.closest('.ts'); if (sec) sec.style.display = L.length ? '' : 'none';
+    var sec = slot.closest('.ts'); if (sec) sec.style.display = L.length ? '' : 'none'; var hint = sec && sec.querySelector('.ts-h .muted'); if (hint) hint.style.display = TS.few ? 'none' : '';
     if (TS.el.parentNode !== slot) slot.appendChild(TS.el);
   }
   function tsTick(now) { if (TS.el && TS.el.isConnected) { var dt = Math.min(64, now - (TS.last || now)); if (!TS.hover && !document.hidden && !TS.few) { TS.x -= dt * .045; var half = TS.el.scrollWidth / 2; if (half > 0 && -TS.x >= half) TS.x += half; TS.el.style.transform = 'translate3d(' + TS.x.toFixed(1) + 'px,0,0)'; } } TS.last = now; requestAnimationFrame(tsTick); }
@@ -1746,6 +1755,7 @@
   S.ctype = 'candle'; S.cma = true; S.cvol = true; S.cmarks = true; S.ccall = true; try { var cpf = JSON.parse(localStorage.getItem('dl.cmarks') || 'null'); if (cpf) { S.cmarks = cpf[0]; S.ccall = cpf[1]; S.cma = cpf[2] !== false; S.cvol = cpf[3] !== false; } } catch (e) {} S.czoom = 70; S.cpan = 0; S.cys = 1; S.cyo = 0; S.cfull = false;
   function ensureTicks(t) {
     if (t.tk) return t.tk;
+    if (t.live) { var h0 = t.hist && t.hist.length ? t.hist : [t.mcN]; return [[t.born, h0[0], 0], [Date.now(), t.mcN, 0]]; }   // real coins: no made-up history; the real trades arrive when the coin is opened (liveLoad)
     var now = Date.now(), start = Math.max(t.born, now - 7 * 864e5), span = Math.max(60000, now - start), n = Math.min(2200, Math.max(30, Math.floor(span / 9000)));
     if (t.archived && t.span) { start = t.born; span = t.span; n = Math.min(1500, Math.max(60, Math.floor(span / 6000))); }
     var h = t.hist && t.hist.length ? t.hist : [t.mcN], r = rng(hash(t.tick + 'tk')), out = [];
@@ -3604,6 +3614,8 @@
       case 'ptab': S.pairTab = arg; render(); break;
       case 'ppick': set({ pair: S.pair === arg ? 'All' : arg, cat: S.pair === arg ? 'all' : pairInfo(arg).cat, fpop: null }); break;
       case 'pcat': set({ cat: arg, pair: 'All', fpop: null }); break;
+      case 'ppickL': set({ pair: S.pair === arg ? 'All' : arg, fpop: null }); break;
+      case 'launchPair': set({ screen: 'create', palOpen: false }); window.scrollTo(0, 0); setTimeout(function () { if (arg === 'SOL') return; try { qPreset(arg); } catch (er) {} }, 50); break;
       case 'ppick2': S.pairQ = ''; set({ pair: arg, cat: pairInfo(arg).cat, fpop: null }); break;
       case 'pclear': set({ cat: 'all', pair: 'All', fpop: null, pairTab: 'all', pairQ: '' }); break;
       case 'rpre': var rq = arg.split('|'); S.r[rq[0]] = [+rq[1], +rq[2]]; render(); break;
