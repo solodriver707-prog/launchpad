@@ -1924,7 +1924,7 @@
   }
   var tcEl = null, tcFor = null;
   document.addEventListener('mouseover', function (e) {
-    var m = e.target.closest && e.target.closest('.mk-cell .maker');
+    var m = null;   // replaced by the wallet preview card (.wpv)
     if (!m) { if (tcEl && !(e.target.closest && e.target.closest('.trader-card'))) { tcEl.remove(); tcEl = null; tcFor = null; } return; }
     if (S.screen !== 'token' || window.matchMedia('(max-width: 760px)').matches) return;
     var addr = m.getAttribute('data-arg'), t = find(S.tick); if (!t || tcFor === m) return;
@@ -2321,30 +2321,74 @@
       '<small class="muted bm-note">Wallets are linked when one funded another, both got their first SOL from the same wallet, or they bought in the same block at launch. Exchanges and busy wallets are ignored.</small></div>';
     return '<div class="hm-ov" data-act="hmapClose"><div class="bm card-s' + (S.bubList ? '' : ' nolist') + '" data-stop>' + head + '<div class="bm-body">' + canvas + side + '</div></div></div>';
   }
+  // ===== WALLET PROFILE: hover preview on any wallet + full profile (positions, closed, created, this coin) =====
+  S.wprof = {}; S.wTab = 'open';
+  function wprof(addr) {
+    if (!DEMO && API) { var e = S.wprof[addr]; if (!e || (Date.now() - e.at > 30e3 && !e.busy)) { e = S.wprof[addr] = e || { at: 0, d: null }; e.busy = true; apiGet('/api/wallet/' + addr).then(function (d) { e.d = d; e.at = Date.now(); e.busy = false; if (S.walletView === addr) render(); if (pvFor === addr) pvFill(); }).catch(function () { e.busy = false; e.at = Date.now(); }); }
+      var d = e.d; if (!d) return { loading: true, coins: [], created: [] };
+      return { sol: d.sol, first: d.first, coins: (d.coins || []).map(function (c) { var t = S.live.filter(function (x) { return x.ca === c.mint; })[0]; return t ? { t: t, held: +c.held || 0, value: +c.value || 0, spent: +c.spent || 0, got: +c.got || 0, profit: +c.profit || 0, profitPct: +c.profitPct || 0, avgEntryMc: +c.avgEntryMc || 0, trades: +c.trades || 0, last: +c.last || 0 } : null; }).filter(Boolean),
+        created: (d.created || []).map(function (c) { return S.live.filter(function (x) { return x.ca === c.mint; })[0]; }).filter(Boolean) }; }
+    var ticks = {}; S.trades.forEach(function (x) { if (x.wallet === addr) ticks[x.tick] = 1; }); all().forEach(function (t) { if (devOf(t) === addr) ticks[t.tick] = 1; });
+    var coins = Object.keys(ticks).map(function (k) { var t = find(k); if (!t) return null; var st = walletStats(addr, t); if (!st.trades.length) return null; var spent = st.b * SOL_USD, got = st.s * SOL_USD, value = st.val * SOL_USD, pr = value + got - spent;
+      return { t: t, held: st.hold, value: value, spent: spent, got: got, profit: pr, profitPct: spent ? pr / spent * 100 : 0, avgEntryMc: st.avgMc * 1000, trades: st.trades.length, last: st.last || 0 }; }).filter(Boolean).sort(function (a, z) { return z.last - a.last; });
+    return { sol: 0.5 + (hash(addr) % 900) / 10, first: coins.reduce(function (m, c) { return Math.min(m, c.t.born); }, Date.now()), coins: coins, created: all().filter(function (t) { return devOf(t) === addr; }), demo: true };
+  }
+  function wsum(P) { var o = { value: 0, spent: 0, got: 0, profit: 0, unreal: 0, open: 0 }; P.coins.forEach(function (c) { o.value += c.value; o.spent += c.spent; o.got += c.got; o.profit += c.profit; if (c.held > 1) { o.open++; o.unreal += c.value - (c.spent - c.got > 0 ? Math.min(c.spent, c.spent - c.got) : 0); } }); o.realized = o.profit - o.unreal; o.port = o.value + (P.sol || 0) * SOL_USD; return o; }
+  function usdP(v) { return (v >= 0 ? '+' : '−') + '$' + money(v); }
+  // hover preview
+  var pvEl = null, pvFor = null, pvT = null;
+  function pvHTML(addr) {
+    var P = wprof(addr), sm = wsum(P), t = find(S.tick), dev = t && devOf(t) === addr, me = S.account && addr === S.account, hp = 0;
+    if (t) { var hh = holdersOf(t).filter(function (h) { return h.a === addr; })[0]; if (hh) hp = hh.pct; }
+    var cur = t && P.coins.filter(function (c) { return c.t.tick === t.tick; })[0];
+    var row = function (k, v, cl) { return '<div class="pv-r"><span>' + k + '</span><b class="mono ' + (cl || '') + '">' + v + '</b></div>'; };
+    return '<div class="pv-h"><span class="av" style="width:40px;height:40px">' + A.svg(walletSpec(addr)) + '</span><span class="pv-n"><b>' + esc(me ? 'You' : walletName(addr)) + '</b><small class="mono">' + short(addr) + '</small></span>' + (dev ? '<span class="bdg dev">DEV</span>' : '') + '</div>' +
+      (dev ? '<div class="pv-note">Creator of $' + esc(t.tick) + ' · holds ' + hp.toFixed(hp < 1 ? 2 : 1) + '% of supply</div>' : hp > 0 ? '<div class="pv-note">Holds ' + hp.toFixed(hp < 1 ? 2 : 1) + '% of $' + esc(t.tick) + '</div>' : '') +
+      (P.loading ? '<div class="pv-load"><span class="gr-sp"></span>Loading wallet…</div>' :
+        row('SOL balance', P.sol != null ? P.sol.toFixed(4) : '—') + row('Portfolio', '$' + money(sm.port)) + row('Holding', sm.open + (sm.open === 1 ? ' token' : ' tokens')) + row('PnL', usdP(sm.profit), sm.profit >= 0 ? 'up' : 'down') +
+        (cur ? '<div class="pv-cur">' + avatarHTML(cur.t, 18) + '<span>On $' + esc(cur.t.tick) + '</span><b class="mono ' + (cur.profit >= 0 ? 'up' : 'down') + '">' + usdP(cur.profit) + ' <i>' + (cur.profitPct >= 0 ? '+' : '') + cur.profitPct.toFixed(1) + '%</i></b></div>' : '')) +
+      '<div class="pv-f"><button class="btn sec" data-act="wallet" data-arg="' + esc(addr) + '">View profile</button><button class="iconbtn" data-act="copyW" data-arg="' + esc(addr) + '" title="Copy address">' + I.copy + '</button></div>';
+  }
+  function pvFill() { if (pvEl && pvFor) pvEl.innerHTML = pvHTML(pvFor); }
+  function pvClose() { clearTimeout(pvT); if (pvEl) { pvEl.remove(); pvEl = null; pvFor = null; } }
+  document.addEventListener('mouseover', function (e) {
+    if (window.matchMedia('(max-width: 760px)').matches) return;
+    var m = e.target.closest && e.target.closest('.maker'), inCard = e.target.closest && e.target.closest('.wpv');
+    if (inCard) { clearTimeout(pvT); return; }
+    if (!m) { if (pvEl) { clearTimeout(pvT); pvT = setTimeout(pvClose, 220); } return; }
+    var addr = m.getAttribute('data-arg'); if (!addr || pvFor === addr) { clearTimeout(pvT); return; }
+    clearTimeout(pvT); pvT = setTimeout(function () { pvClose(); pvFor = addr; pvEl = document.createElement('div'); pvEl.className = 'wpv'; pvEl.innerHTML = pvHTML(addr); document.body.appendChild(pvEl);
+      var r = m.getBoundingClientRect(), cw = pvEl.offsetWidth, ch = pvEl.offsetHeight, x = Math.max(8, Math.min(window.innerWidth - cw - 8, r.left)), y = r.bottom + 8 + ch > window.innerHeight ? Math.max(8, r.top - ch - 8) : r.bottom + 8;
+      pvEl.style.left = x + 'px'; pvEl.style.top = y + 'px'; }, 260);
+  });
+  document.addEventListener('scroll', function () { pvClose(); }, true);
+  document.addEventListener('click', function (e) { if (e.target.closest && e.target.closest('.wpv [data-act]')) setTimeout(pvClose, 0); }, true);
   function walletDrawer() {
     if (!S.walletView) return '';
-    var addr = S.walletView, t = find(S.tick) || featured(), st = walletStats(addr, t), other = walletOther(addr), dev = addr === devOf(t), tracked = S.trackWallets.indexOf(addr) !== -1;
-    var pnlCls = st.pnl >= 0 ? 'up' : 'down', sign = function (v) { return (v >= 0 ? '+' : '') + v.toFixed(3); };
-    return '<div class="overlay drawer-ov" data-act="bg"><aside class="drawer" role="dialog" aria-modal="true" aria-label="Wallet details">' +
-      '<div class="dw-head"><span class="av" style="width:56px;height:56px">' + A.svg(walletSpec(addr)) + '</span><div style="flex:1;min-width:0"><b style="font-size:18px">' + esc(walletName(addr)) + '</b>' + (dev ? ' <span class="bdg dev">DEV</span>' : '') +
-        '<button class="copy" style="display:flex;margin-top:4px" data-act="copyW" data-arg="' + esc(addr) + '">' + esc(addr.slice(0, 6) + '…' + addr.slice(-6)) + ' ' + I.copy + '</button></div><button class="iconbtn" data-act="closeW" aria-label="Close">✕</button></div>' +
-      '<div class="dw-actions"><button class="btn ' + (tracked ? 'sec' : 'pri') + '" data-act="trackW" data-arg="' + esc(addr) + '">' + (tracked ? 'Tracking ✓' : 'Track wallet') + '</button><button class="btn sec" data-act="maker" data-arg="' + esc(addr) + '">Show its trades</button></div>' +
-      devHistoryHTML(addr) + '<div class="dw-sec"><div class="dw-title">' + avatarHTML(t, 22) + 'on $' + esc(t.tick) + '</div>' +
-        '<div class="dw-pnl"><span class="muted">Total PnL</span><b class="mono ' + pnlCls + '">' + sign(st.pnl) + ' SOL</b><span class="chgpill ' + pnlCls + '">' + (st.roi >= 0 ? '+' : '') + st.roi.toFixed(1) + '%</span></div>' +
-        '<div class="dw-grid">' +
-          [['Bought', '<span class="up">' + st.b.toFixed(3) + ' SOL</span>', st.nb + ' buys'], ['Sold', '<span class="down">' + st.s.toFixed(3) + ' SOL</span>', st.ns + ' sells'],
-           ['Holding', fmtNum(st.hold) + ' $' + esc(t.tick), st.holdPct.toFixed(3) + '% of supply'], ['Value now', st.val.toFixed(3) + ' SOL', '$' + (st.val * SOL_USD).toFixed(2)],
-           ['Avg entry', st.avgMc ? fmtK(st.avgMc) + ' MC' : '—', st.avg ? fmtPrice(st.avg) : ''], ['Realized / unreal.', '<span class="' + (st.realized >= 0 ? 'up' : 'down') + '">' + sign(st.realized) + '</span> / <span class="' + (st.unreal >= 0 ? 'up' : 'down') + '">' + sign(st.unreal) + '</span>', 'SOL'],
-           ['First trade', st.first ? ago(st.first) + ' ago' : '—', ''], ['Last trade', st.last ? ago(st.last) + ' ago' : '—', '']].map(function (r) { return '<div><span class="muted">' + r[0] + '</span><b class="mono">' + r[1] + '</b>' + (r[2] ? '<small class="muted mono">' + r[2] + '</small>' : '') + '</div>'; }).join('') + '</div>' +
-        '<div class="dw-sub">Where it bought &amp; sold</div>' + walletChart(addr, t, st) +
-        '<div class="dw-sub">Its trades on $' + esc(t.tick) + '</div><div class="dw-trades">' + (st.trades.length ? st.trades.slice().reverse().map(function (x) {
-          return '<div class="dwt ' + (x.side === 'buy' ? 'b' : 's') + '"><span class="ty">' + (x.side === 'buy' ? 'Buy' : 'Sell') + '</span><span class="mono">' + x.sol.toFixed(3) + ' SOL</span><span class="mono muted">@ ' + fmtK((x.price || price(t)) * 1e9 / 1000) + '</span><span class="mono muted">' + ago(x.t) + '</span><button class="txb" data-act="tx" data-arg="' + esc(x.sig || '') + '" aria-label="Copy transaction">' + I.copy + '</button></div>';
-        }).join('') : '<div class="muted" style="padding:10px 0">No trades on this coin yet.</div>') + '</div></div>' +
-      '<div class="dw-sec"><div class="dw-title">Other coins it trades</div>' + (other.length ? other.map(function (o) {
-          var tk = find(o.tick); if (!tk) return ''; var net = o.s - o.b;
-          return '<button class="dwo" data-act="open" data-arg="' + esc(o.tick) + '">' + avatarHTML(tk, 28) + '<span style="flex:1;text-align:left"><b>$' + esc(o.tick) + '</b><small class="muted mono" style="display:block">' + o.n + ' trades · ' + (o.b + o.s).toFixed(2) + ' SOL volume</small></span><span class="mono ' + (net >= 0 ? 'up' : 'down') + '">' + (net >= 0 ? '+' : '') + net.toFixed(2) + '</span></button>';
-        }).join('') : '<div class="muted">Nothing else yet.</div>') + '</div>' +
-      (DEMO ? '<span class="note">Simulated wallet data in this beta.</span>' : '') + '</aside></div>';
+    var addr = S.walletView, t = find(S.tick) || featured(), P = wprof(addr), sm = wsum(P), me = S.account && addr === S.account, tracked = S.trackWallets.indexOf(addr) !== -1, spec = walletSpec(addr);
+    var tabs = [['open', 'Open', P.coins.filter(function (c) { return c.held > 1; }).length], ['closed', 'Closed', P.coins.filter(function (c) { return c.held <= 1; }).length], ['created', 'Created', P.created.length], ['coin', '$' + t.tick, null]];
+    if (!tabs.some(function (x) { return x[0] === S.wTab; })) S.wTab = 'open';
+    var head = '<div class="wp-ban" style="--wb:' + (spec.bg || '#1d3b2c') + '"><span class="wp-ban-av">' + A.svg(spec) + '</span></div><div class="wp-top"><span class="av wp-av" style="width:96px;height:96px">' + A.svg(spec) + '</span>' +
+      '<div class="wp-id"><b>' + esc(me ? 'You' : walletName(addr)) + '</b>' + (P.created.length ? '<span class="bdg dev">DEV · ' + P.created.length + '</span>' : '') + '<button class="copy wp-addr mono" data-act="copyW" data-arg="' + esc(addr) + '">' + esc(addr.slice(0, 6) + '…' + addr.slice(-6)) + ' ' + I.copy + '</button>' +
+        '<small class="muted">' + (P.first && P.coins.length ? 'First trade on treid ' + ago(P.first) + ' ago' : P.loading ? 'Loading…' : 'No trades on treid yet') + '</small></div>' +
+      '<div class="wp-btns"><button class="btn ' + (tracked ? 'sec' : 'pri') + '" data-act="trackW" data-arg="' + esc(addr) + '">' + (tracked ? 'Tracking ✓' : 'Track') + '</button><button class="btn sec" data-act="maker" data-arg="' + esc(addr) + '">Its trades on $' + esc(t.tick) + '</button><a class="btn sec" href="https://solscan.io/account/' + esc(addr) + '" target="_blank" rel="noopener">Solscan ↗</a></div></div>';
+    var stat = function (k, v, cl, sub) { return '<div class="wp-s"><small>' + k + '</small><b class="mono ' + (cl || '') + '">' + v + '</b>' + (sub ? '<span class="muted mono">' + sub + '</span>' : '') + '</div>'; };
+    var stats = '<div class="wp-stats">' + stat('Portfolio value', '$' + money(sm.port), '', P.sol != null ? P.sol.toFixed(3) + ' SOL + tokens' : '') + stat('SOL balance', P.sol != null ? P.sol.toFixed(4) : '—', '', P.sol != null ? '≈ $' + money(P.sol * SOL_USD) : '') +
+      stat('Total PnL', usdP(sm.profit), sm.profit >= 0 ? 'up' : 'down', sm.spent ? (sm.profit >= 0 ? '+' : '') + (sm.profit / sm.spent * 100).toFixed(1) + '%' : '') + stat('Realized', usdP(sm.realized), sm.realized >= 0 ? 'up' : 'down') + stat('Unrealized', usdP(sm.unreal), sm.unreal >= 0 ? 'up' : 'down') + stat('Buy volume', '$' + money(sm.spent), '', P.coins.length + ' coins') + '</div>';
+    var tabH = '<div class="wp-tabs">' + tabs.map(function (x) { return '<button class="' + (S.wTab === x[0] ? 'on' : '') + '" data-act="wTab" data-arg="' + x[0] + '">' + esc(x[1]) + (x[2] != null ? ' <em>' + x[2] + '</em>' : '') + '</button>'; }).join('') + '</div>';
+    var body = '';
+    if (S.wTab === 'open' || S.wTab === 'closed') { var L = P.coins.filter(function (c) { return S.wTab === 'open' ? c.held > 1 : c.held <= 1; }).sort(function (a, z) { return S.wTab === 'open' ? z.value - a.value : z.profit - a.profit; });
+      body = '<div class="wp-t"><div class="wp-tr wp-th"><span>Coin</span><span class="r">MCap</span><span class="r">' + (S.wTab === 'open' ? 'Value' : 'Got back') + '</span><span class="r">PnL</span></div>' + (L.length ? L.map(function (c) {
+        return '<button class="wp-tr" data-act="open" data-arg="' + esc(c.t.tick) + '"><span class="wp-c">' + avatarHTML(c.t, 36) + '<span><b>' + esc(c.t.name) + '</b><small class="muted mono">' + (c.held > 1 ? fmtNum(c.held) + ' $' + esc(c.t.tick) : '$' + esc(c.t.tick)) + '</small></span></span>' +
+          '<span class="r"><b class="mono">' + fmtK(c.t.mcN) + '</b><small class="muted">' + (c.avgEntryMc ? 'Avg entry ' + fmtK(c.avgEntryMc / 1000) : '') + '</small></span>' +
+          '<span class="r"><b class="mono">$' + money(S.wTab === 'open' ? c.value : c.got) + '</b><small class="muted">Spent $' + money(c.spent) + '</small></span>' +
+          '<span class="r"><b class="mono ' + (c.profit >= 0 ? 'up' : 'down') + '">' + usdP(c.profit) + '</b><small class="mono ' + (c.profit >= 0 ? 'up' : 'down') + '">' + (c.profitPct >= 0 ? '+' : '') + c.profitPct.toFixed(1) + '%</small></span></button>'; }).join('') : '<div class="muted wp-empty">' + (P.loading ? 'Loading…' : S.wTab === 'open' ? 'No open positions on treid.' : 'No closed positions yet.') + '</div>') + '</div>'; }
+    else if (S.wTab === 'created') { body = devHistoryHTML(addr) + '<div class="wp-t">' + (P.created.length ? P.created.map(function (c) { return '<button class="wp-tr wp-cr" data-act="open" data-arg="' + esc(c.tick) + '"><span class="wp-c">' + avatarHTML(c, 36) + '<span><b>' + esc(c.name) + '</b><small class="muted mono">$' + esc(c.tick) + ' · ' + ago(c.born) + ' ago</small></span></span><span class="r"><b class="mono">' + fmtK(c.mcN) + '</b><small class="muted">' + (c.prog >= 100 ? '🎓 graduated' : c.prog.toFixed(0) + '% curve') + '</small></span><span class="r"><b class="mono">' + fmtK(athOf(c)) + '</b><small class="muted">ATH</small></span></button>'; }).join('') : '<div class="muted wp-empty">Hasn’t launched a coin on treid.</div>') + '</div>'; }
+    else { var st = walletStats(addr, t), pc = st.pnl >= 0 ? 'up' : 'down', sg = function (v) { return (v >= 0 ? '+' : '') + v.toFixed(3); };
+      body = '<div class="dw-pnl"><span class="muted">PnL on $' + esc(t.tick) + '</span><b class="mono ' + pc + '">' + sg(st.pnl) + ' SOL</b><span class="chgpill ' + pc + '">' + (st.roi >= 0 ? '+' : '') + st.roi.toFixed(1) + '%</span></div><div class="dw-grid">' +
+        [['Bought', '<span class="up">' + st.b.toFixed(3) + ' SOL</span>', st.nb + ' buys'], ['Sold', '<span class="down">' + st.s.toFixed(3) + ' SOL</span>', st.ns + ' sells'], ['Holding', fmtNum(st.hold) + ' $' + esc(t.tick), st.holdPct.toFixed(3) + '% of supply'], ['Value now', st.val.toFixed(3) + ' SOL', '$' + (st.val * SOL_USD).toFixed(2)], ['Avg entry', st.avgMc ? fmtK(st.avgMc) + ' MC' : '—', ''], ['First / last trade', st.first ? ago(st.first) + ' / ' + ago(st.last) : '—', '']].map(function (r) { return '<div><span class="muted">' + r[0] + '</span><b class="mono">' + r[1] + '</b>' + (r[2] ? '<small class="muted mono">' + r[2] + '</small>' : '') + '</div>'; }).join('') + '</div>' +
+        '<div class="dw-sub">Where it bought &amp; sold</div>' + walletChart(addr, t, st) + '<div class="dw-sub">Trades</div><div class="dw-trades">' + (st.trades.length ? st.trades.slice().reverse().map(function (x) { return '<div class="dwt ' + (x.side === 'buy' ? 'b' : 's') + '"><span class="ty">' + (x.side === 'buy' ? 'Buy' : 'Sell') + '</span><span class="mono">' + x.sol.toFixed(3) + ' SOL</span><span class="mono muted">@ ' + fmtK((x.price || price(t)) * 1e9 / 1000) + '</span><span class="mono muted">' + ago(x.t) + '</span><button class="txb" data-act="tx" data-arg="' + esc(x.sig || '') + '" aria-label="Copy transaction">' + I.copy + '</button></div>'; }).join('') : '<div class="muted" style="padding:10px 0">No trades on this coin yet.</div>') + '</div>'; }
+    return '<div class="overlay wp-ov" data-act="bg"><div class="wp" role="dialog" aria-modal="true" aria-label="Wallet profile"><button class="iconbtn wp-x" data-act="closeW" aria-label="Close">✕</button>' + head + stats + tabH + '<div class="wp-body">' + body + '</div>' + (P.demo && DEMO ? '<span class="note">Simulated wallet data in this demo.</span>' : '') + '</div></div>';
   }
 
   S.lbTab = 'traders';
@@ -3560,6 +3604,7 @@
       case 'walletAnyX': S.tick = (S.trades.filter(function (x) { return x.wallet === arg; })[0] || {}).tick || S.tick; set({ walletView: arg }); break;
       case 'wallet': set({ walletView: arg }); break;
       case 'closeW': set({ walletView: null }); break;
+      case 'wTab': set({ wTab: arg }); break;
       case 'copyW': copy(arg, 'Wallet address copied'); break;
       case 'trackW': var ti = S.trackWallets.indexOf(arg); if (ti === -1) S.trackWallets.push(arg); else S.trackWallets.splice(ti, 1); try { localStorage.setItem('gp.track', JSON.stringify(S.trackWallets)); } catch (er) {} render(); toast(ti === -1 ? 'Tracking ' + walletName(arg) : 'Stopped tracking'); break;
       case 'tpf': set({ tpFilter: arg, tpQueue: 0 }); break;

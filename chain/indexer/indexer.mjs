@@ -136,7 +136,7 @@ async function syncAddress(addr, limit = 1000) {   // fetch history (oldest firs
   for (const x of all.reverse()) await handle(x.signature).catch(e => console.log('err', e.message));
 }
 const clients = new Set(); const push = (ev) => { const s = `data: ${JSON.stringify(ev)}\n\n`; for (const c of clients) { if (c.writableLength > 256e3) { clients.delete(c); try { c.destroy(); } catch {} continue; } c.write(s); } };   // slow readers are dropped, never buffered forever
-let CO = null, BUB = null, bubC = new Map(), coinsSnap = null, burnsSnap = null; const opsSolC = { v: null };   // callouts (started below, once the helpers exist)
+let CO = null, BUB = null, bubC = new Map(), walC = new Map(), coinsSnap = null, burnsSnap = null; const opsSolC = { v: null };   // callouts (started below, once the helpers exist)
 
 // pair tokens: SOL, USDC, USDT always; anything else only if Jupiter lists it as verified with real liquidity (no self-priced fakes)
 const qOk = new Map(), badgeC = new Map();
@@ -412,6 +412,12 @@ async function handleReq(req, res) {
     if (p[1] === 'callout' && req.method === 'POST') { let body = ''; req.on('data', (d) => { body += d; if (body.length > 2.3e6) req.destroy(); });   // text + optional image
       req.on('end', async () => { try { J(await CO.post(JSON.parse(body), ip(req))); } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: e.message })); } }); return; }
     if (p[1] === 'callouts') { const memo = new Map(); return J(CO.list(u.searchParams.get('mint') || null).map((c) => { const k = c.mint + '|' + c.wallet; if (!memo.has(k)) memo.set(k, posStats(c.mint, c.wallet)); return { ...c, ps: memo.get(k) }; })); }   // every callout carries its author's live position
+    if (p[1] === 'wallet' && p[2]) { const w = String(p[2]); if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(w)) return J(null); const c0 = walC.get(w); if (c0 && Date.now() - c0.ts < 30e3) return J(c0.v); if (!rate('wal|' + ip(req), 40, 60e3)) return J(c0 ? c0.v : null);
+      let sol = null; try { sol = (await conn.getBalance(new PublicKey(w))) / 1e9; } catch {}
+      const rows = q('SELECT mint, COUNT(*) n, MIN(ts) f, MAX(ts) l, SUM(CASE WHEN side=\'buy\' THEN usd ELSE 0 END) bu FROM trades WHERE wallet=? GROUP BY mint ORDER BY l DESC LIMIT 60', w).filter((r) => !HIDDEN.has(r.mint));
+      const coins = rows.map((r) => { const c = q1('SELECT symbol, name FROM coins WHERE mint=?', r.mint) || {}; const ps = posStats(r.mint, w); return { mint: r.mint, symbol: c.symbol || '', name: c.name || '', first: r.f, last: r.l, ...ps }; });
+      const created = q('SELECT mint, symbol, name, created_at FROM coins WHERE creator=? ORDER BY created_at DESC LIMIT 50', w).filter((r) => !HIDDEN.has(r.mint));
+      const v = { wallet: w, sol, first: rows.length ? Math.min(...rows.map((r) => r.f)) : null, coins, created }; walC.set(w, { ts: Date.now(), v }); if (walC.size > 3000) walC.delete(walC.keys().next().value); return J(v); }
     if (p[1] === 'pos') { const m = String(u.searchParams.get('mint') || ''), w = String(u.searchParams.get('wallet') || ''); if (!q1('SELECT 1 FROM coins WHERE mint=?', m) || !/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(w)) return J(null); return J(posStats(m, w)); }
     if (p[1] === 'mytrades') { const m = String(u.searchParams.get('mint') || ''), w = String(u.searchParams.get('wallet') || ''); return J(q('SELECT sig, side, sol, tokens, usd, mcap_usd, ts FROM trades WHERE mint=? AND wallet=? ORDER BY ts DESC LIMIT 100', m, w)); }
     if (p[1] === 'burned' && req.method === 'POST' && !rate('burn|' + ip(req), 30, 36e5)) { res.writeHead(429, { 'access-control-allow-origin': '*' }); return res.end('{"ok":false,"error":"too many requests"}'); }
