@@ -2259,38 +2259,60 @@
       '<div class="bt-sum"><div><small>Share of supply</small><b class="mono" id="bt-sup">' + sup.toFixed(3) + '%</b></div><div><small>Value</small><b class="mono" id="bt-usd">$' + fmtNum(Math.round(usd)) + '</b></div><div><small>Supply after</small><b class="mono" id="bt-after">' + fmtNum(Math.round(1e9 - tok - ((S._bnAgg || {})[t.tick] ? S._bnAgg[t.tick].tok : 0))) + '</b></div></div>' +
       '<div class="bt-warn">⚠ Burning is permanent. Tokens are destroyed on-chain and can never be recovered.</div><button class="btn pri bt-go" data-act="burnGo">🔥 Burn ' + pct + '% of my $' + esc(t.tick) + '</button>');
   }
-  // ===== HOLDER MAP: bubble map of top wallets =====
+  // ===== BUBBLE MAP: top holders, clustered by who funded them (server) + bundles; force layout, zoom & pan =====
+  var BUB_COL = ['#3DDC97', '#7FB6FF', '#FFB15C', '#B794FF', '#FF6B8B', '#5AC8E8', '#E8C26A', '#9BE15D', '#F28DD0', '#6EE7D8'];
+  S.bub = null; S.bubSel = null; S.bubList = true; S.bubLinks = true; S.bubV = { x: 0, y: 0, k: 1 };
+  function bubDemo(t) {   // demo coins: derive clusters from the simulated bundle / sniper tags
+    var hs = holdersOf(t).filter(function (h) { return h.kind !== 'curve'; }).slice(0, 100), r = rng(hash(t.tick + 'bub')), links = [], cl = {}, cid = 0;
+    var bu = hs.filter(function (h) { return h.tags.indexOf('bundle') >= 0; }); if (bu.length > 1) { cid++; bu.forEach(function (h, i) { cl[h.a] = cid; if (i) links.push({ a: bu[0].a, b: h.a, k: 'bundle' }); }); }
+    for (var g = 0; g < 3; g++) { var pick2 = hs.filter(function (h) { return !cl[h.a] && r() < .08; }).slice(0, 2 + Math.floor(r() * 3)); if (pick2.length > 1) { cid++; pick2.forEach(function (h, i) { cl[h.a] = cid; if (i) links.push({ a: pick2[0].a, b: h.a, k: i === 1 ? 'fund' : 'shared' }); }); } }
+    var cls = []; for (var c = 1; c <= cid; c++) { var m = hs.filter(function (h) { return cl[h.a] === c; }); cls.push({ id: c, n: m.length, pct: m.reduce(function (a, h) { return a + h.pct; }, 0) }); }
+    return { done: true, demo: true, holders: hs.map(function (h) { return { w: h.a, pct: h.pct, dev: h.tags.indexOf('dev') >= 0, sn: h.tags.indexOf('sniper') >= 0, c: cl[h.a] || 0, f: null }; }), links: links, clusters: cls.sort(function (a, z) { return z.pct - a.pct; }) };
+  }
+  function bubLoad(t) {
+    if (!t.live || !API) { S.bub = { mint: t.tick, d: bubDemo(t) }; return; }
+    if (!S.bub || S.bub.mint !== t.ca) S.bub = { mint: t.ca, d: null };
+    apiGet('/api/bubbles/' + t.ca).then(function (d) { if (!S.hmap || !S.bub || S.bub.mint !== t.ca || !d || d.error) return; S.bub.d = d; render(); if (!d.done) setTimeout(function () { var t2 = find(S.hmap); if (t2 && t2.ca === t.ca) bubLoad(t2); }, 5000); }).catch(function () { if (S.bub && !S.bub.d) { S.bub.err = true; render(); } });
+  }
+  function bubLayout(d) {   // force-directed: repulsion + springs on links + gentle gravity, then collision cleanup
+    var key = d.holders.map(function (h) { return h.w.slice(0, 4) + h.c; }).join('') + d.links.length; if (S.bubL && S.bubL.key === key) return S.bubL;
+    var W = 1000, H = 720, nH = d.holders.length, RB = nH > 60 ? 7 : 9, RM = nH > 60 ? 48 : nH > 25 ? 58 : 66, mx = Math.max.apply(null, d.holders.map(function (h) { return h.pct; }).concat([0.0001])), N = d.holders.map(function (h, i) { var a = i * 2.39996, rr = 30 + 26 * Math.sqrt(i); return { h: h, x: W / 2 + Math.cos(a) * rr, y: H / 2 + Math.sin(a) * rr * .8, vx: 0, vy: 0, r: RB + Math.sqrt(h.pct / mx) * RM }; });
+    var ix = {}; N.forEach(function (n, i) { ix[n.h.w] = i; }); var L = d.links.filter(function (l) { return ix[l.a] != null && ix[l.b] != null; });
+    for (var it = 0; it < 320; it++) { var al = 1 - it / 320;
+      for (var i = 0; i < N.length; i++) for (var j = i + 1; j < N.length; j++) { var a = N[i], b = N[j], dx = b.x - a.x, dy = b.y - a.y, d2 = dx * dx + dy * dy + .01, dd = Math.sqrt(d2), f = 5200 / d2 * al, mn = a.r + b.r + 10;
+        if (dd < mn) f += (mn - dd) * .18; var fx = dx / dd * f, fy = dy / dd * f; a.vx -= fx; a.vy -= fy; b.vx += fx; b.vy += fy; }
+      L.forEach(function (l) { var a = N[ix[l.a]], b = N[ix[l.b]], dx = b.x - a.x, dy = b.y - a.y, dd = Math.sqrt(dx * dx + dy * dy) + .01, tg = a.r + b.r + 26, f = (dd - tg) * .08; a.vx += dx / dd * f; a.vy += dy / dd * f; b.vx -= dx / dd * f; b.vy -= dy / dd * f; });
+      N.forEach(function (n) { n.vx += (W / 2 - n.x) * .0025; n.vy += (H / 2 - n.y) * .0035; n.x += n.vx *= .55; n.y += n.vy *= .55; }); }
+    var x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; N.forEach(function (n) { x0 = Math.min(x0, n.x - n.r); x1 = Math.max(x1, n.x + n.r); y0 = Math.min(y0, n.y - n.r); y1 = Math.max(y1, n.y + n.r); });   // fit everything into view
+    var k = Math.min(1.6, (W - 80) / (x1 - x0), (H - 140) / (y1 - y0)); S.bubV = { k: k, x: W / 2 - (x0 + x1) / 2 * k, y: H / 2 + 10 - (y0 + y1) / 2 * k }; S.bubFitV = { k: S.bubV.k, x: S.bubV.x, y: S.bubV.y };
+    S.bubL = { key: key, N: N, L: L, ix: ix, W: W, H: H, fresh: true }; return S.bubL;
+  }
   function holderMap() {
     if (!S.hmap) return ''; var t = find(S.hmap); if (!t) return '';
-    var hs = holdersOf(t).filter(function (h) { return h.kind !== 'curve'; }).slice(0, 32), W = 760, H = 480;
-    if (!hs.length) return '<div class="hm-ov" data-act="hmapClose"><div class="hm card-s" data-stop><div class="hm-h"><b>Bubble map · $' + esc(t.tick) + '</b><button class="iconbtn" data-act="hmapClose">✕</button></div><div class="muted" style="padding:60px;text-align:center">No holders yet — everything is still on the bonding curve.</div></div></div>';
-    var mxp = hs[0].pct, R = function (p) { return Math.max(12, Math.sqrt(p / mxp) * 112); };
-    var tag = function (h) { return h.tags.indexOf('dev') >= 0 ? 'dev' : h.tags.indexOf('you') >= 0 ? 'you' : h.tags.indexOf('sniper') >= 0 ? 'sn' : h.tags.indexOf('bundle') >= 0 ? 'bu' : 'w'; };
-    // bundles first so they sit together, then the rest by size
-    var order = hs.filter(function (h) { return tag(h) === 'bu'; }).concat(hs.filter(function (h) { return tag(h) !== 'bu'; }));
-    var placed = [], r0 = rng(hash(t.tick + 'hm'));
-    order.forEach(function (h, i) {
-      var r = R(h.pct), best = null;
-      if (!placed.length) best = { x: W / 2, y: H / 2 };
-      var anchor = tag(h) === 'bu' && placed.length && tag(placed[placed.length - 1].h) === 'bu' ? placed[placed.length - 1] : { x: W / 2, y: H / 2 };
-      for (var d = 0; !best && d < 900; d += 3) { for (var a = 0; a < 24; a++) { var ang = a / 24 * 6.283 + r0() * .3, x = anchor.x + Math.cos(ang) * d * 1.25, y = anchor.y + Math.sin(ang) * d * .8;
-        if (x - r < 6 || x + r > W - 6 || y - r < 6 || y + r > H - 6) continue;
-        if (placed.every(function (q) { return Math.hypot(q.x - x, q.y - y) > q.r + r + 4; })) { best = { x: x, y: y }; break; } } }
-      if (best) placed.push({ x: best.x, y: best.y, r: r, h: h, k: tag(h) });
-    });
-    var bu = placed.filter(function (q) { return q.k === 'bu'; }), links = '';
-    for (var i = 1; i < bu.length; i++) links += '<line x1="' + bu[i - 1].x.toFixed(1) + '" y1="' + bu[i - 1].y.toFixed(1) + '" x2="' + bu[i].x.toFixed(1) + '" y2="' + bu[i].y.toFixed(1) + '"/>';
-    var sn = placed.filter(function (q) { return q.k === 'sn'; }); for (var j = 1; j < sn.length; j++) links += '<line class="sn" x1="' + sn[j - 1].x.toFixed(1) + '" y1="' + sn[j - 1].y.toFixed(1) + '" x2="' + sn[j].x.toFixed(1) + '" y2="' + sn[j].y.toFixed(1) + '"/>';
-    var lab = { dev: 'Dev', you: 'You', sn: 'Sniper', bu: 'Bundle', w: 'Wallet' };
-    var bubbles = placed.map(function (q, i) { return '<g class="hm-b k-' + q.k + '" style="--d:' + (i * 35) + 'ms" data-act="walletAny" data-arg="' + esc(q.h.a) + '" data-tip="' + esc(lab[q.k] + ' · ' + short(q.h.a) + ' · ' + q.h.pct.toFixed(2) + '%') + '"><title>' + esc(lab[q.k] + ' · ' + short(q.h.a) + ' · ' + q.h.pct.toFixed(2) + '% of supply') + '</title><circle cx="' + q.x.toFixed(1) + '" cy="' + q.y.toFixed(1) + '" r="' + q.r.toFixed(1) + '"/>' + (q.r > 20 ? '<text x="' + q.x.toFixed(1) + '" y="' + (q.y + 4).toFixed(1) + '">' + q.h.pct.toFixed(q.h.pct >= 10 ? 0 : 1) + '%</text>' : '') + '</g>'; }).join('');
-    var sum = function (k) { return placed.filter(function (q) { return q.k === k; }).reduce(function (a, q) { return a + q.h.pct; }, 0); };
-    var top10 = hs.slice(0, 10).reduce(function (a, h) { return a + h.pct; }, 0);
-    var stats = [['Top 10', top10.toFixed(1) + '%', top10 > 45 ? 'r' : top10 > 30 ? 'y' : 'g'], ['Connected (bundle)', bu.length ? bu.length + (bu.length > 1 ? ' wallets · ' : ' wallet · ') + sum('bu').toFixed(1) + '%' : 'none', bu.length ? (sum('bu') > 9 ? 'r' : 'y') : 'g'], ['Snipers', sn.length ? sn.length + (sn.length > 1 ? ' wallets · ' : ' wallet · ') + sum('sn').toFixed(1) + '%' : 'none', sn.length ? (sum('sn') > 12 ? 'r' : 'y') : 'g'], ['Dev', sum('dev') ? sum('dev').toFixed(1) + '%' : 'holds 0%', sum('dev') > 8 ? 'r' : 'g']];
-    return '<div class="hm-ov" data-act="hmapClose"><div class="hm card-s" data-stop><div class="hm-h"><div><b>Bubble map</b><small>$' + esc(t.tick) + ' · top ' + placed.length + ' wallets · bubble size = share of supply · bonding curve hidden</small></div><button class="iconbtn" data-act="hmapClose" aria-label="Close">✕</button></div>' +
-      '<div class="hm-body"><svg class="hm-svg" viewBox="0 0 ' + W + ' ' + H + '"><g class="hm-links">' + links + '</g>' + bubbles + '</svg>' +
-      '<div class="hm-side">' + stats.map(function (x) { return '<div class="hm-st lv-' + x[2] + '"><small>' + x[0] + '</small><b class="mono">' + x[1] + '</b></div>'; }).join('') +
-      '<div class="hm-leg">' + [['dev', 'Dev'], ['sn', 'Sniper'], ['bu', 'Bundle'], ['you', 'You'], ['w', 'Other wallet']].map(function (x) { return '<span><i class="k-' + x[0] + '"></i>' + x[1] + '</span>'; }).join('') + '<span><em></em>linked wallets</span></div>' +
-      '<small class="muted hm-n">Click a bubble to see that wallet. Linked lines show wallets that bought together in the same block.</small></div></div></div></div>';
+    var B = S.bub, d = B && B.d, head = '<div class="bm-h"><div><b>Bubble map</b><small>$' + esc(t.tick) + ' · top holders · bubble size = share of supply</small></div><div class="bm-hb"><button class="iconbtn" data-act="bubFit" title="Reset view">⟲</button><button class="iconbtn" data-act="hmapClose" aria-label="Close">✕</button></div></div>';
+    if (!d) return '<div class="hm-ov" data-act="hmapClose"><div class="bm card-s" data-stop>' + head + '<div class="bm-wait">' + (B && B.err ? 'Couldn\'t load the bubble map — try again in a moment.' : '<span class="gr-sp"></span>Loading holders…') + '</div></div></div>';
+    if (!d.holders.length) return '<div class="hm-ov" data-act="hmapClose"><div class="bm card-s" data-stop>' + head + '<div class="bm-wait">No holders yet — everything is still on the bonding curve.</div></div></div>';
+    var Lo = bubLayout(d), anim = Lo.fresh; Lo.fresh = false; var sel = S.bubSel, selC = sel && Lo.ix[sel] != null ? Lo.N[Lo.ix[sel]].h.c : 0, me = S.account;
+    var col = function (c) { return c ? BUB_COL[(c - 1) % BUB_COL.length] : null; };
+    var lines = S.bubLinks ? Lo.L.map(function (l) { var a = Lo.N[Lo.ix[l.a]], b = Lo.N[Lo.ix[l.b]], c = col(a.h.c) || '#888', dx = b.x - a.x, dy = b.y - a.y, dd = Math.hypot(dx, dy) || 1, x1 = a.x + dx / dd * a.r, y1 = a.y + dy / dd * a.r, x2 = b.x - dx / dd * (b.r + 3), y2 = b.y - dy / dd * (b.r + 3), dim = selC && a.h.c !== selC;
+      return '<line class="bm-l k-' + l.k + (dim ? ' dim' : '') + '" x1="' + x1.toFixed(1) + '" y1="' + y1.toFixed(1) + '" x2="' + x2.toFixed(1) + '" y2="' + y2.toFixed(1) + '" stroke="' + c + '"' + (l.k === 'fund' ? ' marker-end="url(#bmArr)"' : '') + '/>'; }).join('') : '';
+    var dots = Lo.N.map(function (n, i) { var h = n.h, c = col(h.c), isMe = me && h.w === me, dim = selC ? h.c !== selC : sel ? h.w !== sel : false;
+      var tip = esc((h.dev ? 'Dev · ' : '') + (isMe ? 'You · ' : '') + '#' + (i + 1) + ' ' + short(h.w) + ' · ' + h.pct.toFixed(2) + '%' + (h.c ? ' · cluster ' + h.c : '') + (h.sn ? ' · sniper' : ''));
+      return '<g class="bm-n' + (dim ? ' dim' : '') + (sel === h.w ? ' sel' : '') + '" data-act="bubSel" data-arg="' + esc(h.w) + '" data-tip="' + tip + '" style="--d:' + Math.min(900, i * 9) + 'ms"><circle cx="' + n.x.toFixed(1) + '" cy="' + n.y.toFixed(1) + '" r="' + n.r.toFixed(1) + '" fill="' + (c ? c + '26' : '#232327') + '" stroke="' + (h.dev ? '#E8C26A' : isMe ? '#7FB6FF' : c || '#3A3A40') + '" stroke-width="' + (h.dev || isMe || sel === h.w ? 2.6 : c ? 1.8 : 1.2) + '"' + (h.sn && !c ? ' stroke-dasharray="4 3"' : '') + '/>' +
+        (n.r > 18 ? '<text x="' + n.x.toFixed(1) + '" y="' + (n.y + 4).toFixed(1) + '">' + (h.dev ? 'DEV' : isMe ? 'YOU' : h.pct.toFixed(h.pct >= 10 ? 0 : 1) + '%') + '</text>' : '') + '</g>'; }).join('');
+    var inCl = d.clusters.reduce(function (a, c) { return a + c.pct; }, 0), top10 = d.holders.slice(0, 10).reduce(function (a, h) { return a + h.pct; }, 0), devH = d.holders.filter(function (h) { return h.dev; })[0];
+    var status = d.demo ? '<span class="bm-st ok">Demo data</span>' : d.done ? '<span class="bm-st ok">✓ Connections loaded</span>' : '<span class="bm-st"><span class="gr-sp"></span>Tracing funding · ' + (d.holders.length - d.missing) + '/' + d.holders.length + '</span>';
+    var V = S.bubV, tr = 'translate(' + V.x.toFixed(1) + ' ' + V.y.toFixed(1) + ') scale(' + V.k.toFixed(3) + ')';
+    var canvas = '<div class="bm-cv" id="bm-cv"><svg class="' + (anim ? 'anim' : '') + '" viewBox="0 0 ' + Lo.W + ' ' + Lo.H + '" preserveAspectRatio="xMidYMid meet"><defs><marker id="bmArr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10z" fill="#cfcfd4"/></marker></defs><g id="bm-g" transform="' + tr + '">' + lines + dots + '</g></svg>' +
+      '<div class="bm-tools"><button class="' + (S.bubList ? 'on' : '') + '" data-act="bubList">☰ Holders</button><button class="' + (S.bubLinks ? 'on' : '') + '" data-act="bubLinks">⤳ Links</button></div>' + status +
+      '<div class="bm-tip" id="bm-tip"></div><div class="bm-leg"><span><i style="border-color:#E8C26A"></i>Dev</span><span><i style="border-color:#7FB6FF"></i>You</span><span><i class="dash"></i>Sniper</span><span><em class="a"></em>funded by</span><span><em></em>same funder / bundle</span></div></div>';
+    var stat = function (k, v, lv) { return '<div class="bm-s lv-' + lv + '"><small>' + k + '</small><b class="mono">' + v + '</b></div>'; };
+    var side = '<div class="bm-side' + (S.bubList ? '' : ' off') + '"><div class="bm-stats">' + stat('Top 10', top10.toFixed(1) + '%', top10 > 45 ? 'r' : top10 > 30 ? 'y' : 'g') + stat('In clusters', inCl.toFixed(1) + '%', inCl > 20 ? 'r' : inCl > 8 ? 'y' : 'g') + stat('Clusters', String(d.clusters.length), d.clusters.length ? 'y' : 'g') + stat('Dev holds', devH ? devH.pct.toFixed(2) + '%' : '0%', devH && devH.pct > 8 ? 'r' : 'g') + '</div>' +
+      (d.clusters.length ? '<div class="bm-cls">' + d.clusters.slice(0, 8).map(function (c) { var w0 = d.holders.filter(function (h) { return h.c === c.id; })[0]; return '<button class="' + (selC === c.id ? 'on' : '') + '" data-act="bubSel" data-arg="' + esc(w0 ? w0.w : '') + '"><i style="background:' + col(c.id) + '"></i>Cluster ' + c.id + '<span class="mono">' + c.n + ' wallets · ' + c.pct.toFixed(2) + '%</span></button>'; }).join('') + '</div>' : '') +
+      '<div class="bm-list">' + d.holders.map(function (h, i) { var c = col(h.c), f = h.f; return '<button class="bm-row' + (sel === h.w ? ' on' : '') + '" data-act="bubSel" data-arg="' + esc(h.w) + '"><span class="mono muted">' + (i + 1) + '</span><i style="background:' + (c || '#3A3A40') + '"></i><span class="mono bm-a">' + short(h.w) + (h.dev ? ' <em class="bdg dev">DEV</em>' : '') + (me && h.w === me ? ' <em class="bdg you">YOU</em>' : '') + '</span><span class="mono">' + h.pct.toFixed(2) + '%</span></button>' +
+        (sel === h.w ? '<div class="bm-det">' + (f ? (f.k === 'ok' ? 'Funded by <b class="mono">' + short(f.by) + '</b>' + (f.hub ? ' <span class="muted">(exchange / busy wallet)</span>' : '') + (f.sol ? ' · ' + f.sol.toFixed(2) + ' SOL' : '') + (f.ts ? ' · ' + ago(f.ts) + ' ago' : '') : f.k === 'old' ? 'Old, active wallet — first funding too far back' : 'No SOL funding found') : d.demo ? 'Demo wallet' : 'Tracing…') + '<button class="link bm-ow" data-act="walletAny" data-arg="' + esc(h.w) + '">Open wallet →</button></div>' : ''); }).join('') + '</div>' +
+      '<small class="muted bm-note">Wallets are linked when one funded another, both got their first SOL from the same wallet, or they bought in the same block at launch. Exchanges and busy wallets are ignored.</small></div>';
+    return '<div class="hm-ov" data-act="hmapClose"><div class="bm card-s' + (S.bubList ? '' : ' nolist') + '" data-stop>' + head + '<div class="bm-body">' + canvas + side + '</div></div></div>';
   }
   function walletDrawer() {
     if (!S.walletView) return '';
@@ -3325,7 +3347,11 @@
       case 'cscale': S.cscale = S.cscale === +arg ? 0 : +arg; cviewSave(); render(); break;
       case 'tpTab': set({ tpTab: arg }); break;
       case 'descToggle': S.descOpen = !S.descOpen; render(); break;
-      case 'hmap': set({ hmap: arg }); break;
+      case 'hmap': S.bubSel = null; S.bubV = { x: 0, y: 0, k: 1 }; S.bubL = null; var tH = find(arg); S.hmap = arg; if (tH) bubLoad(tH); render(); break;
+      case 'bubSel': S.bubSel = S.bubSel === arg ? null : arg; render(); break;
+      case 'bubList': S.bubList = !S.bubList; render(); break;
+      case 'bubLinks': S.bubLinks = !S.bubLinks; render(); break;
+      case 'bubFit': S.bubV = S.bubFitV ? { k: S.bubFitV.k, x: S.bubFitV.x, y: S.bubFitV.y } : { x: 0, y: 0, k: 1 }; S.bubSel = null; render(); break;
       case 'devPing': devPing(find(arg)); toast('✋ Check-in signed — activity timer reset'); render(); break;
       case 'devClaim': (function () { var t = find(arg), d = t && devStatus(t); if (!d || d.state !== 'active' || d.claimable < .01) return; S.claimed[t.tick] = (S.claimed[t.tick] || 0) + d.claimable; devPing(t); drSave(); toast('Claimed $' + fmtNum(Math.round(d.claimable)) + ' creator rewards'); render(); })(); break;
       case 'ctoOpen': set({ ctoOpen: arg }); break;
@@ -3721,6 +3747,18 @@
       tip.style.left = Math.min(rb.width - tip.offsetWidth - 4, Math.max(4, px + 12)) + 'px';
     }
   });
+  // bubble map: wheel zoom at the cursor, drag to pan, hover tooltip
+  var BMD = null;
+  function bmUnit(cv) { var r = cv.getBoundingClientRect(), s = Math.max(1000 / r.width, 720 / r.height); return { r: r, s: s, ox: (r.width * s - 1000) / 2, oy: (r.height * s - 720) / 2 }; }
+  function bmApply() { var g = document.getElementById('bm-g'), V = S.bubV; if (g) g.setAttribute('transform', 'translate(' + V.x.toFixed(1) + ' ' + V.y.toFixed(1) + ') scale(' + V.k.toFixed(3) + ')'); }
+  document.addEventListener('wheel', function (e) { var cv = e.target.closest && e.target.closest('#bm-cv'); if (!cv) return; e.preventDefault();
+    var u = bmUnit(cv), px = (e.clientX - u.r.left) * u.s - u.ox, py = (e.clientY - u.r.top) * u.s - u.oy, V = S.bubV, k1 = Math.max(.4, Math.min(6, V.k * (e.deltaY > 0 ? .88 : 1.14)));
+    V.x = px - (px - V.x) * k1 / V.k; V.y = py - (py - V.y) * k1 / V.k; V.k = k1; bmApply(); }, { passive: false });
+  document.addEventListener('pointerdown', function (e) { var cv = e.target.closest && e.target.closest('#bm-cv'); if (!cv || e.button > 0 || e.target.closest('button')) return; BMD = { x: e.clientX, y: e.clientY, vx: S.bubV.x, vy: S.bubV.y, s: bmUnit(cv).s, moved: false }; });
+  document.addEventListener('pointermove', function (e) { if (BMD) { var dx = e.clientX - BMD.x, dy = e.clientY - BMD.y; if (Math.abs(dx) + Math.abs(dy) > 4) BMD.moved = true; if (BMD.moved) { S.bubV.x = BMD.vx + dx * BMD.s; S.bubV.y = BMD.vy + dy * BMD.s; bmApply(); } }
+    var tip = document.getElementById('bm-tip'); if (!tip) return; var n = e.target.closest && e.target.closest('#bm-cv [data-tip]'); if (!n || (BMD && BMD.moved)) { tip.classList.remove('on'); return; }
+    var r = document.getElementById('bm-cv').getBoundingClientRect(); tip.textContent = n.getAttribute('data-tip'); tip.classList.add('on'); tip.style.left = Math.min(r.width - tip.offsetWidth - 6, e.clientX - r.left + 14) + 'px'; tip.style.top = (e.clientY - r.top + 14) + 'px'; });
+  document.addEventListener('pointerup', function () { if (BMD && BMD.moved) { var stop = function (ev) { ev.stopPropagation(); ev.preventDefault(); }; document.addEventListener('click', stop, { capture: true, once: true }); setTimeout(function () { document.removeEventListener('click', stop, { capture: true }); }, 50); } BMD = null; });
   // chart: wheel zoom + drag pan + Esc to leave fullscreen + candle rollover
   var CDRAG = null, PINCH = null;
   document.addEventListener('mouseover', function (e) {
