@@ -372,6 +372,25 @@ function stats(mint, list = false) {
 process.on('unhandledRejection', (e) => console.log('unhandled', String(e?.message || e).slice(0, 200)));   // one bad request or RPC hiccup must never kill the server
 process.on('uncaughtException', (e) => console.log('uncaught', String(e?.message || e).slice(0, 200)));
 const sseByIp = new Map();
+// X (Twitter) post previews for callouts: fetched once from X's public embed endpoint, cached, and served as plain data (the site draws its own card)
+run('CREATE TABLE IF NOT EXISTS xposts(id TEXT PRIMARY KEY, j TEXT, at INT)');
+const xBusy = new Map();
+async function xPost(id) {
+  const c = q1('SELECT j, at FROM xposts WHERE id=?', id); if (c && (c.j !== 'null' ? Date.now() - c.at < 864e5 : Date.now() - c.at < 6e5)) return JSON.parse(c.j);
+  if (xBusy.has(id)) return xBusy.get(id);
+  const pr = (async () => {
+    let out = null;
+    try {
+      const tok = ((Number(id) / 1e15) * Math.PI).toString(36).replace(/(0+|\.)/g, '');
+      const r = await fetch('https://cdn.syndication.twimg.com/tweet-result?id=' + id + '&lang=en&token=' + tok, { headers: { 'user-agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(8000) });
+      if (r.ok) { const d = await r.json(); const pick = (x) => x && x.user ? { id: x.id_str, name: x.user.name, handle: x.user.screen_name, avatar: x.user.profile_image_url_https, verified: !!(x.user.is_blue_verified || x.user.verified),
+          text: String(x.text || '').replace(/\s*https:\/\/t\.co\/\w+\s*$/, '').slice(0, 1200), img: (x.mediaDetails || [])[0]?.media_url_https || (x.photos || [])[0]?.url || x.video?.poster || null, ts: x.created_at ? Date.parse(x.created_at) : 0 } : null;
+        out = pick(d); if (out && d.quoted_tweet) out.quote = pick(d.quoted_tweet); }
+    } catch {}
+    run('INSERT OR REPLACE INTO xposts(id,j,at) VALUES(?,?,?)', id, JSON.stringify(out), Date.now()); xBusy.delete(id); return out;
+  })();
+  xBusy.set(id, pr); return pr;
+}
 http.createServer((req, res) => { handleReq(req, res).catch((e) => { console.log('req err', String(e?.message || e).slice(0, 160)); try { if (!res.headersSent) res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end('{"ok":false}'); } catch {} }); }).listen(PORT, () => console.log('API on :' + PORT));
 async function handleReq(req, res) {
   const u = new URL(req.url, 'http://x'), p = u.pathname.split('/').filter(Boolean), J = (o) => { const body = typeof o === 'object' && o && o.__gz ? null : JSON.stringify(o), gz = /\bgzip\b/.test(String(req.headers['accept-encoding'] || ''));   // big answers go out gzipped (the coin list shrinks ~8x)
@@ -459,6 +478,7 @@ async function handleReq(req, res) {
       const created = q('SELECT mint, symbol, name, created_at FROM coins WHERE creator=? ORDER BY created_at DESC LIMIT 50', w).filter((r) => !HIDDEN.has(r.mint));
       const v = { wallet: w, sol, first: rows.length ? Math.min(...rows.map((r) => r.f)) : null, coins, created }; walC.set(w, { ts: Date.now(), v }); if (walC.size > 3000) walC.delete(walC.keys().next().value); return J(v); }
     if (p[1] === 'vampcheck') { const sym = fold(u.searchParams.get('symbol')), nm = fold(u.searchParams.get('name')); const hits = q('SELECT mint, symbol, name, created_at FROM coins ORDER BY created_at ASC LIMIT 20000').filter((c) => !HIDDEN.has(c.mint) && ((sym.length >= 2 && (fold(c.symbol) === sym || fold(c.name) === sym)) || (nm.length >= 2 && (fold(c.name) === nm || fold(c.symbol) === nm)))).slice(0, 3); return J({ hits }); }
+    if (p[1] === 'xpost' && /^\d{5,25}$/.test(p[2] || '')) return J(await xPost(p[2]));
     if (p[1] === 'rewards' && p[2]) { const w = String(p[2]); if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(w)) return J([]); let rows = []; try { rows = q('SELECT sig, mint, token, amt, dec, ts FROM hpay WHERE wallet=? ORDER BY ts DESC LIMIT 100', w); } catch {}
       return J(rows.filter((r) => !HIDDEN.has(r.mint) || true).map((r) => { const c = q1('SELECT symbol FROM coins WHERE mint=?', r.mint) || {}, tk = r.token === r.mint ? c.symbol : (r.token === WSOL ? 'SOL' : (q1('SELECT symbol FROM coins WHERE mint=?', r.token) || {}).symbol || null);
         return { sig: r.sig, mint: r.mint, symbol: c.symbol || '', token: r.token, tokenSymbol: tk || r.token.slice(0, 4), amount: r.amt / 10 ** (r.dec ?? 6), ts: r.ts }; })); }
