@@ -37,6 +37,7 @@ async function pinJSON(obj, name) {
   const j = await r.json(); if (!j.IpfsHash) throw new Error('pinata json: ' + JSON.stringify(j).slice(0, 120)); return PINATA_GW + '/ipfs/' + j.IpfsHash;
 }
 async function solPrice() { try { const r = await fetchT('https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd'); const j = await r.json(); if (j?.solana?.usd) SOL_USD = j.solana.usd; } catch {} }
+const HIDDEN = new Set(String(process.env.HIDDEN_MINTS || '').split(',').map((s) => s.trim()).filter(Boolean));   // our own test coins: kept on-chain (and paid out fairly), just not listed on the site
 const SUPPLY = 1e9, WSOL = 'So11111111111111111111111111111111111111112';
 const QUOTE_OVERRIDE = (() => { try { return JSON.parse(process.env.QUOTE_USD || '{}'); } catch { return {}; } })();   // {"<mint>": 1} for devnet test tokens
 const qPrice = new Map();
@@ -364,8 +365,8 @@ async function handleReq(req, res) {
       let usd = quoteUsd(m, KNOWN_Q[m]), symbol = KNOWN_Q[m] || null, name = null, icon = null, verified = m === WSOL || STABLE.has(m);
       try { const r = await fetchT('https://lite-api.jup.ag/tokens/v2/search?query=' + m); const j = await r.json(); const t = Array.isArray(j) ? j.find((x) => x.id === m) : null; if (t) { symbol = symbol || t.symbol; name = t.name; icon = t.icon || null; verified = verified || !!(t.isVerified || (t.tags || []).includes('verified')); if (!QUOTE_OVERRIDE[m] && t.usdPrice) { usd = +t.usdPrice * (await qMult(m)); qPrice.set(m, usd); } } } catch {}   // per on-chain unit (scaled-UI tokens: × multiplier)
       return J({ mint: m, usd, symbol, name, icon, verified }); }
-    if (p[1] === 'coins') { if (!coinsSnap || Date.now() - coinsSnap.at > 10e3) coinsSnap = { at: Date.now(), v: q('SELECT mint FROM coins ORDER BY created_slot DESC LIMIT 2000').map((r) => stats(r.mint)) }; return J(coinsSnap.v); }
-    if (p[1] === 'coin') return J(stats(p[2]));
+    if (p[1] === 'coins') { if (!coinsSnap || Date.now() - coinsSnap.at > 10e3) coinsSnap = { at: Date.now(), v: q('SELECT mint FROM coins ORDER BY created_slot DESC LIMIT 2000').filter((r) => !HIDDEN.has(r.mint)).map((r) => stats(r.mint)) }; return J(coinsSnap.v); }
+    if (p[1] === 'coin') return J(HIDDEN.has(p[2]) ? null : stats(p[2]));
     if (p[1] === 'trades') return J(q('SELECT * FROM trades WHERE mint=? ORDER BY ts DESC, slot DESC LIMIT 200', p[2]));
     if (p[1] === 'creator' && p[2]) {   // creator rewards escrow status for a coin
       const c = q1('SELECT * FROM coins WHERE mint=?', p[2]); if (!c) return J(null);
@@ -389,7 +390,7 @@ async function handleReq(req, res) {
     if (p[1] === 'leaderboard') { const pm = { '24h': 864e5, '7d': 6048e5 }[u.searchParams.get('per')] || 1e13, since = Date.now() - pm;
       const px = new Map(q('SELECT t.mint, t.price_usd p FROM trades t JOIN (SELECT mint, MAX(ts) m FROM trades GROUP BY mint) l ON l.mint=t.mint AND l.m=t.ts').map((r) => [r.mint, r.p]));
       const skip = new Set([OPS?.publicKey.toBase58(), PARTNER].filter(Boolean)), W = new Map();
-      for (const r of q(`SELECT wallet, mint, SUM(CASE WHEN side='buy' THEN usd ELSE 0 END) b, SUM(CASE WHEN side='sell' THEN usd ELSE 0 END) s, SUM(CASE WHEN side='buy' THEN tokens ELSE -tokens END) net, COUNT(*) n FROM trades WHERE ts>=? GROUP BY wallet, mint`, since)) {
+      for (const r of q(`SELECT wallet, mint, SUM(CASE WHEN side='buy' THEN usd ELSE 0 END) b, SUM(CASE WHEN side='sell' THEN usd ELSE 0 END) s, SUM(CASE WHEN side='buy' THEN tokens ELSE -tokens END) net, COUNT(*) n FROM trades WHERE ts>=? GROUP BY wallet, mint`, since)) { if (HIDDEN.has(r.mint)) continue;
         if (skip.has(r.wallet)) continue; const val = r.s + Math.max(0, r.net) * (px.get(r.mint) || 0), pnl = val - r.b, e = W.get(r.wallet) || { wallet: r.wallet, pnl: 0, n: 0, coins: 0, wins: 0, best: null };
         e.pnl += pnl; e.n += r.n; e.coins++; if (pnl > 0) e.wins++; if (!e.best || pnl > e.best.pnl) e.best = { mint: r.mint, pnl, x: r.b > 0 ? val / r.b : 0 }; W.set(r.wallet, e); }
       const traders = [...W.values()].sort((a, b) => b.pnl - a.pnl).slice(0, 100);
@@ -400,7 +401,7 @@ async function handleReq(req, res) {
       const hall = coinsAll.map((c) => ({ mint: c.mint, ath: q1('SELECT MAX(mcap_usd) a FROM trades WHERE mint=?', c.mint).a || 0 })).filter((x) => x.ath > 0).sort((a, b) => b.ath - a.ath).slice(0, 50);
       const lv = { traders, devs, hall }; lbCache.set(u.searchParams.get('per') || 'all', { ts: Date.now(), v: lv }); return J(lv); }
     if (p[1] === 'burns' && burnsSnap && Date.now() - burnsSnap.at < 30e3) return J(burnsSnap.v);
-    if (p[1] === 'burns') { const coins = q('SELECT mint, creator FROM coins'), out = [];
+    if (p[1] === 'burns') { const coins = q('SELECT mint, creator FROM coins').filter((r) => !HIDDEN.has(r.mint)), out = [];
       for (const c of coins) { const burned = await burnedOf(c.mint); if (burned < 1) continue;
         const r = REW ? q1(`SELECT COALESCE(SUM(CASE WHEN kind='taxburn' THEN lamports END),0)/1e6 tax, COALESCE(SUM(CASE WHEN kind='burntok' THEN lamports END),0)/1e6 bb FROM rlog WHERE mint=?`, c.mint) : { tax: 0, bb: 0 };
         out.push({ mint: c.mint, burned, tax: r.tax, buyback: r.bb, other: Math.max(0, burned - r.tax - r.bb) }); }
