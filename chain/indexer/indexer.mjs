@@ -152,8 +152,7 @@ async function quoteAllowed(qm) {
 }
 // copycat ("vamp") detection: a coin whose ticker or name folds to the same thing as an OLDER treid coin gets flagged, never blocked
 const LEET = { '0': 'o', '1': 'i', '3': 'e', '4': 'a', '5': 's', '7': 't', '8': 'b', '$': 's', '@': 'a', '!': 'i' };
-function fold(x) { let v = String(x || '').replace(/^\s*\$+/, '').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[0134578$@!]/g, (ch) => LEET[ch]).replace(/[^a-z0-9]/g, '');
-  for (let i = 0; i < 3; i++) v = v.replace(/^(the|real|official|new)/, '').replace(/(official|real|new|v2|v3|ii|2|3|coin|token|onsol|sol)$/, ''); return v; }
+function fold(x) { return String(x || '').replace(/^\s*\$+/, '').trim().toLowerCase().replace(/\s+/g, ' '); }   // 1:1 only (case and spaces ignored)
 let vampMap = null, vampAt = 0;
 function vampOf(mint) {
   if (!vampMap || Date.now() - vampAt > 60e3) { vampMap = new Map(); vampAt = Date.now(); const first = new Map();

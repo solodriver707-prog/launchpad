@@ -2943,12 +2943,11 @@
   }
   // copycat ("vamp") flag: same folded ticker / name as an OLDER coin — flagged with a 🧛 badge, never blocked
   var VLEET = { '0': 'o', '1': 'i', '3': 'e', '4': 'a', '5': 's', '7': 't', '8': 'b', '$': 's', '@': 'a', '!': 'i' };
-  function vfold(x) { var v = String(x || '').replace(/^\s*\$+/, '').toLowerCase(); try { v = v.normalize('NFKD').replace(/[\u0300-\u036f]/g, ''); } catch (e) {} v = v.replace(/[0134578$@!]/g, function (ch) { return VLEET[ch]; }).replace(/[^a-z0-9]/g, '');
-    for (var i = 0; i < 3; i++) v = v.replace(/^(the|real|official|new)/, '').replace(/(official|real|new|v2|v3|ii|2|3|coin|token|onsol|sol)$/, ''); return v; }
+  function vfold(x) { return String(x || '').replace(/^\s*\$+/, '').trim().toLowerCase().replace(/\s+/g, ' '); }   // 1:1 only (case and spaces ignored)
   function vampMatch(tick, name, born, self) { var keys = [vfold(tick), vfold(name)].filter(function (k) { return k.length >= 2; }); if (!keys.length) return null; var best = null;
     all().concat(S.live || []).forEach(function (o) { if (o === self || o.archived || (born && o.born >= born)) return; var ok = [vfold(o.tick), vfold(o.name)]; if (keys.some(function (k) { return ok.indexOf(k) >= 0; }) && (!best || o.born < best.born)) best = o; }); return best; }
   function vampOf(t) { if (t.live) { if (!t.vamp || !t.vamp.mint) return null; var o = S.live.filter(function (x) { return x.ca === t.vamp.mint; })[0]; return o || { tick: String(t.vamp.symbol || '?'), name: String(t.vamp.name || ''), ca: t.vamp.mint }; } if (t._vamp === undefined) t._vamp = vampMatch(t.tick, t.name, t.born, t); return t._vamp; }
-  function vampBadge(t) { var o = vampOf(t); return o ? '<span class="vampb" title="Possible copy of $' + esc(o.tick) + ' — an older coin uses the same ticker or name. Check the contract address before buying.">🧛 Possible copy</span>' : ''; }
+  function vampBadge(t) { var o = vampOf(t); return o ? '<span class="vampb" title="Same name as $' + esc(o.tick) + ', an older coin — check the contract address before buying">🧛</span>' : ''; }
   function vampNote(c) { var o = vampMatch(c.tick, c.name, 0, null); return o ? '🧛 <b>$' + esc(o.tick) + '</b> (' + esc(o.name) + ') already exists on treid. You can still launch, but your coin will show a <b>“Possible copy”</b> badge.' : ''; }
   function crBadge(t) { return crBadge0(t) + vampBadge(t); }
   function crBadge0(t) { var d = devStatus(t); return d.state === 'out' ? '<span class="crb out" title="Dev is out — open for community takeover">DEV OUT</span>' : d.state === 'cto' ? '<span class="crb cto" title="Community takeover">CTO</span>' : d.state === 'inactive' ? '<span class="crb idle" title="Dev inactive for 48h+ — rewards frozen">DEV AWAY</span>' : ''; }
@@ -3250,7 +3249,7 @@
             '<div class="ident-acts">' + (c.img ? '<button class="link" data-act="clearImg">Remove logo</button>' : '<span class="req">logo required</span>') + (c.banner ? '<button class="link" data-act="clearBanner">Remove banner</button>' : '') + '</div></div>' +
           '<input id="c-img" type="file" accept="image/png,image/jpeg,image/gif,image/webp" class="sr"><input id="c-banner" type="file" accept="image/png,image/jpeg,image/gif,image/webp" class="sr">' +
           '<div class="row"><div class="field" style="flex:2 1 220px"><label for="c-name" style="font-weight:700">Name</label><input id="c-name" class="inp" maxlength="32" data-bind="c.name" value="' + esc(c.name) + '" placeholder="e.g. Giga Pug"></div>' +
-            '<div class="field" style="flex:1 1 140px"><label for="c-tick" style="font-weight:700">Ticker</label><span class="tick-in"><em>$</em><input id="c-tick" class="inp mono" data-bind="c.tick" value="' + esc(c.tick) + '" placeholder="DFROG"></span></div></div>' + '<div class="vamp-note" id="vamp-note"' + (vampNote(c) ? '' : ' hidden') + '>' + vampNote(c) + '</div>' +
+            '<div class="field" style="flex:1 1 140px"><label for="c-tick" style="font-weight:700">Ticker</label><span class="tick-in"><em>$</em><input id="c-tick" class="inp mono" data-bind="c.tick" value="' + esc(c.tick) + '" placeholder="DFROG"></span></div></div>' + 
           '<div class="field"><label for="c-desc" style="font-weight:700">Description</label><textarea id="c-desc" class="inp" data-bind="c.desc" placeholder="What is this token about?">' + esc(c.desc) + '</textarea></div>' +
           '<div class="fsec"><i>2</i>Market</div>' +
           realPairPicker(c) + taxPicker(c) + splitPicker(c) + devBuyPicker(c) + vanityPicker(c) +
@@ -3837,7 +3836,6 @@
   document.addEventListener('change', function (e) { if (e.target && e.target.hasAttribute && e.target.hasAttribute('data-shimg')) { var f = e.target.files && e.target.files[0]; e.target.value = ''; if (!f || !/^image\//.test(f.type) || f.size > 8e6 || !S.share) return; var fr = new FileReader(); fr.onload = function () { if (S.share) { S.share.custom = String(fr.result); S.share.bg = 'custom'; render(); } }; fr.readAsDataURL(f); } });
   document.addEventListener('change', function (e) { if (e.target && e.target.hasAttribute && e.target.hasAttribute('data-coimg')) { coPickImage(e.target.files && e.target.files[0]); e.target.value = ''; } });
   document.addEventListener('input', function (e) {
-    if (e.target && (e.target.id === 'c-tick' || e.target.id === 'c-name')) setTimeout(function () { var vn = document.getElementById('vamp-note'); if (vn && S.c) { var h = vampNote(S.c); vn.innerHTML = h; vn.hidden = !h; } }, 0);
     if (e.target.hasAttribute && e.target.hasAttribute('data-burnpct')) { S.burnPct = +e.target.value; var t = find(S.burnTick), pos = t && position(t); if (!pos) return; var tok = pos.tok * S.burnPct / 100;
       var q = function (id, v) { var x = document.getElementById(id); if (x) x.textContent = v; }; q('bt-tok', fmtNum(Math.round(tok)) + ' $' + t.tick); q('bt-sup', (tok / 1e9 * 100).toFixed(3) + '%'); q('bt-usd', '$' + fmtNum(Math.round(tok * price(t))));
       var g = document.querySelector('.bt-go'); if (g) g.textContent = '🔥 Burn ' + S.burnPct + '% of my $' + t.tick; document.querySelectorAll('.bt-pre button').forEach(function (bb) { bb.classList.toggle('on', +bb.getAttribute('data-arg') === S.burnPct); }); return; }
