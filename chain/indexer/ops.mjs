@@ -1,7 +1,7 @@
 // treid ops wallet (hot): fee claimer + Token-2022 withheld-tax authority of every treid coin.
 // It only works on coins where something happened (trades since the last look), so cost and RPC use follow real activity:
 //   · partner fees → claimed straight to the treasury once they're worth ≥ $1
-//   · coin tax → harvested once it's worth ≥ $5 (at most hourly per coin), split holders / burn / dev, receipts on-chain
+//   · coin tax → harvested once it's worth ≥ $5 (at most every 10 min per coin), split holders / burn / dev, receipts on-chain
 //   · spare SOL → swept to the treasury (never what's owed to creators mid-payout)
 import { Keypair, PublicKey, TransactionInstruction, SystemProgram, VersionedTransaction, TransactionMessage } from '@solana/web3.js';
 import { TOKEN_2022_PROGRAM_ID, unpackAccount, getTransferFeeAmount, getMint, getTransferFeeConfig, getAssociatedTokenAddressSync, createAssociatedTokenAccountIdempotentInstruction,
@@ -224,7 +224,7 @@ export function startOps({ conn, dbc, ops, treasury, q, q1, run, mainnet = false
     if (busy || !ready()) return; busy = true;
     try { await claimFees();
       for (const c of q('SELECT * FROM coins WHERE tax_bps > 0')) {
-        const lt = lastTradeTs(c.mint), ls = seenTax.get(c.mint) || 0; if (!(lt > ls && Date.now() - ls > 36e5) && Date.now() - ls < 7 * 864e5) continue;   // hourly at most, only after new trades (weekly fallback: plain wallet-to-wallet transfers pay tax too)
+        const lt = lastTradeTs(c.mint), ls = seenTax.get(c.mint) || 0; if (!(lt > ls && Date.now() - ls > 6e5) && Date.now() - ls < 7 * 864e5) continue;   // every 10 min at most, only after new trades (weekly fallback: plain wallet-to-wallet transfers pay tax too)
         try { const cfg = await dbc.state.getPoolConfig(new PublicKey(c.config)); if (cfg.feeClaimer.toBase58() === ops.publicKey.toBase58()) await taxCycle(c); seenTax.set(c.mint, Date.now()); } catch (e) { log('ops   tax err', c.symbol, e.message.slice(0, 140)); } }
       try { await treidBuyback(); } catch (e) { log('ops   $TREID buyback err', e.message.slice(0, 140)); }
       await sweep();
