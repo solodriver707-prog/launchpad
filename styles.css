@@ -5104,3 +5104,7 @@ body.on-site{background:#08080a}
 .cs-brand b,.cs h1,.cs h2,.cs-stats b,.cs-how li b{color:var(--fg)}
 .cs-stats b{white-space:nowrap;font-size:20px}
 @media (max-width:760px){.cs>section,.cs>.cs-warn{width:calc(100% - 24px)}.cs-stats b{font-size:17px}}
+.kin{font-size:clamp(34px,3.7vw,56px);flex-wrap:nowrap}
+.kin-a{white-space:nowrap;flex:none}
+.kin-w>:first-child:not(b){width:calc(clamp(34px,3.7vw,56px)*.78)!important;height:calc(clamp(34px,3.7vw,56px)*.78)!important}
+@media (max-width:760px){.kin{font-size:34px!important}.kin-w>:first-child:not(b){width:27px!important;height:27px!important}}
