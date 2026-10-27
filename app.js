@@ -2812,7 +2812,7 @@
   S.cpq = ''; S.cpTab = 'crypto';
   try { var CP = JSON.parse(localStorage.getItem('dl.cpairs') || '{}'); Object.keys(CP).forEach(function (k) { PAIR_INFO[k] = CP[k]; }); } catch (e) {}
   // ---- sign in once (24 h): the wallet signs one message, the server hands back a session token — no popup for every callout ----
-  function psClean(p) { if (!p || typeof p !== 'object') return null; var o = {}; ['value', 'spent', 'got', 'profit', 'profitPct', 'avgEntryMc', 'soldPct', 'supplyPct', 'held', 'trades'].forEach(function (k) { o[k] = Number(p[k]) || 0; }); return o; }
+  function psClean(p) { if (!p || typeof p !== 'object') return null; var o = {}; ['value', 'spent', 'got', 'profit', 'profitPct', 'avgEntryMc', 'avgExitMc', 'soldPct', 'supplyPct', 'held', 'trades'].forEach(function (k) { o[k] = Number(p[k]) || 0; }); return o; }
   function money(v) { v = Math.abs(v); return v >= 1e6 ? (v / 1e6).toFixed(2) + 'M' : v >= 1e4 ? (v / 1e3).toFixed(1) + 'K' : v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
   function moneyS(v) { v = Math.abs(v); return v >= 1e6 ? (v / 1e6).toFixed(2) + 'M' : v >= 1e3 ? (v / 1e3).toFixed(v >= 1e5 ? 0 : 2) + 'K' : v.toFixed(2); }
   function psStatus(ps) { return ps.held < 1 ? 'Sold all' : ps.soldPct >= 1 ? 'Sold ' + Math.round(ps.soldPct) + '%' : 'Holding'; }
