@@ -13,6 +13,7 @@ import { opsKeypair, startOps, treidCfg } from './ops.mjs';
 import { startRewards } from './rewards.mjs';
 import { startCallouts } from './callouts.mjs';
 import { startBubbles } from './bubbles.mjs';
+import { startPush } from './push.mjs';
 import { fetchT, JUP } from './txutil.mjs';
 import { HALT } from './lock.mjs';
 let OPS_ST = null;
@@ -140,7 +141,7 @@ async function syncAddress(addr, limit = 1000) {   // fetch history (oldest firs
     if (fresh.length < ok.length || page.length < Math.min(limit, 1000) || all.length >= limit) break; before = page[page.length - 1].signature; }   // stop at the first ALREADY-SEEN tx (failed ones on a page don't count)
   for (const x of all.reverse()) await handle(x.signature).catch(e => console.log('err', e.message));
 }
-const clients = new Set(); const push = (ev) => { const s = `data: ${JSON.stringify(ev)}\n\n`; for (const c of clients) { if (c.writableLength > 256e3) { clients.delete(c); try { c.destroy(); } catch {} continue; } c.write(s); } };   // slow readers are dropped, never buffered forever
+let PUSH = null; const clients = new Set(); const push = (ev) => { if (PUSH) PUSH.onEvent(ev); const s = `data: ${JSON.stringify(ev)}\n\n`; for (const c of clients) { if (c.writableLength > 256e3) { clients.delete(c); try { c.destroy(); } catch {} continue; } c.write(s); } };   // slow readers are dropped, never buffered forever
 function buildCoinsSnap() { if (coinsSnap && coinsSnap.busy) return; if (coinsSnap) coinsSnap.busy = true;
   try { const v = q('SELECT mint FROM coins ORDER BY created_slot DESC LIMIT 2000').filter((r) => !HIDDEN.has(r.mint)).map((r) => stats(r.mint, true)), raw = JSON.stringify(v); coinsSnap = { at: Date.now(), v, out: { raw, __gz: zlib.gzipSync(raw, { level: 6 }) } }; }
   catch (e) { if (coinsSnap) coinsSnap.busy = false; throw e; } }
@@ -436,11 +437,14 @@ async function handleReq(req, res) {
       res.writeHead(200, { 'content-type': im.ct, 'x-content-type-options': 'nosniff', 'access-control-allow-origin': '*', 'cache-control': 'public, max-age=604800, immutable' }); return res.end(im.data); }
     const [h, b64] = d.split(','), ct = h.slice(5, h.indexOf(';')); if (!/^image\/(png|jpe?g|gif|webp)$/.test(ct)) { res.writeHead(404); return res.end(); }   // never serve svg (script)
     res.writeHead(200, { 'content-type': ct, 'x-content-type-options': 'nosniff', 'access-control-allow-origin': '*', 'cache-control': 'public, max-age=86400' }); return res.end(Buffer.from(b64, 'base64')); }
-  if (!p.length || p[1] === 'health') return J({ ok: true, coins: q1('SELECT COUNT(*) n FROM coins').n, trades: q1('SELECT COUNT(*) n FROM trades').n, configs: configs.size, partner: PARTNER || null, ops: OPS?.publicKey.toBase58() || null, ipfs: !!PINATA_JWT, sol_usd: SOL_USD, ready, cluster: MAINNET ? 'mainnet' : 'devnet', db_persistent: DB_PATH.startsWith('/data/'), ops_sol: opsSolC.v, ops_halted: HALT.on ? HALT.why : false, ops_low: !!OPS_ST?.status?.low, sites: SITES });
+  if (!p.length || p[1] === 'health') return J({ ok: true, coins: q1('SELECT COUNT(*) n FROM coins').n, trades: q1('SELECT COUNT(*) n FROM trades').n, configs: configs.size, partner: PARTNER || null, ops: OPS?.publicKey.toBase58() || null, ipfs: !!PINATA_JWT, sol_usd: SOL_USD, ready, cluster: MAINNET ? 'mainnet' : 'devnet', db_persistent: DB_PATH.startsWith('/data/'), ops_sol: opsSolC.v, ops_halted: HALT.on ? HALT.why : false, ops_low: !!OPS_ST?.status?.low, sites: SITES, push: !!PUSH?.on });
   try {
     if (p[1] === 'stream') { const ipx = ip(req), nIp = sseByIp.get(ipx) || 0; if (clients.size >= 3000 || nIp >= 6) { res.writeHead(429, { 'access-control-allow-origin': '*' }); return res.end(); }
       sseByIp.set(ipx, nIp + 1); req.on('close', () => { const v = (sseByIp.get(ipx) || 1) - 1; if (v > 0) sseByIp.set(ipx, v); else sseByIp.delete(ipx); });
       res.writeHead(200, { 'content-type': 'text/event-stream', 'access-control-allow-origin': '*', 'cache-control': 'no-cache' }); res.write(': hi\n\n'); clients.add(res); req.on('close', () => clients.delete(res)); return; }
+    if (p[1] === 'push' && p[2] === 'key') return J({ key: PUSH?.publicKey || null });   // web push: the server's VAPID public key (null = off)
+    if (p[1] === 'push' && (p[2] === 'sub' || p[2] === 'unsub') && req.method === 'POST') { let body = ''; req.on('data', (d) => { body += d; if (body.length > 40000) req.destroy(); });
+      req.on('end', () => { try { if (!rate('push|' + ip(req), 30, 36e5)) throw new Error('too many requests — try again later'); const b = JSON.parse(body); J(p[2] === 'sub' ? PUSH.save(b) : PUSH.drop(b.endpoint)); } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: e.message })); } }); return; }
     if (p[1] === 'qprice' && !rate('qp|' + ip(req), 30, 6e4)) { res.writeHead(429, { 'access-control-allow-origin': '*' }); return res.end('{}'); }
     if (p[1] === 'ticon') {   // logo of a verified token by exact symbol (e.g. tokenized stocks), fetched once and served from here — raster images only
       const sym = String(u.searchParams.get('sym') || ''), mintQ = String(u.searchParams.get('mint') || '');
@@ -548,6 +552,7 @@ if (MAINNET && !(+process.env.OPS_PRIORITY_MICROLAMPORTS > 0)) console.error('!!
 if (MAINNET && OPS && PARTNER === OPS.publicKey.toBase58()) { console.error('On mainnet the treasury (PARTNER) must be a separate cold wallet, not the hot ops wallet'); process.exit(1); }
 setTimeout(async () => { for (const c of q('SELECT mint FROM coins ORDER BY created_at DESC LIMIT 300')) { if (!q1('SELECT 1 FROM cimg WHERE mint=? AND b=0', c.mint)) await coinImage(c.mint, 0); } }, 20e3);   // warm missing images after a restart
 BUB = startBubbles({ conn, q, q1, run, holdersCached });
+PUSH = startPush({ q, q1, run, pub: process.env.VAPID_PUBLIC, priv: process.env.VAPID_PRIVATE, subject: process.env.VAPID_SUBJECT });
 CO = startCallouts({ q, q1, run, push, rate, pinJSON, pinFile, pinataJwt: PINATA_JWT, gateway: PINATA_GW,
   coinStats: async (mint, wallet) => { const last = q1('SELECT mcap_usd, price_usd FROM trades WHERE mint=? ORDER BY ts DESC, slot DESC LIMIT 1', mint) || {}; let pos = 0;
     let held = false; try { const hs = await holdersCached(mint); const h = hs.find((x) => x.wallet === wallet && !x.curve); if (h) { held = true; pos = h.pct / 100 * SUPPLY * (last.price_usd || 0); } } catch {}

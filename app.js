@@ -533,7 +533,7 @@
         (S.walletMenu ? '<div class="wbal"><div class="wb-h"><b>Your balance</b><button class="wb-addr mono" data-act="copyAddr">' + esc(short(S.account)) + ' ' + I.copy + '</button></div>' +
           '<div class="wb-big mono">$' + money(totU) + '</div>' +
           '<div class="wb-sol">' + coinHTML('SOL', 26) + '<b>SOL</b><span class="mono">' + solB.toFixed(4) + ' SOL</span><small class="muted mono">$' + money(solB * SOL_USD) + '</small></div>' +
-          '<div class="wb-acts"><button class="btn pri" data-act="wbDeposit">Deposit</button><button class="btn sec" data-act="wallet" data-arg="' + esc(S.account) + '">Profile</button>' + (CHAIN_ID !== 'solana:mainnet' ? '<button class="btn sec" data-act="airdrop"' + (S.airdropping ? ' disabled' : '') + '>' + (S.airdropping ? 'Requesting…' : 'Get 1 ' + NET + 'SOL') + '</button>' : '') + '</div>' +
+          '<div class="wb-acts"><button class="btn pri" data-act="wbDeposit">Deposit</button><button class="btn sec" data-act="wallet" data-arg="' + esc(S.account) + '">Profile</button><button class="btn sec" data-act="notifOpen" aria-label="Notifications">' + (PUSH && PUSH.sub ? '🔔' : '🔕') + '</button>' + (CHAIN_ID !== 'solana:mainnet' ? '<button class="btn sec" data-act="airdrop"' + (S.airdropping ? ' disabled' : '') + '>' + (S.airdropping ? 'Requesting…' : 'Get 1 ' + NET + 'SOL') + '</button>' : '') + '</div>' +
           (S.wbDep ? '<div class="wb-dep">Send SOL to your wallet address from an exchange or another wallet:<button class="mono" data-act="copyAddr">' + esc(S.account) + ' ' + I.copy + '</button></div>' : '') +
           '<div class="wb-con">' + (S.wallet && S.wallet.icon ? '<img src="' + esc(S.wallet.icon) + '" alt="">' : '<span class="wb-wi">◎</span>') + '<span><small class="muted">Connected with</small><b>' + esc(S.wallet ? S.wallet.name : 'Wallet') + ' <span class="muted">· external wallet</span></b></span><button class="link wb-dc" data-act="disconnect">Disconnect</button></div>' +
           '<div class="wb-tabs"><div class="seg sm"><button class="' + (S.wbTab !== 'closed' ? 'on' : '') + '" data-act="wbTab" data-arg="open">Open</button><button class="' + (S.wbTab === 'closed' ? 'on' : '') + '" data-act="wbTab" data-arg="closed">Closed</button><button class="' + (S.wbTab === 'rewards' ? 'on' : '') + '" data-act="wbTab" data-arg="rewards">🎁 Rewards</button></div><button class="link" data-act="refresh">↻ Refresh</button></div>' +
@@ -547,7 +547,7 @@
       '<button class="brand" data-act="home" aria-label="treid home"><span class="brand-name">treid</span></button>' +
       '<nav class="navlinks"><span class="nav-ind" id="nav-ind"></span><button class="' + (S.screen === 'home' ? 'on' : '') + '" data-act="home">Board</button><button class="' + (S.screen === 'trench' ? 'on' : '') + '" data-act="trenches">Trenches</button><button class="' + (S.screen === 'create' ? 'on' : '') + '" data-act="create">Create</button><button class="' + (S.screen === 'leaders' ? 'on' : '') + '" data-act="leaders">Leaderboard</button><button class="' + (S.screen === 'burn' ? 'on' : '') + '" data-act="burnPage">🔥 Burnery</button><button class="' + (S.screen === 'trend' ? 'on' : '') + '" data-act="trendList">Trending</button><button data-act="how">How it works</button></nav>' +
       '<button class="searchbtn" data-act="palette">' + I.search + '<span>Search tokens or paste CA</span><span class="kbd">Ctrl K</span></button>' +
-      '<div class="hdr-right">' + (DEMO || API ? '<button class="wl-btn co-btn' + (S.coOpen ? ' on' : '') + '" data-act="coToggle" title="Hot callouts">🔥<span>Callouts</span><b class="mono" id="co-new" style="display:none">0</b></button>' : '') + '<button class="wl-btn' + (S.screen === 'watch' ? ' on' : '') + '" data-act="watchPage" aria-label="Watchlist" data-tip="Your watchlist">' + I.star(S.watch.length > 0) + (S.watch.length ? '<b class="mono" id="wl-n">' + S.watch.length + '</b>' : '') + '</button><button class="btn pri" data-act="create">+ Launch token</button>' + right + '</div>' +
+      '<div class="hdr-right">' + (DEMO || API ? '<button class="wl-btn co-btn' + (S.coOpen ? ' on' : '') + '" data-act="coToggle" title="Hot callouts">🔥<span>Callouts</span><b class="mono" id="co-new" style="display:none">0</b></button>' : '') + '<button class="wl-btn nt-btn' + (PUSH && PUSH.sub ? ' on' : '') + '" data-act="notifOpen" aria-label="Notifications" data-tip="Notifications">' + (PUSH && PUSH.sub ? '🔔' : '🔕') + '</button><button class="wl-btn' + (S.screen === 'watch' ? ' on' : '') + '" data-act="watchPage" aria-label="Watchlist" data-tip="Your watchlist">' + I.star(S.watch.length > 0) + (S.watch.length ? '<b class="mono" id="wl-n">' + S.watch.length + '</b>' : '') + '</button><button class="btn pri" data-act="create">+ Launch token</button>' + right + '</div>' +
       '</div></header>' +
       '<nav class="mnav" aria-label="Main">' + [['home', 'Board', '<path d="M3 11l9-7 9 7v9a1 1 0 01-1 1h-5v-6H9v6H4a1 1 0 01-1-1z"/>', (!S.coOpen && S.screen === 'home')], ['trenches', 'Trenches', '<rect x="3" y="4" width="5" height="16" rx="1.5"/><rect x="10" y="4" width="5" height="11" rx="1.5"/><rect x="17" y="4" width="4" height="6" rx="1.5"/>', (!S.coOpen && (S.screen === 'trench' || S.screen === 'trend'))], ['leaders', 'Ranks', '<path d="M8 21V11M16 21V7M12 21V3M4 21h16"/>', (!S.coOpen && S.screen === 'leaders')], ['create', 'Launch', '<path d="M12 5v14M5 12h14"/>', (!S.coOpen && S.screen === 'create'), 'pri'], ['coToggle', 'Callouts', '<path d="M21 12a8 8 0 01-11.6 7.1L4 21l1.9-5.4A8 8 0 1121 12z"/>', S.coOpen], ['burnPage', 'Burnery', '<path d="M12 22c4 0 7-3 7-7 0-3-2-5-3-7-1 2-2 3-3 3 0-3-1-6-4-9 0 4-4 6-4 12 0 5 3 8 7 8z"/>', (!S.coOpen && S.screen === 'burn')], ['watchPage', 'Watchlist', '<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/>', (!S.coOpen && S.screen === 'watch')]].filter(function (x) { return true; }).map(function (x) { return '<button class="' + (x[3] ? 'on ' : '') + (x[4] || '') + '" data-act="' + x[0] + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round">' + x[2] + '</svg><span>' + x[1] + '</span>' + (x[0] === 'coToggle' ? '<b class="mn-badge mono" id="mn-co"' + (S.mCo ? '' : ' style="display:none"') + '>' + (S.mCo || '') + '</b>' : '') + '</button>'; }).join('') + '</nav>';
   }
@@ -861,7 +861,7 @@
   // ===== WATCHLIST PAGE =====
   function watchPage() {
     var list = S.watch.map(find).filter(Boolean);
-    var head = '<div class="wl-head"><button class="link" data-act="home">' + I.back + ' Board</button><h1 class="wl-h"><span class="wl-star">' + I.star(true) + '</span>Watchlist <span class="mono">' + list.length + '</span></h1>' +
+    var head = '<div class="wl-head"><button class="link" data-act="home">' + I.back + ' Board</button><h1 class="wl-h"><span class="wl-star">' + I.star(true) + '</span>Watchlist <span class="mono">' + list.length + '</span></h1>' + '<button class="btn sec wl-nt" data-act="notifOpen">' + (PUSH && PUSH.sub ? '🔔 Alerts on' : '🔔 Get alerts') + '</button>' +
       (list.length ? '<button class="btn sec wl-clear' + (S.wlConfirm ? ' sure' : '') + '" data-act="wlClear">' + (S.wlConfirm ? 'Tap again to clear all' : 'Clear all') + '</button>' : '') + '</div>';
     if (!list.length) {
       var sug = all().slice().sort(function (a, b) { return chg(b) - chg(a); }).slice(0, 4);
@@ -3639,6 +3639,50 @@
       '</div></div></div>';
   }
 
+  // ================= PUSH NOTIFICATIONS (Web Push: service worker + the server's VAPID key) =================
+  var PUSH = { ok: 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window, key: null, reg: null, sub: null, sig: '' };
+  S.pushP = { moves: true, rewards: true, callouts: true }; try { var pp0 = JSON.parse(localStorage.getItem('dl.push') || 'null'); if (pp0) S.pushP = { moves: pp0.moves !== false, rewards: pp0.rewards !== false, callouts: pp0.callouts !== false }; } catch (e) {}
+  function isIOS() { return /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); }
+  function isStandalone() { return (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true; }
+  function u8key(s) { var b = atob(s.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((s.length + 3) % 4)), a = new Uint8Array(b.length); for (var i = 0; i < b.length; i++) a[i] = b.charCodeAt(i); return a; }
+  function pushWatch() { return S.watch.map(find).filter(function (t) { return t && t.live && t.ca; }).map(function (t) { return t.ca; }); }
+  function pushBody() { return { sub: PUSH.sub.toJSON(), wallet: S.account || null, watch: pushWatch(), follow: S.trackWallets.slice(0, 300), moves: S.pushP.moves, rewards: S.pushP.rewards, callouts: S.pushP.callouts }; }
+  function pushPost(path, body) { return fetch(API + '/api/push/' + path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then(function (r) { return r.json().then(function (j) { if (!r.ok || !j.ok) throw new Error(j.error || 'server error'); return j; }); }); }
+  function pushSync(now) { clearTimeout(PUSH._t); PUSH._t = setTimeout(function () { if (PUSH.sub) pushPost('sub', pushBody()).catch(function (e) { console.warn('[treid] push sync', e); }); }, now ? 0 : 1500); }
+  function pushWatchSig() { if (!PUSH || !PUSH.sub) return; var sg = pushWatch().join(',') + '|' + S.trackWallets.join(',') + '|' + (S.account || ''); if (sg !== PUSH.sig) { PUSH.sig = sg; pushSync(); } }   // watchlist / follows / wallet changed → tell the server
+  function pushInit() {
+    if (!API || !PUSH.ok) return;
+    apiGet('/api/push/key').then(function (j) { PUSH.key = j && j.key || null; if (!PUSH.key) return; return navigator.serviceWorker.register('sw.js').then(function (reg) { PUSH.reg = reg; return reg.pushManager.getSubscription(); }).then(function (s) { PUSH.sub = s; if (s && Notification.permission !== 'granted') PUSH.sub = null; if (PUSH.sub) pushWatchSig(); if (S.notifOpen) render(); }); }).catch(function (e) { console.warn('[treid] push init', e); });
+    navigator.serviceWorker.addEventListener('message', function (ev) { var p = ev.data && ev.data.path; if (typeof p === 'string' && /^#\/[A-Za-z0-9\/_-]*$/.test(p)) { location.hash = p; routeReady = false; applyRoute(); routeReady = true; } });
+  }
+  function pushOn() {
+    if (!PUSH.key) { toast('Notifications aren’t switched on on the server yet'); return; }
+    S.pushBusy = true; render();
+    Notification.requestPermission().then(function (p) {   // straight from the tap (iPhone requires that)
+      if (p !== 'granted') throw new Error(p === 'denied' ? 'Notifications are blocked for this site — allow them in your browser settings' : 'Notifications were not allowed');
+      return (PUSH.reg ? Promise.resolve(PUSH.reg) : navigator.serviceWorker.register('sw.js')).then(function (reg) { PUSH.reg = reg; return navigator.serviceWorker.ready; }).then(function (reg) { return reg.pushManager.getSubscription().then(function (s) { return s || reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: u8key(PUSH.key) }); }); });
+    }).then(function (s) { PUSH.sub = s; return pushPost('sub', pushBody()); }).then(function () { PUSH.sig = pushWatch().join(',') + '|' + S.trackWallets.join(',') + '|' + (S.account || ''); toast('🔔 Notifications on'); })
+      .catch(function (e) { PUSH.sub = null; toast(e.message || 'Couldn’t turn notifications on'); }).then(function () { S.pushBusy = false; render(); });
+  }
+  function pushOff() {
+    var s = PUSH.sub; PUSH.sub = null; render(); if (!s) return;
+    pushPost('unsub', { endpoint: s.endpoint }).catch(function () {}); s.unsubscribe().catch(function () {}); toast('Notifications off');
+  }
+  function notifModal() {
+    if (!S.notifOpen) return '';
+    var on = !!PUSH.sub, P = S.pushP, nW = pushWatch().length, nF = S.trackWallets.length, body;
+    var tg = function (k, ic, h, sub, dis) { return '<button class="nt-opt' + (P[k] && !dis ? ' on' : '') + '" data-act="notifPref" data-arg="' + k + '"' + (dis ? ' disabled' : '') + ' role="switch" aria-checked="' + !!(P[k] && !dis) + '"><span class="nt-ic">' + ic + '</span><span class="nt-tx"><b>' + h + '</b><small class="muted">' + sub + '</small></span><i class="nt-sw"></i></button>'; };
+    if (!PUSH.ok && isIOS() && !isStandalone()) body = '<div class="nt-ios"><b>On iPhone, one step first</b><ol><li>Tap <b>Share</b> <span class="nt-sh">⬆︎</span> in Safari</li><li>Choose <b>Add to Home Screen</b></li><li>Open treid from your Home Screen and turn notifications on here</li></ol><small class="muted">Apple only allows web notifications for sites added to the Home Screen (iOS 16.4+).</small></div>';
+    else if (!PUSH.ok) body = '<p class="muted nt-p">This browser doesn’t support notifications. Try Chrome, Edge, Firefox, or Safari on a Mac.</p>';
+    else if (!API || (PUSH.key === null && S.apiOk)) body = '<p class="muted nt-p">Notifications aren’t switched on on the server yet — check back soon.</p>';
+    else body = '<div class="nt-main' + (on ? ' on' : '') + '"><span class="nt-bell">🔔</span><span><b>' + (on ? 'Notifications are on' : 'Get notified') + '</b><small class="muted">' + (on ? 'on this device' : 'even when treid is closed') + '</small></span>' +
+        (on ? '<button class="btn sec" data-act="notifOff">Turn off</button>' : '<button class="btn pri" data-act="notifOn"' + (S.pushBusy ? ' disabled' : '') + '>' + (S.pushBusy ? 'Allowing…' : 'Turn on') + '</button>') + '</div>' +
+      '<div class="nt-opts">' + tg('moves', '⭐', 'Watchlist moves', nW ? 'Big moves (±25%) and graduation of your ' + nW + ' starred coin' + (nW === 1 ? '' : 's') : 'Star coins with ☆ to follow them') +
+        tg('rewards', '🎁', 'My holder rewards', S.account ? 'When a coin pays holder rewards to ' + short(S.account) : 'Connect your wallet to get these', !S.account) +
+        tg('callouts', '🔥', 'Callouts from wallets I follow', nF ? nF + ' wallet' + (nF === 1 ? '' : 's') + ' followed' : 'Follow a wallet from its profile to get these') + '</div>' +
+      '<small class="muted nt-foot">Each device is set up separately. Turning on shares this device’s push address' + (S.account ? ', your wallet address' : '') + ' and your watchlist with the treid server — nothing else.</small>';
+    return '<div class="overlay" data-act="notifClose"><div class="terms card-s notif" data-stop><div class="terms-h"><b>Notifications</b><button class="iconbtn" data-act="notifClose" aria-label="Close">✕</button></div>' + body + '</div></div>';
+  }
   function footer() {
     return '<footer><div class="wrap foot"><span style="display:flex;align-items:center;gap:8px"><span style="width:22px;height:22px;display:inline-block">' + LOGO + '</span><b style="color:var(--soft)">treid<span class="muted" style="font-weight:600">.fun</span></b></span>' +
       '<span>' + (DEMO ? 'Demo · market data on this page is simulated · wallet connects to Solana ' + CLUSTER : 'Beta on Solana ' + CLUSTER + ' · every coin and trade here is real and on-chain') + '</span>' +
@@ -3670,7 +3714,7 @@
     if (S.screen === 'trench') trSave();
     var detOpen = [].map.call(document.querySelectorAll('#app details'), function (d) { return d.open ? (d.className || 'd') : null; });
     if (S.screen === 'site') { document.getElementById('app').innerHTML = body + siteModal() + walletModal(); document.body.classList.add('on-site'); document.body.classList.remove('has-rail', 'has-rail-min'); return; } document.body.classList.remove('on-site');
-    document.getElementById('app').innerHTML = (RPC_DEV || API_DEV ? '<div class="devbar">⚠ Developer mode — custom ' + [RPC_DEV ? 'RPC' : '', API_DEV ? 'server' : ''].filter(Boolean).join(' + ') + ' (this tab only)</div>' : '') + '<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="ccUp" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3DDC97" stop-opacity=".28"/><stop offset="1" stop-color="#3DDC97" stop-opacity="0"/></linearGradient><linearGradient id="ccDn" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F2708A" stop-opacity=".26"/><stop offset="1" stop-color="#F2708A" stop-opacity="0"/></linearGradient></defs></svg>' + tape() + header() + body + footer() + walletModal() + demoImgModal() + termsModal() + calloutDrawer() + calloutRail() + palette() + walletDrawer() + holderMap() + burnModal() + ctoModal() + coModal() + shareModal() + siteModal();
+    document.getElementById('app').innerHTML = (RPC_DEV || API_DEV ? '<div class="devbar">⚠ Developer mode — custom ' + [RPC_DEV ? 'RPC' : '', API_DEV ? 'server' : ''].filter(Boolean).join(' + ') + ' (this tab only)</div>' : '') + '<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="ccUp" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3DDC97" stop-opacity=".28"/><stop offset="1" stop-color="#3DDC97" stop-opacity="0"/></linearGradient><linearGradient id="ccDn" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F2708A" stop-opacity=".26"/><stop offset="1" stop-color="#F2708A" stop-opacity="0"/></linearGradient></defs></svg>' + tape() + header() + body + footer() + walletModal() + demoImgModal() + termsModal() + calloutDrawer() + calloutRail() + palette() + walletDrawer() + holderMap() + burnModal() + ctoModal() + coModal() + shareModal() + siteModal() + notifModal();
     document.body.classList.toggle('has-rail', S.screen === 'home' && !S.coOpen && !S.railHidden); document.body.classList.toggle('has-rail-min', S.screen === 'home' && !S.coOpen && !!S.railHidden);
     if (fid) { var el = document.getElementById(fid); if (el) { el.focus({ preventScroll: true }); try { if (ss != null) el.setSelectionRange(ss, se); } catch (e) {} } }
     if (S.palOpen && !fid) { var p = document.getElementById('pal'); if (p) p.focus(); }
@@ -3682,6 +3726,7 @@
     if (S.screen === 'token') lwMount();
     if (S.screen === 'home') tsMount();
     if (S.screen === 'trench') trMount();
+    pushWatchSig();
     setTimeout(function () { navInd(); labKick(); fwKick(); mbuyWatch(); bnKick(); }, 0);
     mFit(); if (S.screen === 'home') mSetStep(M.step);
   }
@@ -3897,6 +3942,11 @@
       case 'hmapClose': if (el.classList.contains('hm-ov') && e.target.closest('[data-stop]')) break; set({ hmap: null }); break;
       case 'side': set({ side: arg }); break;
       case 'terms': e.preventDefault && e.preventDefault(); set({ termsOpen: true }); break;
+      case 'notifOpen': S.walletMenu = false; set({ notifOpen: true }); break;
+      case 'notifClose': if (e.target.closest('[data-stop]') && !e.target.closest('.iconbtn')) break; set({ notifOpen: false }); break;
+      case 'notifOn': pushOn(); break;
+      case 'notifOff': pushOff(); break;
+      case 'notifPref': S.pushP[arg] = !S.pushP[arg]; try { localStorage.setItem('dl.push', JSON.stringify(S.pushP)); } catch (er) {} pushSync(true); render(); break;
       case 'termsClose': if (e.target.closest('[data-stop]') && !e.target.closest('.iconbtn')) break; set({ termsOpen: false }); break;
       case 'paySol': S.amount = ''; set({ paySol: arg === '1' }); break;
       case 'preset': if (arg === 'reset') { set({ amount: '' }); break; } set({ pctAmt: 0, amount: arg === 'max' ? Math.max(0, S.balance - 0.01).toFixed(3) : arg }); break;
@@ -4936,7 +4986,7 @@
       es.onopen = function () { S.apiOk = true; apiGet('/api/coins').then(function (cs2) { cs2.filter(Boolean).forEach(liveTok); }).catch(function () {}); };
     }).catch(function (e) { tries++; S.apiWait = tries; if (S.screen === 'pending') render(); console.warn('[treid] indexer not reachable, retrying', e); setTimeout(coinsLoad, Math.min(15000, 1500 * tries)); }); })();   // the server restarts after updates — keep trying instead of hanging
   }
-  liveStart();
+  liveStart(); pushInit();
   if (!RPC_DEV) rpc('getGenesisHash', []).then(function (g) { if (g !== GENESIS[CHAIN_ID]) { S.netBad = true; render(); console.warn('[treid] RPC network mismatch'); } }).catch(function () {});
   setInterval(function () { if (S.screen === 'burn' && !document.hidden) burnsLoad(); }, 30000);
   dlResume(); if (isMob() && !window.TreidChain) setTimeout(function () { chainLib().catch(function () {}); }, 1500);   // phones: preload so the wallet hand-off starts instantly

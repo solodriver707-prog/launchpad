@@ -36,3 +36,9 @@ services:
         sync: false
       - key: JUP_API_KEY         # free key from developers.jup.ag (lite-api is being retired)
         sync: false
+      - key: VAPID_PUBLIC        # web push: `npx web-push generate-vapid-keys` → public key (also served to the site)
+        sync: false
+      - key: VAPID_PRIVATE       # web push private key — only here, never in chat or the repo
+        sync: false
+      - key: VAPID_SUBJECT
+        value: mailto:hello@treid.fun

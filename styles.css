@@ -5640,3 +5640,32 @@ body.on-site{padding-bottom:0!important}
   .tn-list{max-height:none;min-height:50vh;overflow:visible;padding:0}
   .tnrow{padding:10px 8px 8px}
 }
+
+/* ---------- notifications ---------- */
+.notif{width:min(440px,calc(100vw - 32px));overflow-y:auto}
+.notif .terms-h{margin-bottom:14px}
+.notif .nt-p{padding:6px 20px 22px;line-height:1.55;margin:0}
+.nt-main{display:flex;align-items:center;gap:12px;margin:4px 18px 14px;padding:14px;border-radius:14px;background:var(--s2);border:1px solid var(--line2)}
+.nt-main.on{border-color:rgba(61,220,151,.45);background:rgba(61,220,151,.07)}
+.nt-main>span:nth-child(2){flex:1;display:flex;flex-direction:column;gap:2px;min-width:0}
+.nt-main small{font-size:12.5px}
+.nt-bell{font-size:24px}
+.nt-opts{display:flex;flex-direction:column;gap:6px;padding:0 18px}
+.nt-opt{display:flex;align-items:center;gap:12px;text-align:left;padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--s1);min-height:56px}
+.nt-opt:disabled{opacity:.55;cursor:default}
+.nt-ic{font-size:19px;width:26px;text-align:center}
+.nt-tx{flex:1;display:flex;flex-direction:column;gap:2px;min-width:0}
+.nt-tx b{font-size:14px}.nt-tx small{font-size:12px;line-height:1.35}
+.nt-sw{flex:none;width:40px;height:24px;border-radius:99px;background:var(--s3);border:1px solid var(--line2);position:relative;transition:background .2s}
+.nt-sw::after{content:"";position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:99px;background:var(--muted);transition:transform .2s,background .2s}
+.nt-opt.on .nt-sw{background:rgba(61,220,151,.3);border-color:rgba(61,220,151,.6)}
+.nt-opt.on .nt-sw::after{transform:translateX(16px);background:var(--up)}
+.nt-foot{display:block;padding:14px 20px 20px;font-size:11.5px;line-height:1.5}
+.nt-ios{padding:4px 20px 22px;line-height:1.55}
+.nt-ios ol{margin:10px 0 12px;padding-left:20px}.nt-ios li{margin:4px 0}
+.nt-sh{display:inline-block;padding:0 6px;border:1px solid var(--line2);border-radius:6px;font-size:12px}
+.nt-btn{font-size:16px}
+.wb-acts .btn[data-act=notifOpen]{flex:0 0 auto;padding:0 14px}
+.wl-nt{margin-left:auto}
+.wl-head .wl-nt+.wl-clear{margin-left:8px}
+@media (max-width:760px){.nt-btn{display:none}.wl-nt{min-height:38px;padding:0 12px;font-size:13px}}
