@@ -60,19 +60,15 @@ Other ideas: ops low-balance Telegram alert, own domain treid.fun (Phantom trust
 - First tax distribution (TTEST, 70/20/10) happened before per-holder receipts existed → it is not in `hpay`/Rewards history; that's accepted.
 
 ## Unfinished items from the overnight audit (not fixed yet)
-### Security
-- `treidConfig` (indexer) still doesn't pin the exact curve params (sqrtStartPrice, migrationQuoteThreshold, migrationOption, fee schedule) — attacker configs with ops as fee claimer are only partly mitigated (real-volume gate, $3000 migration gate, low-balance guard). Pin them.
-- Ops Jupiter swaps: simulation checks SOL only; also check ops' output token balance ≥ `otherAmountThreshold` (route destination not verified).
-- Site `checkSwapTx` (chain/web/src.mjs): doesn't verify the JUP6 destination/amount for the user's swap; simulate and require the user's output account to rise ≥ threshold. Client `treidCfgOk` is weaker than the server check — make them match.
-- `sig.mjs`: require `SESSION_SECRET` in env (fallback derives from OPS/PARTNER); legacy messages without the domain line accepted until 2026-11-01 (closes itself); use `timingSafeEqual` for tokens.
-- Pre-launch upload (`/api/upload`): checks only the data-URL label, not the bytes — reuse `imageOf()`.
-- 400/500 responses return raw `e.message` — return generic text.
-- `badHost` doesn't catch DNS names that resolve to private IPs or dotless hostnames.
-- `ip()` takes the rightmost X-Forwarded-For — verify on Render that it's the client IP (otherwise all per-IP limits share one bucket).
-- `/api/coin/<mint>` can trigger a getProgramAccounts scan per coin every 2 min on request — add per-IP limit. Helius browser key in config.js is public by design: keep it separate from the server key, rate-limit it in Helius.
-- `claimedBy` now throws on unreadable receipts: an old claim the RPC no longer serves blocks settlement forever and costs ~31 s per cycle — mark after N failures + alert.
-- `canWrite` is a weak disk-full test (tiny row update may succeed on a full disk).
-- Images: after the 400 MB quota they're served but re-downloaded each time; 2–6 MB images that used to work are now misses.
+### Security — DONE 29 Oct 2026 (commits e53de06, + client-IP fix)
+- Curve pinned: `chain/indexer/curve.mjs` `curveOk()` (mainnet) rebuilds the site curve from the config's sqrtStartPrice (mc1 = 3×mc0) and compares curve points, threshold, fee schedule, migration settings; site `treidCfgOk` now = server rules + `curveOk` (`strictCurve` on mainnet). TTEST passes; tampered configs fail. RPC errors → retry, never "not treid".
+- Ops Jupiter swaps ($TREID buyback, reward-token convert): simulation must show ops' output account receiving ≥ `otherAmountThreshold`. Site SOL→pair swap: `swapGuard()` simulates, user's output ATA must rise ≥ minimum (tested on a real Jupiter route).
+- `SESSION_SECRET` (≥32 chars) expected in env (loud log + derived fallback otherwise); old callout seals still verify (`sealMatches`); constant-time compares.
+- Upload checks real image bytes (`realImage`); 400/500 bodies use `pubErr()` (own messages only); outbound fetch: dotless names refused, DNS answers in private ranges refused (`hostOk`).
+- Client IP: Render is behind Cloudflare → `ip()` = second-to-last X-Forwarded-For (was the shared Cloudflare edge = everyone shared one limit bucket). `/api/whoami` shows it.
+- `/api/coin` holder-scan budget per IP; claim settle back-off after 5 failures (every 6 h + `!!` log, never marked paid); `canWrite` also halts below 20 MB free disk; images up to 6 MB + 80 MB memory LRU over the disk quota.
+- Still on you: Helius browser key — keep separate from the server key and set a rate limit in Helius.
+
 ### Economics
 - Ops' own sales/buybacks are recorded as trades → inflate volume, sells, traders. Exclude ops wallet from stats.
 - Market cap = price × 1e9, ignores burned supply (`burnedOf` exists).
