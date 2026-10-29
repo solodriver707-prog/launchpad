@@ -3,7 +3,7 @@ import { PublicKey } from '@solana/web3.js';
 import { ed25519 } from '@noble/curves/ed25519';
 import bs58 from 'bs58';
 
-import { verifySig, checkSession, hmac } from './sig.mjs';
+import { verifySig, checkSession, hmac, sealMatches } from './sig.mjs';
 export const calloutMessage = (mint, ts, reply, text) => `treid: callout — ${mint} — ${ts}${reply != null ? ' — reply ' + reply : ''}\n${text}`;
 const clean = (t) => String(t || '').replace(/[\u0000-\u0008\u000B-\u001F\u007F‪-‮⁦-⁩]/g, '').replace(/\n{3,}/g, '\n\n').trim().slice(0, 2000);
 
@@ -12,7 +12,8 @@ export function startCallouts({ q, q1, run, push, rate, coinStats, pinJSON, pinF
   try { run('ALTER TABLE callouts ADD COLUMN img TEXT'); } catch {}
   // a callout is proven either by its own wallet signature, or (signed-in session) by the server's seal over all its fields
   const seal = (c) => 'h:' + hmac([c.mint, c.wallet, c.ts, c.reply ?? '', c.text, c.img || ''].join('|'));
-  const verify = (c) => (String(c.sig || '').startsWith('h:') ? c.sig === seal(c) : verifySig(calloutMessage(c.mint, c.ts, c.reply, c.text), c.sig, c.wallet, c.ts));
+  const sealData = (c) => [c.mint, c.wallet, c.ts, c.reply ?? '', c.text, c.img || ''].join('|');
+  const verify = (c) => (String(c.sig || '').startsWith('h:') ? sealMatches(c.sig, sealData(c)) : verifySig(calloutMessage(c.mint, c.ts, c.reply, c.text), c.sig, c.wallet, c.ts));
   const row = (r) => ({ id: r.id, mint: r.mint, wallet: r.wallet, text: r.text, ts: r.ts, reply: r.reply, mc: r.mc, pos: r.pos, img: r.img || null });
   const IMG_MAX = 1.6e6, MAGIC = { png: [0x89, 0x50, 0x4e, 0x47], jpeg: [0xff, 0xd8, 0xff], gif: [0x47, 0x49, 0x46], webp: [0x52, 0x49, 0x46, 0x46] };
   function imageOf(dataUrl) {   // a real raster image (checked by its bytes, not its label), ≤ 1.6 MB

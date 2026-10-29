@@ -322,7 +322,7 @@
   var chainP = null;
   function chainLib() {
     if (window.TreidChain) return Promise.resolve(window.TreidChain);
-    return chainP || (chainP = new Promise(function (res, rej) { var sc = document.createElement('script'); sc.src = 'chain.js?v=' + ((document.querySelector('script[src*="app.js"]') || {}).src || '').split('v=')[1]; sc.onload = function () { res(window.TreidChain); }; sc.onerror = function () { chainP = null; rej(new Error('Could not load chain module')); }; document.head.appendChild(sc); }));
+    return chainP || (chainP = new Promise(function (res, rej) { var sc = document.createElement('script'); sc.src = 'chain.js?v=' + ((document.querySelector('script[src*="app.js"]') || {}).src || '').split('v=')[1]; sc.onload = function () { if (window.TreidChain && window.TreidChain.strictCurve) window.TreidChain.strictCurve(CHAIN_ID === 'solana:mainnet'); res(window.TreidChain); }; sc.onerror = function () { chainP = null; rej(new Error('Could not load chain module')); }; document.head.appendChild(sc); }));
   }
   function walletSign(list, b) {
     if (S.wallet && S.wallet.dl) return dlSignTx(list, b);
@@ -2334,8 +2334,22 @@
       if (!qr || !qr.outAmount) throw new Error('No Jupiter route from SOL to ' + qSymT(t)); if (qr.inputMint !== WSOL || qr.outputMint !== t.qMint) throw new Error('Jupiter returned a different route — refusing');
       return fetch(JUP + '/swap', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ quoteResponse: qr, userPublicKey: S.account, wrapAndUnwrapSol: true, dynamicComputeUnitLimit: true }) }).then(function (r) { return r.json(); }).then(function (sw) {
         if (!sw || !sw.swapTransaction) throw new Error('Jupiter couldn’t build the swap');
-        var raw = b64Bytes(sw.swapTransaction); return chainLib().then(function (T) { return T.checkSwapTx(raw, S.account, RPC).then(function () { return walletSign([raw]); }); }).then(function (signed) { return rpc('sendTransaction', [bytesB64(signed[0]), { encoding: 'base64', preflightCommitment: 'confirmed', maxRetries: 3 }]); }).then(function (sig) { return waitSig(sig, sw.lastValidBlockHeight); });
+        var raw = b64Bytes(sw.swapTransaction); return chainLib().then(function (T) { return T.checkSwapTx(raw, S.account, RPC).then(function () { return swapGuard(T, sw.swapTransaction, t.qMint, qr.otherAmountThreshold, lam); }).then(function () { return walletSign([raw]); }); }).then(function (signed) { return rpc('sendTransaction', [bytesB64(signed[0]), { encoding: 'base64', preflightCommitment: 'confirmed', maxRetries: 3 }]); }).then(function (sig) { return waitSig(sig, sw.lastValidBlockHeight); });
       }); });
+  }
+  // the Jupiter route is built by an outside API: simulate it and require that YOUR account of the pair token really receives at least the
+  // guaranteed minimum, and that no more SOL leaves than the amount you chose (+ fees / account rent)
+  function swapGuard(T, b64, outMint, minOut, lam) {
+    var who = S.account, addrs = T.ataAddrs(who, outMint), min = BigInt(String(minOut || 0)); if (min <= 0n) return Promise.reject(new Error('Jupiter route has no minimum — refusing'));
+    var amt = function (a) { return a && a.data && a.data.parsed && a.data.parsed.info && a.data.parsed.info.mint === outMint && a.data.parsed.info.owner === who ? BigInt(a.data.parsed.info.tokenAmount.amount) : 0n; };
+    return Promise.all([rpc('getBalance', [who, { commitment: 'confirmed' }]), rpc('getMultipleAccounts', [addrs, { encoding: 'jsonParsed', commitment: 'confirmed' }])]).then(function (r) {
+      var solPre = BigInt(r[0].value), tokPre = r[1].value.reduce(function (s0, a) { return s0 + amt(a); }, 0n);
+      return rpc('simulateTransaction', [b64, { encoding: 'base64', sigVerify: false, replaceRecentBlockhash: true, commitment: 'confirmed', accounts: { encoding: 'jsonParsed', addresses: [who].concat(addrs) } }]).then(function (sim) {
+        var v = sim && sim.value; if (!v || !v.accounts) throw new Error('Couldn’t check the Jupiter swap — not signing'); if (v.err) throw new Error('The Jupiter swap fails in simulation — not signing');
+        var solPost = v.accounts[0] ? BigInt(v.accounts[0].lamports) : 0n, tokPost = v.accounts.slice(1).reduce(function (s0, a) { return s0 + amt(a); }, 0n);
+        if (solPre - solPost > BigInt(lam) + 30000000n) throw new Error('The Jupiter swap would take more SOL than you chose — not signing');
+        if (tokPost - tokPre < min) throw new Error('The Jupiter swap wouldn’t deliver the minimum to your wallet — not signing');
+        return true; }); });
   }
   function qSymT(t) { return t && t.live && t.qMint ? (t.qSym || t.pair) : 'SOL'; }
   function qUsdT(t) { return t && t.live && t.qMint && t.qUsd ? t.qUsd : SOL_USD; }

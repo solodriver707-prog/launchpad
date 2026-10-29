@@ -45,6 +45,9 @@ function jupIxsOk(msg, opsPk) {
     return 'unexpected program ' + pid; }
   return null;
 }
+// the route comes from an outside API: in the simulation, ops' own output account must really receive at least the guaranteed minimum
+function simTok(acc, addr, prog) { if (!acc || !acc.data) return 0n; try { return unpackAccount(new PublicKey(addr), { data: Buffer.from(acc.data[0], 'base64'), owner: new PublicKey(acc.owner), lamports: acc.lamports, executable: false, rentEpoch: 0 }, prog).amount; } catch { return 0n; } }
+async function tokBal(conn, addr, prog) { const ai = await conn.getAccountInfo(new PublicKey(addr)); if (!ai) return 0n; return unpackAccount(new PublicKey(addr), ai, prog).amount; }
 const DEC = 6, HARVEST_USD = 5, SHARE_USD = 0.05, FEE_USD = 1, MAX_ACCTS = 200;
 const parseSplit = (uri) => { let pair = false, rw = null; try { const u = new URL(uri), s = u.searchParams.get('s'), r = u.searchParams.get('r') || ''; pair = r === 'p';   // r=p: holders paid in the pair token · r=<mint>: in that token
     if (/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(r)) rw = r;
@@ -88,8 +91,9 @@ export function startOps({ conn, dbc, ops, treasury, q, q1, run, mainnet = false
     if (minOut > 0n) msg.instructions.push(createBurnCheckedInstruction(ata, tm, ops.publicKey, minOut, DEC, [], tprog));   // burned in the same transaction as the buy
     msg.instructions.push(memoIx(`treid:tbuy:${TREID}:${lam}:${minOut}`));
     const vt2 = new VersionedTransaction(msg.compileToV0Message(luts)); vt2.sign([ops]);
-    const pre = await conn.getBalance(ops.publicKey), sim = await conn.simulateTransaction(vt2, { sigVerify: false, accounts: { encoding: 'base64', addresses: [ops.publicKey.toBase58()] } });
+    const pre = await conn.getBalance(ops.publicKey), preT = await tokBal(conn, ata, tprog), sim = await conn.simulateTransaction(vt2, { sigVerify: false, accounts: { encoding: 'base64', addresses: [ops.publicKey.toBase58(), ata.toBase58()] } });
     if (sim.value.err) throw new Error('$TREID buyback simulation failed'); const post = sim.value.accounts?.[0]?.lamports ?? 0; if (pre - post > lam + 0.01e9) throw new Error('$TREID route would spend too much SOL — refused');
+    if (simTok(sim.value.accounts?.[1], ata, tprog) < preT) throw new Error('$TREID route doesn’t deliver the minimum to ops — refused');   // bought ≥ minOut, then minOut burned: never below where it started
     if (HALT.on) throw new Error('ops halted'); const sig = await landOrExpire(conn, vt2.serialize(), bs58.encode(vt2.signatures[0]), sw.lastValidBlockHeight);
     const t = await getTxRetry(conn, sig); if (!t) { unknown('$TREID buyback ' + sig); throw new Error('receipt unread'); } if (t.meta.err) throw new Error('$TREID buyback failed');
     rec(sig, 0, TREID, 'tbuy', lam); rec(sig, 1, TREID, 'tburn', minOut); rec(sig, 2, TREID, 'tleft', rwOut(t, ops.publicKey, TREID));
@@ -111,8 +115,12 @@ export function startOps({ conn, dbc, ops, treasury, q, q1, run, mainnet = false
     const msg = TransactionMessage.decompile(vt.message, { addressLookupTableAccounts: luts }); { const bad = jupIxsOk(msg, ops.publicKey); if (bad) throw new Error('route refused: ' + bad); } msg.instructions.push(memoIx(`treid:taxconv:${c.mint}:${amt}:${rw}`));
     const vt2 = new VersionedTransaction(msg.compileToV0Message(luts)); vt2.sign([ops]);
     // never sign away more SOL than the swap itself can need (the route comes from an outside API)
-    const pre = await conn.getBalance(ops.publicKey), sim = await conn.simulateTransaction(vt2, { sigVerify: false, accounts: { encoding: 'base64', addresses: [ops.publicKey.toBase58()] } });
+    const minOut = BigInt(qr.otherAmountThreshold || 0); if (minOut <= 0n) throw new Error('route has no minimum output');
+    const rwInfo = rw === WSOL ? null : await conn.getAccountInfo(new PublicKey(rw)), rwProg = rwInfo?.owner, rwAta = rwProg ? getAssociatedTokenAddressSync(new PublicKey(rw), ops.publicKey, false, rwProg).toBase58() : null;
+    if (rw !== WSOL && !rwAta) throw new Error('reward token not found');
+    const pre = await conn.getBalance(ops.publicKey), preT = rwAta ? await tokBal(conn, rwAta, rwProg) : 0n, sim = await conn.simulateTransaction(vt2, { sigVerify: false, accounts: { encoding: 'base64', addresses: [ops.publicKey.toBase58(), ...(rwAta ? [rwAta] : [])] } });
     if (sim.value.err) throw new Error('route simulation failed'); const post = sim.value.accounts?.[0]?.lamports ?? 0, maxLoss = (inM === WSOL ? amt : 0) + 0.01e9; if (pre - post > maxLoss) throw new Error('route would spend too much SOL — refused');
+    if (rwAta ? simTok(sim.value.accounts?.[1], rwAta, rwProg) - preT < minOut : BigInt(post) - BigInt(pre) < minOut - 10000000n) throw new Error('route doesn’t deliver the minimum to ops — refused');   // SOL out: unwrapped to ops (minus fees/rent)
     if (HALT.on) throw new Error('ops halted'); const sig = await landOrExpire(conn, vt2.serialize(), bs58.encode(vt2.signatures[0]), sw.lastValidBlockHeight);   // final answer only: landed, or expired and can never land
     const t = await getTxRetry(conn, sig); if (!t) { unknown('reward swap ' + sig); const e = new Error('receipt unread'); e.unconfirmed = true; throw e; } if (t.meta.err) throw new Error('reward swap failed');
     const out = rwOut(t, ops.publicKey, rw); rec(sig, 0, c.mint, 'taxconv', amt, rw); rec(sig, 1, c.mint, 'taxrw', out, rw);

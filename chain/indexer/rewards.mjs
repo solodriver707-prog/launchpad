@@ -191,6 +191,7 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, q
     else if (purpose === 'buyback') await buybackExact(c, got, sig);
     else await transferExact(c, got, dest, purpose === 'platform' ? 'platform' : 'pay', sig);
   }
+  const settleFail = new Map();
   async function reconcile() {
     for (const [sig, p] of pending) { const st = (await conn.getSignatureStatus(sig, { searchTransactionHistory: true }).catch(() => null))?.value;
       if (st && !st.err && st.confirmationStatus) { record(sig, [{ mint: p.mint, kind: 'claimx', lamports: p.amount, extra: p.extra }]); pending.delete(sig); }
@@ -198,7 +199,9 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, q
     const done = settledSet();
     for (const r of q(`SELECT sig, mint, lamports, extra FROM rlog WHERE kind='claimx' ORDER BY ts`)) { const purpose = String(r.extra || '').split('|')[1]; if (isSettled(r.sig, purpose, done)) continue;
       const c = q1('SELECT * FROM coins WHERE mint=?', r.mint); if (!c) continue;
-      try { await settle(c, r.sig, r.extra, done); } catch (e) { log('rewards settle later', c.symbol, purpose, e.message.slice(0, 100)); } }
+      const fl = settleFail.get(r.sig); if (fl && fl.n >= 5 && Date.now() - fl.at < 6 * 36e5) continue;   // a claim the RPC keeps failing to serve: retried every 6 h, not every cycle (never marked paid without proof)
+      try { await settle(c, r.sig, r.extra, done); settleFail.delete(r.sig); } catch (e) { const f = settleFail.get(r.sig) || { n: 0, at: 0 }; f.n++; f.at = Date.now(); settleFail.set(r.sig, f);
+        if (f.n === 5 || f.n % 20 === 0) console.error('!! rewards claim', r.sig.slice(0, 12), c.symbol, purpose, 'still unsettled after', f.n, 'tries —', e.message.slice(0, 100), '(check it by hand)'); else log('rewards settle later', c.symbol, purpose, e.message.slice(0, 100)); } }
   }
   // SOL that sits in ops waiting for step 2 (never swept to the treasury)
   function liabilities() {

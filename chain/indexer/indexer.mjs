@@ -9,11 +9,14 @@ const coder = new anchor.BorshEventCoder(DynamicBondingCurveIdl), ammCoder = new
 import { DatabaseSync } from 'node:sqlite';
 import http from 'node:http';
 import zlib from 'node:zlib';
+import net from 'node:net';
+import dns from 'node:dns/promises';
 import { opsKeypair, startOps, treidCfg } from './ops.mjs';
 import { startRewards } from './rewards.mjs';
 import { startCallouts } from './callouts.mjs';
 import { startBubbles } from './bubbles.mjs';
 import { startPush } from './push.mjs';
+import { curveOk } from './curve.mjs';
 import { fetchT, JUP } from './txutil.mjs';
 import { HALT } from './lock.mjs';
 let OPS_ST = null;
@@ -109,14 +112,20 @@ function treidConfig(cf) {
       && !n(cf.creatorLiquidityVestingInfo?.isInitialized) && !n(cf.partnerLiquidityVestingInfo?.isInitialized) && n(bf.baseFeeMode) <= 1 && !n(cf.poolFees.dynamicFee?.initialized)
       && n(cf.transferFeeBasisPoints) <= 1000 && (!n(cf.transferFeeFlag) || (n(cf.transferFeeWithheldAuthority) === 0 && n(cf.migratedTransferFeeAuthorityOption) === 0)) && n(cf.creatorTradingFeePercentage) === 50 && n(cf.collectFeeMode) === 0;
   } catch { return false; } }
+// …and (mainnet) its curve is exactly the one the site builds: start price, migration threshold, fee schedule and migration settings
+const qDecC = new Map([[WSOL, 9]]);
+async function quoteDec(qm) { if (qDecC.has(qm)) return qDecC.get(qm); const ai = await conn.getAccountInfo(new PublicKey(qm)); if (!ai) throw new Error('quote mint not found');
+  const mi = await getMint(conn, new PublicKey(qm), 'confirmed', ai.owner.equals(TOKEN_2022_PROGRAM_ID) ? TOKEN_2022_PROGRAM_ID : undefined); qDecC.set(qm, mi.decimals); return mi.decimals; }
+const curveRej = new Set();
+async function treidCurve(k, cf) { if (!MAINNET) return true; const ok = curveOk(cf, await quoteDec(cf.quoteMint.toBase58())); if (!ok && !curveRej.has(k)) { curveRej.add(k); console.log('skip  config with a non-treid curve', k); } return ok; }
 async function loadConfigs() {
   if (!PARTNERS.length) return; const cs = (await Promise.all(PARTNERS.map((w) => dbc.state.getPoolConfigsByOwner(new PublicKey(w))))).flat();
-  for (const c of cs) { const k = c.publicKey.toBase58(); if (!configs.has(k) && treidConfig(c.account) && configs.size < 1e6) configs.add(k); }   // which ones get a live stream is decided by retier()
+  for (const c of cs) { const k = c.publicKey.toBase58(); if (!configs.has(k) && treidConfig(c.account) && configs.size < 1e6 && await treidCurve(k, c.account)) configs.add(k); }   // an RPC error throws → the caller retries (never "not treid")   // which ones get a live stream is decided by retier()
 }
 const cfgFound = new Map();   // configs seen being created (their coin may not be indexed yet) → counted as active
 async function addConfig(k) {   // one new config, read on its own (never a rescan of every config)
   if (configs.has(k)) return true; if (configs.size >= 1e6) return false;
-  const cf = await dbc.state.getPoolConfig(new PublicKey(k)).catch(() => null); if (!cf || !treidConfig(cf)) return false;
+  const cf = await dbc.state.getPoolConfig(new PublicKey(k)).catch(() => null); if (!cf || !treidConfig(cf) || !(await treidCurve(k, cf))) return false;
   configs.add(k); cfgFound.set(k, Date.now()); watch(k); for (const ms of [6e3, 25e3]) setTimeout(() => syncAddress(k, 100).catch(() => {}), ms); return true;   // its pool may be created before the stream is up
 }
 function watch(k) { if (watched.has(k)) return; watched.set(k, conn.onLogs(new PublicKey(k), (l) => { if (!l.err) enqueue(l.signature); }, 'confirmed')); }
@@ -159,28 +168,37 @@ async function quoteAllowed(qm) {
   if (got) qOk.set(qm, { ok, at: Date.now() }); else if (!ok) throw new Error('pair check unavailable');   // a failed lookup is retried, never cached as "not allowed"
   return ok;
 }
+// an uploaded image must really be a PNG / JPEG / GIF / WEBP (checked by its bytes, not its label) and not too big
+const MAGIC = { png: [0x89, 0x50, 0x4e, 0x47], jpeg: [0xff, 0xd8, 0xff], jpg: [0xff, 0xd8, 0xff], gif: [0x47, 0x49, 0x46], webp: [0x52, 0x49, 0x46, 0x46] };
+function realImage(v, maxBytes) { const m = /^data:image\/(png|jpe?g|gif|webp);base64,([A-Za-z0-9+/=]+)$/.exec(typeof v === 'string' ? v : ''); if (!m) return false; const b = Buffer.from(m[2], 'base64');
+  return b.length > 12 && b.length <= maxBytes && MAGIC[m[1]].every((x, i) => b[i] === x) && (m[1] !== 'webp' || b.subarray(8, 12).toString() === 'WEBP'); }
 // coin images: fetched once from IPFS (slow public gateways) and served from here with a long browser cache
 run('CREATE TABLE IF NOT EXISTS cimg(mint TEXT, b INT, ct TEXT, data BLOB, at INT, PRIMARY KEY(mint, b))');
 const imgBusy = new Map();
 function ipfsUrls(u) { const m = String(u || '').match(/\/ipfs\/([A-Za-z0-9]+)(\/[^?#]*)?/) || String(u || '').match(/^ipfs:\/\/([A-Za-z0-9]+)(\/[^?#]*)?/); if (!m) return /^https:\/\//.test(u) ? [u] : []; const path = m[1] + (m[2] || ''); return [PINATA_GW + '/ipfs/' + path, 'https://ipfs.io/ipfs/' + path, 'https://gateway.pinata.cloud/ipfs/' + path].filter((x, i, a) => a.indexOf(x) === i); }
-const badHost = (h) => /^(\d+\.){3}\d+$|^\[|localhost|\.internal$|\.local$|^metadata\./i.test(h);
-async function fetchSafe(x, ms) { let u = x; for (let hop = 0; hop < 4; hop++) { const url = new URL(u); if (url.protocol !== 'https:' || badHost(url.hostname)) return null;   // every redirect hop is checked again
+const badHost = (h) => /^(\d+\.){3}\d+$|^\[|localhost|\.internal$|\.local$|^metadata\./i.test(h) || !h.includes('.');
+const privIp = (a) => { if (net.isIPv4(a)) { const [x, y] = a.split('.').map(Number); return x === 10 || x === 127 || x === 0 || (x === 169 && y === 254) || (x === 172 && y >= 16 && y <= 31) || (x === 192 && y === 168) || (x === 100 && y >= 64 && y <= 127) || x >= 224; }
+  const l = a.toLowerCase(); if (l.startsWith('::ffff:')) return privIp(l.slice(7)); return l === '::1' || l === '::' || /^f[cd]/.test(l) || /^fe[89ab]/.test(l); };
+async function hostOk(h) { if (badHost(h)) return false; try { const as = await dns.lookup(h, { all: true }); return as.length > 0 && !as.some((a) => privIp(a.address)); } catch { return false; } }   // a public name pointing at an internal address is refused too
+async function fetchSafe(x, ms) { let u = x; for (let hop = 0; hop < 4; hop++) { const url = new URL(u); if (url.protocol !== 'https:' || !(await hostOk(url.hostname))) return null;   // every redirect hop is checked again
     const r = await fetch(u, { signal: AbortSignal.timeout(ms), redirect: 'manual' }); if (r.status >= 300 && r.status < 400 && r.headers.get('location')) { u = new URL(r.headers.get('location'), u).href; continue; } return r; } return null; }
 async function fetchAny(urls, ms = 12e3) { for (const x of urls) { try { const r = await fetchSafe(x, ms); if (r && r.ok) return r; } catch {} } return null; }
 async function readCapped(r, max) { const len = +(r.headers.get('content-length') || 0); if (len > max) { try { r.body?.cancel(); } catch {} return null; }   // never hold more than `max` bytes of someone's file in memory
   const rd = r.body.getReader(), parts = []; let n = 0; for (;;) { const { done, value } = await rd.read(); if (done) break; n += value.length; if (n > max) { try { rd.cancel(); } catch {} return null; } parts.push(value); } return Buffer.concat(parts); }
-const IMG_MAX = 2e6, IMG_QUOTA = 400e6; let imgTot = { v: 0, at: 0 };
+const IMG_MAX = 6e6, IMG_QUOTA = 400e6, memImg = new Map(); let memImgB = 0; let imgTot = { v: 0, at: 0 };
 const imgTotal = () => { if (Date.now() - imgTot.at > 10 * 60e3) { imgTot = { v: q1('SELECT COALESCE(SUM(LENGTH(data)),0) s FROM cimg').s, at: Date.now() }; } return imgTot.v; };
 const imgMiss = (mint, ban) => { try { run('INSERT OR REPLACE INTO cimg(mint,b,ct,data,at) VALUES(?,?,?,?,?)', mint, ban, null, null, Date.now()); } catch {} return null; };
 function coinImage(mint, ban) {
-  const row = q1('SELECT ct, data, at FROM cimg WHERE mint=? AND b=?', mint, ban); if (row && row.data) return Promise.resolve({ ct: row.ct, data: Buffer.from(row.data) }); if (row && Date.now() - row.at < 10 * 60e3) return Promise.resolve(null);   // remembered miss: retry in 10 min
+  const row = q1('SELECT ct, data, at FROM cimg WHERE mint=? AND b=?', mint, ban); if (row && row.data) return Promise.resolve({ ct: row.ct, data: Buffer.from(row.data) });
+  const mm = memImg.get(mint + '|' + ban); if (mm) { memImg.delete(mint + '|' + ban); memImg.set(mint + '|' + ban, mm); return Promise.resolve(mm); }   // over the disk quota: recently used images live in memory (LRU, 80 MB) if (row && Date.now() - row.at < 10 * 60e3) return Promise.resolve(null);   // remembered miss: retry in 10 min
   const k = mint + '|' + ban; if (imgBusy.has(k)) return imgBusy.get(k);
   const pr = (async () => { const c = q1('SELECT uri FROM coins WHERE mint=?', mint); if (!c?.uri) return null;
     const mr = await fetchAny(ipfsUrls(c.uri)); let meta = null; try { const mb = mr && await readCapped(mr, 64e3); meta = mb && JSON.parse(mb.toString('utf8')); } catch {} const src = meta && (ban ? meta.banner : meta.image); if (typeof src !== 'string') return imgMiss(mint, ban);
     const r = await fetchAny(ipfsUrls(src), 20e3); const ct = r && String(r.headers.get('content-type') || '').split(';')[0];
     if (!r || !/^image\/(png|jpe?g|gif|webp)$/.test(ct)) return imgMiss(mint, ban);
     const buf = await readCapped(r, IMG_MAX); if (!buf) return imgMiss(mint, ban);
-    if (imgTotal() + buf.length < IMG_QUOTA) { run('INSERT OR REPLACE INTO cimg(mint,b,ct,data,at) VALUES(?,?,?,?,?)', mint, ban, ct, buf, Date.now()); imgTot.v += buf.length; }   // the disk also holds the money ledger: images never fill it
+    if (imgTotal() + buf.length < IMG_QUOTA) { run('INSERT OR REPLACE INTO cimg(mint,b,ct,data,at) VALUES(?,?,?,?,?)', mint, ban, ct, buf, Date.now()); imgTot.v += buf.length; }
+    else { memImg.set(mint + '|' + ban, { ct, data: buf }); memImgB += buf.length; for (const [k2, v2] of memImg) { if (memImgB <= 80e6) break; memImg.delete(k2); memImgB -= v2.data.length; } }   // the disk also holds the money ledger: images never fill it
     return { ct, data: buf }; })().catch(() => imgMiss(mint, ban)).finally(() => imgBusy.delete(k));
   imgBusy.set(k, pr); return pr;
 }
@@ -372,18 +390,20 @@ const hits = new Map(); function rate(k, n, ms) { const now = Date.now(), a = (h
 const ip = (req) => { const x = String(req.headers['x-forwarded-for'] || '').split(',').map((v) => v.trim()).filter(Boolean); return x.length ? x[x.length - 1] : String(req.socket.remoteAddress || ''); };   // rightmost = added by Render's proxy; the left ones are client-controlled
 function liveHolders(mint, refresh = true) { const h = hCache.get(mint); if (refresh && (!h || Date.now() - h.ts > 120e3) && holderSlots()) { if (!h?.busy) { const e = h || { ts: 0, list: null }; e.busy = true; hCache.set(mint, e); hRun++; holders(mint).then((l) => { hCache.set(mint, { ts: Date.now(), list: l }); }).catch(() => { e.busy = false; e.ts = Date.now() - 60e3; }).finally(() => { hRun--; }); } } return h?.list || null; }
 let hRun = 0; const holderSlots = () => hRun < 3;   // at most 3 holder scans at a time (each is a getProgramAccounts)
-function stats(mint, list = false) {
+function stats(mint, list = false, scanOk = true) {
   const c = q1('SELECT * FROM coins WHERE mint=?', mint); if (!c) return null;
   const last = q1('SELECT mcap_usd, progress, reserve FROM trades WHERE mint=? ORDER BY ts DESC, slot DESC LIMIT 1', mint);
   const agg = q1(`SELECT COUNT(*) n, SUM(sol) vol, SUM(usd) volusd, SUM(side='buy') buys, SUM(side='sell') sells, COUNT(DISTINCT wallet) traders, SUM(CASE WHEN sniper=1 THEN tokens ELSE 0 END) snipeTok, SUM(CASE WHEN bundle=1 AND side='buy' THEN tokens ELSE 0 END) bundleTok FROM trades WHERE mint=?`, mint);
   const bal = q(`SELECT wallet, SUM(CASE WHEN side='buy' THEN tokens ELSE -tokens END) n FROM trades WHERE mint=? GROUP BY wallet HAVING n > 0.5 ORDER BY n DESC`, mint);
   const devBuy = q1(`SELECT 1 x FROM trades WHERE mint=? AND wallet=? AND side='buy' LIMIT 1`, mint, c.creator);
-  const recent = (q1('SELECT MAX(ts) t FROM trades WHERE mint=?', mint)?.t || 0) > Date.now() - 36e5, lh = liveHolders(mint, !list || recent), real = lh ? lh.filter((h) => !h.curve) : null;
+  const recent = (q1('SELECT MAX(ts) t FROM trades WHERE mint=?', mint)?.t || 0) > Date.now() - 36e5, lh = liveHolders(mint, scanOk && (!list || recent)), real = lh ? lh.filter((h) => !h.curve) : null;
   const devN = real ? (real.find((h) => h.wallet === c.creator)?.pct || 0) / 100 * SUPPLY : bal.find(b => b.wallet === c.creator)?.n || 0;
   const top10 = Math.min(SUPPLY, real ? real.slice(0, 10).reduce((s, h) => s + h.pct / 100 * SUPPLY, 0) : bal.slice(0, 10).reduce((s, b) => s + b.n, 0));
   const po = OPS && REW ? q1(`SELECT COALESCE(SUM(CASE WHEN kind='taxburn' THEN lamports END),0)/1e6 burned, COALESCE(SUM(CASE WHEN kind='taxhold' THEN lamports END),0)/1e6 holders, COALESCE(SUM(CASE WHEN kind='taxdev' THEN lamports END),0)/1e6 dev, COUNT(CASE WHEN kind='taxhold' THEN 1 END) n, COALESCE(SUM(CASE WHEN kind='taxholdq' THEN lamports END),0) * 1.0 / ${10 ** (c.quote_dec ?? 9)} holders_q FROM rlog WHERE mint=? AND kind IN ('taxburn','taxdev','taxhold','taxholdq')`, mint) : null;   // from on-chain receipts → survives restarts
   return { ...c, vamp: vampOf(mint), tax_paid: po, reserve: last?.reserve || 0, grad_target: gradTarget.get(mint) || 0, quote_usd: quoteUsd(c.quote_mint, c.quote_symbol), vol_usd: agg.volusd || 0, holders: real ? real.length : bal.length, dev_pct: devN / SUPPLY * 100, dev_sold: !!devBuy && devN < 1, top10_pct: top10 / SUPPLY * 100, sol_usd: SOL_USD, mcap_usd: last?.mcap_usd || 0, curve_pct: last?.progress || 0, trades: agg.n, vol_sol: agg.vol || 0, buys: agg.buys || 0, sells: agg.sells || 0, traders: agg.traders, snipers_pct: (agg.snipeTok || 0) / SUPPLY * 100, bundles_pct: (agg.bundleTok || 0) / SUPPLY * 100 };
 }
+// errors our own code throws on purpose are meant for the user; anything else (library, RPC, database, parser) gets a generic text
+const pubErr = (e) => { const m = String(e?.message || ''); if (e && e.constructor === Error && !e.code && m && m.length < 200 && !/sqlite|database|ECONN|ENOTFOUND|EAI_AGAIN|fetch failed|timed? ?out|abort|socket|JSON|Unexpected token|failed to get|getaddrinfo|status code|Cannot read|is not a function|undefined|\bat \S+:\d+/i.test(m)) return m; console.log('err (hidden)', m.slice(0, 160)); return 'something went wrong — try again'; };
 process.on('unhandledRejection', (e) => console.log('unhandled', String(e?.message || e).slice(0, 200)));   // one bad request or RPC hiccup must never kill the server
 process.on('uncaughtException', (e) => console.log('uncaught', String(e?.message || e).slice(0, 200)));
 const sseByIp = new Map();
@@ -435,11 +455,11 @@ async function handleReq(req, res) {
       const m = JSON.parse(body), wl = String(m.wallet || ''), wts = +m.ts;   // only a real wallet with SOL can pin (protects the IPFS account)
       if (!(Math.abs(Date.now() - wts) <= 5 * 60e3) || !verifySig(`treid: upload — ${wl} — ${wts}`, m.sig, wl, wts)) throw new Error('sign the upload with your wallet');
       if (!rate('upw|' + wl, 10, 864e5)) throw new Error('upload limit reached for today'); if ((await conn.getBalance(new PublicKey(wl))) < 0.02e9) throw new Error('your wallet needs a little SOL to launch');
-      const ok = (v) => typeof v === 'string' && /^data:image\/(png|jpe?g|gif|webp);base64,/.test(v) && v.length < 1.5e6, tag = String(m.symbol || 'coin').replace(/[^A-Za-z0-9]/g, '').slice(0, 10) + '-' + Date.now().toString(36);
+      const ok = (v) => realImage(v, 1.1e6), tag = String(m.symbol || 'coin').replace(/[^A-Za-z0-9]/g, '').slice(0, 10) + '-' + Date.now().toString(36);
       const image = ok(m.image) ? await pinFile(m.image, tag) : null, banner = ok(m.banner) ? await pinFile(m.banner, tag + '-banner') : null;
       const meta = { name: String(m.name || '').slice(0, 32), symbol: String(m.symbol || '').slice(0, 10), description: String(m.description || '').slice(0, 600), image, banner, external_url: 'https://treid.fun', properties: { files: image ? [{ uri: image, type: 'image' }] : [] } };
       if (m.x) meta.twitter = String(m.x).slice(0, 100); if (m.tg) meta.telegram = String(m.tg).slice(0, 100); if (m.web) meta.website = String(m.web).slice(0, 100);
-      J({ uri: await pinJSON(meta, tag), image, banner }); } catch (e) { console.log('upload err', e.message); res.writeHead(502, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ uri: null, error: e.message })); } });
+      J({ uri: await pinJSON(meta, tag), image, banner }); } catch (e) { console.log('upload err', e.message); res.writeHead(502, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ uri: null, error: pubErr(e) })); } });
     return;
   }
   if (p[1] === 'meta' && req.method === 'POST') { res.writeHead(410, { 'access-control-allow-origin': '*' }); return res.end('{"ok":false,"error":"metadata lives on IPFS now"}'); }
@@ -451,6 +471,7 @@ async function handleReq(req, res) {
       res.writeHead(200, { 'content-type': im.ct, 'x-content-type-options': 'nosniff', 'access-control-allow-origin': '*', 'cache-control': 'public, max-age=604800, immutable' }); return res.end(im.data); }
     const [h, b64] = d.split(','), ct = h.slice(5, h.indexOf(';')); if (!/^image\/(png|jpe?g|gif|webp)$/.test(ct)) { res.writeHead(404); return res.end(); }   // never serve svg (script)
     res.writeHead(200, { 'content-type': ct, 'x-content-type-options': 'nosniff', 'access-control-allow-origin': '*', 'cache-control': 'public, max-age=86400' }); return res.end(Buffer.from(b64, 'base64')); }
+  if (p[1] === 'whoami') return J({ ip: ip(req), xff: String(req.headers['x-forwarded-for'] || ''), tci: String(req.headers['true-client-ip'] || ''), cf: String(req.headers['cf-connecting-ip'] || ''), xr: String(req.headers['x-real-ip'] || '') });
   if (!p.length || p[1] === 'health') return J({ ok: true, coins: q1('SELECT COUNT(*) n FROM coins').n, trades: q1('SELECT COUNT(*) n FROM trades').n, configs: configs.size, partner: PARTNER || null, ops: OPS?.publicKey.toBase58() || null, ipfs: !!PINATA_JWT, sol_usd: SOL_USD, ready, cluster: MAINNET ? 'mainnet' : 'devnet', db_persistent: DB_PATH.startsWith('/data/'), ops_sol: opsSolC.v, ops_halted: HALT.on ? HALT.why : false, ops_low: !!OPS_ST?.status?.low, sites: SITES, push: !!PUSH?.on, push_subs: PUSH?.on ? q1('SELECT COUNT(*) n FROM pushsub').n : 0 });
   try {
     if (p[1] === 'stream') { const ipx = ip(req), nIp = sseByIp.get(ipx) || 0; if (clients.size >= 3000 || nIp >= 6) { res.writeHead(429, { 'access-control-allow-origin': '*' }); return res.end(); }
@@ -458,10 +479,10 @@ async function handleReq(req, res) {
       res.writeHead(200, { 'content-type': 'text/event-stream', 'access-control-allow-origin': '*', 'cache-control': 'no-cache' }); res.write(': hi\n\n'); clients.add(res); req.on('close', () => clients.delete(res)); return; }
     if (p[1] === 'push' && p[2] === 'key') return J({ key: PUSH?.publicKey || null });   // web push: the server's VAPID public key (null = off)
     if (p[1] === 'push' && ['alert', 'alerts', 'alertdel'].includes(p[2]) && req.method === 'POST') { let body = ''; req.on('data', (d) => { body += d; if (body.length > 4000) req.destroy(); });
-      req.on('end', () => { try { if (!rate('pal|' + ip(req), 120, 36e5)) throw new Error('too many requests — try again later'); const b = JSON.parse(body); J(p[2] === 'alert' ? PUSH.alertAdd(b) : p[2] === 'alerts' ? PUSH.alertList(b) : PUSH.alertDel(b)); } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: e.message })); } }); return; }
+      req.on('end', () => { try { if (!rate('pal|' + ip(req), 120, 36e5)) throw new Error('too many requests — try again later'); const b = JSON.parse(body); J(p[2] === 'alert' ? PUSH.alertAdd(b) : p[2] === 'alerts' ? PUSH.alertList(b) : PUSH.alertDel(b)); } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: pubErr(e) })); } }); return; }
     if (p[1] === 'jt') return jtProxy(req, res, u, p);   // Jupiter Trigger V2 (limit / TP / SL orders), with the server's API key
     if (p[1] === 'push' && (p[2] === 'sub' || p[2] === 'unsub') && req.method === 'POST') { let body = ''; req.on('data', (d) => { body += d; if (body.length > 40000) req.destroy(); });
-      req.on('end', () => { try { if (!rate('push|' + ip(req), 30, 36e5)) throw new Error('too many requests — try again later'); const b = JSON.parse(body); J(p[2] === 'sub' ? PUSH.save(b) : PUSH.drop(b.endpoint)); } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: e.message })); } }); return; }
+      req.on('end', () => { try { if (!rate('push|' + ip(req), 30, 36e5)) throw new Error('too many requests — try again later'); const b = JSON.parse(body); J(p[2] === 'sub' ? PUSH.save(b) : PUSH.drop(b.endpoint)); } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: pubErr(e) })); } }); return; }
     if (p[1] === 'qprice' && !rate('qp|' + ip(req), 30, 6e4)) { res.writeHead(429, { 'access-control-allow-origin': '*' }); return res.end('{}'); }
     if (p[1] === 'ticon') {   // logo of a verified token by exact symbol (e.g. tokenized stocks), fetched once and served from here — raster images only
       const sym = String(u.searchParams.get('sym') || ''), mintQ = String(u.searchParams.get('mint') || '');
@@ -470,7 +491,7 @@ async function handleReq(req, res) {
       if (!h || Date.now() - h.at > 864e5) { if (!rate('ti|' + ip(req), 60, 6e4)) { res.writeHead(429); return res.end(); } h = { at: Date.now(), buf: null, ct: null };
         try { const j = await (await fetchT(JUP + '/tokens/v2/search?query=' + encodeURIComponent(mintQ || sym))).json(), t = (Array.isArray(j) ? j : []).find((x) => x && (mintQ ? x.id === mintQ : (x.isVerified || (x.tags || []).includes('verified')) && String(x.symbol).toLowerCase() === sym.toLowerCase()));
           const url = t && typeof t.icon === 'string' ? new URL(t.icon) : null;
-          if (url && url.protocol === 'https:' && !/^(\d+\.){3}\d+$|^\[|localhost|\.internal$|\.local$/i.test(url.hostname)) { const r = await fetchT(url.href), ct = String(r.headers.get('content-type') || '').split(';')[0];
+          if (url && url.protocol === 'https:' && await hostOk(url.hostname)) { const r = await fetchT(url.href), ct = String(r.headers.get('content-type') || '').split(';')[0];
             if (r.ok && /^image\/(png|jpeg|webp|gif)$/.test(ct)) { const buf = Buffer.from(await r.arrayBuffer()); if (buf.length <= 400e3) { h.buf = buf; h.ct = ct; } } } } catch {}
         iconC.set(ik, h); if (iconC.size > 500) iconC.delete(iconC.keys().next().value); }
       if (!h.buf) { res.writeHead(404, { 'access-control-allow-origin': '*' }); return res.end(); }
@@ -489,7 +510,7 @@ async function handleReq(req, res) {
       try { const r = await fetchT(JUP + '/tokens/v2/search?query=' + m); const j = await r.json(); const t = Array.isArray(j) ? j.find((x) => x.id === m) : null; if (t) { symbol = symbol || t.symbol; name = t.name; icon = t.icon || null; verified = verified || !!(t.isVerified || (t.tags || []).includes('verified')); if (!QUOTE_OVERRIDE[m] && t.usdPrice) { usd = +t.usdPrice * (await qMult(m)); qPrice.set(m, usd); } } } catch {}   // per on-chain unit (scaled-UI tokens: × multiplier)
       return J({ mint: m, usd, symbol, name, icon, verified }); }
     if (p[1] === 'coins') { if (!coinsSnap) buildCoinsSnap(); else if (Date.now() - coinsSnap.at > 10e3) setImmediate(buildCoinsSnap); return J(coinsSnap.out); }   // stale-while-refresh: nobody waits for the rebuild
-    if (p[1] === 'coin') return J(HIDDEN.has(p[2]) ? null : stats(p[2]));
+    if (p[1] === 'coin') return J(HIDDEN.has(p[2]) ? null : stats(p[2], false, rate('hscan|' + ip(req), 30, 60e3)));   // a burst of different coins from one visitor can't fan out into holder scans
     if (p[1] === 'trades') return J(q('SELECT * FROM trades WHERE mint=? ORDER BY ts DESC, slot DESC LIMIT 200', p[2]));
     if (p[1] === 'creator' && p[2]) {   // creator rewards escrow status for a coin
       const c = q1('SELECT * FROM coins WHERE mint=?', p[2]); if (!c) return J(null);
@@ -501,11 +522,11 @@ async function handleReq(req, res) {
     }
     if (['cto', 'claim', 'ping'].includes(p[1]) && req.method === 'POST' && !rate('act|' + ip(req), 30, 36e5)) { res.writeHead(429, { 'access-control-allow-origin': '*' }); return res.end('{"ok":false,"error":"too many requests — try again later"}'); }
     if (p[1] === 'cto' && (p[2] === 'apply' || p[2] === 'vote') && req.method === 'POST') { let body = ''; req.on('data', (d) => { body += d; if (body.length > 6000) req.destroy(); });
-      req.on('end', async () => { try { if (!REW) throw new Error('rewards escrow not enabled'); const b = JSON.parse(body); J(p[2] === 'apply' ? await REW.ctoApply(b) : await REW.ctoVote(b)); } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: e.message })); } }); return; }
+      req.on('end', async () => { try { if (!REW) throw new Error('rewards escrow not enabled'); const b = JSON.parse(body); J(p[2] === 'apply' ? await REW.ctoApply(b) : await REW.ctoVote(b)); } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: pubErr(e) })); } }); return; }
     if (p[1] === 'session' && req.method === 'POST') { let body = ''; req.on('data', (d) => { body += d; if (body.length > 2000) req.destroy(); });   // sign in once (24 h)
-      req.on('end', () => { try { if (!rate('ss|' + ip(req), 20, 36e5)) throw new Error('too many sign-ins'); J(issueSession(JSON.parse(body))); } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: e.message })); } }); return; }
+      req.on('end', () => { try { if (!rate('ss|' + ip(req), 20, 36e5)) throw new Error('too many sign-ins'); J(issueSession(JSON.parse(body))); } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: pubErr(e) })); } }); return; }
     if (p[1] === 'callout' && req.method === 'POST') { let body = ''; req.on('data', (d) => { body += d; if (body.length > 2.3e6) req.destroy(); });   // text + optional image
-      req.on('end', async () => { try { J(await CO.post(JSON.parse(body), ip(req))); } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: e.message })); } }); return; }
+      req.on('end', async () => { try { J(await CO.post(JSON.parse(body), ip(req))); } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: pubErr(e) })); } }); return; }
     if (p[1] === 'callouts') { const cm = u.searchParams.get('mint') || null; return J(cached('co|' + (cm || ''), 5e3, () => { const memo = new Map(); return CO.list(cm).map((c) => { const k = c.mint + '|' + c.wallet; if (!memo.has(k)) memo.set(k, posStats(c.mint, c.wallet)); return { ...c, ps: memo.get(k) }; }); })); }   // every callout carries its author's live position
     if (p[1] === 'wallet' && p[2]) { const w = String(p[2]); if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(w)) return J(null); const c0 = walC.get(w); if (c0 && Date.now() - c0.ts < 30e3) return J(c0.v); if (!rate('wal|' + ip(req), 40, 60e3)) return J(c0 ? c0.v : null);
       let sol = null; try { sol = (await conn.getBalance(new PublicKey(w))) / 1e9; } catch {}
@@ -526,7 +547,7 @@ async function handleReq(req, res) {
     if (p[1] === 'mytrades') { const m = String(u.searchParams.get('mint') || ''), w = String(u.searchParams.get('wallet') || ''); return J(q('SELECT sig, side, sol, tokens, usd, mcap_usd, ts FROM trades WHERE mint=? AND wallet=? ORDER BY ts DESC LIMIT 100', m, w)); }
     if (p[1] === 'burned' && req.method === 'POST' && !rate('burn|' + ip(req), 30, 36e5)) { res.writeHead(429, { 'access-control-allow-origin': '*' }); return res.end('{"ok":false,"error":"too many requests"}'); }
     if (p[1] === 'burned' && req.method === 'POST') { let body = ''; req.on('data', (d) => { body += d; if (body.length > 1000) req.destroy(); });
-      req.on('end', async () => { try { J(await verifyBurn(String(JSON.parse(body).sig || ''))); } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: e.message })); } }); return; }
+      req.on('end', async () => { try { J(await verifyBurn(String(JSON.parse(body).sig || ''))); } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: pubErr(e) })); } }); return; }
     if (p[1] === 'leaderboard' && !['24h', '7d', 'all'].includes(u.searchParams.get('per') || 'all')) return J({ traders: [], devs: [], hall: [] });
     if (p[1] === 'leaderboard' && lbCache.has(u.searchParams.get('per') || 'all') && Date.now() - lbCache.get(u.searchParams.get('per') || 'all').ts < 60e3) return J(lbCache.get(u.searchParams.get('per') || 'all').v);
     if (p[1] === 'leaderboard') { const pm = { '24h': 864e5, '7d': 6048e5 }[u.searchParams.get('per')] || 1e13, since = Date.now() - pm;
@@ -551,9 +572,9 @@ async function handleReq(req, res) {
       const ev = (REW ? q(`SELECT mint, CASE kind WHEN 'taxburn' THEN 'tax' ELSE 'frozen' END src, lamports/1e6 tok, ts, sig, NULL wallet FROM rlog WHERE kind IN ('taxburn','burntok') AND lamports > 0`) : []).concat(q(`SELECT mint, 'dev' src, tok, ts, sig, wallet FROM uburn`)).sort((a, b) => b.ts - a.ts).slice(0, 200);
       burnsSnap = { at: Date.now(), v: { coins: out, events: ev } }; return J(burnsSnap.v); }
     if (p[1] === 'claim' && req.method === 'POST') { let body = ''; req.on('data', (d) => { body += d; if (body.length > 4000) req.destroy(); });
-      req.on('end', async () => { try { if (!REW) throw new Error('rewards escrow not enabled'); J(await REW.claimNow(JSON.parse(body))); } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: e.message })); } }); return; }
+      req.on('end', async () => { try { if (!REW) throw new Error('rewards escrow not enabled'); J(await REW.claimNow(JSON.parse(body))); } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: pubErr(e) })); } }); return; }
     if (p[1] === 'ping' && req.method === 'POST') { let body = ''; req.on('data', (d) => { body += d; if (body.length > 4000) req.destroy(); });
-      req.on('end', async () => { try { if (!REW) throw new Error('rewards escrow not enabled'); J(await REW.ping(JSON.parse(body))); } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: e.message })); } }); return; }
+      req.on('end', async () => { try { if (!REW) throw new Error('rewards escrow not enabled'); J(await REW.ping(JSON.parse(body))); } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: pubErr(e) })); } }); return; }
     if (p[1] === 'payouts') return J(OPS && REW ? q(`SELECT sig, MAX(ts) ts, SUM(lamports)/1e6 harvested, SUM(CASE WHEN kind='taxburn' THEN lamports ELSE 0 END)/1e6 burned, SUM(CASE WHEN kind='taxdev' THEN lamports ELSE 0 END)/1e6 dev, SUM(CASE WHEN kind='taxhold' THEN lamports ELSE 0 END)/1e6 holders, MAX(CASE WHEN kind='taxhold' THEN CAST(extra AS INT) END) n_holders FROM rlog WHERE mint=? AND kind IN ('taxburn','taxdev','taxhold') GROUP BY sig ORDER BY ts DESC LIMIT 50`, p[2]) : []);
     if (p[1] === 'candles') { const tf = u.searchParams.get('tf') || '1m'; return J(cached('cd|' + p[2] + '|' + tf, 5e3, () => candles(p[2], tf))); }
     if (p[1] === 'bubbles' && p[2]) { if (!rate('bub|' + ip(req), 30, 60e3)) return J({ error: 'slow down' }, 429); const k = 'bub|' + p[2], c0 = bubC.get(k); if (c0 && Date.now() - c0.ts < (c0.v?.done ? 60e3 : 6e3)) return J(c0.v);
@@ -561,7 +582,7 @@ async function handleReq(req, res) {
     if (p[1] === 'holders') { const withPs = (l) => l.slice(0, 300).map((x) => (x.curve || x.pool ? x : { ...x, ps: posStats(p[2], x.wallet, x.pct / 100 * SUPPLY) }));   // position value, spent and profit per holder
       const h = hCache.get(p[2]); if (h?.list && Date.now() - h.ts < 15e3) return J(cached('hp|' + p[2] + '|' + h.ts, 15e3, () => withPs(h.list))); if (!q1('SELECT 1 FROM coins WHERE mint=?', p[2])) return J([]); if (!inflight.has(p[2])) inflight.set(p[2], holders(p[2]).finally(() => inflight.delete(p[2]))); const l = await inflight.get(p[2]); hCache.set(p[2], { ts: Date.now(), list: l }); return J(withPs(l)); }
     res.writeHead(404, { 'access-control-allow-origin': '*' }); res.end('{}');
-  } catch (e) { res.writeHead(500, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ error: e.message })); }
+  } catch (e) { res.writeHead(500, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ error: pubErr(e) })); }
 }
 let ready = false;
 if (!PARTNER) { console.error('Set PARTNER=<treid fee-claimer wallet>'); process.exit(1); }

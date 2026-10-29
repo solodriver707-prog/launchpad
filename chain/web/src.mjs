@@ -8,7 +8,7 @@ const bs58enc = (b) => (bs58lib.default || bs58lib).encode(b instanceof Uint8Arr
 import { NATIVE_MINT, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, getAssociatedTokenAddressSync, createBurnCheckedInstruction, getMint, getExtensionTypes, ExtensionType, getTransferFeeConfig } from '@solana/spl-token';
 import BN from 'bn.js';
 import { DynamicBondingCurveClient, buildCurveWithMarketCap, TokenType, TokenDecimal, TokenAuthorityOption, BaseFeeMode, CollectFeeMode,
-  MigrationOption, MigrationFeeOption, MigratedCollectFeeMode, DammV2DynamicFeeMode, ActivationType, deriveDbcPoolAddress, deriveDammV1MigrationMetadataAddress, SwapMode, getCurrentPoint, deriveDammV2PoolAddress, DAMM_V2_MIGRATION_FEE_ADDRESS } from '@meteora-ag/dynamic-bonding-curve-sdk';
+  MigrationOption, MigrationFeeOption, MigratedCollectFeeMode, DammV2DynamicFeeMode, ActivationType, deriveDbcPoolAddress, deriveDammV1MigrationMetadataAddress, SwapMode, getCurrentPoint, deriveDammV2PoolAddress, DAMM_V2_MIGRATION_FEE_ADDRESS, getPriceFromSqrtPrice } from '@meteora-ag/dynamic-bonding-curve-sdk';
 import { CpAmm, calculateTransferFeeExcludedAmount } from '@meteora-ag/cp-amm-sdk';
 
 // ---- treid rules (must match chain/scripts/01_launch.mjs) ----
@@ -98,15 +98,34 @@ export async function buildCreate({ rpc, payer, partner, treasury, name, symbol,
 }
 // the site never trusts a pool address from the server: before any quote or trade it checks ON-CHAIN that the pool is this coin's
 // pool, made with a treid config (fee claimer = treid, fixed supply, locked LP, no vesting, quote-side fees)
-function treidCfgOk(cfg, partners) { const n = (x) => Number(x?.toString?.() ?? x), lv = cfg.lockedVestingConfig;
-  return partners.includes(cfg.feeClaimer.toBase58()) && n(cfg.tokenType) === 1 && n(cfg.tokenDecimal) === 6 && n(cfg.fixedTokenSupplyFlag) === 1 && n(cfg.tokenUpdateAuthority) === 1
-    && n(cfg.creatorLiquidityPercentage) === 0 && n(cfg.partnerLiquidityPercentage) === 0 && n(lv.amountPerPeriod) === 0 && n(lv.cliffUnlockAmount) === 0 && n(cfg.collectFeeMode) === 0 && n(cfg.transferFeeBasisPoints) <= 1000; }
+function treidCfgOk(cfg, partners) { const n = (x) => Number(x?.toString?.() ?? x), lv = cfg.lockedVestingConfig, bf = cfg.poolFees.baseFee;   // same rules as the server (indexer treidConfig)
+  return partners.includes(cfg.feeClaimer.toBase58()) && partners.includes(cfg.leftoverReceiver.toBase58()) && n(cfg.tokenType) === 1 && n(cfg.tokenDecimal) === 6 && n(cfg.fixedTokenSupplyFlag) === 1 && n(cfg.tokenUpdateAuthority) === 1
+    && cfg.preMigrationTokenSupply.toString() === '1000000000000000' && cfg.postMigrationTokenSupply.toString() === '1000000000000000' && ['amountPerPeriod', 'cliffUnlockAmount', 'numberOfPeriod'].every((k) => n(lv[k]) === 0)
+    && n(cfg.creatorLiquidityPercentage) === 0 && n(cfg.partnerLiquidityPercentage) === 0 && n(cfg.creatorPermanentLockedLiquidityPercentage) + n(cfg.partnerPermanentLockedLiquidityPercentage) === 100
+    && !n(cfg.creatorLiquidityVestingInfo?.isInitialized) && !n(cfg.partnerLiquidityVestingInfo?.isInitialized) && n(bf.baseFeeMode) <= 1 && !n(cfg.poolFees.dynamicFee?.initialized)
+    && n(cfg.transferFeeBasisPoints) <= 1000 && (!n(cfg.transferFeeFlag) || (n(cfg.transferFeeWithheldAuthority) === 0 && n(cfg.migratedTransferFeeAuthorityOption) === 0)) && n(cfg.creatorTradingFeePercentage) === 50 && n(cfg.collectFeeMode) === 0; }
+// mainnet: the curve must be exactly the one this site builds (rebuilt from the config's start price; must match indexer curve.mjs)
+let STRICT_CURVE = false; export function strictCurve(v) { STRICT_CURVE = !!v; }
+const nearBig = (a, b, tol) => { const x = BigInt(a.toString()), y = BigInt(b.toString()); if (x === y) return true; const d = x > y ? x - y : y - x, m = x > y ? x : y; return Number(d) / Number(m) <= tol; };
+export function curveOk(cf, quoteDecimals) {
+  try { const n = (x) => Number(x?.toString?.() ?? x), bf = cf.poolFees.baseFee, taxBps = n(cf.transferFeeFlag) ? n(cf.transferFeeBasisPoints) : 0, trapBps = Math.round(n(bf.cliffFeeNumerator) / 1e5), trapSecs = n(bf.firstFactor) * n(bf.secondFactor);
+    if (n(bf.baseFeeMode) !== BaseFeeMode.FeeSchedulerLinear || n(bf.firstFactor) !== RULES.trapSteps || trapBps < RULES.minTrapBps || trapBps > 9000 || trapSecs < RULES.minTrapSecs || trapSecs > 86400 || taxBps > RULES.maxTaxBps) return false;
+    const mc0 = Number(getPriceFromSqrtPrice(cf.sqrtStartPrice, 6, quoteDecimals)) * RULES.supply; if (!(mc0 > 0) || !isFinite(mc0)) return false;
+    const want = curveFor({ taxBps, trapBps, trapSecs, quoteDecimals, mc0, mc1: mc0 * RULES.mc1Sol / RULES.mc0Sol }), wb = want.poolFees.baseFee;
+    if (!nearBig(want.sqrtStartPrice, cf.sqrtStartPrice, 2e-6) || !nearBig(want.migrationQuoteThreshold, cf.migrationQuoteThreshold, 1e-4)) return false;
+    if (['cliffFeeNumerator', 'firstFactor', 'secondFactor', 'thirdFactor'].some((k) => n(wb[k]) !== n(bf[k]))) return false;
+    if (['migrationOption', 'migrationFeeOption', 'activationType', 'collectFeeMode', 'creatorTradingFeePercentage'].some((k) => n(want[k]) !== n(cf[k]))) return false;
+    if (n(cf.migratedPoolFeeBps) !== 50 || n(cf.migratedCollectFeeMode) !== MigratedCollectFeeMode.Compounding || n(cf.migratedDynamicFee) !== 0 || n(cf.migratedCompoundingFeeBps) !== 0 || n(cf.enableFirstSwapWithMinFee) !== 1 || n(cf.poolCreationFee) !== 0 || n(cf.migrationFeePercentage) !== 0 || n(cf.creatorMigrationFeePercentage) !== 0) return false;
+    const pts = (c) => (c || []).filter((p) => p.liquidity.toString() !== '0'), a = pts(want.curve), b = pts(cf.curve); if (!b.length || a.length !== b.length) return false;
+    return a.every((p, i) => nearBig(p.sqrtPrice, b[i].sqrtPrice, 1e-4) && nearBig(p.liquidity, b[i].liquidity, 1e-4));
+  } catch { return false; } }
 async function poolCtx(rpc, pool, expect) {
   const cl = client(rpc), vpw = await cl.state.getPool(pk(pool)); if (!vpw) throw new Error('Pool not found');
   const vp = vpw.poolState || vpw, cfg = await cl.state.getPoolConfig(vp.config), cp = await getCurrentPoint(C(rpc), cfg.activationType);
   if (expect) { if (vp.baseMint.toBase58() !== expect.mint) throw new Error('Pool doesn’t belong to this coin — refusing');
     if (!treidCfgOk(cfg, expect.partners || [])) throw new Error('This pool isn’t a treid pool — refusing'); }
   const qi = await quoteInfo({ rpc, mint: cfg.quoteMint.toBase58() });
+  if (expect && STRICT_CURVE && !curveOk(cfg, qi.decimals)) throw new Error('This pool’s curve isn’t a treid curve — refusing');
   let damm = null;   // graduated: trades go to the coin's DAMM v2 pool — address derived from the curve, contents checked
   if (Number(vp.isMigrated?.toString?.() ?? vp.isMigrated) > 0) { const ap = deriveDammV2PoolAddress(DAMM_CFG, vp.baseMint, cfg.quoteMint), ps = await ammC(rpc).fetchPoolState(ap);
     if (!ps.tokenAMint.equals(vp.baseMint) || !ps.tokenBMint.equals(cfg.quoteMint)) throw new Error('Graduated pool doesn’t match this coin — refusing');
@@ -239,6 +258,8 @@ export async function buildClaimCreator({ rpc, creator, pool }) {
   const out = await finish(rpc, [tx], creator, []), cfg = await client(rpc).state.getPoolConfig(vp.config), qi = await quoteInfo({ rpc, mint: cfg.quoteMint.toBase58() }); return { ...out, amount: Number(amt.toString()) / 10 ** qi.decimals };
 }
 export const b58 = (bytes) => bs58enc(bytes);
+// both possible associated token accounts of an owner for a mint (classic + Token-2022) — for balance checks in simulations
+export const ataAddrs = (owner, mint) => [TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID].map((p) => getAssociatedTokenAddressSync(pk(mint), pk(owner), true, p).toBase58());
 
 // ---- phone wallets without a browser extension: Phantom / Solflare deeplink protocol (x25519 box, base58) ----
 import nacl from 'tweetnacl';
