@@ -42,3 +42,7 @@ services:
         sync: false
       - key: VAPID_SUBJECT
         value: mailto:hello@treid.fun
+      - key: TELEGRAM_BOT_TOKEN  # optional: operator alerts (ops halted / low SOL / stuck claims) — bot from @BotFather
+        sync: false
+      - key: TELEGRAM_CHAT_ID    # your chat id with that bot
+        sync: false

@@ -1,4 +1,5 @@
 // treid indexer: listens to Meteora DBC, stores treid coins + trades in SQLite, serves a JSON API + live stream
+import { ALERTS } from './alerts.mjs';   // first: catches the "!!" lines other modules log while loading
 import { Connection, PublicKey } from '@solana/web3.js';
 import { TOKEN_2022_PROGRAM_ID, getTokenMetadata, unpackAccount, getTransferFeeConfig, getMint, getExtensionTypes, ExtensionType, getScaledUiAmountConfig } from '@solana/spl-token';
 import { DynamicBondingCurveClient, DYNAMIC_BONDING_CURVE_PROGRAM_ID, deriveDbcPoolAuthority, DynamicBondingCurveIdl, getPriceFromSqrtPrice, deriveDammV2PoolAddress, DAMM_V2_MIGRATION_FEE_ADDRESS } from '@meteora-ag/dynamic-bonding-curve-sdk';
@@ -496,7 +497,7 @@ async function handleReq(req, res) {
     const [h, b64] = d.split(','), ct = h.slice(5, h.indexOf(';')); if (!/^image\/(png|jpe?g|gif|webp)$/.test(ct)) { res.writeHead(404); return res.end(); }   // never serve svg (script)
     res.writeHead(200, { 'content-type': ct, 'x-content-type-options': 'nosniff', 'access-control-allow-origin': '*', 'cache-control': 'public, max-age=86400' }); return res.end(Buffer.from(b64, 'base64')); }
   if (p[1] === 'whoami') return J({ ip: ip(req), xff: String(req.headers['x-forwarded-for'] || ''), tci: String(req.headers['true-client-ip'] || ''), cf: String(req.headers['cf-connecting-ip'] || ''), xr: String(req.headers['x-real-ip'] || '') });
-  if (!p.length || p[1] === 'health') return J({ ok: true, coins: q1('SELECT COUNT(*) n FROM coins').n, trades: q1('SELECT COUNT(*) n FROM trades').n, configs: configs.size, partner: PARTNER || null, ops: OPS?.publicKey.toBase58() || null, ipfs: !!PINATA_JWT, sol_usd: SOL_USD, ready, cluster: MAINNET ? 'mainnet' : 'devnet', db_persistent: DB_PATH.startsWith('/data/'), ops_sol: opsSolC.v, ops_halted: HALT.on ? HALT.why : false, ops_low: !!OPS_ST?.status?.low, sites: SITES, push: !!PUSH?.on, push_subs: PUSH?.on ? q1('SELECT COUNT(*) n FROM pushsub').n : 0 });
+  if (!p.length || p[1] === 'health') return J({ ok: true, coins: q1('SELECT COUNT(*) n FROM coins').n, trades: q1('SELECT COUNT(*) n FROM trades').n, configs: configs.size, partner: PARTNER || null, ops: OPS?.publicKey.toBase58() || null, ipfs: !!PINATA_JWT, sol_usd: SOL_USD, ready, cluster: MAINNET ? 'mainnet' : 'devnet', db_persistent: DB_PATH.startsWith('/data/'), ops_sol: opsSolC.v, ops_halted: HALT.on ? HALT.why : false, ops_low: !!OPS_ST?.status?.low, sites: SITES, alerts: ALERTS.on, push: !!PUSH?.on, push_subs: PUSH?.on ? q1('SELECT COUNT(*) n FROM pushsub').n : 0 });
   try {
     if (p[1] === 'stream') { const ipx = ip(req), nIp = sseByIp.get(ipx) || 0; if (clients.size >= 3000 || nIp >= 6) { res.writeHead(429, { 'access-control-allow-origin': '*' }); return res.end(); }
       sseByIp.set(ipx, nIp + 1); req.on('close', () => { const v = (sseByIp.get(ipx) || 1) - 1; if (v > 0) sseByIp.set(ipx, v); else sseByIp.delete(ipx); });

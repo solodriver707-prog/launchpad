@@ -69,28 +69,20 @@ Other ideas: ops low-balance Telegram alert, own domain treid.fun (Phantom trust
 - `/api/coin` holder-scan budget per IP; claim settle back-off after 5 failures (every 6 h + `!!` log, never marked paid); `canWrite` also halts below 20 MB free disk; images up to 6 MB + 80 MB memory LRU over the disk quota.
 - Still on you: Helius browser key — keep separate from the server key and set a rate limit in Helius.
 
-### Economics
-- Ops' own sales/buybacks are recorded as trades → inflate volume, sells, traders. Exclude ops wallet from stats.
-- Market cap = price × 1e9, ignores burned supply (`burnedOf` exists).
-- Trade `usd` uses the SOL price at indexing time; startup backfill reprices history at today's SOL price (and on every restart if the DB fell back to /tmp). Store quote amounts + price at trade time.
-- Position profit ignores holder rewards paid in SOL/pair token and doesn't take sell tax off `value`.
-- Coin-token holder payouts carry no memo → `hpay` can't be rebuilt after DB loss (pair payouts can). `rwUsd` shows $0 for a third reward token.
-- $TREID flywheel: key `treid_since` per mint; cap buyback at `bal − (keep − budget)`; post-graduation platform LP fees aren't included in the budget.
-- Creator can collect holder rewards via a side wallet (<70% moved) — only creator/devTo excluded. Decide whether to address.
-- SOL payouts below rent-exempt (~0.00089 SOL) to empty wallets fail (retried singly). Coins paired with non-SOL tokens bring ops no SOL income. Ops-paid migrations (~0.02–0.05 SOL) aren't reimbursed.
-- Invalid/missing split in URI silently falls back to 70/20/10 while the UI says "split isn't published yet" → return the split ops actually applies via the API and show it.
-- Consider sending ops' holder-reward sales privately (Jito) / in smaller pieces against sandwich bots (slippage already cut to 3% on the curve).
-- "% to creator" is hidden for graduated pools (exact post-graduation creator share not confirmed); curve-path price impact (price move) and DAMM priceImpact (execution vs spot) are defined differently.
-- UI could state that holder shares below $0.05 are burned, not redistributed.
-### Mobile (left after the overnight pass)
-- Chart on phones: OHLC legend wraps/overlaps the Avg-entry label; move "% log auto" into the toolbar; first x-axis label clipped.
-- Small tap targets left: Ranks → Callers tab actions, Burnery period buttons (`bhPer`), create tax chips (`.txs`) and `qTab`/`qPre`, footer X link, `fxpGo`.
-- Many 10px texts on coin page/feeds; board filter panel ~400px even collapsed (pair row always shown); pool "$149K (992.00 SOL)" breaks badly; callout tip "Dismiss" on its own line.
-- Coin-page Callouts card: inner scroll cuts posts — show full height + "Show more".
-- Own wallet profile shows "Track" and "Its trades on $X"; coin page says "Wallet is real (devnet)" for demo coins.
-- 768px: board text shows through the header; callout pop-up covers coin cards.
-- Bento site template leaves empty grid cells; coin-site "← Trade on treid" button overlaps content at the bottom.
-- `?demo=1` still calls the live indexer and Helius — skip network in demo.
+### Economics — DONE 29 Oct 2026 (except where noted)
+- Ops/treasury trades flagged `sys=1` and excluded from coin stats (volume, buys/sells, traders).
+- Market cap = price × circulating supply (`SUPPLY − burned`); `/api/coin` returns `supply`, `burned`; site `price(t)` and TP/SL use `t.supply`.
+- Trade USD for history uses SOL's daily price from CoinGecko (table `spx`); live trades use the current price. Non-SOL pairs without a history source still use the current price.
+- `posStats`: value after the coin's sell tax; `rewardsUsd` (holder rewards in SOL / pair / third token) counted in profit.
+- Per-holder receipts (`hpay`) rebuilt from ops' own transactions (coin TransferChecked + memo'd pair/SOL payouts) — one-time pass `kv.hpay_v1`; the first TTEST payout now shows in Rewards history.
+- `/api/coin` returns `split_applied` (what ops really applies, dev ≤ 50%); site shows it. Third reward token priced (site via `/api/qprice`, server via Jupiter).
+- SOL holder shares below rent-exempt to empty wallets wait for a later round (no failing batch). UI notes that sub-$0.05 shares are burned.
+- NOT done (dormant / decision): $TREID flywheel fixes (`treid_since` per mint, buyback cap, post-graduation LP fees) — do before setting `TREID_MINT`; creator side-wallet reward farming — open question; ops-paid migrations not reimbursed; Jito/private sends for ops sales.
+### Mobile — DONE 29 Oct 2026
+- Even TAX/PAIRED cards (coin header), card badges and top-meme side same size, compact chart legend + `% log auto` in the toolbar on phones, create tax chips 6-col grid, trap durations one row, collapsed board filters hide pair rows, bento coin site without holes, opaque header ≤1100px, footer taps, `$0`, plurals, podium loss colour, QUIET burn gauge, own-wallet profile text, `?demo=1` without live server.
+### Ops alerts — DONE
+- `alerts.mjs`: every `!!` server log line → Telegram (env `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`; optional; 1×/h per message). `/api/health` shows `alerts`.
+- Verified in production: X post preview cards work (`/api/xpost/<id>`).
 
 ## Older pending items (offered, not confirmed/done)
 - Holders-only page; ops low-balance **Telegram alert** (now only `ops_low` in /api/health).
