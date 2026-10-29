@@ -545,11 +545,11 @@
     }
     return '<header><div class="wrap hdr">' +
       '<button class="brand" data-act="home" aria-label="treid home"><span class="brand-name">treid</span></button>' +
-      '<nav class="navlinks"><span class="nav-ind" id="nav-ind"></span><button class="' + (S.screen === 'home' ? 'on' : '') + '" data-act="home">Board</button><button class="' + (S.screen === 'create' ? 'on' : '') + '" data-act="create">Create</button><button class="' + (S.screen === 'leaders' ? 'on' : '') + '" data-act="leaders">Leaderboard</button><button class="' + (S.screen === 'burn' ? 'on' : '') + '" data-act="burnPage">🔥 Burnery</button><button class="' + (S.screen === 'trend' ? 'on' : '') + '" data-act="trendList">Trending</button><button data-act="how">How it works</button></nav>' +
+      '<nav class="navlinks"><span class="nav-ind" id="nav-ind"></span><button class="' + (S.screen === 'home' ? 'on' : '') + '" data-act="home">Board</button><button class="' + (S.screen === 'trench' ? 'on' : '') + '" data-act="trenches">Trenches</button><button class="' + (S.screen === 'create' ? 'on' : '') + '" data-act="create">Create</button><button class="' + (S.screen === 'leaders' ? 'on' : '') + '" data-act="leaders">Leaderboard</button><button class="' + (S.screen === 'burn' ? 'on' : '') + '" data-act="burnPage">🔥 Burnery</button><button class="' + (S.screen === 'trend' ? 'on' : '') + '" data-act="trendList">Trending</button><button data-act="how">How it works</button></nav>' +
       '<button class="searchbtn" data-act="palette">' + I.search + '<span>Search tokens or paste CA</span><span class="kbd">Ctrl K</span></button>' +
       '<div class="hdr-right">' + (DEMO || API ? '<button class="wl-btn co-btn' + (S.coOpen ? ' on' : '') + '" data-act="coToggle" title="Hot callouts">🔥<span>Callouts</span><b class="mono" id="co-new" style="display:none">0</b></button>' : '') + '<button class="wl-btn' + (S.screen === 'watch' ? ' on' : '') + '" data-act="watchPage" aria-label="Watchlist" data-tip="Your watchlist">' + I.star(S.watch.length > 0) + (S.watch.length ? '<b class="mono" id="wl-n">' + S.watch.length + '</b>' : '') + '</button><button class="btn pri" data-act="create">+ Launch token</button>' + right + '</div>' +
       '</div></header>' +
-      '<nav class="mnav" aria-label="Main">' + [['home', 'Board', '<path d="M3 11l9-7 9 7v9a1 1 0 01-1 1h-5v-6H9v6H4a1 1 0 01-1-1z"/>', (!S.coOpen && S.screen === 'home')], ['trendList', 'Trending', '<path d="M3 17l6-6 4 4 8-8M15 7h6v6"/>', (!S.coOpen && S.screen === 'trend')], ['leaders', 'Ranks', '<path d="M8 21V11M16 21V7M12 21V3M4 21h16"/>', (!S.coOpen && S.screen === 'leaders')], ['create', 'Launch', '<path d="M12 5v14M5 12h14"/>', (!S.coOpen && S.screen === 'create'), 'pri'], ['coToggle', 'Callouts', '<path d="M21 12a8 8 0 01-11.6 7.1L4 21l1.9-5.4A8 8 0 1121 12z"/>', S.coOpen], ['burnPage', 'Burnery', '<path d="M12 22c4 0 7-3 7-7 0-3-2-5-3-7-1 2-2 3-3 3 0-3-1-6-4-9 0 4-4 6-4 12 0 5 3 8 7 8z"/>', (!S.coOpen && S.screen === 'burn')], ['watchPage', 'Watchlist', '<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/>', (!S.coOpen && S.screen === 'watch')]].filter(function (x) { return true; }).map(function (x) { return '<button class="' + (x[3] ? 'on ' : '') + (x[4] || '') + '" data-act="' + x[0] + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round">' + x[2] + '</svg><span>' + x[1] + '</span>' + (x[0] === 'coToggle' ? '<b class="mn-badge mono" id="mn-co"' + (S.mCo ? '' : ' style="display:none"') + '>' + (S.mCo || '') + '</b>' : '') + '</button>'; }).join('') + '</nav>';
+      '<nav class="mnav" aria-label="Main">' + [['home', 'Board', '<path d="M3 11l9-7 9 7v9a1 1 0 01-1 1h-5v-6H9v6H4a1 1 0 01-1-1z"/>', (!S.coOpen && S.screen === 'home')], ['trenches', 'Trenches', '<rect x="3" y="4" width="5" height="16" rx="1.5"/><rect x="10" y="4" width="5" height="11" rx="1.5"/><rect x="17" y="4" width="4" height="6" rx="1.5"/>', (!S.coOpen && (S.screen === 'trench' || S.screen === 'trend'))], ['leaders', 'Ranks', '<path d="M8 21V11M16 21V7M12 21V3M4 21h16"/>', (!S.coOpen && S.screen === 'leaders')], ['create', 'Launch', '<path d="M12 5v14M5 12h14"/>', (!S.coOpen && S.screen === 'create'), 'pri'], ['coToggle', 'Callouts', '<path d="M21 12a8 8 0 01-11.6 7.1L4 21l1.9-5.4A8 8 0 1121 12z"/>', S.coOpen], ['burnPage', 'Burnery', '<path d="M12 22c4 0 7-3 7-7 0-3-2-5-3-7-1 2-2 3-3 3 0-3-1-6-4-9 0 4-4 6-4 12 0 5 3 8 7 8z"/>', (!S.coOpen && S.screen === 'burn')], ['watchPage', 'Watchlist', '<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/>', (!S.coOpen && S.screen === 'watch')]].filter(function (x) { return true; }).map(function (x) { return '<button class="' + (x[3] ? 'on ' : '') + (x[4] || '') + '" data-act="' + x[0] + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round">' + x[2] + '</svg><span>' + x[1] + '</span>' + (x[0] === 'coToggle' ? '<b class="mn-badge mono" id="mn-co"' + (S.mCo ? '' : ' style="display:none"') + '>' + (S.mCo || '') + '</b>' : '') + '</button>'; }).join('') + '</nav>';
   }
 
   function cardPts(t) {
@@ -1455,6 +1455,47 @@
       '<div class="seg tr-cats">' + [['all', 'All pairs']].concat(CATS.slice(1).map(function (c) { return [c[0], c[1]]; })).map(function (c) { return '<button class="' + (S.tcat === c[0] ? 'on' : '') + '" data-act="tcat" data-arg="' + c[0] + '">' + c[1] + '</button>'; }).join('') + '</div></div>' +
       listHTML(a) + '</main>';
   }
+  // ===== TRENCHES: New / Graduating / Graduated, live from /api/stream (phones: swipeable tabs) =====
+  var TR_GRAD = 50;   // bonding-curve % from which a coin counts as "graduating"
+  S.trTab = 0; S.trScroll = null;
+  function trBucket(t) { return t.prog >= 100 ? 2 : t.prog >= TR_GRAD ? 1 : 0; }
+  function trList(b) {
+    var l = all().filter(function (t) { if (trBucket(t) !== b) return false; if (S.trZero && Math.max(t.buy, t.sell) !== 0) return false; if (S.trClean && redFlags(t).length) return false; return true; });
+    l.sort(b === 0 ? function (a, z) { return z.born - a.born; } : b === 1 ? function (a, z) { return z.prog - a.prog || z.mcN - a.mcN; } : function (a, z) { return (z._lt || 0) - (a._lt || 0) || z.mcN - a.mcN; });
+    l.forEach(function (t) { t._tb = b; }); return l;
+  }
+  function trRow(t) {
+    var tm = Math.max(t.buy, t.sell), c = chg(t), id = esc(t.tick), fl = redFlags(t), done = t.prog >= 100, on = S.watch.indexOf(t.tick) !== -1, fresh = Date.now() - t.born < 8000;
+    return '<div class="tnrow' + (fresh ? ' is-new' : '') + '" data-act="open" data-arg="' + id + '">' +
+      '<span class="trw-pic">' + avatarHTML(t, 52) + '</span>' +
+      '<span class="trw-mid"><span class="trw-n"><b>' + esc(t.name) + '</b>' + (t.vamp ? '<i title="Same name as an older coin">🧛</i>' : '') + '</span>' +
+        '<span class="trw-s"><span class="mono">$' + id + '</span><span class="mono trw-age" data-t="' + t.born + '">' + ago(t.born) + '</span><i class="trw-tax" style="background:' + taxBg(tm) + '">' + tm + '%</i>' + (trapLeft(t) > 0 ? '<i class="trw-trap" title="Anti-snipe fee still on">🪤</i>' : '') + '</span>' +
+        '<span class="trw-k"><span>👥 <b class="mono">' + fmtNum(t.holders) + '</b></span><span>Vol <b class="mono">' + fmtK(t.vol) + '</b></span><span class="' + (fl.length ? 'bad' : 'ok') + '" title="' + esc(fl.join(' · ') || 'No red flags') + '">' + (fl.length ? '⚠ ' + esc(fl[0]) : '✓ clean') + '</span></span></span>' +
+      '<span class="trw-r"><b class="mono" data-mc="' + id + '" data-v="' + fmtK(t.mcN) + '">' + fmtK(t.mcN) + '</b><span class="trw-rb"><span class="chgpill ' + (c >= 0 ? 'up' : 'down') + '" data-chg="' + id + '">' + chgTxt(c) + '</span>' +
+        '<button class="trw-star' + (on ? ' on' : '') + '" data-act="star" data-arg="' + id + '" aria-label="Add to watchlist" aria-pressed="' + on + '">' + I.star(on) + '</button></span></span>' +
+      '<span class="trw-bar" title="Bonding curve"><u><i class="' + (done ? 'done' : '') + '" data-bar="' + id + '" style="width:' + Math.max(1, Math.min(100, t.prog)) + '%"></i></u><small class="mono" data-prog="' + id + '">' + Math.min(100, t.prog).toFixed(0) + '%</small></span>' +
+    '</div>';
+  }
+  function trenchPage() {
+    var cols = [['✨ New', 'Fresh launches, newest first'], ['🔥 Graduating', 'Bonding curve ' + TR_GRAD + '%+ · close to Meteora'], ['🎓 Graduated', 'Trading on Meteora']], lists = [0, 1, 2].map(trList);
+    var empty = ['No new coins yet — be the first to launch.', 'Nothing near graduation right now.', 'No coin has graduated yet.'];
+    return '<main class="wrap trench"><div class="tn-head"><div><span class="kicker"><span class="tn-live"></span>LIVE</span><h1 class="tr-h">Trenches</h1></div>' +
+      '<div class="tn-f"><button class="chip' + (S.trZero ? ' on' : '') + '" data-act="trF" data-arg="zero">0% tax</button><button class="chip' + (S.trClean ? ' on' : '') + '" data-act="trF" data-arg="clean">No red flags</button><button class="link" data-act="trendList">Trending →</button></div></div>' +
+      '<div class="tn-tabs" role="tablist">' + cols.map(function (c, i) { return '<button role="tab" aria-selected="' + (S.trTab === i) + '" class="' + (S.trTab === i ? 'on' : '') + '" data-act="trTab" data-arg="' + i + '">' + c[0] + ' <b class="mono">' + lists[i].length + '</b></button>'; }).join('') + '<i class="tn-ind" style="transform:translateX(' + (S.trTab * 100) + '%)"></i></div>' +
+      '<div class="tn-cols" id="tn-cols">' + cols.map(function (c, i) {
+        return '<section class="tn-col" data-col="' + i + '"><div class="tn-ch"><b>' + c[0] + '</b><span class="mono">' + lists[i].length + '</span><small class="muted">' + c[1] + '</small></div>' +
+          '<div class="tn-list">' + (lists[i].length ? lists[i].slice(0, 60).map(trRow).join('') : '<div class="tn-empty muted">' + (S.loading || (API && !S.apiOk) ? '<span class="gr-sp"></span> Loading…' : empty[i]) + '</div>') + '</div></section>'; }).join('') + '</div></main>';
+  }
+  function trSave() { var c = document.getElementById('tn-cols'); if (!c) return; S.trScroll = { x: c.scrollLeft, y: [].map.call(c.querySelectorAll('.tn-list'), function (l) { return l.scrollTop; }) }; }
+  function trPaintTab(i) { document.querySelectorAll('.tn-tabs button').forEach(function (b, j) { b.classList.toggle('on', j === i); b.setAttribute('aria-selected', j === i); }); var ind = document.querySelector('.tn-ind'); if (ind) ind.style.transform = 'translateX(' + i * 100 + '%)'; }
+  function trMount() {
+    var c = document.getElementById('tn-cols'); if (!c) return; var sv = S.trScroll; S.trScroll = null;
+    if (isMob()) c.scrollLeft = sv && sv.x != null ? sv.x : S.trTab * c.clientWidth;
+    if (sv) [].forEach.call(c.querySelectorAll('.tn-list'), function (l, i) { if (sv.y[i]) l.scrollTop = sv.y[i]; });
+    c.addEventListener('scroll', function () { if (!isMob()) return; var i = Math.round(c.scrollLeft / Math.max(1, c.clientWidth)); if (i !== S.trTab) { S.trTab = i; trPaintTab(i); } }, { passive: true });
+  }
+  function trBump(t) { if (S.screen !== 'trench' || t._tb === trBucket(t)) return; trRender(); }   // a coin crossed into another column
+  function trRender(n) { if (S._trT) return; n = n || 0; S._trT = setTimeout(function () { S._trT = null; if (S.screen !== 'trench') return; if (n < 6 && document.querySelector('.tn-list:hover')) { trRender(n + 1); return; } render(); }, 900); }   // holds still briefly while the pointer is over a list
   function bubblesHTML(list) {
     return '<section class="grid" style="display:block"><div class="bubbles" id="bubbles">' + list.slice(0, 40).map(function (t) {
       var r = bubR(t), c = chg(t), b = BUB[t.tick];
@@ -3607,7 +3648,7 @@
   // ================= RENDER =================
   var firstCount = true;
   // ================= URL ROUTING (refresh / share / back button keep your place) =================
-  var ROUTES = { create: 'create', burn: 'burnery', leaders: 'leaderboard', trend: 'trending', watch: 'watchlist' }, routeReady = false;
+  var ROUTES = { trench: 'trenches', create: 'create', burn: 'burnery', leaders: 'leaderboard', trend: 'trending', watch: 'watchlist' }, routeReady = false;
   function routeOf() { if (S.screen === 'pending') return location.hash || ''; if (S.screen === 'site' && S.site) { var tsv = find(S.site.tick); return '#/c/' + encodeURIComponent(tsv && tsv.live ? tsv.ca : S.site.tick) + (S.site.th && S.site.th !== 'dark' ? '/' + S.site.th : ''); } if (S.screen === 'callout' && S.coView) { var tv = find(S.coView.tick); return '#/callout/' + encodeURIComponent(tv && tv.live ? tv.ca : S.coView.tick) + '/' + S.coView.id; } if (S.screen === 'token' && S.tick) { var t0 = find(S.tick); return '#/coin/' + encodeURIComponent(t0 && t0.live ? t0.ca : S.tick); } return ROUTES[S.screen] ? '#/' + ROUTES[S.screen] : ''; }
   function syncRoute() { if (!routeReady) return; var r = routeOf(), cur = location.hash || ''; if (cur === r) return; try { history.pushState(null, '', r || (location.pathname + location.search)); } catch (e) {} }
   function applyRoute() {
@@ -3625,7 +3666,8 @@
   function render() {
     var ae = document.activeElement, fid = ae && ae.id, ss = null, se = null;
     try { if (fid && ae.selectionStart != null) { ss = ae.selectionStart; se = ae.selectionEnd; } } catch (e) {}
-    var body = S.screen === 'pending' ? '<main class="wrap"><div class="route-wait"><span class="gr-sp"></span><b>Loading coin…</b><small class="muted">' + (S.apiWait > 1 ? 'the server is restarting — reconnecting (try ' + S.apiWait + ')…' : 'fetching live data from the chain') + '</small></div></main>' : S.screen === 'token' ? tokenPage() : S.screen === 'create' ? createPage() : S.screen === 'leaders' ? leadersPage() : S.screen === 'watch' ? watchPage() : S.screen === 'burn' ? burnPage() : S.screen === 'trend' ? trendPage() : S.screen === 'callout' ? calloutPage() : S.screen === 'site' ? sitePage() : home();
+    var body = S.screen === 'pending' ? '<main class="wrap"><div class="route-wait"><span class="gr-sp"></span><b>Loading coin…</b><small class="muted">' + (S.apiWait > 1 ? 'the server is restarting — reconnecting (try ' + S.apiWait + ')…' : 'fetching live data from the chain') + '</small></div></main>' : S.screen === 'token' ? tokenPage() : S.screen === 'create' ? createPage() : S.screen === 'leaders' ? leadersPage() : S.screen === 'watch' ? watchPage() : S.screen === 'burn' ? burnPage() : S.screen === 'trend' ? trendPage() : S.screen === 'trench' ? trenchPage() : S.screen === 'callout' ? calloutPage() : S.screen === 'site' ? sitePage() : home();
+    if (S.screen === 'trench') trSave();
     var detOpen = [].map.call(document.querySelectorAll('#app details'), function (d) { return d.open ? (d.className || 'd') : null; });
     if (S.screen === 'site') { document.getElementById('app').innerHTML = body + siteModal() + walletModal(); document.body.classList.add('on-site'); document.body.classList.remove('has-rail', 'has-rail-min'); return; } document.body.classList.remove('on-site');
     document.getElementById('app').innerHTML = (RPC_DEV || API_DEV ? '<div class="devbar">⚠ Developer mode — custom ' + [RPC_DEV ? 'RPC' : '', API_DEV ? 'server' : ''].filter(Boolean).join(' + ') + ' (this tab only)</div>' : '') + '<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="ccUp" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3DDC97" stop-opacity=".28"/><stop offset="1" stop-color="#3DDC97" stop-opacity="0"/></linearGradient><linearGradient id="ccDn" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F2708A" stop-opacity=".26"/><stop offset="1" stop-color="#F2708A" stop-opacity="0"/></linearGradient></defs></svg>' + tape() + header() + body + footer() + walletModal() + demoImgModal() + termsModal() + calloutDrawer() + calloutRail() + palette() + walletDrawer() + holderMap() + burnModal() + ctoModal() + coModal() + shareModal() + siteModal();
@@ -3639,6 +3681,7 @@
     if (S.share) drawShare();
     if (S.screen === 'token') lwMount();
     if (S.screen === 'home') tsMount();
+    if (S.screen === 'trench') trMount();
     setTimeout(function () { navInd(); labKick(); fwKick(); mbuyWatch(); bnKick(); }, 0);
     mFit(); if (S.screen === 'home') mSetStep(M.step);
   }
@@ -3690,6 +3733,7 @@
     if (cardEl) { cardEl.classList.remove('shake', 'shake-s'); void cardEl.offsetWidth; cardEl.classList.add(side === 'buy' ? 'shake' : 'shake-s'); if (S.sort === 'bump' && S.screen === 'home' && !cardEl.matches(':hover')) { var gp = cardEl.parentNode; if (gp && gp.firstChild !== cardEl) gp.insertBefore(cardEl, gp.firstChild); } }
     machineTrade(t, tr);
     if (S.screen === 'home') raceUpdate(t, side, sol);
+    trBump(t);
     if (!wasGrad && t.prog >= 100) { machineGrad(t); if (!isMob() || (S.screen === 'token' && S.tick === t.tick)) toast('$' + t.tick + ' graduated to Meteora', t); if (S.screen === 'token' && S.tick === t.tick) confetti(); }
     return tr;
   }
@@ -3781,7 +3825,7 @@
     if (S.coMenu && !e.target.closest('.co-mw')) { S.coMenu = null; if (!el) { render(); return; } }
     if (!el) return;
     var act = el.getAttribute('data-act'), arg = el.getAttribute('data-arg');
-    if (/^(home|create|leaders|trendList|burnPage|watchPage|open|coPage|lbCo)$/.test(act) || (el.closest('.mnav') && act !== 'coToggle')) { S.coOpen = false; S.walletView = null; S.hmap = null; S.share = null; S.walletMenu = false; S.palOpen = false; S.coModal = null; S.burnOpen = false; S.mFilt = false; pvClose && pvClose(); }   // going somewhere closes every panel and sheet
+    if (/^(home|trenches|create|leaders|trendList|burnPage|watchPage|open|coPage|lbCo)$/.test(act) || (el.closest('.mnav') && act !== 'coToggle')) { S.coOpen = false; S.walletView = null; S.hmap = null; S.share = null; S.walletMenu = false; S.palOpen = false; S.coModal = null; S.burnOpen = false; S.mFilt = false; pvClose && pvClose(); }   // going somewhere closes every panel and sheet
     if (el.tagName === 'A' && act !== 'how' && act !== 'dlArm' && act !== 'dlTapGo') e.preventDefault();
     switch (act) {
       case 'bg': if (e.target === el) set({ walletOpen: false, palOpen: false, walletView: null }); break;
@@ -3874,6 +3918,9 @@
       case 'cpair': setC({ pair: arg }); break;
       case 'burnPage': burnsLoad(); set({ screen: 'burn', palOpen: false, coOpen: false }); window.scrollTo(0, 0); break;
       case 'lsort': if (S.lsort === arg) S.ldir = -S.ldir; else { S.lsort = arg; S.ldir = -1; } render(); break;
+      case 'trenches': set({ screen: 'trench', palOpen: false, coOpen: false }); window.scrollTo(0, 0); break;
+      case 'trTab': S.trTab = +arg || 0; trPaintTab(S.trTab); var tnc = document.getElementById('tn-cols'); if (tnc && isMob()) tnc.scrollTo({ left: S.trTab * tnc.clientWidth, behavior: 'smooth' }); break;
+      case 'trF': if (arg === 'zero') S.trZero = !S.trZero; else S.trClean = !S.trClean; render(); break;
       case 'trendList': S.lsort = 'rank'; S.ldir = -1; set({ screen: 'trend', palOpen: false, coOpen: false }); window.scrollTo(0, 0); break;
       case 'bsort': S.bsort = arg; render(); break;
       case 'tcat': S.tcat = arg; render(); break;
