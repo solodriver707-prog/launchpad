@@ -39,9 +39,11 @@ export function vapidAuth(endpoint, key, pub, subject) {
 }
 
 export function startPush({ q, q1, run, pub, priv, subject, log = console.log }) {
+  run('CREATE TABLE IF NOT EXISTS pushalert(id INTEGER PRIMARY KEY AUTOINCREMENT, ep TEXT, mint TEXT, tp REAL, sl REAL, at INT)');
+  run('CREATE INDEX IF NOT EXISTS pa_mint ON pushalert(mint)');
   run('CREATE TABLE IF NOT EXISTS pushsub(ep TEXT PRIMARY KEY, p256dh TEXT, auth TEXT, wallet TEXT, watch TEXT, follow TEXT, moves INT, rewards INT, callouts INT, at INT)');
   let key = null; try { if (pub && priv) key = vapidKey(pub, priv); } catch (e) { log('!! push disabled:', e.message); }
-  if (!key) { if (!pub) log('push   off (set VAPID_PUBLIC / VAPID_PRIVATE / VAPID_SUBJECT to turn on notifications)'); return { on: false, publicKey: null, save() { throw new Error('notifications are not enabled on this server'); }, drop() {}, onEvent() {} }; }
+  if (!key) { if (!pub) log('push   off (set VAPID_PUBLIC / VAPID_PRIVATE / VAPID_SUBJECT to turn on notifications)'); const off = () => { throw new Error('notifications are not enabled on this server'); }; return { on: false, publicKey: null, save: off, drop() {}, onEvent() {}, alertAdd: off, alertList: off, alertDel: off }; }
   const SUBJ = /^(mailto:|https:)/.test(subject || '') ? subject : 'mailto:hello@treid.fun';
   const isAddr = (s) => /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(s), addrs = (a, n) => [...new Set((Array.isArray(a) ? a : []).map(String).filter(isAddr))].slice(0, n);
 
@@ -54,7 +56,19 @@ export function startPush({ q, q1, run, pub, priv, subject, log = console.log })
       JSON.stringify(addrs(b.watch, 300)), JSON.stringify(addrs(b.follow, 300)), b.moves === false ? 0 : 1, b.rewards === false || !wallet ? 0 : 1, b.callouts === false ? 0 : 1, Date.now());
     return { ok: true };
   }
-  function drop(ep) { run('DELETE FROM pushsub WHERE ep=?', String(ep || '')); return { ok: true }; }
+  function drop(ep) { run('DELETE FROM pushsub WHERE ep=?', String(ep || '')); run('DELETE FROM pushalert WHERE ep=?', String(ep || '')); return { ok: true }; }
+  // TP/SL price alerts (for coins Jupiter can't hold, e.g. ones with a transfer tax): one-shot, by market cap; the push endpoint is the credential
+  const own = (ep) => { ep = String(ep || ''); if (!q1('SELECT 1 FROM pushsub WHERE ep=?', ep)) throw new Error('turn on notifications on this device first'); return ep; };
+  function alertAdd(b) { const ep = own(b.endpoint), mint = String(b.mint || ''); if (!isAddr(mint) || !q1('SELECT 1 FROM coins WHERE mint=?', mint)) throw new Error('unknown coin');
+    const tp = +b.tp > 0 ? +b.tp : null, sl = +b.sl > 0 ? +b.sl : null; if (!tp && !sl) throw new Error('set a take-profit or a stop-loss'); if (tp && sl && sl >= tp) throw new Error('stop-loss must be below take-profit');
+    if (q1('SELECT COUNT(*) n FROM pushalert WHERE ep=?', ep).n >= 50) throw new Error('50 alerts max per device');
+    const r = run('INSERT INTO pushalert(ep,mint,tp,sl,at) VALUES(?,?,?,?,?)', ep, mint, tp, sl, Date.now()); return { ok: true, id: Number(r.lastInsertRowid) }; }
+  function alertList(b) { const ep = own(b.endpoint), mint = b.mint ? String(b.mint) : null; return { ok: true, alerts: q('SELECT id, mint, tp, sl, at FROM pushalert WHERE ep=?' + (mint ? ' AND mint=?' : '') + ' ORDER BY id DESC LIMIT 50', ...(mint ? [ep, mint] : [ep])) }; }
+  function alertDel(b) { const ep = own(b.endpoint); run('DELETE FROM pushalert WHERE ep=? AND id=?', ep, +b.id || 0); return { ok: true }; }
+  function checkAlerts(ev, mc) {
+    for (const a of q('SELECT * FROM pushalert WHERE mint=? AND ((tp IS NOT NULL AND tp <= ?) OR (sl IS NOT NULL AND sl >= ?)) LIMIT 2000', ev.mint, mc, mc)) {
+      run('DELETE FROM pushalert WHERE id=?', a.id); const row = q1('SELECT * FROM pushsub WHERE ep=?', a.ep); if (!row) continue; const hitTp = a.tp != null && mc >= a.tp, s = sym(ev.mint);
+      send(row, { title: (hitTp ? '🎯 $' + s + ' hit your take-profit' : '🛑 $' + s + ' hit your stop-loss'), body: 'Market cap ' + fmtUsd(mc) + ' — tap to sell', path: '#/coin/' + ev.mint, tag: 'al-' + a.id, urgency: 'high', ttl: 3600 }); } }
 
   // sending: a small queue (4 at a time); a subscription the push service says is gone (404/410) is deleted
   const queue = []; let active = 0;
@@ -73,7 +87,7 @@ export function startPush({ q, q1, run, pub, priv, subject, log = console.log })
   // watchlist moves: ±25% from the last level we told people about (per coin, at most every 20 min); a stale level just resets
   const anchor = new Map(), MOVE = +(process.env.PUSH_MOVE_PCT || 25) / 100;
   function onTrade(ev) {
-    const mc = +ev.mcap_usd || 0; if (!(mc > 0)) return; const a = anchor.get(ev.mint), now = Date.now();
+    const mc = +ev.mcap_usd || 0; if (!(mc > 0)) return; checkAlerts(ev, mc); const a = anchor.get(ev.mint), now = Date.now();
     if (!a || now - a.at > 6 * 36e5) { anchor.set(ev.mint, { mc, at: now }); return; }
     const ch = mc / a.mc - 1; if (Math.abs(ch) < MOVE || now - a.at < 20 * 60e3) return;
     anchor.set(ev.mint, { mc, at: now }); const s = sym(ev.mint), up = ch > 0;
@@ -97,5 +111,5 @@ export function startPush({ q, q1, run, pub, priv, subject, log = console.log })
   } catch {} }, 60e3);
   function onEvent(ev) { try { if (ev.type === 'trade') onTrade(ev); else if (ev.type === 'grad') onGrad(ev); else if (ev.type === 'callout') onCallout(ev); } catch (e) { log('push err', String(e?.message || e).slice(0, 100)); } }
   log('push   on,', q1('SELECT COUNT(*) n FROM pushsub').n, 'subscriptions');
-  return { on: true, publicKey: pub, save, drop, onEvent, send };
+  return { on: true, publicKey: pub, save, drop, onEvent, send, alertAdd, alertList, alertDel };
 }

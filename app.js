@@ -2814,8 +2814,8 @@
     var inUsd = q.isBuy ? aN * U : aN * pxU, outUsd = q.isBuy ? Math.max(0, aN - (q.tax || 0) - (q.fee || 0)) * U * (1 - Math.min(99, q.impact || 0) / 100) : (q.out || 0) * U;
     function usdS(v) { return v > 0 ? '≈ $' + (v < 0.01 ? '<0.01' : money(v)) : ''; }
     function f4(v) { return v > 0 && v < 0.0001 ? v.toPrecision(2) : v.toFixed(4); }
-    var panel = '<section class="card-s panel tradebox">' +
-      '<div class="bs"><button class="b' + (q.isBuy ? ' on' : '') + '" data-act="side" data-arg="buy">Buy</button><button class="s' + (!q.isBuy ? ' on' : '') + '" data-act="side" data-arg="sell">Sell</button></div>' +
+    var bsBar = '<div class="bs bs3"><button class="b' + (S.side === 'buy' ? ' on' : '') + '" data-act="side" data-arg="buy">Buy</button><button class="s' + (S.side === 'sell' ? ' on' : '') + '" data-act="side" data-arg="sell">Sell</button><button class="l' + (S.side === 'tpsl' ? ' on' : '') + '" data-act="side" data-arg="tpsl">TP / SL</button></div>';
+    var panel = S.side === 'tpsl' ? tpslPanel(t, pos, bsBar) : '<section class="card-s panel tradebox">' + bsBar +
       (jupOn(t) && q.isBuy ? '<div class="paywith"><span class="muted">Pay with</span><button class="' + (PS ? '' : 'on') + '" data-act="paySol" data-arg="0">' + coinHTML(t.pair, 16) + esc(qSymT(t)) + '</button><button class="' + (PS ? 'on' : '') + '" data-act="paySol" data-arg="1">' + coinHTML('SOL', 16) + 'SOL</button>' + (PS ? '<small class="muted">swapped to ' + esc(qSymT(t)) + ' via Jupiter first · 2 wallet approvals</small>' : '') + '</div>' : '') +
       '<div class="tb-top"><span class="muted" style="font-size:12.5px">' + (q.isBuy ? (bal != null ? 'Balance ' + (bal >= 1000 ? fmtNum(bal) : bal.toFixed(3)) + ' ' + esc(QS) : 'Amount in ' + esc(QS)) : (pos ? 'You hold ' + fmtNum(pos.tok) + ' $' + id : 'You hold 0 $' + id)) + '</span>' +
         '<button class="slipbtn" data-act="slip">Slippage ' + S.slip + '% ⚙</button></div>' +
@@ -3683,6 +3683,136 @@
       '<small class="muted nt-foot">Each device is set up separately. Turning on shares this device’s push address' + (S.account ? ', your wallet address' : '') + ' and your watchlist with the treid server — nothing else.</small>';
     return '<div class="overlay" data-act="notifClose"><div class="terms card-s notif" data-stop><div class="terms-h"><b>Notifications</b><button class="iconbtn" data-act="notifClose" aria-label="Close">✕</button></div>' + body + '</div></div>';
   }
+  // ================= TP / SL: Jupiter Trigger V2 orders for coins without a transfer tax; push price alerts for the rest =================
+  // Jupiter rejects Token-2022 mints with a transfer fee (unless whitelisted), so taxed treid coins get a "ping me + one-tap sell" alert instead.
+  S.tpF = { tp: true, tpU: 'pct', tpV: '100', sl: true, slU: 'pct', slV: '40', amt: 100, exp: 30, mode: null }; S.alerts = {};
+  var JT = {};   // mint → active Jupiter orders (undefined = not loaded, 'busy' = loading, null = not signed in)
+  function jtEligible(t) { return CHAIN_ID === 'solana:mainnet' && !!(t && t.live) && Math.max(t.buy, t.sell) === 0 && (!t.auth || !t.auth.taxBps); }
+  function tpMode(t) { return jtEligible(t) ? (S.tpF.mode || 'jup') : 'alert'; }
+  function parseMc(s) { var m = String(s || '').trim().toLowerCase().replace(/[$,\s]/g, '').match(/^(\d*\.?\d+)([km]?)$/); return m ? +m[1] * (m[2] === 'k' ? 1e3 : m[2] === 'm' ? 1e6 : 1) : 0; }
+  function tpTargets(t) {
+    var mc = t.mcN * 1000, F = S.tpF, tp = F.tp ? (F.tpU === 'pct' ? mc * (1 + (parseFloat(F.tpV) || 0) / 100) : parseMc(F.tpV)) : 0, sl = F.sl ? (F.slU === 'pct' ? mc * (1 - (parseFloat(F.slV) || 0) / 100) : parseMc(F.slV)) : 0;
+    var err = !F.tp && !F.sl ? 'Turn on a take profit or a stop loss' : F.tp && !(tp > mc) ? 'Take profit must be above the current market cap' : F.sl && !(sl > 0 && sl < mc) ? 'Stop loss must be below the current market cap' : '';
+    return { mc: mc, tp: tp, sl: sl, err: err };
+  }
+  function tpHint(t, k) { var tg = tpTargets(t), v = tg[k]; return v > 0 ? 'at ' + fmtK(v / 1000) + ' MC · ' + chgTxt((v / tg.mc - 1) * 100) : '—'; }
+  function tpSum(t) {
+    var tg = tpTargets(t), F = S.tpF, pos = position(t), sell = (pos ? pos.tok : 0) * F.amt / 100, mode = tpMode(t), id = esc(t.tick), usd = sell * tg.mc / 1e9;
+    if (tg.err) return '<div class="tps-err">' + esc(tg.err) + '</div>';
+    var parts = [F.tp ? 'MC ≥ <b>' + fmtK(tg.tp / 1000) + '</b>' : '', F.sl ? 'MC ≤ <b>' + fmtK(tg.sl / 1000) + '</b>' : ''].filter(Boolean).join(' or ');
+    return mode === 'jup' ? '<div class="tps-sum">Sell <b class="mono">' + (sell > 0 ? fmtNum(sell) + ' $' + id : F.amt + '% of your $' + id) + '</b>' + (usd > 0 ? ' <span class="muted">(≈ $' + money(usd) + ')</span>' : '') + ' for ' + esc(qSymT(t)) + ' when ' + parts + '.' + (usd > 0 && usd < 10 ? '<div class="tps-err">Jupiter’s minimum order is $10</div>' : '') + '</div>'
+      : '<div class="tps-sum">Ping me when ' + parts + ' — then I sell in one tap.</div>';
+  }
+  function tpslPanel(t, pos, bsBar) {
+    var id = esc(t.tick), F = S.tpF, mode = tpMode(t), elig = jtEligible(t);
+    var row = function (k, label, cls) { var on = F[k], u = F[k + 'U'];
+      return '<div class="tps-row ' + cls + (on ? ' on' : '') + '"><button class="tps-tg" data-act="tpTog" data-arg="' + k + '" role="switch" aria-checked="' + on + '"><i></i><b>' + label + '</b></button>' +
+        (on ? '<div class="tps-in"><input class="inp" id="tp-' + k + '" inputmode="decimal" data-tpv="' + k + '" value="' + esc(F[k + 'V']) + '" aria-label="' + label + '"><div class="seg sm"><button class="' + (u === 'pct' ? 'on' : '') + '" data-act="tpUnit" data-arg="' + k + '|pct">' + (k === 'tp' ? '+%' : '−%') + '</button><button class="' + (u === 'mc' ? 'on' : '') + '" data-act="tpUnit" data-arg="' + k + '|mc">MC $</button></div></div><small class="tps-hint mono" id="tph-' + k + '">' + tpHint(t, k) + '</small>' : '') + '</div>'; };
+    var body = '';
+    if (!t.live) body = '<p class="muted tps-note">TP/SL works on real coins only.</p>';
+    else {
+      body = (elig ? '<div class="seg sm tps-mode"><button class="' + (mode === 'jup' ? 'on' : '') + '" data-act="tpMode" data-arg="jup">⚡ Auto-sell</button><button class="' + (mode === 'alert' ? 'on' : '') + '" data-act="tpMode" data-arg="alert">🔔 Alert me</button></div>' : '') +
+        '<div class="tps-now muted">Market cap now <b class="mono" data-mc="' + id + '" data-v="' + fmtK(t.mcN) + '">' + fmtK(t.mcN) + '</b></div>' +
+        row('tp', 'Take profit', 'tp') + row('sl', 'Stop loss', 'sl') +
+        (mode === 'jup' ? '<div class="tps-amt"><span class="muted">Sell</span><div class="presets">' + [25, 50, 75, 100].map(function (p) { return '<button class="' + (F.amt === p ? 'on' : '') + '" data-act="tpAmt" data-arg="' + p + '">' + p + '%</button>'; }).join('') + '</div></div>' +
+          '<div class="tps-amt"><span class="muted">Expires in</span><div class="presets">' + [1, 7, 30, 90].map(function (d) { return '<button class="' + (F.exp === d ? 'on' : '') + '" data-act="tpExp" data-arg="' + d + '">' + d + 'd</button>'; }).join('') + '</div></div>' : '') +
+        '<div id="tps-sum">' + tpSum(t) + '</div>';
+      if (mode === 'jup') {
+        var tg = tpTargets(t), sellUsd = (pos ? pos.tok : 0) * F.amt / 100 * tg.mc / 1e9, dis = S.busy || tg.err || !pos || sellUsd < 10;
+        body += '<button class="big-btn btn ' + (!S.account ? 'pri' : 'down-b') + '" data-act="' + (S.account ? 'tpPlace' : 'openWallet') + '" data-arg="' + id + '"' + (S.account && dis ? ' disabled' : '') + '>' + (S.busy ? esc(S.busy) + '…' : !S.account ? 'Connect wallet' : !pos ? 'You hold no $' + id : 'Place TP/SL order') + '</button>' +
+          '<span class="note">Jupiter keeps the coins in your personal Jupiter vault and sells automatically at your target. 2 wallet approvals: sign in (no funds move) + deposit. Cancel anytime to get them back.</span>';
+        var os = JT[t.ca];
+        if (os === undefined && S.account && jtStoredOk()) { JT[t.ca] = 'busy'; setTimeout(function () { jtLoad(t, false); }, 0); }
+        body += '<div class="tps-list"><div class="tps-lh"><b>Your open orders</b>' + (S.account ? '<button class="link" data-act="tpLoad" data-arg="' + id + '">' + (Array.isArray(os) ? '↻ Refresh' : 'Show') + '</button>' : '') + '</div>' +
+          (os === 'busy' ? '<div class="muted tps-e"><span class="gr-sp"></span> Loading…</div>' : Array.isArray(os) ? (os.length ? os.map(function (o) { return jtRow(t, o); }).join('') : '<div class="muted tps-e">No open orders on this coin.</div>') : '<div class="muted tps-e">' + (S.account ? 'Tap Show to load them (one Jupiter sign-in).' : 'Connect your wallet to see them.') + '</div>') + '</div>';
+      } else {
+        var tgA = tpTargets(t);
+        body += (PUSH && PUSH.sub ? '<button class="big-btn btn pri" data-act="alSet" data-arg="' + id + '"' + (tgA.err ? ' disabled' : '') + '>🔔 Set alert</button>' : '<button class="big-btn btn pri" data-act="notifOpen">🔔 Turn on notifications first</button>') +
+          '<span class="note">' + (elig ? 'Nothing leaves your wallet: treid pings this device at your target and you sell in one tap.' : 'Coins with a transfer tax can’t go into Jupiter’s auto-sell vaults yet, so treid pings this device at your target and you sell in one tap. Nothing leaves your wallet.') + '</span>';
+        var al = S.alerts[t.ca]; if (al === undefined && PUSH && PUSH.sub) { S.alerts[t.ca] = 'busy'; setTimeout(function () { alLoad(t); }, 0); }
+        if (Array.isArray(al) && al.length) body += '<div class="tps-list"><div class="tps-lh"><b>Your alerts</b></div>' + al.map(function (a) { return '<div class="tps-o"><span>' + (a.tp ? '<em class="up">TP ' + fmtK(a.tp / 1000) + '</em>' : '') + (a.sl ? '<em class="down">SL ' + fmtK(a.sl / 1000) + '</em>' : '') + '</span><small class="muted">set ' + ago(a.at) + ' ago</small><button class="link" data-act="alDel" data-arg="' + esc(t.tick + '|' + a.id) + '">Remove</button></div>'; }).join('') + '</div>';
+      }
+    }
+    return '<section class="card-s panel tradebox tpsl">' + bsBar + body + '</section>';
+  }
+  function jtRow(t, o) {
+    var P = function (k) { var v = o[k] != null ? o[k] : o.rawState && o.rawState[k]; return v != null && +v > 0 ? fmtK(+v * 1e9 / 1000) : null; };
+    var tp = P('tpPriceUsd'), sl = P('slPriceUsd'), tr = P('triggerPriceUsd'), lab = o.orderType === 'oco' ? (tp || sl ? '' : 'TP / SL pair') : '';
+    if (!tp && !sl && tr) { if (o.triggerCondition === 'above') tp = tr; else sl = tr; }
+    var amt = Number(o.remainingInputAmount || o.initialInputAmount || 0) / 1e6, st = String(o.orderState || '');
+    return '<div class="tps-o"><span>' + (tp ? '<em class="up">TP ' + tp + '</em>' : '') + (sl ? '<em class="down">SL ' + sl + '</em>' : '') + esc(lab) + '</span><small class="muted mono">' + fmtNum(amt) + ' $' + esc(t.tick) + (st && st !== 'open' ? ' · ' + esc(st) : '') + '</small>' +
+      (/^(open|pending|ready_to_cancel|pending_withdraw|expired)$/.test(st) || !st ? '<button class="link" data-act="tpCancel" data-arg="' + esc(t.tick + '|' + o.id) + '"' + (S.busy ? ' disabled' : '') + '>' + (st === 'expired' || st === 'pending_withdraw' ? 'Withdraw' : 'Cancel') + '</button>' : '') + '</div>';
+  }
+  // Jupiter Trigger V2 through our server (it adds the API key); the Jupiter session token stays in this browser
+  function jt(path, o) { o = o || {}; return fetch(API + '/api/jt/' + path, { method: o.body ? 'POST' : 'GET', headers: Object.assign({ 'content-type': 'application/json' }, o.tok ? { authorization: 'Bearer ' + o.tok } : {}), body: o.body ? JSON.stringify(o.body) : undefined })
+    .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { if (!r.ok) { var e = new Error(String((j && (j.error || j.message)) || 'Jupiter error ' + r.status).slice(0, 160)); e.status = r.status; throw e; } return j; }); }); }
+  function jtKey() { return 'treid.jt.' + S.account; }
+  function jtStored() { try { return JSON.parse(localStorage.getItem(jtKey()) || 'null'); } catch (e) { return null; } }
+  function jtStoredOk() { var s = jtStored(); return !!(s && (s.r || (s.a && s.exp > Date.now() + 60e3))); }
+  function jtStore(j) { if (!j || !j.accessToken) throw new Error('Jupiter sign-in failed'); try { localStorage.setItem(jtKey(), JSON.stringify({ a: j.accessToken, r: j.refreshToken || null, exp: Date.parse(j.expiresAt) || Date.now() + 14 * 60e3 })); } catch (e) {} return j.accessToken; }
+  function jtForget() { try { localStorage.removeItem(jtKey()); } catch (e) {} }
+  function jtToken(interactive) {
+    var who = S.account, s = jtStored();
+    if (s && s.a && s.exp > Date.now() + 60e3) return Promise.resolve(s.a);
+    return (s && s.r ? jt('auth/refresh', { body: { refreshToken: s.r } }).then(jtStore).catch(function () { jtForget(); return null; }) : Promise.resolve(null)).then(function (a) {
+      if (a || !interactive) return a;
+      var f = S.wallet && S.wallet.features && S.wallet.features['solana:signMessage']; if (!f || S.wallet.dl) throw new Error('Open treid in your wallet app’s browser (or use a browser extension) for TP/SL orders');
+      return jt('auth/challenge', { body: { walletPubkey: who, type: 'message' } }).then(function (c) {
+        if (!c || typeof c.challenge !== 'string' || c.challenge.length > 2000) throw new Error('Unexpected Jupiter sign-in — stopped');
+        toast('Sign in to Jupiter — this moves no funds');
+        return Promise.resolve(f.signMessage({ account: S.walletAcc, message: new TextEncoder().encode(c.challenge) })).then(function (r) { var sg = (Array.isArray(r) ? r[0] : r).signature;
+          if (S.account !== who) throw new Error('Wallet changed — stopped'); return chainLib().then(function (T) { return jt('auth/verify', { body: { type: 'message', walletPubkey: who, signature: T.b58(sg), authMode: 'access_refresh' } }); }); }).then(jtStore); }); });
+  }
+  // before the wallet signs a transaction Jupiter built: simulate it and check what it does to YOUR balances (whatever its instructions look like)
+  function jtGuard(b64, o) {
+    var who = S.account, mints = o.mints.filter(Boolean), accs = [];
+    return Promise.all(mints.map(function (m) { return rpc('getTokenAccountsByOwner', [who, { mint: m }, { encoding: 'jsonParsed', commitment: 'confirmed' }]); })).then(function (rs) {
+      rs.forEach(function (r, i) { ((r && r.value) || []).forEach(function (a) { accs.push({ addr: a.pubkey, mint: mints[i], pre: BigInt(a.account.data.parsed.info.tokenAmount.amount) }); }); });
+      return rpc('getBalance', [who, { commitment: 'confirmed' }]); }).then(function (b) { var solPre = BigInt(b.value);
+      return rpc('simulateTransaction', [b64, { encoding: 'base64', sigVerify: false, replaceRecentBlockhash: true, commitment: 'confirmed', accounts: { encoding: 'jsonParsed', addresses: [who].concat(accs.map(function (a) { return a.addr; })) } }]).then(function (sim) {
+        var v = sim && sim.value; if (!v || !v.accounts) throw new Error('Couldn’t check Jupiter’s transaction — not signing');
+        if (v.err) throw new Error('Jupiter’s transaction fails in simulation — not signing');
+        var solPost = v.accounts[0] ? BigInt(v.accounts[0].lamports) : 0n; if (solPre - solPost > BigInt(o.solMax)) throw new Error('Jupiter’s transaction would take more SOL than expected — not signing');
+        var spent = {}; accs.forEach(function (a, i) { var p = v.accounts[i + 1], post = p && p.data && p.data.parsed ? BigInt(p.data.parsed.info.tokenAmount.amount) : 0n; spent[a.mint] = (spent[a.mint] || 0n) + (a.pre - post); });
+        for (var m in spent) if (spent[m] > BigInt((o.spend || {})[m] || 0)) throw new Error('Jupiter’s transaction would move more tokens than you chose — not signing');
+        return true; }); });
+  }
+  function jtLoad(t, interactive) {
+    JT[t.ca] = 'busy'; if (S.screen === 'token') render();
+    return jtToken(interactive).then(function (a) { return a ? jt('orders/history?state=active&mint=' + t.ca + '&limit=50', { tok: a }) : null; })
+      .then(function (j) { JT[t.ca] = j ? (j.orders || []).filter(function (o) { return o.inputMint === t.ca; }) : undefined; }).catch(function (e) { JT[t.ca] = undefined; if (e.status === 401) jtForget(); if (interactive) toast(e.message); })
+      .then(function () { if (S.screen === 'token' && S.tick === t.tick) render(); });
+  }
+  function jtPlace(t) {
+    var F = S.tpF, tg = tpTargets(t), pos = position(t), who = S.account, out = t.qMint || WSOL, oco = F.tp && F.sl;
+    if (tg.err) return toast(tg.err); if (!pos) return toast('You hold no $' + t.tick);
+    var raw = String(Math.floor(pos.tok * F.amt / 100 * 1e6)); if (raw === '0') return toast('Nothing to sell');
+    if (pos.tok * F.amt / 100 * tg.mc / 1e9 < 10) return toast('Jupiter’s minimum order is $10');
+    var tok, dep; S.busy = 'Placing order'; render();
+    jtToken(true).then(function (a) { tok = a; return jt('vault', { tok: tok }).catch(function () { return jt('vault/register', { tok: tok }); }); })
+      .then(function () { return jt('deposit/craft', { tok: tok, body: { inputMint: t.ca, outputMint: out, userAddress: who, amount: raw, orderType: 'price', orderSubType: oco ? 'oco' : 'single' } }); })
+      .then(function (d) { dep = d; if (!d || !d.transaction || !d.requestId) throw new Error('Jupiter didn’t return a deposit');
+        if ((d.mint && d.mint !== t.ca) || (d.amount != null && String(d.amount) !== raw)) throw new Error('Jupiter’s deposit doesn’t match your order — stopped');
+        return jtGuard(d.transaction, { mints: [t.ca, out === WSOL ? null : out], spend: (function () { var s = {}; s[t.ca] = raw; return s; })(), solMax: 3e7 }); })
+      .then(function () { if (S.account !== who) throw new Error('Wallet changed — stopped'); return walletSign([b64Bytes(dep.transaction)]); })
+      .then(function (sg) { var b = { orderType: oco ? 'oco' : 'single', depositRequestId: dep.requestId, depositSignedTx: bytesB64(sg[0]), userPubkey: who, inputMint: t.ca, inputAmount: raw, outputMint: out, triggerMint: t.ca, expiresAt: Date.now() + F.exp * 864e5 };
+        if (oco) { b.tpPriceUsd = tg.tp / 1e9; b.slPriceUsd = tg.sl / 1e9; } else if (F.tp) { b.triggerCondition = 'above'; b.triggerPriceUsd = tg.tp / 1e9; } else { b.triggerCondition = 'below'; b.triggerPriceUsd = tg.sl / 1e9; }
+        return jt('orders/price', { tok: tok, body: b }); })
+      .then(function () { toast('✅ TP/SL order placed'); setTimeout(function () { livePos(t); }, 2500); return jtLoad(t, false); })
+      .catch(function (e) { if (e && e.status === 401) jtForget(); toast((e && e.message) || 'Order failed'); }).then(function () { S.busy = null; render(); });
+  }
+  function jtCancel(t, oid) {
+    var who = S.account, out = t.qMint || WSOL, tok, c; S.busy = 'Cancelling'; render();
+    jtToken(true).then(function (a) { tok = a; return jt('orders/price/cancel/' + encodeURIComponent(oid), { tok: tok, body: {} }); })
+      .then(function (x) { c = x; if (!c || !c.transaction || !c.requestId) throw new Error('Jupiter didn’t return a withdrawal'); return jtGuard(c.transaction, { mints: [t.ca, out === WSOL ? null : out], spend: {}, solMax: 1e7 }); })
+      .then(function () { if (S.account !== who) throw new Error('Wallet changed — stopped'); return walletSign([b64Bytes(c.transaction)]); })
+      .then(function (sg) { return jt('orders/price/confirm-cancel/' + encodeURIComponent(oid), { tok: tok, body: { signedTransaction: bytesB64(sg[0]), cancelRequestId: c.requestId } }); })
+      .then(function () { toast('Order cancelled — coins on their way back'); setTimeout(function () { livePos(t); }, 2500); return jtLoad(t, false); })
+      .catch(function (e) { if (e && e.status === 401) jtForget(); toast((e && e.message) || 'Cancel failed'); }).then(function () { S.busy = null; render(); });
+  }
+  function alLoad(t) { if (!PUSH.sub) return; pushPost('alerts', { endpoint: PUSH.sub.endpoint, mint: t.ca }).then(function (j) { S.alerts[t.ca] = j.alerts || []; }).catch(function () { S.alerts[t.ca] = []; }).then(function () { if (S.screen === 'token' && S.tick === t.tick) render(); }); }
+  function alSet(t) { var tg = tpTargets(t); if (tg.err) return toast(tg.err); if (!PUSH.sub) return set({ notifOpen: true });
+    pushPost('alert', { endpoint: PUSH.sub.endpoint, mint: t.ca, tp: S.tpF.tp ? tg.tp : 0, sl: S.tpF.sl ? tg.sl : 0 }).then(function () { toast('🔔 Alert set — we’ll ping this device'); alLoad(t); }).catch(function (e) { toast(e.message); }); }
   function footer() {
     return '<footer><div class="wrap foot"><span style="display:flex;align-items:center;gap:8px"><span style="width:22px;height:22px;display:inline-block">' + LOGO + '</span><b style="color:var(--soft)">treid<span class="muted" style="font-weight:600">.fun</span></b></span>' +
       '<span>' + (DEMO ? 'Demo · market data on this page is simulated · wallet connects to Solana ' + CLUSTER : 'Beta on Solana ' + CLUSTER + ' · every coin and trade here is real and on-chain') + '</span>' +
@@ -3945,6 +4075,16 @@
       case 'notifOpen': S.walletMenu = false; set({ notifOpen: true }); break;
       case 'notifClose': if (e.target.closest('[data-stop]') && !e.target.closest('.iconbtn')) break; set({ notifOpen: false }); break;
       case 'notifOn': pushOn(); break;
+      case 'tpTog': S.tpF[arg] = !S.tpF[arg]; render(); break;
+      case 'tpUnit': var tu = arg.split('|'), tt0 = find(S.tick); if (S.tpF[tu[0] + 'U'] !== tu[1] && tt0) { var tgt0 = tpTargets(tt0)[tu[0]]; S.tpF[tu[0] + 'U'] = tu[1]; S.tpF[tu[0] + 'V'] = tu[1] === 'mc' ? (tgt0 > 0 ? String(Math.round(tgt0)) : '') : (tu[0] === 'tp' ? '100' : '40'); } render(); break;
+      case 'tpAmt': S.tpF.amt = +arg; render(); break;
+      case 'tpExp': S.tpF.exp = +arg; render(); break;
+      case 'tpMode': S.tpF.mode = arg; render(); break;
+      case 'tpPlace': var tpt = find(arg); if (tpt) jtPlace(tpt); break;
+      case 'tpLoad': var tlt = find(arg); if (tlt) jtLoad(tlt, true); break;
+      case 'tpCancel': var tcp = String(arg).split('|'), tct = find(tcp[0]); if (tct) jtCancel(tct, tcp.slice(1).join('|')); break;
+      case 'alSet': var tat = find(arg); if (tat) alSet(tat); break;
+      case 'alDel': var adp = String(arg).split('|'), adt = find(adp[0]); if (adt && PUSH.sub) pushPost('alertdel', { endpoint: PUSH.sub.endpoint, id: +adp[1] }).then(function () { alLoad(adt); }).catch(function (er) { toast(er.message); }); break;
       case 'notifOff': pushOff(); break;
       case 'notifPref': S.pushP[arg] = !S.pushP[arg]; try { localStorage.setItem('dl.push', JSON.stringify(S.pushP)); } catch (er) {} pushSync(true); render(); break;
       case 'termsClose': if (e.target.closest('[data-stop]') && !e.target.closest('.iconbtn')) break; set({ termsOpen: false }); break;
@@ -4250,6 +4390,9 @@
   document.addEventListener('change', function (e) { if (e.target && e.target.hasAttribute && e.target.hasAttribute('data-shimg')) { var f = e.target.files && e.target.files[0]; e.target.value = ''; if (!f || !/^image\//.test(f.type) || f.size > 8e6 || !S.share) return; var fr = new FileReader(); fr.onload = function () { if (S.share) { S.share.custom = String(fr.result); S.share.bg = 'custom'; render(); } }; fr.readAsDataURL(f); } });
   document.addEventListener('change', function (e) { if (e.target && e.target.hasAttribute && e.target.hasAttribute('data-coimg')) { coPickImage(e.target.files && e.target.files[0]); e.target.value = ''; } });
   document.addEventListener('input', function (e) {
+    if (e.target.hasAttribute && e.target.hasAttribute('data-tpv')) { var tk0 = e.target.getAttribute('data-tpv'), tt1 = find(S.tick); S.tpF[tk0 + 'V'] = e.target.value.replace(/[^0-9.,kKmM$]/g, '').replace(',', '.'); if (!tt1) return;
+      var hh = document.getElementById('tph-' + tk0); if (hh) hh.textContent = tpHint(tt1, tk0); var sm = document.getElementById('tps-sum'); if (sm) sm.innerHTML = tpSum(tt1);
+      var go = document.querySelector('.tpsl .big-btn'), tg1 = tpTargets(tt1); if (go && S.account && (go.getAttribute('data-act') === 'tpPlace' || go.getAttribute('data-act') === 'alSet')) { var ps1 = position(tt1); go.disabled = !!(S.busy || tg1.err || (go.getAttribute('data-act') === 'tpPlace' && (!ps1 || ps1.tok * S.tpF.amt / 100 * tg1.mc / 1e9 < 10))); } return; }
     if (e.target.hasAttribute && e.target.hasAttribute('data-burnpct')) { S.burnPct = +e.target.value; var t = find(S.burnTick), pos = t && position(t); if (!pos) return; var tok = pos.tok * S.burnPct / 100;
       var q = function (id, v) { var x = document.getElementById(id); if (x) x.textContent = v; }; q('bt-tok', fmtNum(Math.round(tok)) + ' $' + t.tick); q('bt-sup', (tok / 1e9 * 100).toFixed(3) + '%'); q('bt-usd', '$' + fmtNum(Math.round(tok * price(t))));
       var g = document.querySelector('.bt-go'); if (g) g.textContent = '🔥 Burn ' + S.burnPct + '% of my $' + t.tick; document.querySelectorAll('.bt-pre button').forEach(function (bb) { bb.classList.toggle('on', +bb.getAttribute('data-arg') === S.burnPct); }); return; }

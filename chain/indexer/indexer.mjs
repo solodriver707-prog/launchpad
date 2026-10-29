@@ -406,13 +406,27 @@ async function xPost(id) {
   })();
   xBusy.set(id, pr); return pr;
 }
+// Jupiter Trigger V2 proxy: the browser can't hold the API key. Only the order endpoints, the user's own Jupiter JWT passed through.
+const JT_ROUTES = [['POST', /^auth\/(challenge|verify|refresh)$/], ['GET', /^vault(\/register)?$/], ['POST', /^deposit\/craft$/], ['POST', /^orders\/price$/], ['POST', /^orders\/price\/(cancel|confirm-cancel)\/[A-Za-z0-9_-]{1,80}$/], ['GET', /^orders\/history$/]];
+async function jtProxy(req, res, u, p) {
+  const out = (code, o) => { res.writeHead(code, { 'content-type': 'application/json', 'access-control-allow-origin': '*', 'cache-control': 'no-store' }); res.end(JSON.stringify(o)); };
+  if (req.method === 'OPTIONS') { res.writeHead(204, { 'access-control-allow-origin': '*', 'access-control-allow-headers': 'authorization,content-type', 'access-control-allow-methods': 'GET,POST' }); return res.end(); }
+  const path = p.slice(2).join('/'); if (!JT_ROUTES.some(([m, re]) => m === req.method && re.test(path))) return out(404, { error: 'not found' });
+  if (!process.env.JUP_API_KEY) return out(503, { error: 'limit orders are not enabled on this server (JUP_API_KEY missing)' });
+  if (!rate('jt|' + ip(req), 400, 36e5)) return out(429, { error: 'too many requests — try again later' });
+  let body = null; if (req.method === 'POST') { body = await new Promise((ok, no) => { let b = ''; req.on('data', (d) => { b += d; if (b.length > 3e5) { req.destroy(); no(new Error('too big')); } }); req.on('end', () => ok(b)); req.on('error', no); }); }
+  const auth = String(req.headers.authorization || ''), qs = path === 'orders/history' ? '?' + new URLSearchParams([...u.searchParams].filter(([k]) => ['state', 'mint', 'limit', 'offset', 'sort', 'dir'].includes(k))).toString() : '';
+  try { const r = await fetchT('https://api.jup.ag/trigger/v2/' + path + qs, { method: req.method, body: body || undefined, headers: { 'content-type': 'application/json', ...(/^Bearer [A-Za-z0-9._~+\/=-]{10,4000}$/.test(auth) ? { authorization: auth } : {}) } }, 20e3);
+    const txt = await r.text(); res.writeHead(r.status, { 'content-type': 'application/json', 'access-control-allow-origin': '*', 'cache-control': 'no-store' }); res.end(txt.slice(0, 2e6)); }
+  catch (e) { out(502, { error: 'Jupiter not reachable — try again' }); }
+}
 http.createServer((req, res) => { handleReq(req, res).catch((e) => { console.log('req err', String(e?.message || e).slice(0, 160)); try { if (!res.headersSent) res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end('{"ok":false}'); } catch {} }); }).listen(PORT, () => console.log('API on :' + PORT));
 async function handleReq(req, res) {
   const u = new URL(req.url, 'http://x'), p = u.pathname.split('/').filter(Boolean), J = (o) => { const body = typeof o === 'object' && o && o.__gz ? null : JSON.stringify(o), gz = /\bgzip\b/.test(String(req.headers['accept-encoding'] || ''));   // big answers go out gzipped (the coin list shrinks ~8x)
     if (o && o.__gz) { res.writeHead(200, { 'content-type': 'application/json', 'access-control-allow-origin': '*', 'cache-control': 'no-store', ...(gz ? { 'content-encoding': 'gzip', vary: 'Accept-Encoding' } : {}) }); return res.end(gz ? o.__gz : o.raw); }
     if (gz && body.length > 4096) { res.writeHead(200, { 'content-type': 'application/json', 'access-control-allow-origin': '*', 'cache-control': 'no-store', 'content-encoding': 'gzip', vary: 'Accept-Encoding' }); return res.end(zlib.gzipSync(body, { level: 6 })); }
     res.writeHead(200, { 'content-type': 'application/json', 'access-control-allow-origin': '*', 'cache-control': 'no-store' }); res.end(body); };
-  if (req.method === 'OPTIONS') { res.writeHead(204, { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'GET,POST' }); return res.end(); }
+  if (req.method === 'OPTIONS') { res.writeHead(204, { 'access-control-allow-origin': '*', 'access-control-allow-headers': 'authorization, *', 'access-control-allow-methods': 'GET,POST' }); return res.end(); }
   // coin metadata (image / description) posted by the site at launch — first write wins. TODO mainnet: pin to IPFS instead.
   if (p[1] === 'upload' && req.method === 'POST') {   // before launch: pin image(s) + metadata JSON to IPFS, return the permanent URI
     if (!rate('up|' + ip(req), 6, 36e5)) { res.writeHead(429, { 'access-control-allow-origin': '*' }); return res.end(JSON.stringify({ uri: null, error: 'too many uploads — try again later' })); }
@@ -443,6 +457,9 @@ async function handleReq(req, res) {
       sseByIp.set(ipx, nIp + 1); req.on('close', () => { const v = (sseByIp.get(ipx) || 1) - 1; if (v > 0) sseByIp.set(ipx, v); else sseByIp.delete(ipx); });
       res.writeHead(200, { 'content-type': 'text/event-stream', 'access-control-allow-origin': '*', 'cache-control': 'no-cache' }); res.write(': hi\n\n'); clients.add(res); req.on('close', () => clients.delete(res)); return; }
     if (p[1] === 'push' && p[2] === 'key') return J({ key: PUSH?.publicKey || null });   // web push: the server's VAPID public key (null = off)
+    if (p[1] === 'push' && ['alert', 'alerts', 'alertdel'].includes(p[2]) && req.method === 'POST') { let body = ''; req.on('data', (d) => { body += d; if (body.length > 4000) req.destroy(); });
+      req.on('end', () => { try { if (!rate('pal|' + ip(req), 120, 36e5)) throw new Error('too many requests — try again later'); const b = JSON.parse(body); J(p[2] === 'alert' ? PUSH.alertAdd(b) : p[2] === 'alerts' ? PUSH.alertList(b) : PUSH.alertDel(b)); } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: e.message })); } }); return; }
+    if (p[1] === 'jt') return jtProxy(req, res, u, p);   // Jupiter Trigger V2 (limit / TP / SL orders), with the server's API key
     if (p[1] === 'push' && (p[2] === 'sub' || p[2] === 'unsub') && req.method === 'POST') { let body = ''; req.on('data', (d) => { body += d; if (body.length > 40000) req.destroy(); });
       req.on('end', () => { try { if (!rate('push|' + ip(req), 30, 36e5)) throw new Error('too many requests — try again later'); const b = JSON.parse(body); J(p[2] === 'sub' ? PUSH.save(b) : PUSH.drop(b.endpoint)); } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: e.message })); } }); return; }
     if (p[1] === 'qprice' && !rate('qp|' + ip(req), 30, 6e4)) { res.writeHead(429, { 'access-control-allow-origin': '*' }); return res.end('{}'); }
