@@ -1479,7 +1479,7 @@
   function trenchPage() {
     var cols = [['✨ New', 'Fresh launches, newest first'], ['🔥 Graduating', 'Bonding curve ' + TR_GRAD + '%+ · close to Meteora'], ['🎓 Graduated', 'Trading on Meteora']], lists = [0, 1, 2].map(trList);
     var empty = ['No new coins yet — be the first to launch.', 'Nothing near graduation right now.', 'No coin has graduated yet.'];
-    return '<main class="wrap trench"><div class="tn-head"><div><span class="kicker"><span class="tn-live"></span>LIVE</span><h1 class="tr-h">Trenches</h1></div>' +
+    return '<main class="wrap trench"><div class="tn-head"><h1 class="tr-h">Trenches</h1>' +
       '<div class="tn-f"><button class="chip' + (S.trZero ? ' on' : '') + '" data-act="trF" data-arg="zero">0% tax</button><button class="chip' + (S.trClean ? ' on' : '') + '" data-act="trF" data-arg="clean">No red flags</button><button class="link" data-act="trendList">Trending →</button></div></div>' +
       '<div class="tn-tabs" role="tablist">' + cols.map(function (c, i) { return '<button role="tab" aria-selected="' + (S.trTab === i) + '" class="' + (S.trTab === i ? 'on' : '') + '" data-act="trTab" data-arg="' + i + '">' + c[0] + ' <b class="mono">' + lists[i].length + '</b></button>'; }).join('') + '<i class="tn-ind" style="transform:translateX(' + (S.trTab * 100) + '%)"></i></div>' +
       '<div class="tn-cols" id="tn-cols">' + cols.map(function (c, i) {
