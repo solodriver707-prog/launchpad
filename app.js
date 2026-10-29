@@ -30,7 +30,7 @@
   function fakeCA(suf) { suf = suf || 'trd'; return b58(44 - suf.length) + suf; }
   function short(a) { return a ? a.slice(0, 4) + '…' + a.slice(/treid$/.test(a) ? -5 : -4) : ''; }
   function taxBg(t) { return t === 0 ? 'var(--up)' : t <= 3 ? 'var(--yellow)' : t <= 6 ? 'var(--orange)' : 'var(--pink)'; }
-  function fmtK(k) { if (!isFinite(k)) k = 0; var sg = k < 0 ? '-' : '', a = Math.abs(k); if (a > 0 && a < 0.9995) { var d0 = a * 1000; return sg + '$' + (d0 < 100 ? d0.toFixed(2) : Math.round(d0)); } if (a >= 999.995) return sg + '$' + (a / 1000).toFixed(2) + 'M'; if (a >= 99.95) return sg + '$' + Math.round(a) + 'K'; return sg + '$' + a.toFixed(1) + 'K'; }
+  function fmtK(k) { if (!isFinite(k)) k = 0; var sg = k < 0 ? '-' : '', a = Math.abs(k); if (a < 5e-6) return '$0'; if (a > 0 && a < 0.9995) { var d0 = a * 1000; return sg + '$' + (d0 < 100 ? d0.toFixed(2) : Math.round(d0)); } if (a >= 999.995) return sg + '$' + (a / 1000).toFixed(2) + 'M'; if (a >= 99.95) return sg + '$' + Math.round(a) + 'K'; return sg + '$' + a.toFixed(1) + 'K'; }
   var SUB = '₀₁₂₃₄₅₆₇₈₉';
   function fmtPrice(p) {
     if (!(p > 0)) return '$0';
@@ -533,7 +533,7 @@
         (S.walletMenu ? '<div class="wbal"><div class="wb-h"><b>Your balance</b><button class="wb-addr mono" data-act="copyAddr">' + esc(short(S.account)) + ' ' + I.copy + '</button></div>' +
           '<div class="wb-big mono">$' + money(totU) + '</div>' +
           '<div class="wb-sol">' + coinHTML('SOL', 26) + '<b>SOL</b><span class="mono">' + solB.toFixed(4) + ' SOL</span><small class="muted mono">$' + money(solB * SOL_USD) + '</small></div>' +
-          '<div class="wb-acts"><button class="btn pri" data-act="wbDeposit">Deposit</button><button class="btn sec" data-act="wallet" data-arg="' + esc(S.account) + '">Profile</button><button class="btn sec" data-act="notifOpen" aria-label="Notifications">' + (PUSH && PUSH.sub ? '🔔' : '🔕') + '</button>' + (CHAIN_ID !== 'solana:mainnet' ? '<button class="btn sec" data-act="airdrop"' + (S.airdropping ? ' disabled' : '') + '>' + (S.airdropping ? 'Requesting…' : 'Get 1 ' + NET + 'SOL') + '</button>' : '') + '</div>' +
+          '<div class="wb-acts"><button class="btn pri" data-act="wbDeposit">Deposit</button><button class="btn sec" data-act="wallet" data-arg="' + esc(S.account) + '">Profile</button><button class="btn sec" data-act="notifOpen" aria-label="Notifications">🔔</button>' + (CHAIN_ID !== 'solana:mainnet' ? '<button class="btn sec" data-act="airdrop"' + (S.airdropping ? ' disabled' : '') + '>' + (S.airdropping ? 'Requesting…' : 'Get 1 ' + NET + 'SOL') + '</button>' : '') + '</div>' +
           (S.wbDep ? '<div class="wb-dep">Send SOL to your wallet address from an exchange or another wallet:<button class="mono" data-act="copyAddr">' + esc(S.account) + ' ' + I.copy + '</button></div>' : '') +
           '<div class="wb-con">' + (S.wallet && S.wallet.icon ? '<img src="' + esc(S.wallet.icon) + '" alt="">' : '<span class="wb-wi">◎</span>') + '<span><small class="muted">Connected with</small><b>' + esc(S.wallet ? S.wallet.name : 'Wallet') + ' <span class="muted">· external wallet</span></b></span><button class="link wb-dc" data-act="disconnect">Disconnect</button></div>' +
           '<div class="wb-tabs"><div class="seg sm"><button class="' + (S.wbTab !== 'closed' ? 'on' : '') + '" data-act="wbTab" data-arg="open">Open</button><button class="' + (S.wbTab === 'closed' ? 'on' : '') + '" data-act="wbTab" data-arg="closed">Closed</button><button class="' + (S.wbTab === 'rewards' ? 'on' : '') + '" data-act="wbTab" data-arg="rewards">🎁 Rewards</button></div><button class="link" data-act="refresh">↻ Refresh</button></div>' +
@@ -547,7 +547,7 @@
       '<button class="brand" data-act="home" aria-label="treid home"><span class="brand-name">treid</span></button>' +
       '<nav class="navlinks"><span class="nav-ind" id="nav-ind"></span><button class="' + (S.screen === 'home' ? 'on' : '') + '" data-act="home">Board</button><button class="' + (S.screen === 'trench' ? 'on' : '') + '" data-act="trenches">Trenches</button><button class="' + (S.screen === 'create' ? 'on' : '') + '" data-act="create">Create</button><button class="' + (S.screen === 'leaders' ? 'on' : '') + '" data-act="leaders">Leaderboard</button><button class="' + (S.screen === 'burn' ? 'on' : '') + '" data-act="burnPage">🔥 Burnery</button><button class="' + (S.screen === 'trend' ? 'on' : '') + '" data-act="trendList">Trending</button><button data-act="how">How it works</button></nav>' +
       '<button class="searchbtn" data-act="palette">' + I.search + '<span>Search tokens or paste CA</span><span class="kbd">Ctrl K</span></button>' +
-      '<div class="hdr-right">' + (DEMO || API ? '<button class="wl-btn co-btn' + (S.coOpen ? ' on' : '') + '" data-act="coToggle" title="Hot callouts">🔥<span>Callouts</span><b class="mono" id="co-new" style="display:none">0</b></button>' : '') + '<button class="wl-btn nt-btn' + (PUSH && PUSH.sub ? ' on' : '') + '" data-act="notifOpen" aria-label="Notifications" data-tip="Notifications">' + (PUSH && PUSH.sub ? '🔔' : '🔕') + '</button><button class="wl-btn' + (S.screen === 'watch' ? ' on' : '') + '" data-act="watchPage" aria-label="Watchlist" data-tip="Your watchlist">' + I.star(S.watch.length > 0) + (S.watch.length ? '<b class="mono" id="wl-n">' + S.watch.length + '</b>' : '') + '</button><button class="btn pri" data-act="create">+ Launch token</button>' + right + '</div>' +
+      '<div class="hdr-right">' + (DEMO || API ? '<button class="wl-btn co-btn' + (S.coOpen ? ' on' : '') + '" data-act="coToggle" title="Hot callouts">🔥<span>Callouts</span><b class="mono" id="co-new" style="display:none">0</b></button>' : '') + '<button class="wl-btn nt-btn' + (PUSH && PUSH.sub ? ' on' : '') + '" data-act="notifOpen" aria-label="Notifications" data-tip="' + (PUSH && PUSH.sub ? 'Notifications on' : 'Notifications') + '"><svg width="18" height="18" viewBox="0 0 24 24" fill="' + (PUSH && PUSH.sub ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0112 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10.3 21a1.94 1.94 0 003.4 0"/></svg></button><button class="wl-btn' + (S.screen === 'watch' ? ' on' : '') + '" data-act="watchPage" aria-label="Watchlist" data-tip="Your watchlist">' + I.star(S.watch.length > 0) + (S.watch.length ? '<b class="mono" id="wl-n">' + S.watch.length + '</b>' : '') + '</button><button class="btn pri" data-act="create">+ Launch token</button>' + right + '</div>' +
       '</div></header>' +
       '<nav class="mnav" aria-label="Main">' + [['home', 'Board', '<path d="M3 11l9-7 9 7v9a1 1 0 01-1 1h-5v-6H9v6H4a1 1 0 01-1-1z"/>', (!S.coOpen && S.screen === 'home')], ['trenches', 'Trenches', '<rect x="3" y="4" width="5" height="16" rx="1.5"/><rect x="10" y="4" width="5" height="11" rx="1.5"/><rect x="17" y="4" width="4" height="6" rx="1.5"/>', (!S.coOpen && (S.screen === 'trench' || S.screen === 'trend'))], ['leaders', 'Ranks', '<path d="M8 21V11M16 21V7M12 21V3M4 21h16"/>', (!S.coOpen && S.screen === 'leaders')], ['create', 'Launch', '<path d="M12 5v14M5 12h14"/>', (!S.coOpen && S.screen === 'create'), 'pri'], ['coToggle', 'Callouts', '<path d="M21 12a8 8 0 01-11.6 7.1L4 21l1.9-5.4A8 8 0 1121 12z"/>', S.coOpen], ['burnPage', 'Burnery', '<path d="M12 22c4 0 7-3 7-7 0-3-2-5-3-7-1 2-2 3-3 3 0-3-1-6-4-9 0 4-4 6-4 12 0 5 3 8 7 8z"/>', (!S.coOpen && S.screen === 'burn')], ['watchPage', 'Watchlist', '<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/>', (!S.coOpen && S.screen === 'watch')]].filter(function (x) { return true; }).map(function (x) { return '<button class="' + (x[3] ? 'on ' : '') + (x[4] || '') + '" data-act="' + x[0] + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round">' + x[2] + '</svg><span>' + x[1] + '</span>' + (x[0] === 'coToggle' ? '<b class="mn-badge mono" id="mn-co"' + (S.mCo ? '' : ' style="display:none"') + '>' + (S.mCo || '') + '</b>' : '') + '</button>'; }).join('') + '</nav>';
   }
@@ -575,8 +575,9 @@
     var h = hash(t.tick);
     return { web: h % 3 !== 0 ? '#' : null, x: '#', tg: (h >> 2) % 2 === 0 ? '#' : null, demo: true };
   }
-  function socialsHTML(t, big) {
+  function socialsHTML(t, big, hideEmpty) {
     var so = socialsOf(t), items = [['web', 'Website', I.web], ['x', 'X', I.x], ['tg', 'Telegram', I.tg]];
+    if (hideEmpty && !items.some(function (it) { return so[it[0]]; })) return '';   // no links at all: nothing to show (the risk flags already say "No socials")
     return '<div class="soc' + (big ? ' big' : '') + '">' + items.map(function (it) {
       var has = !!so[it[0]];
       return has ? '<button class="sbtn2 on" data-act="soc" data-arg="' + esc(t.tick) + '|' + it[0] + '" aria-label="' + it[1] + '">' + it[2] + '<span>' + it[1] + '</span></button>' :
@@ -645,7 +646,7 @@
       '<div class="tc-name2"><b>' + esc(t.name) + crBadge(t) + '</b><span class="tc-tkr"><span class="mono">$' + esc(t.tick) + '</span>' + (opts.preview ? '' : '<button class="tc-ca mono" data-act="ca" data-arg="' + esc(t.tick) + '" data-tip="Copy contract address" aria-label="Copy contract address">' + esc(short(t.ca)) + I.copy + '</button>') + '</span></div>' +
       riskTiles(t) + socialsHTML(t) +
       '<div class="tc-mid"><div class="tc-mc"><div class="v"><span data-mc="' + esc(t.tick) + '" data-v="' + fmtK(t.mcN) + '">' + fmtK(t.mcN) + '</span>' +
-        '<span class="chgpill ' + (c >= 0 ? 'up' : 'down') + '" data-chg="' + esc(t.tick) + '">' + chgTxt(c) + '</span></div><div class="l">market cap · ' + fmtNum(t.holders) + ' holders · vol ' + fmtK(t.vol) + '</div></div></div>' +
+        '<span class="chgpill ' + (c >= 0 ? 'up' : 'down') + '" data-chg="' + esc(t.tick) + '">' + chgTxt(c) + '</span></div><div class="l">market cap · ' + fmtNum(t.holders) + (t.holders === 1 ? ' holder' : ' holders') + ' · vol ' + fmtK(t.vol) + '</div></div></div>' +
       '<div class="tc-chart ' + (c >= 0 ? 'up' : 'down') + '" data-cchart="' + esc(t.tick) + '">' + cardChart(t) + '</div>' +
       '<div class="prog"><div class="l"><span>' + (done ? 'On Meteora' : 'Bonding curve') + '</span><span class="mono" data-prog="' + esc(t.tick) + '">' + Math.min(100, t.prog).toFixed(0) + '%</span></div>' +
         '<div class="bar"><i class="' + (done ? 'done' : '') + '" data-bar="' + esc(t.tick) + '" style="width:' + Math.max(1, Math.min(100, t.prog)) + '%"></i></div></div>' +
@@ -1315,7 +1316,7 @@
   function bhTubes(log) {
     var st = { dev: 0, tax: 0, frozen: 0 }, cn = { dev: {}, tax: {}, frozen: {} }, tot = 0; log.forEach(function (b) { st[b.src] += b.tok; cn[b.src][b.t.tick] = 1; tot += b.tok; }); BN.src = st;
     return '<div class="bh-side bh-src"><div class="bh-sh"><b>Who’s burning</b><small>share of all tokens burned</small></div><div class="bh-tubes">' + ['dev', 'tax', 'frozen'].map(function (k) { var sh = tot ? st[k] / tot * 100 : 0;
-      return '<div class="bh-tube" data-tube="' + k + '" style="--c:' + BSRC[k][1] + '"><span class="bh-pct mono" data-tpct="' + k + '">' + sh.toFixed(0) + '%</span><div class="bh-glass"><div class="bh-liq" data-tliq="' + k + '" style="height:' + Math.max(8, sh).toFixed(1) + '%"><i class="bh-wv"></i><u></u><u></u><u></u></div><span class="bh-shine"></span></div><em>' + BSI[k] + '</em><b>' + (DEMO ? { dev: 'Devs', tax: 'Buybacks', frozen: 'Frozen' } : { dev: 'Devs & holders', tax: 'Tax burns', frozen: 'Buybacks' })[k] + '</b><small class="mono" data-ttok="' + k + '">' + fmtBig(st[k]) + '</small><small class="bh-cn">' + Object.keys(cn[k]).length + ' coins</small></div>'; }).join('') + '</div></div>';
+      return '<div class="bh-tube" data-tube="' + k + '" style="--c:' + BSRC[k][1] + '"><span class="bh-pct mono" data-tpct="' + k + '">' + sh.toFixed(0) + '%</span><div class="bh-glass"><div class="bh-liq" data-tliq="' + k + '" style="height:' + Math.max(8, sh).toFixed(1) + '%"><i class="bh-wv"></i><u></u><u></u><u></u></div><span class="bh-shine"></span></div><em>' + BSI[k] + '</em><b>' + (DEMO ? { dev: 'Devs', tax: 'Buybacks', frozen: 'Frozen' } : { dev: 'Devs & holders', tax: 'Tax burns', frozen: 'Buybacks' })[k] + '</b><small class="mono" data-ttok="' + k + '">' + fmtBig(st[k]) + '</small><small class="bh-cn">' + Object.keys(cn[k]).length + (Object.keys(cn[k]).length === 1 ? ' coin' : ' coins') + '</small></div>'; }).join('') + '</div></div>';
   }
   function bhGauge(log, usd, ncoins) {
     var per = S.bhPer || '1h', W0 = { '1h': 36e5, '24h': 864e5, '7d': 6048e5, '30d': 2592e6 }[per], PL = { '1h': ['hour', '1h'], '24h': ['24 hours', '24h'], '7d': ['7 days', '7d'], '30d': ['30 days', '30d'] }[per];
@@ -1326,7 +1327,7 @@
     return '<div class="bh-side bh-gauge"><div class="bh-sh bh-shr"><div><b>Burn rate</b><small>tokens destroyed in the last ' + PL[0] + '</small></div><div class="bh-per">' + ['1h', '24h', '7d', '30d'].map(function (x) { return '<button class="' + (per === x ? 'on' : '') + '" data-act="bhPer" data-arg="' + x + '">' + x.toUpperCase() + '</button>'; }).join('') + '</div></div>' +
       '<div class="bh-dial"><svg viewBox="0 0 200 116"><defs><linearGradient id="bhg" x1="0" x2="1"><stop offset="0" stop-color="#3DDC97"/><stop offset=".5" stop-color="#FFD15C"/><stop offset="1" stop-color="#FF4D2E"/></linearGradient></defs><path d="M20 100 A80 80 0 0 1 180 100" fill="none" stroke="rgba(255,255,255,.06)" stroke-width="14" stroke-linecap="round"/><path d="M20 100 A80 80 0 0 1 180 100" fill="none" stroke="url(#bhg)" stroke-width="14" stroke-linecap="round" opacity=".9"/><g class="bh-ticks">' + ticks + '</g>' +
       '<g class="bh-needle" id="bh-needle" style="transform:rotate(' + (-90 + BN.lvl * 180) + 'deg)"><path d="M97 100 L100 28 L103 100Z" fill="#FFF1D6"/></g><circle cx="100" cy="100" r="8" fill="#1b130e" stroke="#FFD15C" stroke-width="2.5"/></svg>' +
-      '<div class="bh-dv"><b class="mono"><span id="bh-rate">' + fmtBig(rate) + '</span><em>/ ' + PL[1] + '</em></b><span class="bh-hot" id="bh-hot">' + (BN.lvl > .8 ? '🔥 ON FIRE' : BN.lvl > .5 ? '🔥 HOT' : '♨ WARM') + '</span><small class="bh-avg">' + (!rp ? 'no earlier data to compare' : (rate >= avg ? '▲ +' : '▼ −') + Math.min(999, Math.abs(Math.round((rate / avg - 1) * 100))) + '% vs previous ' + PL[0]) + '</small></div></div>' +
+      '<div class="bh-dv"><b class="mono"><span id="bh-rate">' + fmtBig(rate) + '</span><em>/ ' + PL[1] + '</em></b><span class="bh-hot" id="bh-hot">' + (!(rate > 0) ? '💤 QUIET' : BN.lvl > .8 ? '🔥 ON FIRE' : BN.lvl > .5 ? '🔥 HOT' : '♨ WARM') + '</span><small class="bh-avg">' + (!rp ? 'no earlier data to compare' : (rate >= avg ? '▲ +' : '▼ −') + Math.min(999, Math.abs(Math.round((rate / avg - 1) * 100))) + '% vs previous ' + PL[0]) + '</small></div></div>' +
       '<div class="bh-mini"><div><small>Value · ' + PL[1] + '</small><b class="mono" id="bh-u1">$' + fmtNum(Math.round(u1)) + '</b></div><div><small>Burns · ' + PL[1] + '</small><b class="mono" id="bh-n1">' + n1 + '</b></div><div><small>Coins · ' + PL[1] + '</small><b class="mono" id="bh-c1">' + Object.keys(c1).length + '</b></div></div></div>';
   }
   function bhKick(b, anim) {
@@ -1804,7 +1805,7 @@
       '<span class="tc-main"><span class="tc-k">TOP MEME <b>#' + (k + 1) + '</b></span><b class="tc-n">' + esc(t.name) + '</b><span class="tc-tk mono">$' + id + '</span>' +
         '<span class="tc-row"><span class="mono">' + fmtK(t.mcN) + '</span><span class="mono ' + (c >= 0 ? 'up' : 'down') + '">' + chgTxt(c) + '</span></span>' +
         '<span class="tc-bar"><i style="width:' + Math.min(100, t.prog) + '%"></i></span></span>' +
-      '<span class="tc-side"><span class="tc-pair">' + coinHTML(t.pair, 26) + '<b>' + esc(pairLabel(t.pair)) + '</b></span><span class="tax" style="background:' + taxBg(tm) + '"><small>TAX</small><b>' + tm + '%</b></span></span></div>' + socialsHTML(t);
+      '<span class="tc-side"><span class="tc-pair">' + coinHTML(t.pair, 26) + '<b>' + esc(pairLabel(t.pair)) + '</b></span><span class="tax" style="background:' + taxBg(tm) + '"><small>TAX</small><b>' + tm + '%</b></span></span></div>' + socialsHTML(t, false, true);
   }
   var tcI = 0;
   setInterval(function () {
@@ -1946,7 +1947,7 @@
       layout: { background: { type: 'solid', color: 'transparent' }, textColor: '#8C8C93', fontSize: 11, fontFamily: "'JetBrains Mono', ui-monospace, monospace", attributionLogo: true },
       grid: { vertLines: { color: 'rgba(255,255,255,.035)' }, horzLines: { color: 'rgba(255,255,255,.035)' } },
       crosshair: { mode: C.CrosshairMode.Normal, vertLine: { color: 'rgba(255,255,255,.25)', labelBackgroundColor: '#2A2A2E' }, horzLine: { color: 'rgba(255,255,255,.25)', labelBackgroundColor: '#2A2A2E' } },
-      rightPriceScale: { borderColor: 'rgba(255,255,255,.08)', scaleMargins: { top: .14, bottom: .24 } },
+      rightPriceScale: { borderColor: 'rgba(255,255,255,.08)', scaleMargins: { top: isMob() ? .22 : .14, bottom: .24 } },
       timeScale: { borderColor: 'rgba(255,255,255,.08)', timeVisible: true, secondsVisible: false, rightOffset: 8, barSpacing: 9, minBarSpacing: 1.5 , tickMarkFormatter: lwTick },
       localization: { priceFormatter: lwFmt, timeFormatter: lwTimeFmt, locale: 'en-US' } });
     var pf = { type: 'custom', formatter: lwFmt, minMove: 1e-14 };
@@ -2010,7 +2011,7 @@
     var el = document.getElementById('c-ohlc'); if (!el) return; var t = find(S.tick); if (!t) return;
     var b = bar || LW.bars[LW.bars.length - 1]; if (!b) { el.innerHTML = ''; return; }
     var ch = b.o ? (b.c - b.o) / b.o * 100 : 0, cl = ch >= 0 ? 'up' : 'down', f = function (k) { return lwFmt(lwConv(k)); };
-    el.innerHTML = 'O <b class="' + cl + '">' + f(b.o) + '</b> H <b class="' + cl + '">' + f(b.h) + '</b> L <b class="' + cl + '">' + f(b.l) + '</b> C <b class="' + cl + '">' + f(b.c) + '</b> <b class="' + cl + '">' + (ch >= 0 ? '+' : '') + ch.toFixed(2) + '%</b>' +
+    el.innerHTML = '<span class="c-ohl">O <b class="' + cl + '">' + f(b.o) + '</b> H <b class="' + cl + '">' + f(b.h) + '</b> L <b class="' + cl + '">' + f(b.l) + '</b> </span>C <b class="' + cl + '">' + f(b.c) + '</b> <b class="' + cl + '">' + (ch >= 0 ? '+' : '') + ch.toFixed(2) + '%</b>' +
       (S.cvol ? ' <span class="c-vl">Vol <b>' + (S.cden === 'sol' ? b.v.toFixed(2) + ' SOL' : '$' + lwCompact(b.v * SOL_USD)) + '</b></span>' : '');
   }
   function lwBarAt(time) { for (var i = LW.bars.length - 1; i >= 0; i--) if (lwTime(LW.bars[i].t) === time) return LW.bars[i]; return null; }
@@ -2053,6 +2054,7 @@
       seg(S.ctype, [['candle', '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 3v4M7 17v4M17 5v3M17 16v3"/><rect x="4" y="7" width="6" height="10" rx="1"/><rect x="14" y="8" width="6" height="8" rx="1"/></svg>', 'Candles'], ['line', '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 17l6-6 4 4 8-8"/></svg>', 'Line']], 'ctype') +
       seg(S.chartMode, [['price', 'Price'], ['mc', 'MCap']], 'cmode') + seg(S.cden, [['usd', 'USD'], ['sol', 'SOL']], 'cden') +
       '<div class="ctog">' + [['cma', 'MA', S.cma], ['cvol', 'Vol', S.cvol], ['cmarks', 'Trades', S.cmarks], ['ccall', 'Callouts', S.ccall]].map(function (x) { return '<button class="' + (x[2] ? 'on' : '') + '" data-act="ctog" data-arg="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div>' +
+      '<div class="seg c-scale-tb"><button class="' + (S.cscale === 2 ? 'on' : '') + '" data-act="cscale" data-arg="2">%</button><button class="' + (S.cscale === 1 ? 'on' : '') + '" data-act="cscale" data-arg="1">log</button><button data-act="cauto">auto</button></div>' +
       '<button class="iconbtn c-rs" data-act="czoom" data-arg="reset" title="Reset view">⟲</button>' +
       '<button class="iconbtn c-fs" data-act="cfull" aria-label="Fullscreen chart" title="Fullscreen">' + (S.cfull ? '✕' : '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>') + '</button></div>';
   }
@@ -2596,7 +2598,7 @@
     var head = '<div class="wp-ban" style="--wb:' + (spec.bg || '#1d3b2c') + '"><span class="wp-ban-av">' + A.svg(spec) + '</span></div><div class="wp-top"><span class="av wp-av" style="width:96px;height:96px">' + A.svg(spec) + '</span>' +
       '<div class="wp-id"><b>' + esc(me ? 'You' : walletName(addr)) + '</b>' + (P.created.length ? '<span class="bdg dev">DEV · ' + P.created.length + '</span>' : '') + '<button class="copy wp-addr mono" data-act="copyW" data-arg="' + esc(addr) + '">' + esc(addr.slice(0, 6) + '…' + addr.slice(-6)) + ' ' + I.copy + '</button>' +
         '<small class="muted">' + (P.first && P.coins.length ? 'First trade on treid ' + ago(P.first) + ' ago' : P.loading ? 'Loading…' : 'No trades on treid yet') + '</small></div>' +
-      '<div class="wp-btns"><button class="btn ' + (tracked ? 'sec' : 'pri') + '" data-act="trackW" data-arg="' + esc(addr) + '">' + (tracked ? 'Tracking ✓' : 'Track') + '</button><button class="btn sec" data-act="maker" data-arg="' + esc(addr) + '">Its trades on $' + esc(t.tick) + '</button><a class="btn sec" href="https://solscan.io/account/' + esc(addr) + '" target="_blank" rel="noopener">Solscan ↗</a></div></div>';
+      '<div class="wp-btns">' + (me ? '' : '<button class="btn ' + (tracked ? 'sec' : 'pri') + '" data-act="trackW" data-arg="' + esc(addr) + '">' + (tracked ? 'Tracking ✓' : 'Track') + '</button>') + '<button class="btn sec" data-act="maker" data-arg="' + esc(addr) + '">' + (me ? 'My' : 'Its') + ' trades on $' + esc(t.tick) + '</button><a class="btn sec" href="https://solscan.io/account/' + esc(addr) + '" target="_blank" rel="noopener">Solscan ↗</a></div></div>';
     var stat = function (k, v, cl, sub) { return '<div class="wp-s"><small>' + k + '</small><b class="mono ' + (cl || '') + '">' + v + '</b>' + (sub ? '<span class="muted mono">' + sub + '</span>' : '') + '</div>'; };
     var stats = '<div class="wp-stats">' + stat('Portfolio value', '$' + money(sm.port), '', P.sol != null ? P.sol.toFixed(3) + ' SOL + tokens' : '') + stat('SOL balance', P.sol != null ? P.sol.toFixed(4) : '—', '', P.sol != null ? '≈ $' + money(P.sol * SOL_USD) : '') +
       stat('Total PnL', usdP(sm.profit), sm.profit >= 0 ? 'up' : 'down', sm.spent ? (sm.profit >= 0 ? '+' : '') + (sm.profit / sm.spent * 100).toFixed(1) + '%' : '') + stat('Realized', usdP(sm.realized), sm.realized >= 0 ? 'up' : 'down') + stat('Unrealized', usdP(sm.unreal), sm.unreal >= 0 ? 'up' : 'down') + stat('Buy volume', '$' + money(sm.spent), '', P.coins.length + ' coins') + '</div>';
@@ -2727,7 +2729,7 @@
     var key = function (r) { return hall ? r.t.tick : r.a; }, go = function (r) { return hall ? 'data-act="open" data-arg="' + esc(r.t.tick) + '"' : 'data-act="walletAny" data-arg="' + esc(r.a) + '"'; };
     var hero = rows[0] ? '<div class="lb3-hero"><div class="lb3-one"><span class="lb3-n1">1</span><b>' + esc(nm(rows[0])) + '</b><strong class="mono ' + (rows[0].cols[0].c || '') + '">' + rows[0].main + '</strong></div><div class="lb3-stage">' +
       '<i class="lb3-star s1">★</i><i class="lb3-star s2">★</i><i class="lb3-star s3">★</i><i class="lb3-star s4">★</i>' +
-      [1, 2, 0, 3].filter(function (i) { return rows[i]; }).map(function (i) { var r = rows[i]; return '<button class="lb3-card c' + (i + 1) + '" ' + go(r) + ' title="' + esc(nm(r) + ' · ' + r.sub) + '">' + (i === 0 ? '<span class="lb3-crown">👑</span>' : '') + '<span class="lb3-num">' + (i + 1) + '</span><span class="lb3-pic">' + pic(r, i ? 120 : 190) + '</span><span class="lb3-cap"><b>' + esc(nm(r)) + '</b><em class="mono">' + r.main + '</em></span></button>'; }).join('') + '</div></div>' : '';
+      [1, 2, 0, 3].filter(function (i) { return rows[i]; }).map(function (i) { var r = rows[i]; return '<button class="lb3-card c' + (i + 1) + '" ' + go(r) + ' title="' + esc(nm(r) + ' · ' + r.sub) + '">' + (i === 0 ? '<span class="lb3-crown">👑</span>' : '') + '<span class="lb3-num">' + (i + 1) + '</span><span class="lb3-pic">' + pic(r, i ? 120 : 190) + '</span><span class="lb3-cap"><b>' + esc(nm(r)) + '</b><em class="mono ' + ((r.cols[0] || {}).c || '') + '">' + r.main + '</em></span></button>'; }).join('') + '</div></div>' : '';
     var myI = S.account && !hall ? full.map(function (r) { return r.a; }).indexOf(S.account) : -1;
     var you = hall ? '' : S.account ? '<div class="lb3-you"><span class="lb3-yav">' + pic({ a: S.account }, 46) + '<em>YOU</em></span><span class="lb3-yn"><b>' + esc(short(S.account)) + '</b><small class="muted">' + (myI >= 0 ? 'Rank <b class="up">#' + (myI + 1) + '</b>' : tab === 'callers' ? 'Post a callout to get ranked' : 'Not ranked yet — trade to climb') + '</small></span><span class="lb3-yv r"><small>' + heads[0].toUpperCase() + '</small><b class="mono ' + (myI >= 0 ? full[myI].cols[0].c || '' : '') + '">' + (myI >= 0 ? full[myI].main : '—') + '</b></span></div>' : '<div class="lb3-you off"><span class="muted">Connect a wallet to see your rank</span><button class="btn sec" data-act="openWallet">Connect</button></div>';
     var list = rows.length ? rows.map(function (r, i) { var k = key(r), open = S.lbOpen === k;
@@ -2771,7 +2773,7 @@
         var row = function (l, a, bb, fa, fb) { var tot = a + bb, w = tot ? a / tot * 100 : 50; return '<div class="st-row"><div class="st-v"><span class="up"><b class="mono">' + fa + '</b> ' + l[0] + '</span><span class="down"><b class="mono">' + fb + '</b> ' + l[1] + '</span></div><div class="bs-bar"><i style="width:' + w.toFixed(1) + '%"></i></div></div>'; };
         return '<div class="st-box"><div class="st-h"><b>Activity</b><span class="st-pc ' + (pc >= 0 ? 'up' : 'down') + '">' + (pc >= 0 ? '↑ +' : '↓ ') + pc.toFixed(1) + '%</span><span class="st-vol muted">Vol <b class="mono">' + fmtK((bv + sv) / 1000) + '</b></span><div class="seg sm st-tf">' + ['5m', '1h', '24h'].map(function (x) { return '<button class="' + ((S.stf || '24h') === x ? 'on' : '') + '" data-act="stf" data-arg="' + x + '">' + x + '</button>'; }).join('') + '</div></div>' +
           row(['buys', 'sells'], b, se, fmtNum(b), fmtNum(se)) + row(['bought', 'sold'], bv, sv, fmtK(bv / 1000), fmtK(sv / 1000)) + row(['buyers', 'sellers'], nbw, nsw, fmtNum(nbw), fmtNum(nsw)) + '</div>' +
-          '<div class="st-foot"><div><small>Pool</small><b class="mono">' + fmtK(liqK(t)) + ' <em>(' + (liqK(t) * 1000 / qUsdT(t)).toFixed(2) + ' ' + esc(qSymT(t)) + ')</em></b><span class="muted">paired with ' + coinHTML(t.pair, 14) + ' ' + esc(pairLabel(t.pair)) + '</span></div>' +
+          '<div class="st-foot"><div><small>Pool</small><b class="mono st-pool">' + fmtK(liqK(t)) + ' <em>' + (liqK(t) * 1000 / qUsdT(t)).toFixed(2) + ' ' + esc(qSymT(t)) + '</em></b><span class="muted">paired with ' + coinHTML(t.pair, 14) + ' ' + esc(pairLabel(t.pair)) + '</span></div>' +
           '<div><small>Creator</small><b>' + makerHTML(devOf(t), t) + '</b><span class="muted">earns ' + (+creatorCut(t).toFixed(3)) + '% of every trade' + (Math.max(t.buy, t.sell) > 0 ? '' : ' (creator rewards)') + '</span></div>' +
           '<button class="st-bub" data-act="hmap" data-arg="' + id + '">◎ Bubble map</button></div>' +
           '</section>';
@@ -2789,7 +2791,7 @@
     var body = '';
     if (S.tpTab === 'trades') {
       var rows = tt.filter(tradeMatches).slice(0, 40);
-      body = '<div class="tfilters"><div class="seg">' + [['all', 'All'], ['buy', 'Buys'], ['sell', 'Sells'], ['whale', 'Whales ≥2'], ['mine', 'Mine']].map(function (f) { return '<button class="' + (S.tpFilter === f[0] ? 'on' : '') + '" data-act="tpf" data-arg="' + f[0] + '">' + f[1] + '</button>'; }).join('') + '</div>' +
+      body = '<div class="tfilters"><div class="seg">' + [['all', 'All'], ['buy', 'Buys'], ['sell', 'Sells'], ['whale', 'Whales'], ['mine', 'Mine']].map(function (f) { return '<button class="' + (S.tpFilter === f[0] ? 'on' : '') + '" data-act="tpf" data-arg="' + f[0] + '">' + f[1] + '</button>'; }).join('') + '</div>' +
         '<label class="minsol"><span class="muted">Min SOL</span><input id="minsol" class="inp" inputmode="decimal" data-bind="minSol" value="' + esc(S.minSol) + '" placeholder="0"></label>' +
         (S.tpMaker ? '<button class="chip on" data-act="maker" data-arg="">Wallet ' + esc(short(S.tpMaker)) + ' ✕</button>' : '') +
         '<span class="paused" id="tp-paused" style="display:none" data-act="resume">Paused · <b id="tp-qn">0</b> new trades — click to resume</span></div>' +
@@ -2846,7 +2848,7 @@
         '<div style="padding-top:9px;border-top:1px solid var(--line)"><span class="muted">You receive ≈</span><span style="font-weight:800;font-size:15px">' + (q.isBuy ? fmtNum(q.out) + ' $' + id : q.out.toFixed(4) + ' ' + esc(QS)) + (outUsd > 0 ? ' <small class="q-usd">' + usdS(outUsd) + '</small>' : '') + '</span></div></div>') +
       (trapLeft(t) > 0 ? trapBox(t, 'buy') : '') +
       '<button class="big-btn btn ' + (!S.account ? 'pri' : q.isBuy ? 'up-b' : 'down-b') + '" data-act="trade" data-arg="' + id + '"' + (S.busy ? ' disabled' : '') + '>' + (S.busy ? esc(S.busy) + '…' : !S.account ? 'Connect wallet to trade' : (q.isBuy ? 'Buy $' : 'Sell $') + id) + '</button>' +
-      '<span class="note">' + (t.live ? 'Real on-chain coin' + NETP + ' — every buy and sell is signed by your wallet.' : 'Wallet is real (devnet). Trades are simulated in this beta — nothing is sent on-chain.') + '</span></section>';
+      '<span class="note">' + (t.live ? 'Real on-chain coin' + NETP + ' — every buy and sell is signed by your wallet.' : 'Demo coin — trades here are simulated, nothing is sent on-chain.') + '</span></section>';
     var posCard = pos ? (function () {
       var ps = t.live && S.myPs && S.myPs[t.ca] && S.myPs[t.ca].trades > 0 ? S.myPs[t.ca] : null, U2 = qUsdT(t);
       var val = ps ? ps.value : pos.val * U2, pr = ps ? ps.profit : pos.pnl * U2, prp = ps ? ps.profitPct : pos.pct, up = pr >= 0;
@@ -5070,7 +5072,7 @@
   // ================= LIVE CHAIN DATA (treid indexer) =================
   // Real coins launched on treid come from the indexer API. Without an API the site runs as a pure demo.
   // Set it with ?api=https://your-indexer (remembered), or window.TREID_API in index.html. ?api= (empty) clears it.
-  var API_DEV = devOverride('api', 'api'), API = (API_DEV || window.TREID_API || '').replace(/\/+$/, '');
+  var API_DEV = devOverride('api', 'api'), API = (API_DEV || (DEMO ? '' : window.TREID_API) || '').replace(/\/+$/, '');   // ?demo=1: simulated market only, no live server
   if (window.TREID_PARTNER) S.escrowWallet = window.TREID_PARTNER;
   S.api = API; S.apiOk = false;
   function apiGet(path) { return fetch(API + path, { cache: 'no-store' }).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); }); }
@@ -5144,7 +5146,7 @@
     }).catch(function (e) { tries++; S.apiWait = tries; if (S.screen === 'pending') render(); console.warn('[treid] indexer not reachable, retrying', e); setTimeout(coinsLoad, Math.min(15000, 1500 * tries)); }); })();   // the server restarts after updates — keep trying instead of hanging
   }
   liveStart(); pushInit();
-  if (!RPC_DEV) rpc('getGenesisHash', []).then(function (g) { if (g !== GENESIS[CHAIN_ID]) { S.netBad = true; render(); console.warn('[treid] RPC network mismatch'); } }).catch(function () {});
+  if (!RPC_DEV && !DEMO) rpc('getGenesisHash', []).then(function (g) { if (g !== GENESIS[CHAIN_ID]) { S.netBad = true; render(); console.warn('[treid] RPC network mismatch'); } }).catch(function () {});
   setInterval(function () { if (S.screen === 'burn' && !document.hidden) burnsLoad(); }, 30000);
   dlResume(); if (isMob() && !window.TreidChain) setTimeout(function () { chainLib().catch(function () {}); }, 1500);   // phones: preload so the wallet hand-off starts instantly
   applyRoute(); render();   // same tick as the first paint → no flash of the board on refresh

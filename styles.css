@@ -5704,3 +5704,76 @@ body.on-site{padding-bottom:0!important}
 .tps-o>span{display:flex;gap:8px;font-weight:700}.tps-o em{font-style:normal;font-family:var(--mono);font-size:12.5px}
 .tps-o small{flex:1;text-align:right;font-size:11.5px}
 .tps-o .link{min-height:32px;font-size:12.5px;color:var(--down)}
+
+/* ---------- phones: coin header TAX + PAIRED cards as an even pair (same width, height, radius, rhythm) ---------- */
+@media (max-width:760px){
+  html body .tp-banner .tp-key{display:grid!important;grid-template-columns:1fr 1fr!important;gap:8px!important;align-items:stretch!important}
+  html body .tp-banner .tp-key>.liq{grid-column:1/-1}
+  html body .tp-banner .tp-key>.tax,html body .tp-banner .tp-key>.pairbig{min-height:62px;height:100%;margin:0!important;border-radius:14px!important;padding:8px 12px!important;box-sizing:border-box;transform:none!important}
+  html body .tp-banner .tp-key>.tax{display:grid!important;grid-template-columns:auto 1fr;grid-template-rows:auto auto auto;align-content:center;column-gap:10px;row-gap:2px;text-align:left}
+  html body .tp-banner .tp-key>.tax b{grid-column:1;grid-row:1/4;font-size:26px!important;line-height:1;align-self:center}
+  html body .tp-banner .tp-key>.tax small{grid-column:2;display:block!important;font-size:9.5px!important;letter-spacing:.1em!important;line-height:1.15;font-weight:800;white-space:nowrap}
+  html body .tp-banner .tp-key>.tax small:first-child{grid-row:1}
+  html body .tp-banner .tp-key>.tax small:nth-of-type(2){grid-row:2;opacity:.75}
+  html body .tp-banner .tp-key>.tax .spbar{grid-column:2;grid-row:3;display:flex!important;width:100%;height:5px;margin:3px 0 0;border-radius:9px;overflow:hidden}
+  html body .tp-banner .tp-key>.pairbig{display:flex!important;align-items:center;gap:10px}
+  html body .tp-banner .tp-key>.pairbig .coin,html body .tp-banner .tp-key>.pairbig .av{width:38px!important;height:38px!important;flex:none;animation:none}
+  html body .tp-banner .tp-key>.pairbig div{min-width:0}
+  html body .tp-banner .tp-key>.pairbig small{font-size:9.5px!important;letter-spacing:.1em!important}
+  html body .tp-banner .tp-key>.pairbig b{font-size:20px!important;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  html body .tp-banner .tp-key>.pairbig span{display:none}
+}
+/* phones: chart legend = pair + close + change on one line; scale buttons live in the toolbar; first time label not clipped */
+.c-scale-tb{display:none!important}
+@media (max-width:760px){
+  html body .c-legend{max-width:calc(100% - 70px);font-size:11px;line-height:1.45}
+  html body .c-legend .c-lt .muted{display:none}
+  html body .c-ohlc{font-size:11px!important;white-space:nowrap}
+  html body .c-ohlc .c-ohl{display:none}
+  html body .c-scale{display:none!important}
+  html body .c-scale-tb{display:inline-flex!important}
+  html body .cpanel #chart{padding-left:4px}
+}
+/* phones: coin page polish */
+@media (max-width:760px){
+  html body .st-foot b.st-pool{flex-direction:column;align-items:flex-start;gap:1px}
+  html body .st-foot b.st-pool em{font-size:11.5px}
+  html body .cr-money small{white-space:normal;line-height:1.25;min-height:2.5em;display:flex;align-items:flex-end}
+  html body .cr-money b{font-size:12.5px}
+  html body .tfilters .seg button{white-space:nowrap}
+  html body .tsp-paid .sp-ic{width:18px;height:18px}html body .tsp-paid .sp-ic svg{width:16px;height:16px}
+  html body footer .foot{justify-content:flex-start;gap:10px 16px}
+  html body footer .foot>span:last-child{margin-left:0!important;width:100%;display:flex;flex-wrap:wrap;gap:4px 18px!important}
+  html body footer .foot>span:last-child a{min-height:44px;display:inline-flex;align-items:center;padding:0 2px}
+}
+/* phones: board polish */
+@media (max-width:760px){
+  html body #tc .tc-side{width:86px}
+  html body #tc .tc-side>*{width:100%;box-sizing:border-box;border-radius:12px!important;min-height:46px}
+  html body #tc .tc-pair{justify-content:center;padding:6px 8px!important}
+  html body #tc .tc-side .tax{justify-content:center;padding:6px 8px!important}
+  html body .fbar2:not(.mopen) .pairrow{display:none}
+  html body .pairrow .kicker,html body .pair-head .kicker{white-space:nowrap}
+}
+/* phones: create page — tax chips in an even 6-column grid (0% = plain coin gets the wide slot), trap durations on one row */
+@media (max-width:760px){
+  html body .taxf .txrow:not(.sm){display:grid!important;grid-template-columns:repeat(6,1fr);gap:6px}
+  html body .taxf .txrow:not(.sm) .txs{min-width:0;min-height:44px;width:100%}
+  html body .taxf .txrow:not(.sm) .txs:first-child{grid-column:span 2}
+  html body .tc-seg{flex-wrap:nowrap!important}
+  html body .tc-seg button{flex:1 1 0;min-width:0;min-height:40px;white-space:nowrap;padding:0 2px}
+}
+/* coin cards: TAX and PAIR badges share one width and radius */
+html body .tch-side{align-items:stretch;width:64px}
+html body .tch-side>.tax,html body .tch-side>.pairmini,html body .tch-side>.liq{width:100%;min-width:0;box-sizing:border-box;border-radius:12px;text-align:center}
+@media (max-width:760px){html body .tch-side{width:58px}}
+html body .lb3-cap em.down{color:var(--down)}html body .lb3-cap em:not(.up):not(.down){color:var(--soft)}
+@media (max-width:760px){html body .bh-per button{min-height:34px;min-width:40px;padding:0 8px;font-size:11px}}
+/* coin site (phones): bento without holes; the floating "← Trade on treid" never covers the last content */
+@media (max-width:760px){
+  html body .bn .bn-logo,html body .bn .bn-buy{grid-column:span 2}
+  html body .bn .bn-logo{min-height:200px;display:flex!important;align-items:center!important;justify-content:center!important}
+  html body .cs{padding-bottom:84px!important}
+}
+/* tablets / phones: the sticky header is opaque enough that the board never reads through it */
+@media (max-width:1100px){html body > #app > header,html body header{background:rgba(8,8,9,.97)!important;backdrop-filter:blur(16px)!important;-webkit-backdrop-filter:blur(16px)!important}}
