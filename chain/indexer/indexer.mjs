@@ -387,7 +387,9 @@ const rcache = new Map(); function cached(key, ms, fn) { const h = rcache.get(ke
 const hits = new Map(); function rate(k, n, ms) { const now = Date.now(), a = (hits.get(k) || []).filter((t) => now - t < ms); if (a.length >= n) { hits.set(k, a); return false; } a.push(now); hits.set(k, a);
   if (hits.size > 50000) for (const [key, v] of hits) if (now - v[v.length - 1] > 36e5) hits.delete(key);   // evict by age, never wipe all limits
   return true; }
-const ip = (req) => { const x = String(req.headers['x-forwarded-for'] || '').split(',').map((v) => v.trim()).filter(Boolean); return x.length ? x[x.length - 1] : String(req.socket.remoteAddress || ''); };   // rightmost = added by Render's proxy; the left ones are client-controlled
+// Render sits behind Cloudflare: X-Forwarded-For = "<anything the client sent>, <client IP added by Cloudflare>, <Cloudflare edge added by Render>".
+// So the client is the SECOND-TO-LAST entry (checked on production via /api/whoami); the rightmost is a shared Cloudflare edge address.
+const ip = (req) => { const x = String(req.headers['x-forwarded-for'] || '').split(',').map((v) => v.trim()).filter(Boolean); return x.length >= 2 ? x[x.length - 2] : x.length ? x[0] : String(req.socket.remoteAddress || ''); };
 function liveHolders(mint, refresh = true) { const h = hCache.get(mint); if (refresh && (!h || Date.now() - h.ts > 120e3) && holderSlots()) { if (!h?.busy) { const e = h || { ts: 0, list: null }; e.busy = true; hCache.set(mint, e); hRun++; holders(mint).then((l) => { hCache.set(mint, { ts: Date.now(), list: l }); }).catch(() => { e.busy = false; e.ts = Date.now() - 60e3; }).finally(() => { hRun--; }); } } return h?.list || null; }
 let hRun = 0; const holderSlots = () => hRun < 3;   // at most 3 holder scans at a time (each is a getProgramAccounts)
 function stats(mint, list = false, scanOk = true) {
