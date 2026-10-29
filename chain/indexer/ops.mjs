@@ -53,6 +53,7 @@ const parseSplit = (uri) => { let pair = false, rw = null; try { const u = new U
     if (/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(r)) rw = r;
     if (s) { const p = s.split('.').map(Number); if (p.length === 3 && p.every((x) => Number.isInteger(x) && x >= 0 && x <= 100) && p[0] + p[1] + p[2] === 100) { const d = Math.min(50, p[2]); return { h: p[0], b: p[1] + p[2] - d, d, pair, rw }; } /* dev share capped at 50% on the server too (the rest is burned) */ } } catch {} return { h: 70, b: 20, d: 10, pair, rw }; };
 
+export { parseSplit };
 export function startOps({ conn, dbc, ops, treasury, q, q1, run, mainnet = false, rewardOk = async () => false, quoteUsd = () => 150, poolAuthority, log = console.log, everyMs = 10 * 60e3, liabilities = () => 0, devState = (c) => ({ state: 'active', creator: c.creator }), ready = () => true }) {
   const send = (ixs) => { if (HALT.on) throw new Error('ops halted'); return sendTx(conn, ixs, [ops]); },   // nothing leaves the ops wallet once the ledger is broken
     amm = new CpAmm(conn), DAMM_CFG = DAMM_V2_MIGRATION_FEE_ADDRESS[6];
@@ -156,7 +157,10 @@ export function startOps({ conn, dbc, ops, treasury, q, q1, run, mainnet = false
     if (!sol) { const ok = []; for (let i = 0; i < elig.length; i += 100) { const infos = await conn.getMultipleAccountsInfo(elig.slice(i, i + 100).map((h) => h.dst)); infos.forEach((ai, j) => { if (ai) ok.push(elig[i + j]); }); } elig = ok; }
     const tot = elig.reduce((a, h) => a + h.total, 0n); if (tot <= 0n) return { paid: 0n, n: 0 };
     const minAmt = qusd > 0 ? BigInt(Math.ceil(SHARE_USD / qusd * 10 ** qd)) : BigInt(Number.MAX_SAFE_INTEGER), src = sol ? null : getAssociatedTokenAddressSync(QM, ops.publicKey, false, qprog);
-    const shares = elig.map((h) => ({ to: h.dst, owner: h.owner.toBase58(), mint: c.mint, amt: left * h.total / tot })).filter((x) => x.amt >= minAmt);
+    let shares = elig.map((h) => ({ to: h.dst, owner: h.owner.toBase58(), mint: c.mint, amt: left * h.total / tot })).filter((x) => x.amt >= minAmt);
+    if (sol) { const RENT0 = 890880n, small = shares.filter((x) => x.amt < RENT0), empty = new Set();   // SOL below the rent minimum can't land in an empty wallet: leave it for a later round instead of failing the whole batch
+      for (let i = 0; i < small.length; i += 100) { const infos = await conn.getMultipleAccountsInfo(small.slice(i, i + 100).map((x) => x.to)); infos.forEach((ai, j) => { if (!ai || !ai.lamports) empty.add(small[i + j].owner); }); }
+      if (empty.size) shares = shares.filter((x) => !empty.has(x.owner)); }
     const ix = (x) => (sol ? SystemProgram.transfer({ fromPubkey: ops.publicKey, toPubkey: x.to, lamports: x.amt }) : createTransferCheckedInstruction(src, QM, x.to, ops.publicKey, x.amt, qd, [], qprog));
     let paid = 0n, n = 0;
     const kind = rw ? 'taxholdr' : 'taxholdq', batchSend = async (b) => { const amt = b.reduce((a, x) => a + x.amt, 0n), sg = await send([...b.map(ix), memoIx(`treid:${kind}:${c.mint}:${amt}:${b.length}`)]); rec(sg, 0, c.mint, kind, amt, String(b.length)); hrec(sg, b, QM.toBase58(), qd); paid += amt; n += b.length; };

@@ -70,8 +70,19 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, q
         for (const it of [...items]) if (it.kind === 'tbuy') { items.push({ kind: 'tburn', mint: it.mint, lamports: +(it.extra || 0) || 0, extra: null }, { kind: 'tleft', mint: it.mint, lamports: rwOut(t, ops.publicKey, it.mint), extra: null }); it.extra = null; }   // $TREID buyback: burned in-tx + what stayed
         for (const it of [...items]) if (it.kind === 'taxconv' && it.extra) items.push({ kind: 'taxrw', mint: it.mint, lamports: rwOut(t, ops.publicKey, it.extra), extra: it.extra });   // what that reward swap delivered
         items.forEach((it, i) => run('INSERT OR IGNORE INTO rlog(sig,i,mint,kind,lamports,ts,extra) VALUES(?,?,?,?,?,?,?)', x.signature, i, it.mint, it.kind, it.lamports, (x.blockTime || 0) * 1000, it.extra)); n += items.length;
+        try { hpayFrom(t, x.signature, (x.blockTime || 0) * 1000, items); } catch (e) { log('hpay rebuild skip', x.signature.slice(0, 10), String(e?.message || e).slice(0, 60)); }   // per-holder receipts too (only read, never sent)
         run('INSERT OR IGNORE INTO rscan VALUES(?)', x.signature); }
       if (page.length < 1000) break; before = page[page.length - 1].signature; }
+    // one-time: receipts for payouts made before per-holder receipts existed (or lost with the database) — read-only pass over ops' history
+    run('CREATE TABLE IF NOT EXISTS kv(k TEXT PRIMARY KEY, v TEXT)');
+    if (!q1("SELECT 1 FROM kv WHERE k='hpay_v1'")) try { let b2, got = 0;
+      while (true) { const page = await conn.getSignaturesForAddress(ops.publicKey, { limit: 1000, before: b2 }, 'confirmed'); if (!page.length) break;
+        for (const x of page) { if (x.err) continue; const t = await getTxRetry(conn, x.signature, 4); if (!t) throw new Error('receipt rebuild: could not read ' + x.signature.slice(0, 10) + ' — will retry');
+          const msg = t.transaction.message, keys = msg.getAccountKeys({ accountKeysFromLookups: t.meta.loadedAddresses }); if (!keys.get(0)?.equals(ops.publicKey)) continue;
+          const items = (msg.compiledInstructions || []).filter((ix) => keys.get(ix.programIdIndex)?.equals(MEMO)).map((ix) => Buffer.from(ix.data).toString('utf8')).filter((m) => m.startsWith('treid:')).map((m) => { const p = m.split(':'); return { kind: p[1], mint: p[2], extra: p.length > 4 ? p.slice(4).join(':') : null }; });
+          const n0 = q1('SELECT COUNT(*) c FROM hpay').c; hpayFrom(t, x.signature, (x.blockTime || 0) * 1000, items); got += q1('SELECT COUNT(*) c FROM hpay').c - n0; }
+        if (page.length < 1000) break; b2 = page[page.length - 1].signature; }
+      run("INSERT OR REPLACE INTO kv(k,v) VALUES('hpay_v1',?)", String(Date.now())); log('rewards receipts rebuilt:', got, 'new'); } catch (e) { log('rewards receipts rebuild later:', String(e?.message || e).slice(0, 80)); }   // history only — never blocks payouts
     READY = true; log('rewards ledger rebuilt:', n, 'entries');
   }
   const sum = (mint, kind, since = 0) => q1('SELECT COALESCE(SUM(lamports),0) s FROM rlog WHERE mint=? AND kind=? AND ts>=?', mint, kind, since).s;
@@ -190,6 +201,25 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, q
       if (half > 0 && !done.has(sig + '#b')) await buybackExact(c, half, sig + '#b'); else if (!done.has(sig + '#b')) record(sig + ':b0', [{ mint: c.mint, kind: 'pay0', lamports: 0, extra: sig + '#b' }]); }
     else if (purpose === 'buyback') await buybackExact(c, got, sig);
     else await transferExact(c, got, dest, purpose === 'platform' ? 'platform' : 'pay', sig);
+  }
+  // per-holder payout receipts (the Rewards history) rebuilt from ops' own transactions after a database loss:
+  //  · coin-token payouts = Token-2022 TransferChecked of a treid coin, signed by ops (holders + dev share)
+  //  · pair / reward-token payouts = token transfers or SOL transfers in a tx that carries a treid:taxholdq / taxholdr memo
+  run('CREATE TABLE IF NOT EXISTS hpay(sig TEXT, wallet TEXT, mint TEXT, token TEXT, amt INT, dec INT, ts INT, PRIMARY KEY(sig, wallet))');
+  const T22 = TOKEN_2022_PROGRAM_ID.toBase58(), TOK = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA', SYSP = '11111111111111111111111111111111', WSOLM = NATIVE_MINT.toBase58();
+  function hpayFrom(t, sig, ts, items) {
+    const msg = t.transaction.message, keys = msg.getAccountKeys({ accountKeysFromLookups: t.meta.loadedAddresses }), key = (i) => keys.get(i)?.toBase58(), me = ops.publicKey.toBase58();
+    const qmemo = items.find((it) => it.kind === 'taxholdq' || it.kind === 'taxholdr'), add = new Map();
+    const ownerOf = (idx) => (t.meta.postTokenBalances || []).find((b) => b.accountIndex === idx);
+    for (const ix of msg.compiledInstructions || []) { const pid = key(ix.programIdIndex), d = Buffer.from(ix.data), a = ix.accountKeyIndexes;
+      if ((pid === T22 || pid === TOK) && d[0] === 12 && d.length >= 10 && key(a[3]) === me) {   // TransferChecked: [source, mint, dest, authority] · u64 amount · u8 decimals
+        const mint = key(a[1]), amt = Number(d.readBigUInt64LE(1)), dec = d[9], ob = ownerOf(a[2]); if (!ob || !ob.owner || ob.owner === me) continue;
+        const coin = q1('SELECT mint FROM coins WHERE mint=?', mint);
+        if (coin && pid === T22) add.set(ob.owner + '|' + mint, { wallet: ob.owner, mint, token: mint, amt, dec });   // paid in the coin itself
+        else if (qmemo) add.set(ob.owner + '|' + mint, { wallet: ob.owner, mint: qmemo.mint, token: mint, amt, dec }); }
+      else if (pid === SYSP && qmemo && d.readUInt32LE(0) === 2 && key(a[0]) === me && key(a[1]) !== me) {   // SOL payout
+        const to = key(a[1]); add.set(to + '|sol', { wallet: to, mint: qmemo.mint, token: qmemo.kind === 'taxholdr' ? (qmemo.extra || WSOLM) : WSOLM, amt: Number(d.readBigUInt64LE(4)), dec: 9 }); } }
+    for (const v of add.values()) run('INSERT OR IGNORE INTO hpay(sig,wallet,mint,token,amt,dec,ts) VALUES(?,?,?,?,?,?,?)', sig, v.wallet, v.mint, v.token, v.amt, v.dec, ts);
   }
   const settleFail = new Map();
   async function reconcile() {

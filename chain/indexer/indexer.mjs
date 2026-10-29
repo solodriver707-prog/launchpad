@@ -11,7 +11,7 @@ import http from 'node:http';
 import zlib from 'node:zlib';
 import net from 'node:net';
 import dns from 'node:dns/promises';
-import { opsKeypair, startOps, treidCfg } from './ops.mjs';
+import { opsKeypair, startOps, treidCfg, parseSplit } from './ops.mjs';
 import { startRewards } from './rewards.mjs';
 import { startCallouts } from './callouts.mjs';
 import { startBubbles } from './bubbles.mjs';
@@ -28,7 +28,8 @@ const WS = process.env.WS || RPC.replace('http', 'ws').replace(':8899', ':8900')
 const PARTNER = process.env.PARTNER;               // treid treasury / legacy fee-claimer wallet
 const MAINNET = process.env.CLUSTER === 'mainnet' || /mainnet/.test(RPC);
 const OPS = opsKeypair(process.env.OPS_SECRET, { mainnet: MAINNET });   // optional hot ops wallet: fee claimer + tax authority of new coins
-const PARTNERS = [...new Set([PARTNER, OPS?.publicKey.toBase58()].filter(Boolean))];   // coins from configs of any of these are indexed
+const PARTNERS = [...new Set([PARTNER, OPS?.publicKey.toBase58()].filter(Boolean))];
+const SYSW = new Set(PARTNERS);   // treid wallets: their trades are bookkeeping, not market activity   // coins from configs of any of these are indexed
 const PORT = +(process.env.PORT || 8787), PUBLIC_URL = (process.env.PUBLIC_URL || 'https://treid-indexer.onrender.com').replace(/\/+$/, '');
 let SOL_USD = +(process.env.SOL_USD || 150);
 // permanent coin images + metadata on IPFS via Pinata (set PINATA_JWT); without it metadata lives in this server's memory only
@@ -49,10 +50,22 @@ const HIDDEN = new Set(String(process.env.HIDDEN_MINTS || '').split(',').map((s)
 const SUPPLY = 1e9, WSOL = 'So11111111111111111111111111111111111111112';
 const QUOTE_OVERRIDE = (() => { try { return JSON.parse(process.env.QUOTE_USD || '{}'); } catch { return {}; } })();   // {"<mint>": 1} for devnet test tokens
 const qPrice = new Map();
+// a trade's USD value uses the pair-token price AT THAT TIME: live trades → the current price; history (backfill) → SOL's daily price
+// from CoinGecko (cached in the db), stablecoins → 1. Other pair tokens have no history source → current price (best we have).
+const dayPx = new Map(); let dayPxBusy = 0;
+async function solUsdOn(ts) {
+  const d = new Date(ts), key = `${String(d.getUTCDate()).padStart(2, '0')}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${d.getUTCFullYear()}`;
+  if (dayPx.has(key)) return dayPx.get(key); const row = q1('SELECT usd FROM spx WHERE day=?', key); if (row) { dayPx.set(key, row.usd); return row.usd; }
+  if (dayPxBusy > 2) return SOL_USD; dayPxBusy++;
+  try { const j = await (await fetchT('https://api.coingecko.com/api/v3/coins/solana/history?date=' + key + '&localization=false', {}, 10e3)).json(), v = +j?.market_data?.current_price?.usd;
+    if (v > 0) { run('INSERT OR REPLACE INTO spx(day,usd) VALUES(?,?)', key, v); dayPx.set(key, v); return v; } } catch {} finally { dayPxBusy--; }
+  return SOL_USD; }   // unknown → today's price, not cached (tried again next time)
+async function quoteUsdAt(mint, symbol, ts) { if (Date.now() - ts < 20 * 60e3) return quoteUsd(mint, symbol); if (!mint || mint === WSOL) return solUsdOn(ts); return quoteUsd(mint, symbol); }
 const STABLE = new Set(['EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB', '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU']);   // USDC, USDT, devnet USDC — never guessed from a name
 function quoteUsd(mint, symbol) { if (!mint || mint === WSOL) return SOL_USD; if (QUOTE_OVERRIDE[mint] != null) return +QUOTE_OVERRIDE[mint]; const p = qPrice.get(mint); if (p) return p; return STABLE.has(mint) ? 1 : 0; }
 async function quotePrices() {
-  const ms = q('SELECT DISTINCT quote_mint m FROM coins WHERE quote_mint IS NOT NULL AND quote_mint != ?', WSOL).map((r) => r.m).filter((m) => QUOTE_OVERRIDE[m] == null); if (!ms.length) return;
+  let rwm = []; try { rwm = q('SELECT DISTINCT token m FROM hpay WHERE token != mint AND token != ?', WSOL).map((r) => r.m); } catch {}   // third-token holder rewards need a price too
+  const ms = [...new Set([...q('SELECT DISTINCT quote_mint m FROM coins WHERE quote_mint IS NOT NULL AND quote_mint != ?', WSOL).map((r) => r.m), ...rwm])].filter((m) => QUOTE_OVERRIDE[m] == null); if (!ms.length) return;
   for (let i = 0; i < ms.length; i += 50) { const part = ms.slice(i, i + 50);   // every pair token, 50 per request
     try { const r = await fetchT(JUP + '/price/v3?ids=' + part.join(',')); const j = await r.json(); for (const m of part) if (j?.[m]?.usdPrice) qPrice.set(m, +j[m].usdPrice * (await qMult(m))); } catch {} }
 }
@@ -79,8 +92,10 @@ CREATE TABLE IF NOT EXISTS meta(mint TEXT PRIMARY KEY, name TEXT, symbol TEXT, d
 for (const col of ['trap_bps INT DEFAULT 0', 'trap_secs INT DEFAULT 0', 'trap_steps INT DEFAULT 0', "quote_mint TEXT DEFAULT 'So11111111111111111111111111111111111111112'", 'quote_dec INT DEFAULT 9', "quote_symbol TEXT DEFAULT 'SOL'"]) { try { db.exec('ALTER TABLE coins ADD COLUMN ' + col); } catch {} }
 try { db.exec('ALTER TABLE trades ADD COLUMN usd REAL DEFAULT 0'); } catch {}
 try { db.exec('ALTER TABLE trades ADD COLUMN reserve REAL DEFAULT 0'); } catch {}
-try { db.exec('ALTER TABLE coins ADD COLUMN damm TEXT'); } catch {}   // the coin's DAMM v2 pool once it graduated
+try { db.exec('ALTER TABLE coins ADD COLUMN damm TEXT'); } catch {}
+try { db.exec('ALTER TABLE trades ADD COLUMN sys INT DEFAULT 0'); } catch {}   // the coin's DAMM v2 pool once it graduated
 const gradTarget = new Map();
+db.exec('CREATE TABLE IF NOT EXISTS spx(day TEXT PRIMARY KEY, usd REAL)');
 db.exec('CREATE TABLE IF NOT EXISTS uburn(sig TEXT PRIMARY KEY, mint TEXT, wallet TEXT, tok REAL, ts INT)');
 // ---- burns: total burned is authoritative from the mint supply; events come from the ops receipts + reported user burns ----
 const supplyC = new Map();
@@ -301,7 +316,7 @@ async function handle(sig) {
       const ac = bm ? await addCoin(bm, tx.slot, ts, null, pool) : (ps === null ? 'retry' : false); if (ac === 'retry') { again = true; continue; }
       if (!ac) { badPool.set(pool, Date.now()); if (badPool.size > 100000) badPool.clear(); continue; } coin = q1('SELECT * FROM coins WHERE pool=?', pool); if (!coin) continue; }
     const sw = ixs.filter((x) => SWAP_DISC.has(x.disc) && x.accts[2] === pool).pop(), trader = sw?.accts[9]; if (!trader) continue;   // the swap's own payer account = the trader
-    const QD = 10 ** (coin.quote_dec ?? 9), QU = quoteUsd(coin.quote_mint || WSOL, coin.quote_symbol), tax = (coin.tax_bps || 0) / 1e4, buy = Number(ev.data.trade_direction) === 1;
+    const QD = 10 ** (coin.quote_dec ?? 9), QU = await quoteUsdAt(coin.quote_mint || WSOL, coin.quote_symbol, ts), tax = (coin.tax_bps || 0) / 1e4, buy = Number(ev.data.trade_direction) === 1, circ = SUPPLY - await burnedOf(coin.mint);
     if (!gradTarget.has(coin.mint) && coin.config) { const cf = await dbc.state.getPoolConfig(new PublicKey(coin.config)).catch(() => null); if (cf) gradTarget.set(coin.mint, Number(cf.migrationQuoteThreshold.toString()) / QD); }   // newer swap events don't carry the threshold
     let inAmt, outAmt, fee, sq, reserveRaw, targetRaw;
     if (ev.name === 'EvtSwap2') { const r = ev.data.swap_result; inAmt = Number(r.included_fee_input_amount); outAmt = Number(r.output_amount); fee = Number(r.trading_fee); sq = r.next_sqrt_price; reserveRaw = Number(ev.data.quote_reserve_amount); targetRaw = Number(ev.data.migration_threshold); }
@@ -312,7 +327,8 @@ async function handle(sig) {
     if (targetRaw && !gradTarget.has(coin.mint)) gradTarget.set(coin.mint, targetRaw / QD);
     const sniper = buy && trader !== coin.creator && (coin.created_slot > 0 ? tx.slot - coin.created_slot <= 4 : ts - coin.created_at <= 2000) ? 1 : 0;   // ~1.5s after launch: faster than a human
     const rowSig = n++ ? sig + '#' + coin.mint.slice(0, 6) : sig;
-    run('INSERT OR IGNORE INTO trades(sig,mint,wallet,side,sol,tokens,price_usd,mcap_usd,slot,ts,sniper,bundle,fee_sol,progress,usd,reserve) VALUES(?,?,?,?,?,?,?,?,?,?,?,0,?,?,?,?)', rowSig, coin.mint, trader, side, sol, tokens, price, price * SUPPLY, tx.slot, ts, sniper, fee / QD, Math.min(100, prog), sol * QU, reserve);
+    run('INSERT OR IGNORE INTO trades(sig,mint,wallet,side,sol,tokens,price_usd,mcap_usd,slot,ts,sniper,bundle,fee_sol,progress,usd,reserve) VALUES(?,?,?,?,?,?,?,?,?,?,?,0,?,?,?,?)', rowSig, coin.mint, trader, side, sol, tokens, price, price * circ, tx.slot, ts, sniper, fee / QD, Math.min(100, prog), sol * QU, reserve);
+    if (SYSW.has(trader)) run('UPDATE trades SET sys=1 WHERE sig=?', rowSig);   // treid's own wallets (tax sales, buybacks) never count as market activity
     // bundle = several different wallets buying in the same slot right after launch (where coordinated buys matter)
     if (buy && coin.created_slot > 0 && tx.slot - coin.created_slot <= 20) { const same = q("SELECT DISTINCT wallet FROM trades WHERE mint=? AND slot=? AND side='buy' AND wallet!=?", coin.mint, tx.slot, coin.creator); if (same.length >= 3) run("UPDATE trades SET bundle=1 WHERE mint=? AND slot=? AND side='buy' AND wallet!=?", coin.mint, tx.slot, coin.creator); }
     const t = q1('SELECT * FROM trades WHERE sig=?', rowSig); if (t) push({ type: 'trade', ...t, symbol: coin.symbol });
@@ -324,11 +340,12 @@ async function handle(sig) {
   for (const [pool, ev] of aev) {
     const coin = q1('SELECT * FROM coins WHERE damm=?', pool); if (!coin) continue;
     const trader = aixs.filter((x) => AMM_SWAP.has(x.disc) && x.accts[1] === pool).pop()?.accts[8]; if (!trader) continue;   // the swap's payer
-    const QD = 10 ** (coin.quote_dec ?? 9), QU = quoteUsd(coin.quote_mint || WSOL, coin.quote_symbol), d = ev.data, r = d.swap_result, buy = Number(d.trade_direction) === 1;   // tokenA = coin, tokenB = pair: B→A is a buy
+    const QD = 10 ** (coin.quote_dec ?? 9), QU = await quoteUsdAt(coin.quote_mint || WSOL, coin.quote_symbol, ts), d = ev.data, r = d.swap_result, buy = Number(d.trade_direction) === 1, circ = SUPPLY - await burnedOf(coin.mint);   // tokenA = coin, tokenB = pair: B→A is a buy
     const sol = Number(buy ? d.included_transfer_fee_amount_in : d.excluded_transfer_fee_amount_out) / QD, tokens = Number(buy ? d.excluded_transfer_fee_amount_out : d.included_transfer_fee_amount_in) / 1e6;
     const fee = ['claiming_fee', 'protocol_fee', 'compounding_fee', 'referral_fee'].reduce((a, k) => a + Number(r[k] || 0), 0), price = Number(ammPrice(r.next_sqrt_price, 6, coin.quote_dec ?? 9)) * QU, side = buy ? 'buy' : 'sell';
     const rowSig = n++ ? sig + '#' + coin.mint.slice(0, 6) : sig;
-    run('INSERT OR IGNORE INTO trades(sig,mint,wallet,side,sol,tokens,price_usd,mcap_usd,slot,ts,sniper,bundle,fee_sol,progress,usd,reserve) VALUES(?,?,?,?,?,?,?,?,?,?,0,0,?,100,?,?)', rowSig, coin.mint, trader, side, sol, tokens, price, price * SUPPLY, tx.slot, ts, fee / QD, sol * QU, Number(d.reserve_b_amount) / QD);
+    run('INSERT OR IGNORE INTO trades(sig,mint,wallet,side,sol,tokens,price_usd,mcap_usd,slot,ts,sniper,bundle,fee_sol,progress,usd,reserve) VALUES(?,?,?,?,?,?,?,?,?,?,0,0,?,100,?,?)', rowSig, coin.mint, trader, side, sol, tokens, price, price * circ, tx.slot, ts, fee / QD, sol * QU, Number(d.reserve_b_amount) / QD);
+    if (SYSW.has(trader)) run('UPDATE trades SET sys=1 WHERE sig=?', rowSig);
     const t = q1('SELECT * FROM trades WHERE sig=?', rowSig); if (t) push({ type: 'trade', ...t, symbol: coin.symbol });
     console.log('trade ', coin.symbol, side.padEnd(4), sol.toFixed(3), coin.quote_symbol || 'SOL', tokens.toFixed(0), '(DAMM)');
   }
@@ -340,6 +357,7 @@ const queue = []; let active = 0; const MAXQ = 5000;
 function enqueue(sig) { if (queue.length >= MAXQ) return; queue.push(sig); pump(); }
 function pump() { while (active < 4 && queue.length) { const s = queue.shift(); active++; handle(s).catch((e) => console.log('err', String(e?.message || e).slice(0, 120))).finally(() => { active--; pump(); }); } }
 async function backfill() {   // rebuilds everything from chain, so the server can run without a persistent disk
+  if (SYSW.size) run(`UPDATE trades SET sys=1 WHERE sys=0 AND wallet IN (${[...SYSW].map(() => '?').join(',')})`, ...SYSW);
   await loadConfigs();
   for (const w of PARTNERS) await syncAddress(w, 2000).catch(() => {});   // configs created recently (also found by the scan above)
   for (const k of configs) await syncAddress(k, 1e9);   // FULL history (paged); with a persistent disk only the new part is fetched
@@ -365,8 +383,10 @@ function posStats(mint, wallet, held = null) {
     COALESCE(SUM(CASE WHEN side='sell' THEN tokens END),0) sold, COALESCE(SUM(CASE WHEN side='buy' THEN tokens*mcap_usd END),0) wmc, COALESCE(SUM(CASE WHEN side='sell' THEN tokens*mcap_usd END),0) smc, COUNT(*) n FROM trades WHERE mint=? AND wallet=?`, mint, wallet);
   const px = q1('SELECT price_usd p FROM trades WHERE mint=? ORDER BY ts DESC, slot DESC LIMIT 1', mint)?.p || 0;
   if (held == null) { const lh = hCache.get(mint)?.list; const h = lh && lh.find((x) => x.wallet === wallet); held = h ? h.pct / 100 * SUPPLY : Math.max(0, r.bought - r.sold); }
-  const value = held * px, profit = value + r.got - r.spent;
-  return { value, spent: r.spent, got: r.got, profit, profitPct: r.spent > 0 ? profit / r.spent * 100 : 0, avgEntryMc: r.bought > 0 ? r.wmc / r.bought : 0,   /* token-weighted, like the exit */ avgExitMc: r.sold > 0 ? r.smc / r.sold : 0,
+  const cRow = q1('SELECT tax_bps, quote_mint, quote_symbol, quote_dec FROM coins WHERE mint=?', mint) || {}, sellTax = (cRow.tax_bps || 0) / 1e4;
+  let rewardsUsd = 0; try { for (const h of q('SELECT token, SUM(amt) a, MAX(dec) d FROM hpay WHERE mint=? AND wallet=? AND token != ? GROUP BY token', mint, wallet, mint)) rewardsUsd += h.a / 10 ** (h.d ?? 9) * (h.token === cRow.quote_mint ? quoteUsd(cRow.quote_mint, cRow.quote_symbol) : quoteUsd(h.token)); } catch {}   // paid in SOL / the pair / another token
+  const value = held * px * (1 - sellTax), profit = value + r.got + rewardsUsd - r.spent;   // value = what selling now would bring (after the coin's tax)
+  return { value, spent: r.spent, got: r.got, rewardsUsd, profit, profitPct: r.spent > 0 ? profit / r.spent * 100 : 0, avgEntryMc: r.bought > 0 ? r.wmc / r.bought : 0,   /* token-weighted, like the exit */ avgExitMc: r.sold > 0 ? r.smc / r.sold : 0,
     soldPct: r.bought > 0 ? Math.min(100, r.sold / r.bought * 100) : 0, supplyPct: held / SUPPLY * 100, held, trades: r.n };
 }
 async function holders(mint) {   // one row per OWNER (all their token accounts added up) — a dust account can't fake someone's balance
@@ -395,14 +415,16 @@ let hRun = 0; const holderSlots = () => hRun < 3;   // at most 3 holder scans at
 function stats(mint, list = false, scanOk = true) {
   const c = q1('SELECT * FROM coins WHERE mint=?', mint); if (!c) return null;
   const last = q1('SELECT mcap_usd, progress, reserve FROM trades WHERE mint=? ORDER BY ts DESC, slot DESC LIMIT 1', mint);
-  const agg = q1(`SELECT COUNT(*) n, SUM(sol) vol, SUM(usd) volusd, SUM(side='buy') buys, SUM(side='sell') sells, COUNT(DISTINCT wallet) traders, SUM(CASE WHEN sniper=1 THEN tokens ELSE 0 END) snipeTok, SUM(CASE WHEN bundle=1 AND side='buy' THEN tokens ELSE 0 END) bundleTok FROM trades WHERE mint=?`, mint);
+  const agg = q1(`SELECT COUNT(*) n, SUM(sol) vol, SUM(usd) volusd, SUM(side='buy') buys, SUM(side='sell') sells, COUNT(DISTINCT wallet) traders, SUM(CASE WHEN sniper=1 THEN tokens ELSE 0 END) snipeTok, SUM(CASE WHEN bundle=1 AND side='buy' THEN tokens ELSE 0 END) bundleTok FROM trades WHERE mint=? AND sys=0`, mint);
   const bal = q(`SELECT wallet, SUM(CASE WHEN side='buy' THEN tokens ELSE -tokens END) n FROM trades WHERE mint=? GROUP BY wallet HAVING n > 0.5 ORDER BY n DESC`, mint);
   const devBuy = q1(`SELECT 1 x FROM trades WHERE mint=? AND wallet=? AND side='buy' LIMIT 1`, mint, c.creator);
   const recent = (q1('SELECT MAX(ts) t FROM trades WHERE mint=?', mint)?.t || 0) > Date.now() - 36e5, lh = liveHolders(mint, scanOk && (!list || recent)), real = lh ? lh.filter((h) => !h.curve) : null;
   const devN = real ? (real.find((h) => h.wallet === c.creator)?.pct || 0) / 100 * SUPPLY : bal.find(b => b.wallet === c.creator)?.n || 0;
   const top10 = Math.min(SUPPLY, real ? real.slice(0, 10).reduce((s, h) => s + h.pct / 100 * SUPPLY, 0) : bal.slice(0, 10).reduce((s, b) => s + b.n, 0));
   const po = OPS && REW ? q1(`SELECT COALESCE(SUM(CASE WHEN kind='taxburn' THEN lamports END),0)/1e6 burned, COALESCE(SUM(CASE WHEN kind='taxhold' THEN lamports END),0)/1e6 holders, COALESCE(SUM(CASE WHEN kind='taxdev' THEN lamports END),0)/1e6 dev, COUNT(CASE WHEN kind='taxhold' THEN 1 END) n, COALESCE(SUM(CASE WHEN kind='taxholdq' THEN lamports END),0) * 1.0 / ${10 ** (c.quote_dec ?? 9)} holders_q FROM rlog WHERE mint=? AND kind IN ('taxburn','taxdev','taxhold','taxholdq')`, mint) : null;   // from on-chain receipts → survives restarts
-  return { ...c, vamp: vampOf(mint), tax_paid: po, reserve: last?.reserve || 0, grad_target: gradTarget.get(mint) || 0, quote_usd: quoteUsd(c.quote_mint, c.quote_symbol), vol_usd: agg.volusd || 0, holders: real ? real.length : bal.length, dev_pct: devN / SUPPLY * 100, dev_sold: !!devBuy && devN < 1, top10_pct: top10 / SUPPLY * 100, sol_usd: SOL_USD, mcap_usd: last?.mcap_usd || 0, curve_pct: last?.progress || 0, trades: agg.n, vol_sol: agg.vol || 0, buys: agg.buys || 0, sells: agg.sells || 0, traders: agg.traders, snipers_pct: (agg.snipeTok || 0) / SUPPLY * 100, bundles_pct: (agg.bundleTok || 0) / SUPPLY * 100 };
+  const burned = supplyC.get(mint)?.v || 0; if (!supplyC.has(mint) || Date.now() - supplyC.get(mint).ts > 60e3) burnedOf(mint).catch(() => {});   // refreshed in the background
+  const sp = c.tax_bps > 0 ? parseSplit(c.uri) : null;   // the split ops ACTUALLY applies (an invalid or missing one falls back to 70/20/10; dev share capped at 50%)
+  return { ...c, supply: SUPPLY - burned, burned, split_applied: sp ? { h: sp.h, b: sp.b, d: sp.d, pair: !!sp.pair, rw: sp.rw || null } : null, vamp: vampOf(mint), tax_paid: po, reserve: last?.reserve || 0, grad_target: gradTarget.get(mint) || 0, quote_usd: quoteUsd(c.quote_mint, c.quote_symbol), vol_usd: agg.volusd || 0, holders: real ? real.length : bal.length, dev_pct: devN / SUPPLY * 100, dev_sold: !!devBuy && devN < 1, top10_pct: top10 / SUPPLY * 100, sol_usd: SOL_USD, mcap_usd: last?.mcap_usd || 0, curve_pct: last?.progress || 0, trades: agg.n, vol_sol: agg.vol || 0, buys: agg.buys || 0, sells: agg.sells || 0, traders: agg.traders, snipers_pct: (agg.snipeTok || 0) / SUPPLY * 100, bundles_pct: (agg.bundleTok || 0) / SUPPLY * 100 };
 }
 // errors our own code throws on purpose are meant for the user; anything else (library, RPC, database, parser) gets a generic text
 const pubErr = (e) => { const m = String(e?.message || ''); if (e && e.constructor === Error && !e.code && m && m.length < 200 && !/sqlite|database|ECONN|ENOTFOUND|EAI_AGAIN|fetch failed|timed? ?out|abort|socket|JSON|Unexpected token|failed to get|getaddrinfo|status code|Cannot read|is not a function|undefined|\bat \S+:\d+/i.test(m)) return m; console.log('err (hidden)', m.slice(0, 160)); return 'something went wrong — try again'; };

@@ -41,7 +41,7 @@
     if (z < 4) return '$0.' + s.slice(0, z) + sig;
     return '$0.0' + String(z).split('').map(function (d) { return SUB[+d]; }).join('') + sig;
   }
-  function price(t) { return t.mcN * 1000 / 1e9; }
+  function price(t) { return t.mcN * 1000 / (t.supply || 1e9); }   // market cap is on circulating supply (burned tokens excluded)
   function chg(t) { return (t.mcN / t.mc0 - 1) * 100; }
   function chgTxt(c) { if (!isFinite(c)) c = 0; if (Math.abs(c) < .05) c = 0; return (c >= 0 ? '+' : '') + c.toFixed(1) + '%'; }
   function ago(ts) {
@@ -2528,7 +2528,10 @@
   }
   // ===== WALLET PROFILE: hover preview on any wallet + full profile (positions, closed, created, this coin) =====
   S.wprof = {}; S.wTab = 'open';
-  function rwUsd(t, tok, amt) { return tok === t.ca ? amt * price(t) : tok === WSOL ? amt * SOL_USD : tok === t.qMint ? amt * qUsdT(t) : 0; }
+  S.tokUsd = {};
+  function rwUsd(t, tok, amt) { if (tok === t.ca) return amt * price(t); if (tok === WSOL) return amt * SOL_USD; if (tok === t.qMint) return amt * qUsdT(t);
+    if (S.tokUsd[tok] == null && API) { S.tokUsd[tok] = 0; apiGet('/api/qprice?mint=' + encodeURIComponent(tok)).then(function (j) { if (j && j.usd > 0) { S.tokUsd[tok] = +j.usd; render(); } }).catch(function () {}); }   // a third reward token
+    return amt * (S.tokUsd[tok] || 0); }
   function rwCoinHTML(t, taxed) {   // total holder rewards this wallet got from this coin, in the token they were paid in
     var L = (S.rw.acc === S.account ? S.rw.list : []).filter(function (r) { return r.mint === t.ca; });
     if (!L.length && !taxed) return '';
@@ -3477,7 +3480,7 @@
     return '<section class="card-s panel tsp-panel"><div class="tsp-h"><b>Where the ' + m + '% tax goes</b><span class="tsp-p">' + ICO.lock + name + ' · locked</span></div>' + splitBar(sp, 'big') +
       (sp.h > 0 ? '<small class="muted tsp-n">Holders are paid in <b>' + esc(rwSym(t)) + '</b>' + (t.rw && t.rw !== 'coin' ? ' — the tax is sold for it before each payout.' : ' — nothing is sold.') + '</small>' : '') +
       '<div class="tsp-rows">' + ['h', 'b', 'd'].map(function (k) { var c0 = SPC[k]; return '<div class="tsp-r" style="--c:' + c0[0] + '"><em class="sp-ic">' + ICO[c0[1]] + '</em><span>' + c0[2] + '</span><b class="mono">' + sp[k] + '%</b><small class="mono">' + (m * sp[k] / 100).toFixed(2).replace(/\.?0+$/, '') + '% / trade</small></div>'; }).join('') + '</div>' +
-      '<small class="muted tsp-n">Plus a ' + FEE.taxed + '% trading fee (' + FEE.creatorTaxed + '% creator · ' + FEE.treidTaxed + '% treid · ' + FEE.dexTaxed + '% Meteora), total ' + (m + FEE.taxed) + '% per trade. On a 1 SOL buy: ' + ['h', 'b', 'd'].map(function (k) { return (m / 100 * sp[k] / 100).toFixed(4).replace(/\.?0+$/, '') + ' SOL ' + SPC[k][2].toLowerCase(); }).join(' · ') + '</small>' + (t.live && t.taxPaid && t.taxPaid.n ? '<div class="tsp-paid"><b>Paid out on-chain</b><span class="mono"><em class="sp-ic">' + ICO[SPC.b[1]] + '</em>' + fmtNum(t.taxPaid.burned) + ' burned</span><span class="mono"><em class="sp-ic">' + ICO[SPC.h[1]] + '</em>' + (t.rw && t.rw !== 'coin' ? (+t.taxPaid.holders_q || 0).toFixed(4).replace(/\.?0+$/, '') + ' ' + esc(rwSym(t)) : fmtNum(t.taxPaid.holders)) + ' to holders</span><span class="mono"><em class="sp-ic">' + ICO[SPC.d[1]] + '</em>' + fmtNum(t.taxPaid.dev) + ' to dev</span></div>' : '') + '</section>';
+      '<small class="muted tsp-n">Plus a ' + FEE.taxed + '% trading fee (' + FEE.creatorTaxed + '% creator · ' + FEE.treidTaxed + '% treid · ' + FEE.dexTaxed + '% Meteora), total ' + (m + FEE.taxed) + '% per trade. On a 1 SOL buy: ' + ['h', 'b', 'd'].map(function (k) { return (m / 100 * sp[k] / 100).toFixed(4).replace(/\.?0+$/, '') + ' SOL ' + SPC[k][2].toLowerCase(); }).join(' · ') + '. Holder shares worth less than $0.05 in a round are burned (sending them would cost more than they are worth).</small>' + (t.live && t.taxPaid && t.taxPaid.n ? '<div class="tsp-paid"><b>Paid out on-chain</b><span class="mono"><em class="sp-ic">' + ICO[SPC.b[1]] + '</em>' + fmtNum(t.taxPaid.burned) + ' burned</span><span class="mono"><em class="sp-ic">' + ICO[SPC.h[1]] + '</em>' + (t.rw && t.rw !== 'coin' ? (+t.taxPaid.holders_q || 0).toFixed(4).replace(/\.?0+$/, '') + ' ' + esc(rwSym(t)) : fmtNum(t.taxPaid.holders)) + ' to holders</span><span class="mono"><em class="sp-ic">' + ICO[SPC.d[1]] + '</em>' + fmtNum(t.taxPaid.dev) + ' to dev</span></div>' : '') + '</section>';
   }
   function taxPicker(c) {
     var sn = c.snipe || (c.snipe = { on: true, start: 50, dur: 30 }); sn.on = true; if (sn.start < 50) sn.start = 50; if (sn.dur < 30) sn.dur = 30; var base = c.buy;
@@ -3713,7 +3716,7 @@
   }
   function tpHint(t, k) { var tg = tpTargets(t), v = tg[k]; return v > 0 ? 'at ' + fmtK(v / 1000) + ' MC · ' + chgTxt((v / tg.mc - 1) * 100) : '—'; }
   function tpSum(t) {
-    var tg = tpTargets(t), F = S.tpF, pos = position(t), sell = (pos ? pos.tok : 0) * F.amt / 100, mode = tpMode(t), id = esc(t.tick), usd = sell * tg.mc / 1e9;
+    var tg = tpTargets(t), F = S.tpF, pos = position(t), sell = (pos ? pos.tok : 0) * F.amt / 100, mode = tpMode(t), id = esc(t.tick), usd = sell * tg.mc / (t.supply || 1e9);
     if (tg.err) return '<div class="tps-err">' + esc(tg.err) + '</div>';
     var parts = [F.tp ? 'MC ≥ <b>' + fmtK(tg.tp / 1000) + '</b>' : '', F.sl ? 'MC ≤ <b>' + fmtK(tg.sl / 1000) + '</b>' : ''].filter(Boolean).join(' or ');
     return mode === 'jup' ? '<div class="tps-sum">Sell <b class="mono">' + (sell > 0 ? fmtNum(sell) + ' $' + id : F.amt + '% of your $' + id) + '</b>' + (usd > 0 ? ' <span class="muted">(≈ $' + money(usd) + ')</span>' : '') + ' for ' + esc(qSymT(t)) + ' when ' + parts + '.' + (usd > 0 && usd < 10 ? '<div class="tps-err">Jupiter’s minimum order is $10</div>' : '') + '</div>'
@@ -3734,7 +3737,7 @@
           '<div class="tps-amt"><span class="muted">Expires in</span><div class="presets">' + [1, 7, 30, 90].map(function (d) { return '<button class="' + (F.exp === d ? 'on' : '') + '" data-act="tpExp" data-arg="' + d + '">' + d + 'd</button>'; }).join('') + '</div></div>' : '') +
         '<div id="tps-sum">' + tpSum(t) + '</div>';
       if (mode === 'jup') {
-        var tg = tpTargets(t), sellUsd = (pos ? pos.tok : 0) * F.amt / 100 * tg.mc / 1e9, dis = S.busy || tg.err || !pos || sellUsd < 10;
+        var tg = tpTargets(t), sellUsd = (pos ? pos.tok : 0) * F.amt / 100 * tg.mc / (t.supply || 1e9), dis = S.busy || tg.err || !pos || sellUsd < 10;
         body += '<button class="big-btn btn ' + (!S.account ? 'pri' : 'down-b') + '" data-act="' + (S.account ? 'tpPlace' : 'openWallet') + '" data-arg="' + id + '"' + (S.account && dis ? ' disabled' : '') + '>' + (S.busy ? esc(S.busy) + '…' : !S.account ? 'Connect wallet' : !pos ? 'You hold no $' + id : 'Place TP/SL order') + '</button>' +
           '<span class="note">Jupiter keeps the coins in your personal Jupiter vault and sells automatically at your target. 2 wallet approvals: sign in (no funds move) + deposit. Cancel anytime to get them back.</span>';
         var os = JT[t.ca];
@@ -3752,7 +3755,7 @@
     return '<section class="card-s panel tradebox tpsl">' + bsBar + body + '</section>';
   }
   function jtRow(t, o) {
-    var P = function (k) { var v = o[k] != null ? o[k] : o.rawState && o.rawState[k]; return v != null && +v > 0 ? fmtK(+v * 1e9 / 1000) : null; };
+    var P = function (k) { var v = o[k] != null ? o[k] : o.rawState && o.rawState[k]; return v != null && +v > 0 ? fmtK(+v * (t.supply || 1e9) / 1000) : null; };
     var tp = P('tpPriceUsd'), sl = P('slPriceUsd'), tr = P('triggerPriceUsd'), lab = o.orderType === 'oco' ? (tp || sl ? '' : 'TP / SL pair') : '';
     if (!tp && !sl && tr) { if (o.triggerCondition === 'above') tp = tr; else sl = tr; }
     var amt = Number(o.remainingInputAmount || o.initialInputAmount || 0) / 1e6, st = String(o.orderState || '');
@@ -3803,7 +3806,7 @@
     var F = S.tpF, tg = tpTargets(t), pos = position(t), who = S.account, out = t.qMint || WSOL, oco = F.tp && F.sl;
     if (tg.err) return toast(tg.err); if (!pos) return toast('You hold no $' + t.tick);
     var raw = String(Math.floor(pos.tok * F.amt / 100 * 1e6)); if (raw === '0') return toast('Nothing to sell');
-    if (pos.tok * F.amt / 100 * tg.mc / 1e9 < 10) return toast('Jupiter’s minimum order is $10');
+    if (pos.tok * F.amt / 100 * tg.mc / (t.supply || 1e9) < 10) return toast('Jupiter’s minimum order is $10');
     var tok, dep; S.busy = 'Placing order'; render();
     jtToken(true).then(function (a) { tok = a; return jt('vault', { tok: tok }).catch(function () { return jt('vault/register', { tok: tok }); }); })
       .then(function () { return jt('deposit/craft', { tok: tok, body: { inputMint: t.ca, outputMint: out, userAddress: who, amount: raw, orderType: 'price', orderSubType: oco ? 'oco' : 'single' } }); })
@@ -3812,7 +3815,7 @@
         return jtGuard(d.transaction, { mints: [t.ca, out === WSOL ? null : out], spend: (function () { var s = {}; s[t.ca] = raw; return s; })(), solMax: 3e7 }); })
       .then(function () { if (S.account !== who) throw new Error('Wallet changed — stopped'); return walletSign([b64Bytes(dep.transaction)]); })
       .then(function (sg) { var b = { orderType: oco ? 'oco' : 'single', depositRequestId: dep.requestId, depositSignedTx: bytesB64(sg[0]), userPubkey: who, inputMint: t.ca, inputAmount: raw, outputMint: out, triggerMint: t.ca, expiresAt: Date.now() + F.exp * 864e5 };
-        if (oco) { b.tpPriceUsd = tg.tp / 1e9; b.slPriceUsd = tg.sl / 1e9; } else if (F.tp) { b.triggerCondition = 'above'; b.triggerPriceUsd = tg.tp / 1e9; } else { b.triggerCondition = 'below'; b.triggerPriceUsd = tg.sl / 1e9; }
+        if (oco) { var sup = t.supply || 1e9; b.tpPriceUsd = tg.tp / sup; b.slPriceUsd = tg.sl / sup; } else if (F.tp) { b.triggerCondition = 'above'; b.triggerPriceUsd = tg.tp / (t.supply || 1e9); } else { b.triggerCondition = 'below'; b.triggerPriceUsd = tg.sl / (t.supply || 1e9); }
         return jt('orders/price', { tok: tok, body: b }); })
       .then(function () { toast('✅ TP/SL order placed'); setTimeout(function () { livePos(t); }, 2500); return jtLoad(t, false); })
       .catch(function (e) { if (e && e.status === 401) jtForget(); toast((e && e.message) || 'Order failed'); }).then(function () { S.busy = null; render(); });
@@ -4408,7 +4411,7 @@
   document.addEventListener('input', function (e) {
     if (e.target.hasAttribute && e.target.hasAttribute('data-tpv')) { var tk0 = e.target.getAttribute('data-tpv'), tt1 = find(S.tick); S.tpF[tk0 + 'V'] = e.target.value.replace(/[^0-9.,kKmM$]/g, '').replace(',', '.'); if (!tt1) return;
       var hh = document.getElementById('tph-' + tk0); if (hh) hh.textContent = tpHint(tt1, tk0); var sm = document.getElementById('tps-sum'); if (sm) sm.innerHTML = tpSum(tt1);
-      var go = document.querySelector('.tpsl .big-btn'), tg1 = tpTargets(tt1); if (go && S.account && (go.getAttribute('data-act') === 'tpPlace' || go.getAttribute('data-act') === 'alSet')) { var ps1 = position(tt1); go.disabled = !!(S.busy || tg1.err || (go.getAttribute('data-act') === 'tpPlace' && (!ps1 || ps1.tok * S.tpF.amt / 100 * tg1.mc / 1e9 < 10))); } return; }
+      var go = document.querySelector('.tpsl .big-btn'), tg1 = tpTargets(tt1); if (go && S.account && (go.getAttribute('data-act') === 'tpPlace' || go.getAttribute('data-act') === 'alSet')) { var ps1 = position(tt1); go.disabled = !!(S.busy || tg1.err || (go.getAttribute('data-act') === 'tpPlace' && (!ps1 || ps1.tok * S.tpF.amt / 100 * tg1.mc / (tt1.supply || 1e9) < 10))); } return; }
     if (e.target.hasAttribute && e.target.hasAttribute('data-burnpct')) { S.burnPct = +e.target.value; var t = find(S.burnTick), pos = t && position(t); if (!pos) return; var tok = pos.tok * S.burnPct / 100;
       var q = function (id, v) { var x = document.getElementById(id); if (x) x.textContent = v; }; q('bt-tok', fmtNum(Math.round(tok)) + ' $' + t.tick); q('bt-sup', (tok / 1e9 * 100).toFixed(3) + '%'); q('bt-usd', '$' + fmtNum(Math.round(tok * price(t))));
       var g = document.querySelector('.bt-go'); if (g) g.textContent = '🔥 Burn ' + S.burnPct + '% of my $' + t.tick; document.querySelectorAll('.bt-pre button').forEach(function (bb) { bb.classList.toggle('on', +bb.getAttribute('data-arg') === S.burnPct); }); return; }
@@ -5098,8 +5101,10 @@
     if (c.reserve != null) t.reserve = c.reserve;
     if (t.qMint) { if (c.quote_usd) t.qUsd = c.quote_usd; if (c.vol_usd != null) t.vol = c.vol_usd / 1000; }
     liveStat(t, c);
+    if (c.supply > 0) t.supply = c.supply;
+    if (c.split_applied && c.split_applied.h + c.split_applied.b + c.split_applied.d === 100) { var sa = c.split_applied, pre0 = null; for (var pk1 in SPRE) if (SPRE[pk1][2] === sa.h && SPRE[pk1][3] === sa.b && SPRE[pk1][4] === sa.d) pre0 = pk1; t.split = { p: pre0 || 'custom', h: sa.h, b: sa.b, d: sa.d }; t._splitSrv = 1; }   // the split ops really applies
     if ('vamp' in c) t.vamp = c.vamp && typeof c.vamp.mint === 'string' ? { mint: c.vamp.mint, symbol: String(c.vamp.symbol || ''), name: String(c.vamp.name || '') } : null;
-    if (c.uri && !t._uri) { t._uri = 1; var pu = parseUri(c.uri); if (pu.spec) t.spec = pu.spec; if (pu.split) t.split = pu.split; if (pu.rw) t.rw = pu.rw;
+    if (c.uri && !t._uri) { t._uri = 1; var pu = parseUri(c.uri); if (pu.spec) t.spec = pu.spec; if (pu.split && !t._splitSrv) t.split = pu.split; if (pu.rw) t.rw = pu.rw;
       if (pu.x || pu.t || pu.w) { t.soc = true; t.links = { demo: false, x: pu.x ? xLink(pu.x) : null, tg: pu.t ? tgLink(pu.t) : null, web: pu.w ? linkOf(pu.w) : null }; }
       if (!t.img && API) t.img = API + '/api/img/' + c.mint;   // served + cached by our server (IPFS gateways are slow)
       if (!t.img) { try { var cimg = safeImg(localStorage.getItem('dl.img.' + c.mint)); if (cimg) t.img = cimg; } catch (e) {} }
