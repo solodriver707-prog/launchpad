@@ -435,7 +435,7 @@
   function coinUri(mint, c, ipfsUri) {
     var A0 = A, ix = function (arr, v) { return Math.max(0, arr.indexOf(v)).toString(36); }, sp = c.spec || {};
     var q = 'c=' + ix(A0.KINDS, sp.kind) + ix(A0.SKINS, sp.skin) + ix(A0.BGS, sp.bg) + ix(A0.EYES, sp.eyes) + ix(A0.MOUTHS, sp.mouth) + ix(A0.ACCS, sp.acc);
-    if (c.buy > 0 && c.split) q += '&s=' + c.split.h + '.' + c.split.b + '.' + c.split.d + (rwUri(c) && c.split.h > 0 ? '&r=' + rwUri(c) : '');
+    if (c.buy > 0 && c.split) q += '&s=' + c.split.h + '.' + c.split.b + '.' + c.split.d + (c.split.d > 50 ? '&dc=1' : '') + (rwUri(c) && c.split.h > 0 ? '&r=' + rwUri(c) : '');
     var base = (ipfsUri ? ipfsUri : (API || 'https://treid.fun') + '/api/meta/' + mint) + '?' + q, add = function (k, v) { v = String(v || '').replace(/^https?:\/\//, '').replace(/^@/, '').trim(); if (v && (base + '&' + k + '=' + encodeURIComponent(v)).length <= 200) base += '&' + k + '=' + encodeURIComponent(v); };
     add('x', c.x); add('t', c.tg); add('w', c.web); return base;
   }
@@ -3505,14 +3505,15 @@
     var chips = Object.keys(SPRE).map(function (k) { var p = SPRE[k]; return '<button class="spc' + (sp.p === k ? ' on' : '') + '" data-act="spPre" data-arg="' + k + '"><span class="spc-ic">' + ICO[p[0]] + '</span><b>' + p[1] + '</b><small class="mono">' + p[2] + ' / ' + p[3] + ' / ' + p[4] + '</small>' + splitBar({ h: p[2], b: p[3], d: p[4] }) + '</button>'; }).join('') +
       '<button class="spc' + (sp.p === 'custom' ? ' on' : '') + '" data-act="spPre" data-arg="custom"><span class="spc-ic">' + ICO.custom + '</span><b>Custom</b><small>set it yourself</small><span class="spbar"><i style="flex:1;background:repeating-linear-gradient(90deg,#3a3a40 0 4px,#26262a 4px 8px)"></i></span></button>';
     var ex = function (k) { return (base * sp[k] / 100).toFixed(2).replace(/\.?0+$/, '') + '%'; };
-    var rows = ['h', 'b', 'd'].map(function (k) { var c0 = SPC[k]; return '<div class="spr" style="--c:' + c0[0] + '"><span class="spr-l"><span class="sp-ic">' + ICO[c0[1]] + '</span>' + c0[2] + '</span>' + (sp.p === 'custom' ? '<span class="spr-rg' + (k === 'd' ? ' cap' : '') + '"><input type="range" min="0" max="100" step="5" value="' + sp[k] + '" data-split="' + k + '">' + (k === 'd' ? '<em>cap 50%</em>' : '') + '</span>' : '<span class="spr-fill"><i style="width:' + sp[k] + '%;background:' + c0[3] + '"></i></span>') + '<b class="mono" data-spv="' + k + '">' + sp[k] + '%</b><small class="mono" data-spx="' + k + '">' + ex(k) + ' of each trade</small></div>'; }).join('');
+    var rows = ['h', 'b', 'd'].map(function (k) { var c0 = SPC[k]; return '<div class="spr" style="--c:' + c0[0] + '"><span class="spr-l"><span class="sp-ic">' + ICO[c0[1]] + '</span>' + c0[2] + '</span>' + (sp.p === 'custom' ? '<span class="spr-rg"><input type="range" min="0" max="100" step="5" value="' + sp[k] + '" data-split="' + k + '">' + '</span>' : '<span class="spr-fill"><i style="width:' + sp[k] + '%;background:' + c0[3] + '"></i></span>') + '<b class="mono" data-spv="' + k + '">' + sp[k] + '%</b><small class="mono" data-spx="' + k + '">' + ex(k) + ' of each trade</small></div>'; }).join('');
     return '<div class="spk"><div class="spk-h"><b>Where the tax goes</b><span class="spk-lock">' + ICO.lock + 'Locked forever at launch</span></div><div class="spk-chips">' + chips + '</div>' +
       '<div class="spk-viz"><div class="spk-big" data-spbig>' + splitBar(sp, 'big') + '</div>' + rows + '</div>' + rewardPick(c) +
-      '<small class="spk-note">Dev share is capped at 50%. Buyers also pay a ' + FEE.taxed + '% trading fee (total ' + (base + FEE.taxed) + '% per trade): ' + FEE.creatorTaxed + '% of it goes to you, ' + FEE.treidTaxed + '% to treid, ' + FEE.dexTaxed + '% to Meteora. It never comes out of this split.</small></div>';
+      '<small class="spk-note">' + (S.c.split && S.c.split.d > 50 ? '<b class="spk-warn">Dev gets ' + S.c.split.d + '% of the tax — traders see this on your coin page. </b>' : '') + 'Buyers also pay a ' + FEE.taxed + '% trading fee (total ' + (base + FEE.taxed) + '% per trade): ' + FEE.creatorTaxed + '% of it goes to you, ' + FEE.treidTaxed + '% to treid, ' + FEE.dexTaxed + '% to Meteora. It never comes out of this split.</small></div>';
   }
   function spUpdate() {
     var sp = S.c.split, base = S.c.buy; ['h', 'b', 'd'].forEach(function (k) { var v = document.querySelector('[data-spv="' + k + '"]'), x = document.querySelector('[data-spx="' + k + '"]'), r = document.querySelector('[data-split="' + k + '"]'); if (v) v.textContent = sp[k] + '%'; if (x) x.textContent = (base * sp[k] / 100).toFixed(2).replace(/\.?0+$/, '') + '% of each trade'; if (r && +r.value !== sp[k]) r.value = sp[k]; });
     var bg = document.querySelector('[data-spbig]'); if (bg) bg.innerHTML = splitBar(sp, 'big');
+    var nt = document.querySelector('.spk-note'), w = nt && nt.querySelector('.spk-warn'); if (nt) { if (sp.d > 50) { if (!w) { w = document.createElement('b'); w.className = 'spk-warn'; nt.insertBefore(w, nt.firstChild); } w.textContent = 'Dev gets ' + sp.d + '% of the tax — traders see this on your coin page. '; } else if (w) w.remove(); }
   }
   function taxSplitPanel(t) {
     var sp = splitOf(t), m = Math.max(t.buy, t.sell);
@@ -4549,7 +4550,8 @@
     if (!im.classList.contains('rwp-ic')) return; var sp = document.createElement('span'); sp.className = 'coin rwp-ic'; sp.textContent = im.getAttribute('data-ini') || '?';
     sp.style.cssText = 'width:' + im.style.width + ';height:' + im.style.height + ';background:#2E2E33;font-size:9px'; im.replaceWith(sp); }, true);
   document.addEventListener('change', function (e) { if (e.target && e.target.hasAttribute && e.target.hasAttribute('data-shimg')) { var f = e.target.files && e.target.files[0]; e.target.value = ''; if (!f || !/^image\//.test(f.type) || f.size > 8e6 || !S.share) return; var fr = new FileReader(); fr.onload = function () { if (S.share) { S.share.custom = String(fr.result); S.share.bg = 'custom'; render(); } }; fr.readAsDataURL(f); } });
-  document.addEventListener('change', function (e) { if (e.target && e.target.hasAttribute && e.target.hasAttribute('data-coimg')) { coPickImage(e.target.files && e.target.files[0]); e.target.value = ''; } });
+  document.addEventListener('change', function (e) { if (e.target && e.target.hasAttribute && e.target.hasAttribute('data-split')) { render(); return; }   // slider released: refresh the preview ("Holders get X%") and the payout section
+    if (e.target && e.target.hasAttribute && e.target.hasAttribute('data-coimg')) { coPickImage(e.target.files && e.target.files[0]); e.target.value = ''; } });
   document.addEventListener('input', function (e) {
     if (e.target.hasAttribute && e.target.hasAttribute('data-tpv')) { var tk0 = e.target.getAttribute('data-tpv'), tt1 = find(S.tick); S.tpF[tk0 + 'V'] = e.target.value.replace(/[^0-9.,kKmM$]/g, '').replace(',', '.'); if (!tt1) return; tpRefresh(tt1, tk0); lwRefitIfHidden(); return; }
     if (e.target.hasAttribute && e.target.hasAttribute('data-tpr')) { var kr = e.target.getAttribute('data-tpr'); tpSetPct(kr, tpSlVal(kr, +e.target.value)); var tr0 = find(S.tick); if (tr0) { var sp0 = tpSlPos(kr, tpPct(tr0, kr)); e.target.value = sp0.toFixed(1); e.target.style.setProperty('--p', sp0.toFixed(1) + '%'); } return; }
@@ -4569,10 +4571,9 @@
       return;
     }
     var spk = e.target.getAttribute && e.target.getAttribute('data-split');
-    if (spk && S.c.split) { var sp = S.c.split, v = Math.min(spk === 'd' ? 50 : 100, +e.target.value); if (+e.target.value !== v) e.target.value = v; var others = ['h', 'b', 'd'].filter(function (k) { return k !== spk; }), rest = 100 - v;
+    if (spk && S.c.split) { var sp = S.c.split, v = Math.min(100, +e.target.value); if (+e.target.value !== v) e.target.value = v; var others = ['h', 'b', 'd'].filter(function (k) { return k !== spk; }), rest = 100 - v;
       var a = others[0], b2 = others[1], sumO = sp[a] + sp[b2];
       var na = sumO ? Math.round(rest * sp[a] / sumO / 5) * 5 : Math.round(rest / 10) * 5, nb = rest - na;
-      if (b2 === 'd' && nb > 50) { nb = 50; na = rest - 50; } if (a === 'd' && na > 50) { na = 50; nb = rest - 50; }
       sp[spk] = v; sp[a] = na; sp[b2] = nb; spUpdate(); return; }
     var rg = e.target.getAttribute && e.target.getAttribute('data-range');
     if (rg) {

@@ -51,7 +51,7 @@ async function tokBal(conn, addr, prog) { const ai = await conn.getAccountInfo(n
 const DEC = 6, HARVEST_USD = 5, SHARE_USD = 0.05, FEE_USD = 1, MAX_ACCTS = 200;
 const parseSplit = (uri) => { let pair = false, rw = null; try { const u = new URL(uri), s = u.searchParams.get('s'), r = u.searchParams.get('r') || ''; pair = r === 'p';   // r=p: holders paid in the pair token · r=<mint>: in that token
     if (/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(r)) rw = r;
-    if (s) { const p = s.split('.').map(Number); if (p.length === 3 && p.every((x) => Number.isInteger(x) && x >= 0 && x <= 100) && p[0] + p[1] + p[2] === 100) { const d = Math.min(50, p[2]); return { h: p[0], b: p[1] + p[2] - d, d, pair, rw }; } /* dev share capped at 50% on the server too (the rest is burned) */ } } catch {} return { h: 70, b: 20, d: 10, pair, rw }; };
+    if (s) { const p = s.split('.').map(Number); if (p.length === 3 && p.every((x) => Number.isInteger(x) && x >= 0 && x <= 100) && p[0] + p[1] + p[2] === 100) { const cap = u.searchParams.get('dc') === '1' ? 100 : 50, d = Math.min(cap, p[2]); return { h: p[0], b: p[1] + p[2] - d, d, pair, rw }; } /* dev share: up to 100% for coins launched with dc=1 (the creator chose it, shown on the coin); older coins keep the 50% cap they launched with (the rest is burned) */ } } catch {} return { h: 70, b: 20, d: 10, pair, rw }; };
 
 export { parseSplit };
 export function startOps({ conn, dbc, ops, treasury, q, q1, run, mainnet = false, rewardOk = async () => false, quoteUsd = () => 150, poolAuthority, log = console.log, everyMs = 10 * 60e3, liabilities = () => 0, devState = (c) => ({ state: 'active', creator: c.creator }), ready = () => true }) {
