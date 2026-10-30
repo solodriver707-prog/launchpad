@@ -3810,7 +3810,10 @@
   }
   function tlMove(e) { if (!TLD) return; var box = document.getElementById('c-tl'), t = find(S.tick); if (!box || !t) return; e.preventDefault();
     var y = e.clientY - box.getBoundingClientRect().top, v = lwMain().coordinateToPrice(Math.max(4, Math.min(box.clientHeight - 4, y))); if (v == null) return;
-    var mc = t.mcN * 1000, u = chartToMc(v), pct = TLD.k === 'tp' ? (u / mc - 1) * 100 : (1 - u / mc) * 100; tpSetPct(TLD.k, pct); }
+    var mc = t.mcN * 1000, u = chartToMc(v), d = (u / mc - 1) * 100, k = TLD.k;
+    // dragged through the price: the line changes side (TP ↔ SL). The old line on that side is switched off — the nearer stop/target fires first anyway
+    if ((k === 'tp' && d < -0.5) || (k === 'sl' && d > 0.5)) { var nk = k === 'tp' ? 'sl' : 'tp'; S.tpF[k] = false; S.tpF[nk] = true; TLD.k = nk; k = nk; tpSetPct(k, Math.abs(d)); render(); return; }
+    tpSetPct(k, k === 'tp' ? d : -d); }
   document.addEventListener('pointerdown', function (e) { var l = e.target.closest && e.target.closest('#c-tl .tgl'); if (!l) return; e.preventDefault(); e.stopPropagation();
     TLD = { k: l.getAttribute('data-tl'), fr: LW.span }; try { l.setPointerCapture(e.pointerId); } catch (x) {} l.classList.add('drag'); }, true);
   document.addEventListener('pointermove', tlMove, true);
