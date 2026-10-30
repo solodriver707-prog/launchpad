@@ -349,7 +349,8 @@
   function dlPrep() {
     var T = window.TreidChain; if (!T) { if (!S._dlLoading) { S._dlLoading = true; chainLib().then(function () { S._dlLoading = false; if (S.walletOpen) render(); }).catch(function () { S._dlLoading = false; }); } return; }
     ['phantom', 'solflare'].forEach(function (prov) { if (S.dlPre[prov]) return; var kp = T.dl.keyPair(), rid = dlRid(), st = { prov: prov, sk: kp.sk, pk: kp.pk, pend: { rid: rid, kind: 'connect', ret: location.hash } };
-      S.dlPre[prov] = { st: st, url: dlUrl(st, 'connect', { app_url: location.origin + location.pathname, dapp_encryption_public_key: kp.pk, redirect_link: dlBack(rid), cluster: CLUSTER === 'mainnet' ? 'mainnet-beta' : CLUSTER }) }; });
+      S.dlPre[prov] = { st: st, url: dlUrl(st, 'connect', { app_url: location.origin + location.pathname, dapp_encryption_public_key: kp.pk, redirect_link: dlBack(rid), cluster: CLUSTER === 'mainnet' ? 'mainnet-beta' : CLUSTER }) };
+      try { var pre = JSON.parse(localStorage.getItem('treid.dlpre') || '{}'), ks = Object.keys(pre); pre[rid] = st; if (ks.length > 6) delete pre[ks[0]]; localStorage.setItem('treid.dlpre', JSON.stringify(pre)); } catch (e) {} });
   }
   function dlWallet(st) { return { name: DLP[st.prov].name, icon: '', dl: true, features: { 'solana:signTransaction': { signTransaction: function () { return Promise.reject(new Error('use walletSign')); } }, 'solana:signMessage': { signMessage: function (o) { return dlSignMsg(o.message); } } } }; }
   function dlUse(st) { S.wallet = dlWallet(st); S.walletAcc = { address: st.account, chains: [CHAIN_ID] }; S.account = st.account; S.balance = null; refreshBalance(); }
@@ -377,12 +378,17 @@
   // runs before the first route: read the wallet's reply from the URL, put the page back where it was
   var DLQ = (function () { var q; try { q = new URLSearchParams(location.search); } catch (e) { return null; } var rid = q.get('dlr'), st = dlGet();
     if (!rid) return st && st.account && st.session ? { restore: st } : null;
-    var p = st && st.pend && st.pend.rid === rid ? st.pend : null; try { history.replaceState(null, '', location.pathname + ((p && p.ret) || '')); } catch (e) {}
+    var p = st && st.pend && st.pend.rid === rid ? st.pend : null;
+    if (!p) { try { var pre = JSON.parse(localStorage.getItem('treid.dlpre') || '{}'); if (pre[rid]) { st = pre[rid]; p = st.pend; } } catch (e) {} }   // the tap handler may not have run before iOS switched apps
+    if (p && p.kind === 'connect') try { localStorage.removeItem('treid.dlpre'); } catch (e) {}
+    try { history.replaceState(null, '', location.pathname + ((p && p.ret) || '')); } catch (e) {}
     return { q: q, st: st, p: p }; })();
   function dlResume() {
     if (!DLQ) return; var R = DLQ; DLQ = null;
     if (R.restore) { dlUse(R.restore); return; }
-    var st = R.st, p = R.p, q = R.q; if (!st || !p) return; st.pend = null; dlPut(st);
+    var st = R.st, p = R.p, q = R.q;
+    if (!st || !p) { if (q.get('data') || q.get('errorCode')) S.dlLost = true; render(); return; }   // wallet answered, but this browser never asked (private tab / other browser)
+    st.pend = null; dlPut(st);
     if (q.get('errorCode')) { if (st.account) dlUse(st); toast(/reject|cancel|4001/i.test(q.get('errorMessage') + q.get('errorCode')) ? 'Cancelled in wallet' : 'Wallet: ' + (q.get('errorMessage') || 'error')); render(); return; }
     chainLib().then(function (T) {
       if (p.kind === 'connect') { var wpk = q.get(DLP[st.prov].pk), d = T.dl.open(q.get('data'), q.get('nonce'), wpk, st.sk); st.wpk = wpk; st.session = d.session; st.account = d.public_key; dlPut(st); dlUse(st); set({ walletOpen: false }); toast(DLP[st.prov].name + ' connected · ' + short(st.account)); return; }
@@ -3646,8 +3652,15 @@
       '</div></main>';
   }
 
+  function dlLostHTML() { var here = encodeURIComponent(location.origin + location.pathname + location.hash), ref = encodeURIComponent(location.origin);
+    return '<div class="overlay center"><div class="modal dl-tap" role="dialog" aria-modal="true"><img class="wl-ic" src="' + WICON.phantom + '" alt=""><b>Almost connected</b>' +
+      '<span class="muted">The wallet approved, but it came back to a different browser tab than the one you started in (this happens with private tabs or another browser). Easiest fix — open treid inside the wallet app:</span>' +
+      '<a class="wl-one dl-go" href="https://phantom.app/ul/browse/' + here + '?ref=' + ref + '"><span class="wl-nm"><b>Open in Phantom</b></span><span class="wl-go">→</span></a>' +
+      '<a class="wl-one" href="https://solflare.com/ul/v1/browse/' + here + '?ref=' + ref + '"><span class="wl-nm"><b>Open in Solflare</b></span><span class="wl-go">→</span></a>' +
+      '<button class="link" data-act="dlLostRetry">Try again here</button></div></div>'; }
   function walletModal() {
     if (S.dlTap) return dlTapHTML();
+    if (S.dlLost) return dlLostHTML();
     if (!S.walletOpen) return '';
     var opts = S.wallets.length ? S.wallets.map(function (w) {
       var busy = S.connecting === w.name;
@@ -3928,6 +3941,7 @@
     pushWatchSig();
     setTimeout(function () { navInd(); labKick(); fwKick(); mbuyWatch(); bnKick(); }, 0);
     mFit(); if (S.screen === 'home') mSetStep(M.step);
+    if (!render.booted) { render.booted = true; setTimeout(function () { document.documentElement.classList.add('booted'); }, 1300); }   // intro animations play once per visit, not on every live re-render
   }
   function countUp() {
     document.querySelectorAll('[data-count]').forEach(function (el) {
@@ -4163,6 +4177,7 @@
       case 'preset': if (arg === 'reset') { set({ amount: '' }); break; } set({ pctAmt: 0, amount: arg === 'max' ? Math.max(0, S.balance - 0.01).toFixed(3) : arg }); break;
       case 'dlConnect': dlConnect(arg); break;
       case 'dlTapGo': setTimeout(function () { S.dlTap = null; render(); }, 600); break;
+      case 'dlLostRetry': S.dlLost = false; S.dlPre = {}; set({ walletOpen: true }); break;
       case 'dlTapX': { var stx = dlGet(); if (stx) { stx.pend = null; dlPut(stx); } S.dlTap = null; S.busy = null; render(); break; }
       case 'dlArm': if (S.dlPre[arg]) dlPut(S.dlPre[arg].st); S.dlPre = {}; break;   // the link itself opens the wallet
       case 'openWallet': set({ walletOpen: true }); break;

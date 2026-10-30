@@ -5797,3 +5797,5 @@ html body .lb3-cap em.down{color:var(--down)}html body .lb3-cap em:not(.up):not(
 html body .hdr-right .wbal .wb-acts .btn.pri{display:inline-flex!important}   /* the Deposit button inside the wallet menu is not the header "Launch" button */
 /* modals that were already open: live re-renders must not replay the pop-in (looked like the screen shaking) */
 .ov-still,.ov-still>*{animation:none!important}
+/* logo draws in once per visit; live re-renders must not replay it (it flickered constantly) */
+.booted .tr-bar,.booted .tr-stem{animation:none}
