@@ -5795,3 +5795,5 @@ html body .lb3-cap em.down{color:var(--down)}html body .lb3-cap em:not(.up):not(
 .rv-copy{display:flex;width:calc(100% - 40px);margin:0 20px}
 .rv-bal{display:block;text-align:center;margin-top:10px;font-size:12px}
 html body .hdr-right .wbal .wb-acts .btn.pri{display:inline-flex!important}   /* the Deposit button inside the wallet menu is not the header "Launch" button */
+/* modals that were already open: live re-renders must not replay the pop-in (looked like the screen shaking) */
+.ov-still,.ov-still>*{animation:none!important}
