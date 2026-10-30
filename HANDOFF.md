@@ -77,7 +77,7 @@ Other ideas: ops low-balance Telegram alert, own domain treid.fun (Phantom trust
 - Per-holder receipts (`hpay`) rebuilt from ops' own transactions (coin TransferChecked + memo'd pair/SOL payouts) — one-time pass `kv.hpay_v1`; the first TTEST payout now shows in Rewards history.
 - `/api/coin` returns `split_applied` (what ops really applies, dev ≤ 50%); site shows it. Third reward token priced (site via `/api/qprice`, server via Jupiter).
 - SOL holder shares below rent-exempt to empty wallets wait for a later round (no failing batch). UI notes that sub-$0.05 shares are burned.
-- NOT done (dormant / decision): $TREID flywheel fixes (`treid_since` per mint, buyback cap, post-graduation LP fees) — do before setting `TREID_MINT`; creator side-wallet reward farming — open question; ops-paid migrations not reimbursed; Jito/private sends for ops sales.
+- NOT done (dormant / decision): $TREID flywheel fixes (`treid_since` per mint, buyback cap, post-graduation LP fees) — do before setting `TREID_MINT`; ops-paid migrations not reimbursed; Jito/private sends for ops sales.
 ### Mobile — DONE 29 Oct 2026
 - Even TAX/PAIRED cards (coin header), card badges and top-meme side same size, compact chart legend + `% log auto` in the toolbar on phones, create tax chips 6-col grid, trap durations one row, collapsed board filters hide pair rows, bento coin site without holes, opaque header ≤1100px, footer taps, `$0`, plurals, podium loss colour, QUIET burn gauge, own-wallet profile text, `?demo=1` without live server.
 ### Ops alerts — DONE
@@ -106,5 +106,5 @@ Other ideas: ops low-balance Telegram alert, own domain treid.fun (Phantom trust
 ## Open questions
 - Does Jupiter whitelist our Token-2022 transfer-fee coins for Trigger orders? (needed for Auto-sell on taxed coins)
 - Exact creator fee share after graduation (DAMM v2 `poolFeeBps: 50`)?
-- Do we act on creator side-wallet reward farming?
+- ~~Creator side-wallet reward farming~~ — DECIDED 30 Oct 2026: leave as is (a side-wallet buy is a normal buy; direct transfers already count toward the 70% rule).
 - Is the 10-min tax interval affordable at real volume? (watch ops SOL in /api/health)
