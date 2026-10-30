@@ -4720,10 +4720,13 @@
     if (!FXP.coins.length || (now - FXP.spawn > 1500 && lastC.x > 90)) { FXP.spawn = now; fxpSpawn(box); }
     FXP.coins = FXP.coins.filter(function (c) { c.x += dt * .085; if (!c.hit && c.x >= W / 2 && now >= (FXP.stop || 0)) { var over = c.x - W / 2; FXP.coins.forEach(function (o) { o.x -= over; o.el.style.transform = 'translateX(' + (o.x - 23).toFixed(1) + 'px)'; }); c.hit = true; FXP.stop = now + 560; fxpHit(c, W); } c.el.style.transform = 'translateX(' + (c.x - 23).toFixed(1) + 'px)'; if (c.x > W + 40) { c.el.remove(); return false; } return true; }); }
   requestAnimationFrame(fxpTick);
-  (function () { var sx = null; document.addEventListener('touchstart', function (e) { if (e.target.closest && e.target.closest('#fxp')) { sx = e.touches[0].clientX; } }, { passive: true });
-    document.addEventListener('touchend', function (e) { if (sx == null) return; var dx = e.changedTouches[0].clientX - sx; sx = null; if (Math.abs(dx) > 40) { FXP.hold = Date.now() + 9000; fxpShow(FXP.k + (dx < 0 ? 1 : -1)); } }, { passive: true }); })();
+  (function () { var sx = null, sy = 0, st = 0, onView = false; document.addEventListener('touchstart', function (e) { if (e.target.closest && e.target.closest('#fxp') && !e.target.closest('.fxp-dots')) { sx = e.touches[0].clientX; sy = e.touches[0].clientY; st = Date.now(); onView = !!e.target.closest('.fxp-view'); } }, { passive: true });
+    document.addEventListener('touchend', function (e) { if (sx == null) return; var c = e.changedTouches[0], dx = c.clientX - sx, dy = c.clientY - sy; sx = null;
+      if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) { FXP.hold = Date.now() + 9000; fxpShow(FXP.k + (dx < 0 ? 1 : -1)); return; }
+      if (onView && Math.abs(dx) < 12 && Math.abs(dy) < 12 && Date.now() - st < 500) {   // a tap: iOS doesn't always turn a tap on a plain <div> into a click, so handle it here
+        var v = document.querySelector('#fxp .fxp-view'), r = v && v.getBoundingClientRect(); if (!r) return; FXP.tapAt = Date.now(); FXP.hold = Date.now() + 9000; fxpShow(FXP.k + (c.clientX - r.left < r.width * .25 ? -1 : 1)); } }, { passive: true }); })();
   // tap anywhere on the factory card → next step (left edge → back), like stories; a swipe never becomes a click
-  document.addEventListener('click', function (e) { var v = e.target.closest && e.target.closest('#fxp .fxp-view'); if (!v) return; var r = v.getBoundingClientRect(), back = e.clientX - r.left < r.width * .25;
+  document.addEventListener('click', function (e) { var v = e.target.closest && e.target.closest('#fxp .fxp-view'); if (!v || Date.now() - (FXP.tapAt || 0) < 700) return; var r = v.getBoundingClientRect(), back = e.clientX - r.left < r.width * .25;
     FXP.hold = Date.now() + 9000; fxpShow(FXP.k + (back ? -1 : 1)); });
   function machineSection() {
     FW.cnt[2] = FW.cnt[2] || 1840.5; FW.cnt[5] = FW.cnt[5] || 58210;
