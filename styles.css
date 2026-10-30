@@ -5782,3 +5782,4 @@ html body .lb3-cap em.down{color:var(--down)}html body .lb3-cap em:not(.up):not(
 .dev-rep.good{border-color:rgba(61,220,151,.45);color:#3DDC97;background:rgba(61,220,151,.07)}
 .dev-rep.bad{border-color:rgba(242,112,138,.5);color:#F2708A;background:rgba(242,112,138,.08)}
 .dh2-n i.rg{font-style:normal;color:#F2708A;font-weight:800}
+.tsp-paid .tsp-who{width:100%;color:var(--muted)!important;font-size:12px}
