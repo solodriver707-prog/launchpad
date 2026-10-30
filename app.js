@@ -3815,10 +3815,10 @@
     if ((k === 'tp' && d < -0.5) || (k === 'sl' && d > 0.5)) { var nk = k === 'tp' ? 'sl' : 'tp'; S.tpF[k] = false; S.tpF[nk] = true; TLD.k = nk; k = nk; tpSetPct(k, Math.abs(d)); render(); return; }
     tpSetPct(k, k === 'tp' ? d : -d); }
   document.addEventListener('pointerdown', function (e) { var l = e.target.closest && e.target.closest('#c-tl .tgl'); if (!l) return; e.preventDefault(); e.stopPropagation();
-    TLD = { k: l.getAttribute('data-tl'), fr: LW.span }; try { l.setPointerCapture(e.pointerId); } catch (x) {} l.classList.add('drag'); }, true);
+    TLD = { k: l.getAttribute('data-tl'), fr: LW.span }; document.body.classList.add('tl-drag'); try { l.setPointerCapture(e.pointerId); } catch (x) {} l.classList.add('drag'); }, true);
   document.addEventListener('pointermove', tlMove, true);
-  document.addEventListener('pointerup', function () { if (!TLD) return; LW.keep = TLD.fr || null; TLD = null; var b = document.getElementById('c-tl'); if (b) b._h = ''; lwTpsl(); }, true);
-  document.addEventListener('pointercancel', function () { TLD = null; }, true);
+  document.addEventListener('pointerup', function () { if (!TLD) return; document.body.classList.remove('tl-drag'); LW.keep = TLD.fr || null; TLD = null; var b = document.getElementById('c-tl'); if (b) b._h = ''; lwTpsl(); }, true);
+  document.addEventListener('pointercancel', function () { TLD = null; document.body.classList.remove('tl-drag'); }, true);
   function tpslPanel(t, pos, bsBar) {
     var id = esc(t.tick), F = S.tpF, mode = tpMode(t), elig = jtEligible(t);
     var row = function (k, label, cls) { var on = F[k], u = F[k + 'U'];
