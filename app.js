@@ -3784,7 +3784,7 @@
     var lim = k === 'sl' ? tpSlPos('sl', slMax(t)) : 100;
     return '<div class="tps-sl ' + k + '"' + (lim < 100 ? ' style="--lim:' + lim.toFixed(1) + '%" title="Below ' + fmtK(launchFloor(t) / 1000) + ' (launch market cap) the price can’t fall on the curve"' : '') + '><input type="range" min="0" max="100" step="0.1" data-tpr="' + k + '" value="' + tpSlPos(k, pc).toFixed(1) + '" aria-label="' + (k === 'tp' ? 'Take profit %' : 'Stop loss %') + '" style="--p:' + tpSlPos(k, pc).toFixed(1) + '%">' +
       '<div class="tps-sk mono">' + (k === 'tp' ? [0, 50, 250, 1000] : [0, 25, 50, 95]).map(function (x, i) { var ps = tpSlPos(k, x); return '<button data-act="tpPick" data-arg="' + k + '|' + x + '" style="left:' + ps.toFixed(1) + '%' + (i === 0 ? ';transform:none' : i === 3 ? ';transform:translateX(-100%)' : '') + '">' + (x ? (k === 'tp' ? '+' : '−') : '') + x + '%</button>'; }).join('') + '</div></div>'; }
-  function tpSetPct(k, pct) { if (!TLD) setTimeout(lwRefit, 0); var t = find(S.tick); if (!t) return; pct = tpRound(Math.max(k === 'tp' ? 0.5 : Math.min(0.5, slMax(t)), Math.min(k === 'tp' ? TPMAX.tp * 5 : slMax(t), pct)));
+  function tpSetPct(k, pct) { if (!TLD) setTimeout(lwRefitIfHidden, 0); var t = find(S.tick); if (!t) return; pct = tpRound(Math.max(k === 'tp' ? 0.5 : Math.min(0.5, slMax(t)), Math.min(k === 'tp' ? TPMAX.tp * 5 : slMax(t), pct)));
     if (S.tpF[k + 'U'] === 'mc') { var mc = t.mcN * 1000; S.tpF[k + 'V'] = String(Math.round(k === 'tp' ? mc * (1 + pct / 100) : mc * (1 - pct / 100))); } else S.tpF[k + 'V'] = String(pct);
     var inp = document.getElementById('tp-' + k); if (inp && document.activeElement !== inp) inp.value = S.tpF[k + 'V']; tpRefresh(t, k); }
   function tpRefresh(t, k) {   // update the TP/SL panel in place (no full re-render while typing or dragging)
@@ -3802,6 +3802,10 @@
         if (z > -Infinity) { var pad = (Math.max(hi, z) - Math.min(lo, a)) * .08; if (z > hi - pad) hi = z + pad; if (a < lo + pad) lo = a - pad; } }
       r.priceRange = { minValue: lo, maxValue: hi }; }
     LW.span = [r.priceRange.minValue, r.priceRange.maxValue]; return r; }
+  function lwRefitIfHidden() {   // only re-fit the price scale when a target line is off-screen — never move a view you just zoomed
+    var t = find(S.tick), box = document.getElementById('c-tl'); if (!t || !LW.chart || !box || TLD) return; var tg = tpTargets(t), m = lwMain(), H = box.clientHeight, out = false;
+    ['tp', 'sl'].forEach(function (k) { if (S.tpF[k] && tg[k] > 0) { var y = m.priceToCoordinate(mcToChart(tg[k])); if (y == null || y < 10 || y > H - 10) out = true; } });
+    if (out) lwRefit(); }
   function lwRefit() { if (LW.chart && !TLD) try { LW.chart.priceScale('right').applyOptions({ autoScale: true }); } catch (e) {} }
   function lwTpsl() {
     var box = document.getElementById('c-tl'), t = find(S.tick); if (!box) return;
@@ -4547,7 +4551,7 @@
   document.addEventListener('change', function (e) { if (e.target && e.target.hasAttribute && e.target.hasAttribute('data-shimg')) { var f = e.target.files && e.target.files[0]; e.target.value = ''; if (!f || !/^image\//.test(f.type) || f.size > 8e6 || !S.share) return; var fr = new FileReader(); fr.onload = function () { if (S.share) { S.share.custom = String(fr.result); S.share.bg = 'custom'; render(); } }; fr.readAsDataURL(f); } });
   document.addEventListener('change', function (e) { if (e.target && e.target.hasAttribute && e.target.hasAttribute('data-coimg')) { coPickImage(e.target.files && e.target.files[0]); e.target.value = ''; } });
   document.addEventListener('input', function (e) {
-    if (e.target.hasAttribute && e.target.hasAttribute('data-tpv')) { var tk0 = e.target.getAttribute('data-tpv'), tt1 = find(S.tick); S.tpF[tk0 + 'V'] = e.target.value.replace(/[^0-9.,kKmM$]/g, '').replace(',', '.'); if (!tt1) return; tpRefresh(tt1, tk0); lwRefit(); return; }
+    if (e.target.hasAttribute && e.target.hasAttribute('data-tpv')) { var tk0 = e.target.getAttribute('data-tpv'), tt1 = find(S.tick); S.tpF[tk0 + 'V'] = e.target.value.replace(/[^0-9.,kKmM$]/g, '').replace(',', '.'); if (!tt1) return; tpRefresh(tt1, tk0); lwRefitIfHidden(); return; }
     if (e.target.hasAttribute && e.target.hasAttribute('data-tpr')) { var kr = e.target.getAttribute('data-tpr'); tpSetPct(kr, tpSlVal(kr, +e.target.value)); var tr0 = find(S.tick); if (tr0) { var sp0 = tpSlPos(kr, tpPct(tr0, kr)); e.target.value = sp0.toFixed(1); e.target.style.setProperty('--p', sp0.toFixed(1) + '%'); } return; }
     if (e.target.hasAttribute && e.target.hasAttribute('data-burnpct')) { S.burnPct = +e.target.value; var t = find(S.burnTick), pos = t && position(t); if (!pos) return; var tok = pos.tok * S.burnPct / 100;
       var q = function (id, v) { var x = document.getElementById(id); if (x) x.textContent = v; }; q('bt-tok', fmtNum(Math.round(tok)) + ' $' + t.tick); q('bt-sup', (tok / 1e9 * 100).toFixed(3) + '%'); q('bt-usd', '$' + fmtNum(Math.round(tok * price(t))));
