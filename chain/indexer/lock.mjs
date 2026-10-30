@@ -1,6 +1,7 @@
 // one ops-wallet action at a time (tax cycle and rewards cycle share the same token accounts)
 let chain = Promise.resolve();
 export function withLock(fn) { const run = chain.then(fn, fn); chain = run.catch(() => {}); return run; }
+export const lockIdle = () => chain;   // resolves when the money action running now (if any) has finished
 // if the money ledger can't be written (disk full, db error) the ops wallet must stop: amounts still owed are computed from it,
 // so a lost row would be paid again on the next cycle. Halted until a restart (after the disk is fixed).
 export const HALT = { on: false, why: '' };

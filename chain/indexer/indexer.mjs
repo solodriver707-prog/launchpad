@@ -19,7 +19,7 @@ import { startBubbles } from './bubbles.mjs';
 import { startPush } from './push.mjs';
 import { curveOk } from './curve.mjs';
 import { fetchT, JUP } from './txutil.mjs';
-import { HALT } from './lock.mjs';
+import { HALT, lockIdle } from './lock.mjs';
 let OPS_ST = null;
 import { verifySig, SITES, issueSession } from './sig.mjs';
 import { ed25519 } from '@noble/curves/ed25519';
@@ -447,6 +447,18 @@ function stats(mint, list = false, scanOk = true) {
 }
 // errors our own code throws on purpose are meant for the user; anything else (library, RPC, database, parser) gets a generic text
 const pubErr = (e) => { const m = String(e?.message || ''); if (e && e.constructor === Error && !e.code && m && m.length < 200 && !/sqlite|database|ECONN|ENOTFOUND|EAI_AGAIN|fetch failed|timed? ?out|abort|socket|JSON|Unexpected token|failed to get|getaddrinfo|status code|Cannot read|is not a function|undefined|\bat \S+:\d+/i.test(m)) return m; console.log('err (hidden)', m.slice(0, 160)); return 'something went wrong — try again'; };
+// deploys / restarts: Render sends SIGTERM first. Stop starting new money transactions, let the one in flight finish (its receipt
+// is recorded), tell live viewers to reconnect, then exit — so a restart never cuts a payout in half.
+let stopping = false;
+async function shutdown(sig) {
+  if (stopping) return; stopping = true; console.log('shutdown', sig, '— finishing what is in flight');
+  if (!HALT.on) { HALT.on = true; HALT.why = 'restarting'; }   // every send checks this: nothing new leaves the ops wallet
+  await Promise.race([lockIdle(), new Promise((r) => setTimeout(r, 25e3))]);
+  for (const c of clients) { try { c.write('retry: 3000\nevent: bye\ndata: {}\n\n'); c.end(); } catch {} }
+  try { server.close(); } catch {} try { db.close(); } catch {}
+  console.log('shutdown done'); process.exit(0);
+}
+process.on('SIGTERM', () => shutdown('SIGTERM')); process.on('SIGINT', () => shutdown('SIGINT'));
 process.on('unhandledRejection', (e) => console.log('unhandled', String(e?.message || e).slice(0, 200)));   // one bad request or RPC hiccup must never kill the server
 process.on('uncaughtException', (e) => console.log('uncaught', String(e?.message || e).slice(0, 200)));
 const sseByIp = new Map();
@@ -483,7 +495,7 @@ async function jtProxy(req, res, u, p) {
     const txt = await r.text(); res.writeHead(r.status, { 'content-type': 'application/json', 'access-control-allow-origin': '*', 'cache-control': 'no-store' }); res.end(txt.slice(0, 2e6)); }
   catch (e) { out(502, { error: 'Jupiter not reachable — try again' }); }
 }
-http.createServer((req, res) => { handleReq(req, res).catch((e) => { console.log('req err', String(e?.message || e).slice(0, 160)); try { if (!res.headersSent) res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end('{"ok":false}'); } catch {} }); }).listen(PORT, () => console.log('API on :' + PORT));
+const server = http.createServer((req, res) => { handleReq(req, res).catch((e) => { console.log('req err', String(e?.message || e).slice(0, 160)); try { if (!res.headersSent) res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end('{"ok":false}'); } catch {} }); }).listen(PORT, () => console.log('API on :' + PORT));
 async function handleReq(req, res) {
   const u = new URL(req.url, 'http://x'), p = u.pathname.split('/').filter(Boolean), J = (o) => { const body = typeof o === 'object' && o && o.__gz ? null : JSON.stringify(o), gz = /\bgzip\b/.test(String(req.headers['accept-encoding'] || ''));   // big answers go out gzipped (the coin list shrinks ~8x)
     if (o && o.__gz) { res.writeHead(200, { 'content-type': 'application/json', 'access-control-allow-origin': '*', 'cache-control': 'no-store', ...(gz ? { 'content-encoding': 'gzip', vary: 'Accept-Encoding' } : {}) }); return res.end(gz ? o.__gz : o.raw); }

@@ -84,27 +84,36 @@ Other ideas: ops low-balance Telegram alert, own domain treid.fun (Phantom trust
 - `alerts.mjs`: every `!!` server log line → Telegram (env `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`; optional; 1×/h per message). `/api/health` shows `alerts`.
 - Verified in production: X post preview cards work (`/api/xpost/<id>`).
 
+### Done 30 Oct 2026
+- Creator reputation: `/api/dev/<wallet>` (grad / rug = creator sold ≥70% of peak bag / dead = 3 days quiet; time until dev sold); wallet panel "Created" shows the REAL record (no simulated past coins for real wallets); reputation chip on the coin page.
+- Rewards stats per coin: `rewards_stats` in `/api/coin` (holders paid, payouts, last) under "Paid out on-chain".
+- Likes / reposts on callouts stored on the server (`coreact`, one per wallet, 24 h session), live counts via the stream.
+- Deposit sheet with QR (`qr.js`, MIT, vendored) + copy + Solana-only warning; Deposit button was hidden in the wallet menu on phones (fixed).
+- $TREID flywheel: budget key per mint, post-graduation LP fees (claimx …|platform|dammP) included, buyback capped at ops' free SOL.
+- Creator share after graduation: 0.2% (DAMM v2 0.5%, Meteora protocol 20%, LP fees 50/50 creator/treid; migration config A8gMr… has protocolFeePercent 0 → program default 20% applies).
+- Graceful restart: SIGTERM → no new money tx (HALT 'restarting'), in-flight lock finishes (≤25 s), SSE clients told to reconnect, exit 0. Render can't do zero-downtime with a disk; this is the safe version.
+
 ## Older pending items (offered, not confirmed/done)
-- Holders-only page; ops low-balance **Telegram alert** (now only `ops_low` in /api/health).
-- pump.fun app ideas: mobile Deposit button, "New callouts" bar, profile Deposit/Receive.
-- Likes/reposts stored server-side (now browser-only).
+- Holders-only page (not started). Telegram alerts: done (`alerts.mjs`, needs env).
+- pump.fun app ideas: Deposit/Receive done (QR); new-callouts badge on mobile nav + pause queue already exist.
+- Likes/reposts stored server-side: done.
 - Own domain **treid.fun** + Phantom dApp review (removes wallet warnings, improves deeplinks).
 - `HIDDEN_MINTS` = TTEST mint after testing; `TREID_MINT` when $TREID exists.
 - **Phantom/Solflare deeplink on a real iPhone not tested yet.** Connect link is prebuilt so one tap opens the app; signing uses a tap sheet. If Safari still lands on phantom.com's "open in app" page, switch to the `phantom://v1/...` scheme (iOS asks "Open in Phantom?" once).
-- X post cards use `cdn.syndication.twimg.com/tweet-result` server-side — never verified from production; check one real callout with an x.com/…/status/… link.
+- X post cards: verified in production.
 - Phantom hides incoming unverified-token transfers in History (spam filter) — we can't change that; holders see rewards in the site (🎁 tab, coin page) with Solscan links, or Phantom's hidden/spam section.
 
 ## Ideas / recommendations not started
 - Creator fee split across several wallets (pump.fun: up to 10) + coin ownership transfer.
 - Card on-ramp / Deposit (MoonPay-style) on phones.
-- Creator reputation: past launches + "rug" mark on the dev profile (fits "Trade safer").
+- Creator reputation: done.
 - Livestream/video per coin (later; expensive/risky).
-- "Rewards paid" stats + holder rewards map per coin.
+- "Rewards paid" stats: done (holder rewards map per coin not started).
 - Zero-downtime deploys on Render (server restart after each deploy briefly breaks the site; the site now retries).
 - Deploy in quiet hours until then.
 
 ## Open questions
 - Does Jupiter whitelist our Token-2022 transfer-fee coins for Trigger orders? (needed for Auto-sell on taxed coins)
-- Exact creator fee share after graduation (DAMM v2 `poolFeeBps: 50`)?
+- ~~Creator fee share after graduation~~ — 0.2% (see Done 30 Oct).
 - ~~Creator side-wallet reward farming~~ — DECIDED 30 Oct 2026: leave as is (a side-wallet buy is a normal buy; direct transfers already count toward the 70% rule).
 - Is the 10-min tax interval affordable at real volume? (watch ops SOL in /api/health)
