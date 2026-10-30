@@ -3800,13 +3800,23 @@
   function lwRefit() { if (LW.chart && !TLD) try { LW.chart.priceScale('right').applyOptions({ autoScale: true }); } catch (e) {} }
   function lwTpsl() {
     var box = document.getElementById('c-tl'), t = find(S.tick); if (!box) return;
-    if (!t || S.side !== 'tpsl' || !LW.chart || !t.live) { if (box._h) { box.innerHTML = ''; box._h = ''; } return; }
+    if (!t || S.side !== 'tpsl' || !LW.chart || !t.live) { if (box._h) { box.innerHTML = ''; box._h = ''; } lwTpAxis(null, null); return; }
     var main = lwMain(), H = box.clientHeight, tg = tpTargets(t), h = '';
     ['tp', 'sl'].forEach(function (k) { if (!S.tpF[k] || !(tg[k] > 0)) return; var y = main.priceToCoordinate(mcToChart(tg[k])), off = '';
       if (y == null || y < 14) { off = y == null ? '' : ' ↑'; y = y == null ? (k === 'tp' ? 14 : H - 14) : 14; } else if (y > H - 14) { y = H - 14; off = ' ↓'; }
       var pc = tpPct(t, k);
-      h += '<div class="tgl ' + k + (TLD && TLD.k === k ? ' drag' : '') + '" data-tl="' + k + '" style="top:' + y.toFixed(1) + 'px"><i></i><span class="tl-p mono"><b>' + (k === 'tp' ? 'TP' : 'SL') + '</b><em>' + (k === 'tp' ? '+' : '−') + tpRound(pc) + '%' + off + '</em><s>' + fmtK(tg[k] / 1000) + '</s></span></div>'; });
+      h += '<div class="tgl ' + k + (TLD && TLD.k === k ? ' drag' : '') + '" data-tl="' + k + '" style="top:' + y.toFixed(1) + 'px"><i></i><span class="tl-p mono"><b>' + (k === 'tp' ? 'TP' : 'SL') + '</b><em>' + (k === 'tp' ? '+' : '−') + tpRound(pc) + '%' + off + '</em><s>' + lwFmt(mcToChart(tg[k])) + '</s></span></div>'; });
     if (box._h !== h) { box.innerHTML = h; box._h = h; }
+    lwTpAxis(t, tg);
+  }
+  LW.tpl = {};
+  function lwTpAxis(t, tg) {   // the target's value on the price axis, like Avg entry / exit — follows the line while you drag
+    var main = LW.chart && lwMain();
+    ['tp', 'sl'].forEach(function (k) { var o = LW.tpl[k], want = main && t && tg && S.side === 'tpsl' && t.live && S.tpF[k] && tg[k] > 0;
+      if (o && (!want || o.s !== main)) { try { o.s.removePriceLine(o.l); } catch (e) {} o = LW.tpl[k] = null; }
+      if (!want) return; var v = mcToChart(tg[k]), c = k === 'tp' ? '#3DDC97' : '#F2708A', title = k === 'tp' ? 'TP' : 'SL';
+      if (!o) LW.tpl[k] = { s: main, l: main.createPriceLine({ price: v, color: c, lineVisible: false, axisLabelVisible: true, axisLabelColor: c, axisLabelTextColor: '#07110c', title: title }), v: v };
+      else if (o.v !== v) { o.l.applyOptions({ price: v }); o.v = v; } });
   }
   function tlMove(e) { if (!TLD) return; var box = document.getElementById('c-tl'), t = find(S.tick); if (!box || !t) return; e.preventDefault();
     var y = e.clientY - box.getBoundingClientRect().top, v = lwMain().coordinateToPrice(Math.max(4, Math.min(box.clientHeight - 4, y))); if (v == null) return;
