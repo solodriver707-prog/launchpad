@@ -3801,11 +3801,11 @@
     if (!t || S.side !== 'tpsl' || !LW.chart || !t.live) { if (box._h) { box.innerHTML = ''; box._h = ''; } lwTpAxis(null, null); return; }
     try { var aw = LW.chart.priceScale('right').width(); if (aw && box._aw !== aw) { box._aw = aw; box.style.setProperty('--axw', aw + 'px'); } } catch (e) {}   // lines end exactly at the price axis
     var main = lwMain(), H = box.clientHeight, tg = tpTargets(t), h = '', ps = position(t), sp = ps ? ps.tok * S.tpF.amt / 100 / (t.supply || 1e9) * 100 : 0,
-      sup = '<s>' + (sp > 0 ? 'Sell ' + (sp < 0.01 ? '<0.01' : sp < 1 ? sp.toFixed(2) : sp.toFixed(1)) + '% supply' : 'Sell 0%') + '</s>';
+      supT = (sp > 0 ? (sp < 0.01 ? '<0.01' : sp < 1 ? sp.toFixed(2) : sp.toFixed(1)) : '0') + '%';   // like GMGN: the tag only says how much it sells (here: % of supply)
     ['tp', 'sl'].forEach(function (k) { if (!S.tpF[k] || !(tg[k] > 0)) return; var y = main.priceToCoordinate(mcToChart(tg[k])), off = '';
       if (y == null || y < 14) { off = y == null ? '' : ' ↑'; y = y == null ? (k === 'tp' ? 14 : H - 14) : 14; } else if (y > H - 14) { y = H - 14; off = ' ↓'; }
       var pc = tpPct(t, k);
-      h += '<div class="tgl ' + k + (TLD && TLD.k === k ? ' drag' : '') + '" data-tl="' + k + '" style="top:' + y.toFixed(1) + 'px"><i></i><span class="tl-p mono"><b>' + (k === 'tp' ? 'TP' : 'SL') + '</b><em>' + (k === 'tp' ? '+' : '−') + tpRound(pc) + '%' + off + '</em>' + sup + '</span><span class="tl-o"></span></div>'; });
+      h += '<div class="tgl ' + k + (TLD && TLD.k === k ? ' drag' : '') + '" data-tl="' + k + '" style="top:' + y.toFixed(1) + 'px"><i></i><span class="tl-p mono" title="' + (k === 'tp' ? 'Take profit +' : 'Stop loss −') + tpRound(pc) + '% · sells ' + supT + ' of the supply"><b>' + (k === 'tp' ? 'TP' : 'SL') + off + '</b><em>' + supT + '</em></span><span class="tl-o"></span></div>'; });
     if (box._h !== h) { box.innerHTML = h; box._h = h; }
     lwTpAxis(t, tg);
   }

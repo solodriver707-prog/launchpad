@@ -5841,3 +5841,13 @@ html body .hdr-right .wbal .wb-acts .btn.pri{display:inline-flex!important}   /*
 @media (max-width:760px){.c-tl .tl-p{right:18px}}
 .c-tl .tgl{right:calc(var(--axw,60px) + 6px)!important}
 .c-tl .tl-p{right:16px!important}
+/* GMGN-size tag: tiny, thin outline, transparent — the price lives on the axis, the % move in the panel */
+.c-tl .tl-p{right:120px!important;font-size:9.5px!important;font-weight:700;letter-spacing:.04em;border-radius:2px;border-width:1px;background:rgba(17,17,19,.6)!important;box-shadow:none!important;line-height:1}
+.c-tl .tl-p b,.c-tl .tl-p em{padding:3px 6px!important;display:flex;align-items:center}
+.c-tl .tl-p b{gap:5px;font-weight:700}
+.c-tl .tl-p b:before{display:block!important;content:'';width:1px;height:8px;background:currentColor;opacity:.8;border-radius:0}
+.c-tl .tl-p em{opacity:1}
+.c-tl .tgl i{border-top-width:1px;opacity:.75}
+.c-tl .tl-o{width:7px;height:7px;margin-top:-3.5px;border-width:1px;right:-3px}
+.c-tl .tgl.drag .tl-p{box-shadow:0 0 0 2px color-mix(in srgb,var(--c) 22%,transparent)!important}
+@media (max-width:760px){.c-tl .tl-p{right:12px!important;font-size:10px!important}.c-tl .tl-p b,.c-tl .tl-p em{padding:4px 7px!important}}
