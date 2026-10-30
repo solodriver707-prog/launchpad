@@ -5819,9 +5819,20 @@ html body .hdr-right .wbal .wb-acts .btn.pri{display:inline-flex!important}   /*
 .c-tl .tl-p b{background:color-mix(in srgb,var(--c) 18%,transparent);border-right:1px solid var(--c)}
 .c-tl .tl-p s{border-left:1px solid color-mix(in srgb,var(--c) 45%,transparent);color:#cfcfd4;font-weight:600}
 .c-tl .tgl:hover i,.c-tl .tgl.drag i{border-top-style:solid;opacity:1}
-.c-tl .tgl.drag .tl-p{background:var(--c);color:#07110c}.c-tl .tgl.drag .tl-p s{color:#07110c}
+
 @media (max-width:760px){.c-tl .tgl{right:52px;height:26px;margin-top:-13px}.c-tl .tl-p{font-size:11.5px}.c-tl .tl-p b,.c-tl .tl-p em,.c-tl .tl-p s{padding:3px 8px}}
 
 .c-tl .tgl.drag,body.tl-drag,body.tl-drag *{cursor:grabbing!important}
 .c-tl .tl-p b{display:flex;align-items:center;gap:5px}
 .c-tl .tl-p b:before{content:'';width:6px;height:9px;opacity:.7;background:radial-gradient(circle,currentColor 1px,transparent 1.3px) 0 0/3px 3px}
+
+/* GMGN look: outlined tag on a dashed line, a small ring where the line meets the price axis, value only on the axis */
+.c-tl .tl-p{background:rgba(17,17,19,.85)!important;color:var(--c)!important;border-radius:3px;left:12%}
+.c-tl .tl-p b{background:none!important;border-right:1px solid var(--c)}
+.c-tl .tl-p b:before{display:none}
+.c-tl .tl-p b,.c-tl .tl-p em{padding:2px 8px}
+.c-tl .tgl i{border-top-style:dashed!important}
+.c-tl .tgl.drag i{opacity:1}
+.c-tl .tgl.drag .tl-p{box-shadow:0 0 0 3px color-mix(in srgb,var(--c) 25%,transparent)}
+.c-tl .tl-o{position:absolute;right:-4px;top:50%;width:9px;height:9px;margin-top:-4.5px;border-radius:50%;border:1.5px solid var(--c);background:#111113}
+.c-tl .tgl.drag .tl-o{background:var(--c)}

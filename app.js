@@ -3777,7 +3777,7 @@
   function tpSlider(t, k) { var pc = tpPct(t, k);
     return '<div class="tps-sl ' + k + '"><input type="range" min="0" max="100" step="0.1" data-tpr="' + k + '" value="' + tpSlPos(k, pc).toFixed(1) + '" aria-label="' + (k === 'tp' ? 'Take profit %' : 'Stop loss %') + '" style="--p:' + tpSlPos(k, pc).toFixed(1) + '%">' +
       '<div class="tps-sk mono">' + (k === 'tp' ? [0, 50, 250, 1000] : [0, 25, 50, 95]).map(function (x, i) { var ps = tpSlPos(k, x); return '<button data-act="tpPick" data-arg="' + k + '|' + x + '" style="left:' + ps.toFixed(1) + '%' + (i === 0 ? ';transform:none' : i === 3 ? ';transform:translateX(-100%)' : '') + '">' + (x ? (k === 'tp' ? '+' : '−') : '') + x + '%</button>'; }).join('') + '</div></div>'; }
-  function tpSetPct(k, pct) { if (!TLD && LW.keep) { LW.keep = null; setTimeout(lwRefit, 0); } var t = find(S.tick); if (!t) return; pct = tpRound(Math.max(k === 'tp' ? 0.5 : 0.5, Math.min(TPMAX[k] * (k === 'tp' ? 5 : 1), pct)));
+  function tpSetPct(k, pct) { if (!TLD) setTimeout(lwRefit, 0); var t = find(S.tick); if (!t) return; pct = tpRound(Math.max(k === 'tp' ? 0.5 : 0.5, Math.min(TPMAX[k] * (k === 'tp' ? 5 : 1), pct)));
     if (S.tpF[k + 'U'] === 'mc') { var mc = t.mcN * 1000; S.tpF[k + 'V'] = String(Math.round(k === 'tp' ? mc * (1 + pct / 100) : mc * (1 - pct / 100))); } else S.tpF[k + 'V'] = String(pct);
     var inp = document.getElementById('tp-' + k); if (inp && document.activeElement !== inp) inp.value = S.tpF[k + 'V']; tpRefresh(t, k); }
   function tpRefresh(t, k) {   // update the TP/SL panel in place (no full re-render while typing or dragging)
@@ -3790,10 +3790,8 @@
   var TLD = null;   // a TP/SL line being dragged
   function lwAuto(r) {
     if (!r || !r.priceRange) return r; var t = S.screen === 'token' && find(S.tick);
-    if (TLD && TLD.fr) { r.priceRange = { minValue: TLD.fr[0], maxValue: TLD.fr[1] }; return r; }
     if (t && t.live && S.side === 'tpsl') { var lo = r.priceRange.minValue, hi = r.priceRange.maxValue;
-      if (LW.keep) { lo = Math.min(lo, LW.keep[0]); hi = Math.max(hi, LW.keep[1]); }   // after you drop a line the view stays put (only grows if the price runs past it)
-      else { var tg = tpTargets(t), a = Infinity, z = -Infinity; ['tp', 'sl'].forEach(function (k) { if (S.tpF[k] && tg[k] > 0) { var v = mcToChart(tg[k]); a = Math.min(a, v); z = Math.max(z, v); } });
+      { var tg = tpTargets(t), a = Infinity, z = -Infinity; ['tp', 'sl'].forEach(function (k) { if (S.tpF[k] && tg[k] > 0) { var v = mcToChart(tg[k]); a = Math.min(a, v); z = Math.max(z, v); } });
         if (z > -Infinity) { var pad = (Math.max(hi, z) - Math.min(lo, a)) * .08; if (z > hi - pad) hi = z + pad; if (a < lo + pad) lo = a - pad; } }
       r.priceRange = { minValue: lo, maxValue: hi }; }
     LW.span = [r.priceRange.minValue, r.priceRange.maxValue]; return r; }
@@ -3801,11 +3799,12 @@
   function lwTpsl() {
     var box = document.getElementById('c-tl'), t = find(S.tick); if (!box) return;
     if (!t || S.side !== 'tpsl' || !LW.chart || !t.live) { if (box._h) { box.innerHTML = ''; box._h = ''; } lwTpAxis(null, null); return; }
-    var main = lwMain(), H = box.clientHeight, tg = tpTargets(t), h = '';
+    var main = lwMain(), H = box.clientHeight, tg = tpTargets(t), h = '', ps = position(t), sp = ps ? ps.tok * S.tpF.amt / 100 / (t.supply || 1e9) * 100 : 0,
+      sup = '<s>' + (sp > 0 ? 'Sell ' + (sp < 0.01 ? '<0.01' : sp < 1 ? sp.toFixed(2) : sp.toFixed(1)) + '% supply' : 'Sell 0%') + '</s>';
     ['tp', 'sl'].forEach(function (k) { if (!S.tpF[k] || !(tg[k] > 0)) return; var y = main.priceToCoordinate(mcToChart(tg[k])), off = '';
       if (y == null || y < 14) { off = y == null ? '' : ' ↑'; y = y == null ? (k === 'tp' ? 14 : H - 14) : 14; } else if (y > H - 14) { y = H - 14; off = ' ↓'; }
       var pc = tpPct(t, k);
-      h += '<div class="tgl ' + k + (TLD && TLD.k === k ? ' drag' : '') + '" data-tl="' + k + '" style="top:' + y.toFixed(1) + 'px"><i></i><span class="tl-p mono"><b>' + (k === 'tp' ? 'TP' : 'SL') + '</b><em>' + (k === 'tp' ? '+' : '−') + tpRound(pc) + '%' + off + '</em><s>' + lwFmt(mcToChart(tg[k])) + '</s></span></div>'; });
+      h += '<div class="tgl ' + k + (TLD && TLD.k === k ? ' drag' : '') + '" data-tl="' + k + '" style="top:' + y.toFixed(1) + 'px"><i></i><span class="tl-p mono"><b>' + (k === 'tp' ? 'TP' : 'SL') + '</b><em>' + (k === 'tp' ? '+' : '−') + tpRound(pc) + '%' + off + '</em>' + sup + '</span><span class="tl-o"></span></div>'; });
     if (box._h !== h) { box.innerHTML = h; box._h = h; }
     lwTpAxis(t, tg);
   }
@@ -3815,7 +3814,7 @@
     ['tp', 'sl'].forEach(function (k) { var o = LW.tpl[k], want = main && t && tg && S.side === 'tpsl' && t.live && S.tpF[k] && tg[k] > 0;
       if (o && (!want || o.s !== main)) { try { o.s.removePriceLine(o.l); } catch (e) {} o = LW.tpl[k] = null; }
       if (!want) return; var v = mcToChart(tg[k]), c = k === 'tp' ? '#3DDC97' : '#F2708A', title = k === 'tp' ? 'TP' : 'SL';
-      if (!o) LW.tpl[k] = { s: main, l: main.createPriceLine({ price: v, color: c, lineVisible: false, axisLabelVisible: true, axisLabelColor: c, axisLabelTextColor: '#07110c', title: title }), v: v };
+      if (!o) LW.tpl[k] = { s: main, l: main.createPriceLine({ price: v, color: c, lineVisible: false, axisLabelVisible: true, axisLabelColor: c, axisLabelTextColor: '#fff', title: '' }), v: v };
       else if (o.v !== v) { o.l.applyOptions({ price: v }); o.v = v; } });
   }
   function tlMove(e) { if (!TLD) return; var box = document.getElementById('c-tl'), t = find(S.tick); if (!box || !t) return; e.preventDefault();
@@ -3825,9 +3824,9 @@
     if ((k === 'tp' && d < -0.5) || (k === 'sl' && d > 0.5)) { var nk = k === 'tp' ? 'sl' : 'tp'; S.tpF[k] = false; S.tpF[nk] = true; TLD.k = nk; k = nk; tpSetPct(k, Math.abs(d)); render(); return; }
     tpSetPct(k, k === 'tp' ? d : -d); }
   document.addEventListener('pointerdown', function (e) { var l = e.target.closest && e.target.closest('#c-tl .tgl'); if (!l) return; e.preventDefault(); e.stopPropagation();
-    TLD = { k: l.getAttribute('data-tl'), fr: LW.span }; document.body.classList.add('tl-drag'); try { l.setPointerCapture(e.pointerId); } catch (x) {} l.classList.add('drag'); }, true);
+    TLD = { k: l.getAttribute('data-tl') }; try { LW.chart.priceScale('right').applyOptions({ autoScale: false }); } catch (x) {} document.body.classList.add('tl-drag'); try { l.setPointerCapture(e.pointerId); } catch (x) {} l.classList.add('drag'); }, true);
   document.addEventListener('pointermove', tlMove, true);
-  document.addEventListener('pointerup', function () { if (!TLD) return; document.body.classList.remove('tl-drag'); LW.keep = TLD.fr || null; TLD = null; var b = document.getElementById('c-tl'); if (b) b._h = ''; lwTpsl(); }, true);
+  document.addEventListener('pointerup', function () { if (!TLD) return; document.body.classList.remove('tl-drag'); TLD = null; var b = document.getElementById('c-tl'); if (b) b._h = ''; lwTpsl(); }, true);
   document.addEventListener('pointercancel', function () { TLD = null; document.body.classList.remove('tl-drag'); }, true);
   function tpslPanel(t, pos, bsBar) {
     var id = esc(t.tick), F = S.tpF, mode = tpMode(t), elig = jtEligible(t);
@@ -4215,7 +4214,7 @@
         var b = { t: t, tok: tok, pct: tok / 1e9 * 100, usd: tok * price(t), at: Date.now(), src: 'dev', who: S.account, sig: b58(64), mine: true, fresh: true }; S.myBurns = S.myBurns || []; S.myBurns.push({ tick: t.tick, tok: tok, usd: b.usd, at: b.at, who: S.account, sig: b.sig }); try { localStorage.setItem('dl.myburns', JSON.stringify(S.myBurns)); } catch (er) {} S._burns = null; S._bnAgg = null;
         S.burnOpen = false; S._bnAgg = null; toast('🔥 Burned ' + fmtNum(Math.round(tok)) + ' $' + t.tick + ' — gone forever'); if (S.screen === 'burn') { render(); setTimeout(function () { var fl = document.getElementById('bn-fly'); if (fl) { var r = fl.getBoundingClientRect(); bnImpact(b, r.width / 2, r.height * .74); } }, 400); } else render(); })(); break;
       case 'hmapClose': if (el.classList.contains('hm-ov') && e.target.closest('[data-stop]')) break; set({ hmap: null }); break;
-      case 'side': LW.keep = null; set({ side: arg }); setTimeout(lwRefit, 30); break;
+      case 'side': set({ side: arg }); setTimeout(lwRefit, 30); break;
       case 'terms': e.preventDefault && e.preventDefault(); set({ termsOpen: true }); break;
       case 'notifOpen': S.walletMenu = false; set({ notifOpen: true }); break;
       case 'notifClose': if (e.target.closest('[data-stop]') && !e.target.closest('.iconbtn')) break; set({ notifOpen: false }); break;
@@ -4540,7 +4539,7 @@
   document.addEventListener('change', function (e) { if (e.target && e.target.hasAttribute && e.target.hasAttribute('data-shimg')) { var f = e.target.files && e.target.files[0]; e.target.value = ''; if (!f || !/^image\//.test(f.type) || f.size > 8e6 || !S.share) return; var fr = new FileReader(); fr.onload = function () { if (S.share) { S.share.custom = String(fr.result); S.share.bg = 'custom'; render(); } }; fr.readAsDataURL(f); } });
   document.addEventListener('change', function (e) { if (e.target && e.target.hasAttribute && e.target.hasAttribute('data-coimg')) { coPickImage(e.target.files && e.target.files[0]); e.target.value = ''; } });
   document.addEventListener('input', function (e) {
-    if (e.target.hasAttribute && e.target.hasAttribute('data-tpv')) { var tk0 = e.target.getAttribute('data-tpv'), tt1 = find(S.tick); S.tpF[tk0 + 'V'] = e.target.value.replace(/[^0-9.,kKmM$]/g, '').replace(',', '.'); if (!tt1) return; tpRefresh(tt1, tk0); LW.keep = null; lwRefit(); return; }
+    if (e.target.hasAttribute && e.target.hasAttribute('data-tpv')) { var tk0 = e.target.getAttribute('data-tpv'), tt1 = find(S.tick); S.tpF[tk0 + 'V'] = e.target.value.replace(/[^0-9.,kKmM$]/g, '').replace(',', '.'); if (!tt1) return; tpRefresh(tt1, tk0); lwRefit(); return; }
     if (e.target.hasAttribute && e.target.hasAttribute('data-tpr')) { var kr = e.target.getAttribute('data-tpr'); e.target.style.setProperty('--p', e.target.value + '%'); tpSetPct(kr, tpSlVal(kr, +e.target.value)); return; }
     if (e.target.hasAttribute && e.target.hasAttribute('data-burnpct')) { S.burnPct = +e.target.value; var t = find(S.burnTick), pos = t && position(t); if (!pos) return; var tok = pos.tok * S.burnPct / 100;
       var q = function (id, v) { var x = document.getElementById(id); if (x) x.textContent = v; }; q('bt-tok', fmtNum(Math.round(tok)) + ' $' + t.tick); q('bt-sup', (tok / 1e9 * 100).toFixed(3) + '%'); q('bt-usd', '$' + fmtNum(Math.round(tok * price(t))));
