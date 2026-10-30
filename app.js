@@ -1956,9 +1956,9 @@
       rightPriceScale: { borderColor: 'rgba(255,255,255,.08)', scaleMargins: { top: isMob() ? .22 : .14, bottom: .24 } },
       timeScale: { borderColor: 'rgba(255,255,255,.08)', timeVisible: true, secondsVisible: false, rightOffset: 8, barSpacing: 9, minBarSpacing: 1.5 , tickMarkFormatter: lwTick },
       localization: { priceFormatter: lwFmt, timeFormatter: lwTimeFmt, locale: 'en-US' } });
-    var pf = { type: 'custom', formatter: lwFmt, minMove: 1e-14 };
-    LW.cs = ch.addCandlestickSeries({ upColor: '#3DDC97', downColor: '#F2708A', borderVisible: false, wickUpColor: '#3DDC97', wickDownColor: '#F2708A', priceFormat: pf });
-    LW.ls = ch.addAreaSeries({ lineColor: '#3DDC97', topColor: 'rgba(61,220,151,.22)', bottomColor: 'rgba(61,220,151,0)', lineWidth: 2, priceFormat: pf, visible: false });
+    var pf = { type: 'custom', formatter: lwFmt, minMove: 1e-14, }, asp = function (orig) { return lwAuto(orig()); };
+    LW.cs = ch.addCandlestickSeries({ autoscaleInfoProvider: asp, upColor: '#3DDC97', downColor: '#F2708A', borderVisible: false, wickUpColor: '#3DDC97', wickDownColor: '#F2708A', priceFormat: pf });
+    LW.ls = ch.addAreaSeries({ autoscaleInfoProvider: asp, lineColor: '#3DDC97', topColor: 'rgba(61,220,151,.22)', bottomColor: 'rgba(61,220,151,0)', lineWidth: 2, priceFormat: pf, visible: false });
     LW.vs = ch.addHistogramSeries({ priceScaleId: 'vol', priceFormat: { type: 'volume' }, lastValueVisible: false, priceLineVisible: false });
     ch.priceScale('vol').applyOptions({ scaleMargins: { top: .8, bottom: 0 } });
     LW.ma = ch.addLineSeries({ color: 'rgba(216,195,160,.85)', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false, priceFormat: pf });
@@ -2022,7 +2022,8 @@
   }
   function lwBarAt(time) { for (var i = LW.bars.length - 1; i >= 0; i--) if (lwTime(LW.bars[i].t) === time) return LW.bars[i]; return null; }
   function lwHover(p) { lwLegend(p && p.time != null ? lwBarAt(p.time) : null); }
-  function lwPlace() {   // our own markers: B / S coins in the candle's colour, anchored to the candle, stacked when several share one
+  function lwPlace() { lwPlace0(); if (!TLD) lwTpsl(); }
+  function lwPlace0() {   // our own markers: B / S coins in the candle's colour, anchored to the candle, stacked when several share one
     var box = document.getElementById('c-mk'); if (!box || !LW.chart || !LW.M) return; var main = lwMain(), ts = LW.chart.timeScale(), st = {}, h = '', W = box.clientWidth;
     LW.M.forEach(function (m) { var bar = LW.byT[m.time]; if (!bar) return; var x = ts.timeToCoordinate(m.time); if (x == null || x < -10 || x > W - 60) return;
       var below = m.position === 'belowBar', y = main.priceToCoordinate(lwConv(below ? bar.l : bar.h)); if (y == null) return; var k = m.time + (below ? 'b' : 'a'), n = st[k] = (st[k] || 0) + 1;
@@ -2051,7 +2052,7 @@
     var full = S.chartMode === 'price' ? 'Price' : 'Market Cap';
     return '<div class="c-legend"><div class="c-lt"><b>$' + esc(t.tick) + '/' + esc(pairLabel(t.pair)) + '</b> <span class="muted">' + full + ' (' + (S.cden === 'sol' ? 'SOL' : 'USD') + ') · ' + esc((TFS.filter(function (x) { return x[0] === S.tf; })[0] || TFS[0])[1]) + ' · treid</span></div><div class="c-ohlc mono" id="c-ohlc"></div></div>' +
       '<div class="c-scale"><button class="' + (S.cscale === 2 ? 'on' : '') + '" data-act="cscale" data-arg="2" title="Percent scale">%</button><button class="' + (S.cscale === 1 ? 'on' : '') + '" data-act="cscale" data-arg="1" title="Log scale">log</button><button data-act="cauto" title="Auto-fit price scale">auto</button></div>' +
-      '<div class="c-mk" id="c-mk"></div><button class="c-live" id="c-now" data-act="cnow" style="display:none">Back to now →</button><div class="cm-tip" id="cmtip"></div>';
+      '<div class="c-mk" id="c-mk"></div><div class="c-tl" id="c-tl"></div><button class="c-live" id="c-now" data-act="cnow" style="display:none">Back to now →</button><div class="cm-tip" id="cmtip"></div>';
   }
   function chartRedraw() { lwMount(); }
   function chartToolbar(t) {
@@ -3767,11 +3768,57 @@
     return mode === 'jup' ? '<div class="tps-sum">Sell <b class="mono">' + (sell > 0 ? fmtNum(sell) + ' $' + id : F.amt + '% of your $' + id) + '</b>' + (usd > 0 ? ' <span class="muted">(≈ $' + money(usd) + ')</span>' : '') + ' for ' + esc(qSymT(t)) + ' when ' + parts + '.' + (usd > 0 && usd < 10 ? '<div class="tps-err">Jupiter’s minimum order is $10</div>' : '') + '</div>'
       : '<div class="tps-sum">Ping me when ' + parts + ' — then I sell in one tap.</div>';
   }
+  // GMGN-style: a % slider under each target, and the same targets as lines on the chart you can drag
+  var TPMAX = { tp: 1000, sl: 95 };
+  function tpPct(t, k) { var tg = tpTargets(t), v = tg[k]; if (!(v > 0) || !(tg.mc > 0)) return 0; return k === 'tp' ? (v / tg.mc - 1) * 100 : (1 - v / tg.mc) * 100; }
+  function tpSlPos(k, pct) { var m = TPMAX[k]; pct = Math.max(0, Math.min(m, pct)); return k === 'tp' ? Math.sqrt(pct / m) * 100 : pct / m * 100; }   // TP slider is square-root so +5…+50% stay easy to hit
+  function tpSlVal(k, pos) { var m = TPMAX[k]; return k === 'tp' ? Math.pow(pos / 100, 2) * m : pos / 100 * m; }
+  function tpRound(p) { return p < 10 ? Math.round(p * 10) / 10 : Math.round(p); }
+  function tpSlider(t, k) { var pc = tpPct(t, k);
+    return '<div class="tps-sl ' + k + '"><input type="range" min="0" max="100" step="0.1" data-tpr="' + k + '" value="' + tpSlPos(k, pc).toFixed(1) + '" aria-label="' + (k === 'tp' ? 'Take profit %' : 'Stop loss %') + '" style="--p:' + tpSlPos(k, pc).toFixed(1) + '%">' +
+      '<div class="tps-sk mono">' + (k === 'tp' ? [0, 50, 250, 1000] : [0, 25, 50, 95]).map(function (x, i) { var ps = tpSlPos(k, x); return '<button data-act="tpPick" data-arg="' + k + '|' + x + '" style="left:' + ps.toFixed(1) + '%' + (i === 0 ? ';transform:none' : i === 3 ? ';transform:translateX(-100%)' : '') + '">' + (x ? (k === 'tp' ? '+' : '−') : '') + x + '%</button>'; }).join('') + '</div></div>'; }
+  function tpSetPct(k, pct) { if (!TLD) setTimeout(lwRefit, 0); var t = find(S.tick); if (!t) return; pct = tpRound(Math.max(k === 'tp' ? 0.5 : 0.5, Math.min(TPMAX[k] * (k === 'tp' ? 5 : 1), pct)));
+    if (S.tpF[k + 'U'] === 'mc') { var mc = t.mcN * 1000; S.tpF[k + 'V'] = String(Math.round(k === 'tp' ? mc * (1 + pct / 100) : mc * (1 - pct / 100))); } else S.tpF[k + 'V'] = String(pct);
+    var inp = document.getElementById('tp-' + k); if (inp && document.activeElement !== inp) inp.value = S.tpF[k + 'V']; tpRefresh(t, k); }
+  function tpRefresh(t, k) {   // update the TP/SL panel in place (no full re-render while typing or dragging)
+    var hh = document.getElementById('tph-' + k); if (hh) hh.textContent = tpHint(t, k); var sm = document.getElementById('tps-sum'); if (sm) sm.innerHTML = tpSum(t);
+    var r = document.querySelector('[data-tpr="' + k + '"]'); if (r && document.activeElement !== r) { var sp = tpSlPos(k, tpPct(t, k)); r.value = sp.toFixed(1); r.style.setProperty('--p', sp.toFixed(1) + '%'); }
+    var go = document.querySelector('.tpsl .big-btn'), tg1 = tpTargets(t); if (go && S.account && (go.getAttribute('data-act') === 'tpPlace' || go.getAttribute('data-act') === 'alSet')) { var ps1 = position(t); go.disabled = !!(S.busy || tg1.err || (go.getAttribute('data-act') === 'tpPlace' && (!ps1 || ps1.tok * S.tpF.amt / 100 * tg1.mc / (t.supply || 1e9) < 10))); }
+    lwTpsl(); }
+  function mcToChart(u) { var v = S.chartMode === 'price' ? u / 1e9 : u; return S.cden === 'sol' ? v / SOL_USD : v; }
+  function chartToMc(v) { var u = S.cden === 'sol' ? v * SOL_USD : v; return S.chartMode === 'price' ? u * 1e9 : u; }
+  var TLD = null;   // a TP/SL line being dragged
+  function lwAuto(r) {
+    if (!r || !r.priceRange) return r; var t = S.screen === 'token' && find(S.tick);
+    if (TLD && TLD.fr) { r.priceRange = { minValue: TLD.fr[0], maxValue: TLD.fr[1] }; return r; }
+    if (t && t.live && S.side === 'tpsl') { var tg = tpTargets(t), lo = r.priceRange.minValue, hi = r.priceRange.maxValue;
+      ['tp', 'sl'].forEach(function (k) { if (S.tpF[k] && tg[k] > 0) { var v = mcToChart(tg[k]); if (v > hi) hi = v; if (v < lo) lo = v; } });
+      r.priceRange = { minValue: lo, maxValue: hi + (hi - lo) * .04 }; }
+    LW.span = [r.priceRange.minValue, r.priceRange.maxValue]; return r; }
+  function lwRefit() { if (LW.chart && !TLD) try { LW.chart.priceScale('right').applyOptions({ autoScale: true }); } catch (e) {} }
+  function lwTpsl() {
+    var box = document.getElementById('c-tl'), t = find(S.tick); if (!box) return;
+    if (!t || S.side !== 'tpsl' || !LW.chart || !t.live) { if (box._h) { box.innerHTML = ''; box._h = ''; } return; }
+    var main = lwMain(), H = box.clientHeight, tg = tpTargets(t), h = '';
+    ['tp', 'sl'].forEach(function (k) { if (!S.tpF[k] || !(tg[k] > 0)) return; var y = main.priceToCoordinate(mcToChart(tg[k])), off = '';
+      if (y == null || y < 14) { off = y == null ? '' : ' ↑'; y = y == null ? (k === 'tp' ? 14 : H - 14) : 14; } else if (y > H - 14) { y = H - 14; off = ' ↓'; }
+      var pc = tpPct(t, k);
+      h += '<div class="tgl ' + k + (TLD && TLD.k === k ? ' drag' : '') + '" data-tl="' + k + '" style="top:' + y.toFixed(1) + 'px"><i></i><span class="tl-p mono"><b>' + (k === 'tp' ? 'TP' : 'SL') + '</b> ' + fmtK(tg[k] / 1000) + ' <em>' + (k === 'tp' ? '+' : '−') + tpRound(pc) + '%</em>' + off + '<u>⇕</u></span></div>'; });
+    if (box._h !== h) { box.innerHTML = h; box._h = h; }
+  }
+  function tlMove(e) { if (!TLD) return; var box = document.getElementById('c-tl'), t = find(S.tick); if (!box || !t) return; e.preventDefault();
+    var y = e.clientY - box.getBoundingClientRect().top, v = lwMain().coordinateToPrice(Math.max(4, Math.min(box.clientHeight - 4, y))); if (v == null) return;
+    var mc = t.mcN * 1000, u = chartToMc(v), pct = TLD.k === 'tp' ? (u / mc - 1) * 100 : (1 - u / mc) * 100; tpSetPct(TLD.k, pct); }
+  document.addEventListener('pointerdown', function (e) { var l = e.target.closest && e.target.closest('#c-tl .tgl'); if (!l) return; e.preventDefault(); e.stopPropagation();
+    TLD = { k: l.getAttribute('data-tl'), fr: LW.span }; try { l.setPointerCapture(e.pointerId); } catch (x) {} l.classList.add('drag'); }, true);
+  document.addEventListener('pointermove', tlMove, true);
+  document.addEventListener('pointerup', function () { if (!TLD) return; TLD = null; lwRefit(); var b = document.getElementById('c-tl'); if (b) b._h = ''; lwTpsl(); }, true);
+  document.addEventListener('pointercancel', function () { TLD = null; }, true);
   function tpslPanel(t, pos, bsBar) {
     var id = esc(t.tick), F = S.tpF, mode = tpMode(t), elig = jtEligible(t);
     var row = function (k, label, cls) { var on = F[k], u = F[k + 'U'];
       return '<div class="tps-row ' + cls + (on ? ' on' : '') + '"><button class="tps-tg" data-act="tpTog" data-arg="' + k + '" role="switch" aria-checked="' + on + '"><i></i><b>' + label + '</b></button>' +
-        (on ? '<div class="tps-in"><input class="inp" id="tp-' + k + '" inputmode="decimal" data-tpv="' + k + '" value="' + esc(F[k + 'V']) + '" aria-label="' + label + '"><div class="seg sm"><button class="' + (u === 'pct' ? 'on' : '') + '" data-act="tpUnit" data-arg="' + k + '|pct">' + (k === 'tp' ? '+%' : '−%') + '</button><button class="' + (u === 'mc' ? 'on' : '') + '" data-act="tpUnit" data-arg="' + k + '|mc">MC $</button></div></div><small class="tps-hint mono" id="tph-' + k + '">' + tpHint(t, k) + '</small>' : '') + '</div>'; };
+        (on ? '<div class="tps-in"><input class="inp" id="tp-' + k + '" inputmode="decimal" data-tpv="' + k + '" value="' + esc(F[k + 'V']) + '" aria-label="' + label + '"><div class="seg sm"><button class="' + (u === 'pct' ? 'on' : '') + '" data-act="tpUnit" data-arg="' + k + '|pct">' + (k === 'tp' ? '+%' : '−%') + '</button><button class="' + (u === 'mc' ? 'on' : '') + '" data-act="tpUnit" data-arg="' + k + '|mc">MC $</button></div></div><small class="tps-hint mono" id="tph-' + k + '">' + tpHint(t, k) + '</small>' + tpSlider(t, k) : '') + '</div>'; };
     var body = '';
     if (!t.live) body = '<p class="muted tps-note">TP/SL works on real coins only.</p>';
     else {
@@ -3935,7 +3982,7 @@
     if (detOpen.some(Boolean)) { var dets = document.querySelectorAll('#app details'); detOpen.forEach(function (cl, i) { if (cl && dets[i] && (dets[i].className || 'd') === cl) dets[i].open = true; }); }   // keep opened sections open across live re-renders
     if (S.screen === 'callout') drawShareCard();
     if (S.share) drawShare();
-    if (S.screen === 'token') lwMount();
+    if (S.screen === 'token') { lwMount(); requestAnimationFrame(lwTpsl); }
     if (S.screen === 'home') tsMount();
     if (S.screen === 'trench') trMount();
     pushWatchSig();
@@ -4153,13 +4200,14 @@
         var b = { t: t, tok: tok, pct: tok / 1e9 * 100, usd: tok * price(t), at: Date.now(), src: 'dev', who: S.account, sig: b58(64), mine: true, fresh: true }; S.myBurns = S.myBurns || []; S.myBurns.push({ tick: t.tick, tok: tok, usd: b.usd, at: b.at, who: S.account, sig: b.sig }); try { localStorage.setItem('dl.myburns', JSON.stringify(S.myBurns)); } catch (er) {} S._burns = null; S._bnAgg = null;
         S.burnOpen = false; S._bnAgg = null; toast('🔥 Burned ' + fmtNum(Math.round(tok)) + ' $' + t.tick + ' — gone forever'); if (S.screen === 'burn') { render(); setTimeout(function () { var fl = document.getElementById('bn-fly'); if (fl) { var r = fl.getBoundingClientRect(); bnImpact(b, r.width / 2, r.height * .74); } }, 400); } else render(); })(); break;
       case 'hmapClose': if (el.classList.contains('hm-ov') && e.target.closest('[data-stop]')) break; set({ hmap: null }); break;
-      case 'side': set({ side: arg }); break;
+      case 'side': set({ side: arg }); setTimeout(lwRefit, 30); break;
       case 'terms': e.preventDefault && e.preventDefault(); set({ termsOpen: true }); break;
       case 'notifOpen': S.walletMenu = false; set({ notifOpen: true }); break;
       case 'notifClose': if (e.target.closest('[data-stop]') && !e.target.closest('.iconbtn')) break; set({ notifOpen: false }); break;
       case 'notifOn': pushOn(); break;
       case 'recvOpen': S.walletMenu = false; set({ recvOpen: true }); clearInterval(S.recvT); S.recvT = setInterval(function () { if (!S.recvOpen) { clearInterval(S.recvT); return; } refreshBalance(); }, 8000); break;
       case 'recvClose': if (e.target.closest('[data-stop]') && !e.target.closest('.iconbtn')) break; clearInterval(S.recvT); set({ recvOpen: false }); break;
+      case 'tpPick': { var pk = arg.split('|'); if (+pk[1] > 0) tpSetPct(pk[0], +pk[1]); break; }
       case 'tpTog': S.tpF[arg] = !S.tpF[arg]; render(); break;
       case 'tpUnit': var tu = arg.split('|'), tt0 = find(S.tick); if (S.tpF[tu[0] + 'U'] !== tu[1] && tt0) { var tgt0 = tpTargets(tt0)[tu[0]]; S.tpF[tu[0] + 'U'] = tu[1]; S.tpF[tu[0] + 'V'] = tu[1] === 'mc' ? (tgt0 > 0 ? String(Math.round(tgt0)) : '') : (tu[0] === 'tp' ? '100' : '40'); } render(); break;
       case 'tpAmt': S.tpF.amt = +arg; render(); break;
@@ -4477,9 +4525,8 @@
   document.addEventListener('change', function (e) { if (e.target && e.target.hasAttribute && e.target.hasAttribute('data-shimg')) { var f = e.target.files && e.target.files[0]; e.target.value = ''; if (!f || !/^image\//.test(f.type) || f.size > 8e6 || !S.share) return; var fr = new FileReader(); fr.onload = function () { if (S.share) { S.share.custom = String(fr.result); S.share.bg = 'custom'; render(); } }; fr.readAsDataURL(f); } });
   document.addEventListener('change', function (e) { if (e.target && e.target.hasAttribute && e.target.hasAttribute('data-coimg')) { coPickImage(e.target.files && e.target.files[0]); e.target.value = ''; } });
   document.addEventListener('input', function (e) {
-    if (e.target.hasAttribute && e.target.hasAttribute('data-tpv')) { var tk0 = e.target.getAttribute('data-tpv'), tt1 = find(S.tick); S.tpF[tk0 + 'V'] = e.target.value.replace(/[^0-9.,kKmM$]/g, '').replace(',', '.'); if (!tt1) return;
-      var hh = document.getElementById('tph-' + tk0); if (hh) hh.textContent = tpHint(tt1, tk0); var sm = document.getElementById('tps-sum'); if (sm) sm.innerHTML = tpSum(tt1);
-      var go = document.querySelector('.tpsl .big-btn'), tg1 = tpTargets(tt1); if (go && S.account && (go.getAttribute('data-act') === 'tpPlace' || go.getAttribute('data-act') === 'alSet')) { var ps1 = position(tt1); go.disabled = !!(S.busy || tg1.err || (go.getAttribute('data-act') === 'tpPlace' && (!ps1 || ps1.tok * S.tpF.amt / 100 * tg1.mc / (tt1.supply || 1e9) < 10))); } return; }
+    if (e.target.hasAttribute && e.target.hasAttribute('data-tpv')) { var tk0 = e.target.getAttribute('data-tpv'), tt1 = find(S.tick); S.tpF[tk0 + 'V'] = e.target.value.replace(/[^0-9.,kKmM$]/g, '').replace(',', '.'); if (!tt1) return; tpRefresh(tt1, tk0); lwRefit(); return; }
+    if (e.target.hasAttribute && e.target.hasAttribute('data-tpr')) { var kr = e.target.getAttribute('data-tpr'); e.target.style.setProperty('--p', e.target.value + '%'); tpSetPct(kr, tpSlVal(kr, +e.target.value)); return; }
     if (e.target.hasAttribute && e.target.hasAttribute('data-burnpct')) { S.burnPct = +e.target.value; var t = find(S.burnTick), pos = t && position(t); if (!pos) return; var tok = pos.tok * S.burnPct / 100;
       var q = function (id, v) { var x = document.getElementById(id); if (x) x.textContent = v; }; q('bt-tok', fmtNum(Math.round(tok)) + ' $' + t.tick); q('bt-sup', (tok / 1e9 * 100).toFixed(3) + '%'); q('bt-usd', '$' + fmtNum(Math.round(tok * price(t))));
       var g = document.querySelector('.bt-go'); if (g) g.textContent = '🔥 Burn ' + S.burnPct + '% of my $' + t.tick; document.querySelectorAll('.bt-pre button').forEach(function (bb) { bb.classList.toggle('on', +bb.getAttribute('data-arg') === S.burnPct); }); return; }
