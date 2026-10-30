@@ -3799,6 +3799,7 @@
   function lwTpsl() {
     var box = document.getElementById('c-tl'), t = find(S.tick); if (!box) return;
     if (!t || S.side !== 'tpsl' || !LW.chart || !t.live) { if (box._h) { box.innerHTML = ''; box._h = ''; } lwTpAxis(null, null); return; }
+    try { var aw = LW.chart.priceScale('right').width(); if (aw && box._aw !== aw) { box._aw = aw; box.style.setProperty('--axw', aw + 'px'); } } catch (e) {}   // lines end exactly at the price axis
     var main = lwMain(), H = box.clientHeight, tg = tpTargets(t), h = '', ps = position(t), sp = ps ? ps.tok * S.tpF.amt / 100 / (t.supply || 1e9) * 100 : 0,
       sup = '<s>' + (sp > 0 ? 'Sell ' + (sp < 0.01 ? '<0.01' : sp < 1 ? sp.toFixed(2) : sp.toFixed(1)) + '% supply' : 'Sell 0%') + '</s>';
     ['tp', 'sl'].forEach(function (k) { if (!S.tpF[k] || !(tg[k] > 0)) return; var y = main.priceToCoordinate(mcToChart(tg[k])), off = '';

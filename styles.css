@@ -5836,3 +5836,8 @@ html body .hdr-right .wbal .wb-acts .btn.pri{display:inline-flex!important}   /*
 .c-tl .tgl.drag .tl-p{box-shadow:0 0 0 3px color-mix(in srgb,var(--c) 25%,transparent)}
 .c-tl .tl-o{position:absolute;right:-4px;top:50%;width:9px;height:9px;margin-top:-4.5px;border-radius:50%;border:1.5px solid var(--c);background:#111113}
 .c-tl .tgl.drag .tl-o{background:var(--c)}
+/* tag sits near the right edge, just left of the price axis (like GMGN) */
+.c-tl .tl-p{left:auto!important;right:70px;transform:translateY(-50%)!important}
+@media (max-width:760px){.c-tl .tl-p{right:18px}}
+.c-tl .tgl{right:calc(var(--axw,60px) + 6px)!important}
+.c-tl .tl-p{right:16px!important}
