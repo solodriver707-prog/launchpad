@@ -413,6 +413,23 @@ const hits = new Map(); function rate(k, n, ms) { const now = Date.now(), a = (h
 const ip = (req) => { const x = String(req.headers['x-forwarded-for'] || '').split(',').map((v) => v.trim()).filter(Boolean); return x.length >= 2 ? x[x.length - 2] : x.length ? x[0] : String(req.socket.remoteAddress || ''); };
 function liveHolders(mint, refresh = true) { const h = hCache.get(mint); if (refresh && (!h || Date.now() - h.ts > 120e3) && holderSlots()) { if (!h?.busy) { const e = h || { ts: 0, list: null }; e.busy = true; hCache.set(mint, e); hRun++; holders(mint).then((l) => { hCache.set(mint, { ts: Date.now(), list: l }); }).catch(() => { e.busy = false; e.ts = Date.now() - 60e3; }).finally(() => { hRun--; }); } } return h?.list || null; }
 let hRun = 0; const holderSlots = () => hRun < 3;   // at most 3 holder scans at a time (each is a getProgramAccounts)
+// a creator's track record, from the indexed trades of each coin they launched (never guessed):
+//  · grad  = reached Meteora · rug = creator sold ≥70% of the most they ever held (or the rewards rules put them out for selling)
+//  · dead  = no trades for 3 days, not graduated · live = everything else. soldAfterMin = minutes from launch until the creator's bag fell below 30% of its peak.
+function devRecord(w) {
+  const coins = q('SELECT * FROM coins WHERE creator=? ORDER BY created_at DESC LIMIT 100', w).filter((c) => !HIDDEN.has(c.mint));
+  const list = coins.map((c) => {
+    const ag = q1('SELECT MAX(mcap_usd) ath, MAX(progress) prog, MAX(ts) lt FROM trades WHERE mint=? AND sys=0', c.mint) || {}, now = q1('SELECT mcap_usd m FROM trades WHERE mint=? ORDER BY ts DESC, slot DESC LIMIT 1', c.mint)?.m || 0;
+    let bag = 0, peak = 0, soldAt = null;
+    for (const t of q("SELECT side, tokens, ts FROM trades WHERE mint=? AND wallet=? ORDER BY ts, slot", c.mint, w)) { bag = Math.max(0, bag + (t.side === 'buy' ? t.tokens : -t.tokens)); if (bag > peak) { peak = bag; soldAt = null; } else if (peak > 0 && bag < peak * 0.3 && soldAt == null) soldAt = t.ts; }
+    let outSold = false; try { const st = REW && REW.state(c); outSold = !!(st && st.era === 'out' && st.why === 'sold'); } catch {}
+    const grad = !!c.damm || (ag.prog || 0) >= 100, rug = !grad && (outSold || (peak > 0 && bag <= peak * 0.3)), dead = !grad && !rug && Date.now() - (ag.lt || c.created_at || 0) > 3 * 864e5;
+    return { mint: c.mint, symbol: c.symbol, name: c.name, created: c.created_at, ath: ag.ath || 0, mc: now, status: grad ? 'grad' : rug ? 'rug' : dead ? 'dead' : 'live', devBuy: peak > 0, soldAfterMin: soldAt ? Math.max(0, (soldAt - (c.created_at || soldAt)) / 60000) : null };
+  });
+  const n = list.length, grads = list.filter((x) => x.status === 'grad').length, rugs = list.filter((x) => x.status === 'rug').length, fast = list.filter((x) => x.soldAfterMin != null && x.soldAfterMin < 60).length;
+  const tag = !n ? null : n >= 2 && rugs / n > 0.4 ? 'bad' : n >= 2 && grads / n >= 0.4 && rugs <= 1 ? 'good' : n <= 1 ? 'new' : 'mixed';
+  return { wallet: w, launches: n, grads, rugs, fast, best: list.reduce((m, x) => Math.max(m, x.ath), 0), tag, coins: list };
+}
 function stats(mint, list = false, scanOk = true) {
   const c = q1('SELECT * FROM coins WHERE mint=?', mint); if (!c) return null;
   const last = q1('SELECT mcap_usd, progress, reserve FROM trades WHERE mint=? ORDER BY ts DESC, slot DESC LIMIT 1', mint);
@@ -553,6 +570,7 @@ async function handleReq(req, res) {
     if (p[1] === 'callout' && req.method === 'POST') { let body = ''; req.on('data', (d) => { body += d; if (body.length > 2.3e6) req.destroy(); });   // text + optional image
       req.on('end', async () => { try { J(await CO.post(JSON.parse(body), ip(req))); } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: pubErr(e) })); } }); return; }
     if (p[1] === 'callouts') { const cm = u.searchParams.get('mint') || null; return J(cached('co|' + (cm || ''), 5e3, () => { const memo = new Map(); return CO.list(cm).map((c) => { const k = c.mint + '|' + c.wallet; if (!memo.has(k)) memo.set(k, posStats(c.mint, c.wallet)); return { ...c, ps: memo.get(k) }; }); })); }   // every callout carries its author's live position
+    if (p[1] === 'dev' && p[2]) { const w = String(p[2]); if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(w)) return J(null); return J(cached('dev|' + w, 30e3, () => devRecord(w))); }   // creator reputation: every coin this wallet launched on treid
     if (p[1] === 'wallet' && p[2]) { const w = String(p[2]); if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(w)) return J(null); const c0 = walC.get(w); if (c0 && Date.now() - c0.ts < 30e3) return J(c0.v); if (!rate('wal|' + ip(req), 40, 60e3)) return J(c0 ? c0.v : null);
       let sol = null; try { sol = (await conn.getBalance(new PublicKey(w))) / 1e9; } catch {}
       const rows = q('SELECT mint, COUNT(*) n, MIN(ts) f, MAX(ts) l, SUM(CASE WHEN side=\'buy\' THEN usd ELSE 0 END) bu FROM trades WHERE wallet=? GROUP BY mint ORDER BY l DESC LIMIT 60', w).filter((r) => !HIDDEN.has(r.mint));

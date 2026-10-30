@@ -5777,3 +5777,8 @@ html body .lb3-cap em.down{color:var(--down)}html body .lb3-cap em:not(.up):not(
 }
 /* tablets / phones: the sticky header is opaque enough that the board never reads through it */
 @media (max-width:1100px){html body > #app > header,html body header{background:rgba(8,8,9,.97)!important;backdrop-filter:blur(16px)!important;-webkit-backdrop-filter:blur(16px)!important}}
+/* creator reputation chip (coin page) */
+.dev-rep{display:inline-flex;align-items:center;gap:4px;margin-top:6px;align-self:flex-start;min-height:30px;padding:0 10px;border-radius:99px;border:1px solid var(--line2);background:rgba(255,255,255,.03);color:var(--soft);font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.dev-rep.good{border-color:rgba(61,220,151,.45);color:#3DDC97;background:rgba(61,220,151,.07)}
+.dev-rep.bad{border-color:rgba(242,112,138,.5);color:#F2708A;background:rgba(242,112,138,.08)}
+.dh2-n i.rg{font-style:normal;color:#F2708A;font-weight:800}

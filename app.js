@@ -2422,7 +2422,18 @@
   // ---- dev history: previous deploys and how they went ----
   var DADJ = ['Moon', 'Turbo', 'Based', 'Tiny', 'Giga', 'Lazy', 'Rich', 'Sad', 'Angry', 'Golden', 'Pixel', 'Space', 'Baby', 'Mega', 'Wet', 'Hyper'];
   var DNOUN = ['Frog', 'Cat', 'Pug', 'Duck', 'Ape', 'Owl', 'Shark', 'Goat', 'Bear', 'Doge', 'Hamster', 'Penguin', 'Otter', 'Crab'];
+  S.devH = {};
+  function devRecord(addr) {   // real creators: their record from the server (never simulated)
+    var d = S.devH[addr]; if (d === undefined && API && addr) { S.devH[addr] = null; apiGet('/api/dev/' + addr).then(function (r) { S.devH[addr] = r || { launches: 0, coins: [] }; render(); }).catch(function () { delete S.devH[addr]; }); }
+    return d || null;
+  }
   function devHistory(addr) {
+    if (!DEMO) { var R = devRecord(addr), cs = (R && R.coins) || [], byCa = {}; S.live.forEach(function (x) { byCa[x.ca] = x; });
+      var liveL = cs.filter(function (c) { return c.status === 'live' && byCa[c.mint]; }).map(function (c) { return byCa[c.mint]; });
+      var pastL = cs.filter(function (c) { return c.status !== 'live'; }).map(function (c) { var lt = byCa[c.mint], rr = rng(hash(c.mint));
+        return { name: c.name || c.symbol, tick: lt ? lt.tick : null, t: lt || null, spec: lt ? lt.spec : { kind: A.KINDS[Math.floor(rr() * A.KINDS.length)], skin: A.SKINS[0], bg: A.BGS[0], eyes: 'normal', mouth: 'smile', acc: 'none' }, out: c.status, ath: c.ath / 1000, ago: (Date.now() - (c.created || Date.now())) / 60000, devSoldAfter: c.soldAfterMin, noBuy: !c.devBuy }; });
+      return { live: liveL, past: pastL, grad: R ? R.grads : 0, rugs: R ? R.rugs : 0, best: R ? R.best / 1000 : 0, loading: !R, real: true,
+        score: !R || !R.tag ? null : R.tag === 'bad' ? ['bad', 'Serial rugger'] : R.tag === 'good' ? ['good', 'Trusted builder'] : R.tag === 'new' ? ['mid', 'New dev'] : ['mid', 'Mixed record'] }; }
     var live = all().filter(function (t) { return devOf(t) === addr; }), r = rng(hash(addr + 'deploys')), isDev = live.length > 0;
     var n = isDev ? 2 + Math.floor(r() * 5) : (r() < .25 ? 1 + Math.floor(r() * 2) : 0), profile = r(), past = [];
     for (var i = 0; i < n; i++) {
@@ -2442,15 +2453,21 @@
     var score = !past.length ? null : rg / past.length > .4 ? ['bad', 'Serial rugger'] : g / past.length >= .4 && rg <= 1 ? ['good', 'Trusted builder'] : ['mid', 'Mixed record'];
     return { live: live, past: past, grad: g, rugs: rg, score: score, best: past.reduce(function (m, x) { return Math.max(m, x.ath); }, 0) };
   }
+  // creator track record as one honest line on the coin page (tap → their launches)
+  function devRepHTML(t) {
+    var addr = devOf(t); if (!addr) return ''; var h = devHistory(addr); if (h.loading) return '<span class="dev-rep">record…</span>';
+    var n = h.live.length + h.past.length, g = h.grad + (h.real ? 0 : h.live.filter(function (x) { return x.prog >= 100; }).length), sc = h.score || ['mid', 'New dev'];
+    return '<button class="dev-rep ' + sc[0] + '" data-act="devRec" data-arg="' + esc(addr) + '" title="All coins this creator launched on treid">' + (sc[0] === 'bad' ? '⚠ ' : sc[0] === 'good' ? '✓ ' : '') + esc(sc[1]) + ' · ' + n + (n === 1 ? ' launch' : ' launches') + (g ? ' · ' + g + ' 🎓' : '') + (h.rugs ? ' · ' + h.rugs + (h.rugs === 1 ? ' rug' : ' rugs') : '') + '</button>';
+  }
   function durH(m) { if (m >= 59.5 && m < 60) m = 60; return m < 60 ? Math.max(1, Math.round(m)) + 'm' : m < 1440 ? (m / 60).toFixed(m < 600 ? 1 : 0).replace('.0', '') + 'h' : Math.round(m / 1440) + 'd'; }
   function devHistoryHTML(addr) {
-    var h = devHistory(addr); if (!h.live.length && !h.past.length) return '';
+    var h = devHistory(addr); if (h.loading) return '<div class="dw-sec dh2 muted" style="padding:14px"><span class="gr-sp"></span> Loading creator record…</div>'; if (!h.live.length && !h.past.length) return '';
     var sold = h.past.filter(function (x) { return x.devSoldAfter != null; }), avg = sold.length ? sold.reduce(function (a, x) { return a + x.devSoldAfter; }, 0) / sold.length : null, fast = sold.filter(function (x) { return x.devSoldAfter < 60; }).length;
     var holdCls = function (m) { return m == null ? 'g' : m < 60 ? 'r' : m < 1440 ? 'y' : 'g'; };
     var rows = h.live.map(function (t) { var dh = (Date.now() - t.born) / 60000, ds = riskMetrics(t)[0].val === 'SOLD';
         return '<button class="dh2-row" data-act="open" data-arg="' + esc(t.tick) + '">' + avatarHTML(t, 30) + '<span class="dh2-n"><b>' + esc(t.name) + '</b><small>$' + esc(t.tick) + ' · ' + ago(t.born) + ' ago · <i class="lv">live</i></small></span><span class="dh2-mc mono">' + fmtK(athOf(t)) + '</span><span class="dh2-s ' + (ds ? 'r' : 'g') + '">' + (ds ? 'sold' : 'holding') + '</span></button>'; }).join('') +
-      h.past.map(function (x) { var c = holdCls(x.devSoldAfter);
-        return '<button class="dh2-row" data-act="open" data-arg="' + esc(x.tick) + '"><span class="av" style="width:30px;height:30px">' + A.svg(x.spec) + '</span><span class="dh2-n"><b>' + esc(x.name) + '</b><small>$' + x.tick + ' · ' + ago(Date.now() - x.ago * 60000) + ' ago' + (x.out === 'grad' ? ' · 🎓' : '') + '</small></span><span class="dh2-mc mono">' + fmtK(x.ath) + '</span><span class="dh2-s ' + c + '">' + (x.devSoldAfter == null ? 'still holding' : durH(x.devSoldAfter)) + '</span></button>'; }).join('');
+      h.past.map(function (x) { var c = x.noBuy ? 'g' : holdCls(x.devSoldAfter);
+        return '<button class="dh2-row"' + (x.tick ? ' data-act="open" data-arg="' + esc(x.tick) + '"' : '') + '>' + (x.t ? avatarHTML(x.t, 30) : '<span class="av" style="width:30px;height:30px">' + A.svg(x.spec) + '</span>') + '<span class="dh2-n"><b>' + esc(x.name) + '</b><small>$' + esc(x.tick || x.name) + ' · ' + ago(Date.now() - x.ago * 60000) + ' ago' + (x.out === 'grad' ? ' · 🎓' : x.out === 'rug' ? ' · <i class="rg">rug</i>' : x.out === 'dead' ? ' · 💤' : '') + '</small></span><span class="dh2-mc mono">' + fmtK(x.ath) + '</span><span class="dh2-s ' + c + '">' + (x.noBuy ? 'no dev buy' : x.devSoldAfter == null ? 'still holding' : durH(x.devSoldAfter)) + '</span></button>'; }).join('');
     return '<div class="dw-sec dh2"><div class="dw-title">Last deploys <span class="mono muted">' + (h.live.length + h.past.length) + '</span></div>' +
       (fast ? '<div class="dh2-alert">⚠ Sold within 1 hour on <b>' + fast + ' of ' + h.past.length + '</b> previous coins</div>' : '') +
       '<div class="dh2-head"><span>Coin</span><span class="r">ATH MC</span><span class="r">Dev sold after</span></div>' + rows +
@@ -2777,7 +2794,7 @@
         return '<div class="st-box"><div class="st-h"><b>Activity</b><span class="st-pc ' + (pc >= 0 ? 'up' : 'down') + '">' + (pc >= 0 ? '↑ +' : '↓ ') + pc.toFixed(1) + '%</span><span class="st-vol muted">Vol <b class="mono">' + fmtK((bv + sv) / 1000) + '</b></span><div class="seg sm st-tf">' + ['5m', '1h', '24h'].map(function (x) { return '<button class="' + ((S.stf || '24h') === x ? 'on' : '') + '" data-act="stf" data-arg="' + x + '">' + x + '</button>'; }).join('') + '</div></div>' +
           row(['buys', 'sells'], b, se, fmtNum(b), fmtNum(se)) + row(['bought', 'sold'], bv, sv, fmtK(bv / 1000), fmtK(sv / 1000)) + row(['buyers', 'sellers'], nbw, nsw, fmtNum(nbw), fmtNum(nsw)) + '</div>' +
           '<div class="st-foot"><div><small>Pool</small><b class="mono st-pool">' + fmtK(liqK(t)) + ' <em>' + (liqK(t) * 1000 / qUsdT(t)).toFixed(2) + ' ' + esc(qSymT(t)) + '</em></b><span class="muted">paired with ' + coinHTML(t.pair, 14) + ' ' + esc(pairLabel(t.pair)) + '</span></div>' +
-          '<div><small>Creator</small><b>' + makerHTML(devOf(t), t) + '</b><span class="muted">earns ' + (+creatorCut(t).toFixed(3)) + '% of every trade' + (Math.max(t.buy, t.sell) > 0 ? '' : ' (creator rewards)') + '</span></div>' +
+          '<div><small>Creator</small><b>' + makerHTML(devOf(t), t) + '</b><span class="muted">earns ' + (+creatorCut(t).toFixed(3)) + '% of every trade' + (Math.max(t.buy, t.sell) > 0 ? '' : ' (creator rewards)') + '</span>' + devRepHTML(t) + '</div>' +
           '<button class="st-bub" data-act="hmap" data-arg="' + id + '">◎ Bubble map</button></div>' +
           '</section>';
       })();
@@ -4206,6 +4223,7 @@
       case 'walletAny': S.hmap = null;
       case 'walletAnyX': S.tick = (S.trades.filter(function (x) { return x.wallet === arg; })[0] || {}).tick || S.tick; set({ walletView: arg }); break;
       case 'wallet': set({ walletView: arg, walletMenu: false }); break;
+      case 'devRec': set({ walletView: arg, wTab: 'created', walletMenu: false }); break;
       case 'closeW': set({ walletView: null }); break;
       case 'wTab': set({ wTab: arg }); break;
       case 'rwOpen': rwLoad(); set({ walletMenu: true, wbTab: 'rewards' }); window.scrollTo({ top: 0, behavior: 'smooth' }); break;
