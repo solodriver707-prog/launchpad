@@ -10,6 +10,7 @@ const clean = (t) => String(t || '').replace(/[\u0000-\u0008\u000B-\u001F\u007Fâ
 export function startCallouts({ q, q1, run, push, rate, coinStats, pinJSON, pinFile, pinataJwt, gateway, log = console.log }) {
   run(`CREATE TABLE IF NOT EXISTS callouts(id INTEGER PRIMARY KEY AUTOINCREMENT, mint TEXT, wallet TEXT, text TEXT, ts INT, sig TEXT UNIQUE, reply INT, mc REAL, pos REAL)`);
   try { run('ALTER TABLE callouts ADD COLUMN img TEXT'); } catch {}
+  run('CREATE TABLE IF NOT EXISTS coreact(id INT, wallet TEXT, kind TEXT, ts INT, PRIMARY KEY(id, wallet, kind))');   // likes / reposts, one per wallet (signed-in session)
   // a callout is proven either by its own wallet signature, or (signed-in session) by the server's seal over all its fields
   const seal = (c) => 'h:' + hmac([c.mint, c.wallet, c.ts, c.reply ?? '', c.text, c.img || ''].join('|'));
   const sealData = (c) => [c.mint, c.wallet, c.ts, c.reply ?? '', c.text, c.img || ''].join('|');
@@ -41,7 +42,16 @@ export function startCallouts({ q, q1, run, push, rate, coinStats, pinJSON, pinF
     const r = run('INSERT INTO callouts(mint,wallet,text,ts,sig,reply,mc,pos,img) VALUES(?,?,?,?,?,?,?,?,?)', mint, wallet, text, ts, sig, reply, s.mc, s.pos, img);   // ts = the signed time, so a restored copy still verifies
     const out = row(q1('SELECT * FROM callouts WHERE id=?', r.lastInsertRowid)); push({ type: 'callout', ...out }); backupSoon(); return { ok: true, callout: out };
   }
-  const list = (mint) => (mint ? q('SELECT * FROM callouts WHERE mint=? ORDER BY id DESC LIMIT 300', mint) : q('SELECT * FROM callouts ORDER BY id DESC LIMIT 150')).map(row);
+  const counts = (id) => ({ likes: q1("SELECT COUNT(*) n FROM coreact WHERE id=? AND kind='like'", id).n, rts: q1("SELECT COUNT(*) n FROM coreact WHERE id=? AND kind='rt'", id).n });
+  const list = (mint, me = null) => (mint ? q('SELECT * FROM callouts WHERE mint=? ORDER BY id DESC LIMIT 300', mint) : q('SELECT * FROM callouts ORDER BY id DESC LIMIT 150')).map((r) => {
+    const o = { ...row(r), ...counts(r.id) }; if (me) { o.liked = !!q1("SELECT 1 FROM coreact WHERE id=? AND wallet=? AND kind='like'", r.id, me); o.rtd = !!q1("SELECT 1 FROM coreact WHERE id=? AND wallet=? AND kind='rt'", r.id, me); } return o; });
+  function react(body, ipAddr) {   // like / repost: needs a sign-in session (one wallet = one like), never a wallet popup per tap
+    const wallet = checkSession(body.session); if (!wallet) throw new Error('please sign in again');
+    const id = +body.id, kind = body.kind === 'rt' ? 'rt' : 'like'; if (!q1('SELECT 1 FROM callouts WHERE id=?', id)) throw new Error('callout not found');
+    if (!rate('re|' + wallet, 60, 6e4) || !rate('reip|' + ipAddr, 300, 36e5)) throw new Error('slow down');
+    if (body.on) run('INSERT OR IGNORE INTO coreact(id,wallet,kind,ts) VALUES(?,?,?,?)', id, wallet, kind, Date.now()); else run('DELETE FROM coreact WHERE id=? AND wallet=? AND kind=?', id, wallet, kind);
+    const c = counts(id); push({ type: 'coreact', id, ...c }); return { ok: true, id, ...c, on: !!body.on };
+  }
 
   // ---- IPFS backup: one JSON snapshot, the previous one is unpinned ----
   let timer = null, lastCid = null;
@@ -59,5 +69,5 @@ export function startCallouts({ q, q1, run, push, rate, coinStats, pinJSON, pinF
       log('callouts restored from IPFS:', n); for (const x of rows.slice(1)) fetch('https://api.pinata.cloud/pinning/unpin/' + x.ipfs_pin_hash, { method: 'DELETE', headers: { authorization: 'Bearer ' + pinataJwt } }).catch(() => {});
     } catch (e) { log('callouts restore err', e.message.slice(0, 100)); }
   }
-  return { post, list, restore };
+  return { post, list, restore, react };
 }

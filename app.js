@@ -2293,9 +2293,21 @@
   }, 3500);
   // ---- real callouts: wallet-signed, stored by the indexer ----
   function coClean(x) { return String(x || '').replace(/[\u0000-\u0008\u000B-\u001F\u007F\u202A-\u202E\u2066-\u2069]/g, '').replace(/\n{3,}/g, '\n\n').trim().slice(0, 280); }   // must match indexer/callouts.mjs
-  function coFromRow(r) { return { ps: psClean(r.ps), id: Number(r.id), w: String(r.wallet), text: String(r.text || ''), img: safeImg(r.img) && /^https:/.test(r.img) ? r.img : null, t: Number(r.ts) || 0, likes: 0, liked: false, reply: r.reply == null ? null : Number(r.reply), mc0: (Number(r.mc) || 0) / 1000 || null, pos: Math.round(Number(r.pos) || 0), real: true }; }
-  function refreshCallouts() { var t = S.screen === 'token' && find(S.tick); if (!t || !t.live || !API) return; apiGet('/api/callouts?mint=' + t.ca).then(function (rows) { coMerge(rows || []); if (S.screen === 'token' && S.tick === t.tick) render(); }).catch(function () {}); }
-  function coMerge(rows) { var ch = []; rows.forEach(function (r) { var t = S.live.filter(function (x) { return x.ca === r.mint; })[0]; if (!t) return; var list = S.comments[t.tick] || (S.comments[t.tick] = []); var old = list.filter(function (c) { return c.id === r.id; })[0]; if (old) { if (r.ps) old.ps = psClean(r.ps); return; } var c = coFromRow(r); if (!c.mc0) c.mc0 = t.mcN; list.push(c); ch.push({ c: c, t: t }); }); return ch; }
+  function coFromRow(r) { return { ps: psClean(r.ps), id: Number(r.id), w: String(r.wallet), text: String(r.text || ''), img: safeImg(r.img) && /^https:/.test(r.img) ? r.img : null, t: Number(r.ts) || 0, likes: +r.likes || 0, liked: !!r.liked, rt: +r.rts || 0, rtd: !!r.rtd, reply: r.reply == null ? null : Number(r.reply), mc0: (Number(r.mc) || 0) / 1000 || null, pos: Math.round(Number(r.pos) || 0), real: true }; }
+  function coMe() { return S.account ? '&me=' + encodeURIComponent(S.account) : ''; }
+  function coById(id) { for (var k in S.comments) { var l = S.comments[k] || []; for (var i = 0; i < l.length; i++) if (l[i].real && l[i].id === id) return l[i]; } return null; }
+  // like / repost a real callout: shown at once, saved on the server with the 24 h sign-in (rolled back if it fails)
+  function coReact(c, kind) {
+    var on = kind === 'rt' ? !c.rtd : !c.liked, ck = kind === 'rt' ? 'rtd' : 'liked', nk = kind === 'rt' ? 'rt' : 'likes';
+    if (!c.real || !API) { c[ck] = on; c[nk] = Math.max(0, (c[nk] || 0) + (on ? 1 : -1)); render(); return; }
+    if (!S.account) { set({ walletOpen: true }); return; }
+    c[ck] = on; c[nk] = Math.max(0, (c[nk] || 0) + (on ? 1 : -1)); render();
+    getSession().then(function (tok) { return fetch(API + '/api/coreact', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ session: tok, id: c.id, kind: kind, on: on }) }).then(function (r) { return r.json(); }); })
+      .then(function (j) { if (!j || !j.ok) throw new Error((j && j.error) || 'not saved'); c.likes = j.likes; c.rt = j.rts; render(); })
+      .catch(function (e) { c[ck] = !on; c[nk] = Math.max(0, (c[nk] || 0) + (on ? -1 : 1)); if (/sign in again/.test(e.message || '')) dropSession(); toast(e.message || 'Couldn’t save that'); render(); });
+  }
+  function refreshCallouts() { var t = S.screen === 'token' && find(S.tick); if (!t || !t.live || !API) return; apiGet('/api/callouts?mint=' + t.ca + coMe()).then(function (rows) { coMerge(rows || []); if (S.screen === 'token' && S.tick === t.tick) render(); }).catch(function () {}); }
+  function coMerge(rows) { var ch = []; rows.forEach(function (r) { var t = S.live.filter(function (x) { return x.ca === r.mint; })[0]; if (!t) return; var list = S.comments[t.tick] || (S.comments[t.tick] = []); var old = list.filter(function (c) { return c.id === r.id; })[0]; if (old) { if (r.ps) old.ps = psClean(r.ps); if (r.likes != null) { old.likes = +r.likes || 0; old.rt = +r.rts || 0; if ('liked' in r) { old.liked = !!r.liked; old.rtd = !!r.rtd; } } return; } var c = coFromRow(r); if (!c.mc0) c.mc0 = t.mcN; list.push(c); ch.push({ c: c, t: t }); }); return ch; }
   function coArrive(c, t) {
     coMeta(c, t);
     var tb2 = document.getElementById('cmts'); if (tb2 && S.screen === 'token' && c.reply == null && (S.ttab === 'all' || S.tick === t.tick)) {
@@ -4261,8 +4273,8 @@
       case 'coFollow': if (S.follow[arg]) delete S.follow[arg]; else S.follow[arg] = 1; try { localStorage.setItem('dl.follow', JSON.stringify(S.follow)); } catch (er) {} toast(S.follow[arg] ? 'Following ' + coName(arg) : 'Unfollowed ' + coName(arg)); render(); break;
       case 'coMenu': S.coMenu = S.coMenu === arg ? null : arg; render(); break;
       case 'coExpand': S.coExp[arg] = 1; render(); break;
-      case 'coLike': var cx = coFind(arg); if (cx) { cx.c.liked = !cx.c.liked; cx.c.likes = (cx.c.likes || 0) + (cx.c.liked ? 1 : -1); render(); } break;
-      case 'coRT': var cr = coFind(arg); if (cr) { cr.c.rtd = !cr.c.rtd; cr.c.rt = (cr.c.rt || 0) + (cr.c.rtd ? 1 : -1); toast(cr.c.rtd ? 'Reposted' : 'Repost removed'); render(); } break;
+      case 'coLike': var cx = coFind(arg); if (cx) coReact(cx.c, 'like'); break;
+      case 'coRT': var cr = coFind(arg); if (cr) { var had = !!cr.c.rtd; coReact(cr.c, 'rt'); if (!!cr.c.rtd !== had) toast(cr.c.rtd ? 'Reposted' : 'Repost removed'); } break;
       case 'coShare': S.coMenu = null; var shp = arg.split('|'); shareOpen(shp[0], +shp[1], 'callout'); break;
       case 'shPos': shareOpen(arg, null, 'profit'); break;
       case 'shClose': S.share = null; render(); break;
@@ -5143,7 +5155,7 @@
       if (!t.auth) rpc('getAccountInfo', [t.ca, { encoding: 'jsonParsed', commitment: 'confirmed' }]).then(function (r) { var inf = r && r.value && r.value.data && r.value.data.parsed && r.value.data.parsed.info; if (inf) { var tfx = (inf.extensions || []).filter(function (x) { return x.extension === 'transferFeeConfig'; })[0], bps = tfx ? Number((tfx.state.newerTransferFee || {}).transferFeeBasisPoints || 0) : 0; t.auth = { mint: !inf.mintAuthority, freeze: !inf.freezeAuthority, taxBps: bps }; t.buy = t.sell = bps / 100; if (S.screen === 'token' && S.tick === t.tick) render(); } }).catch(function () {});
       livePos(t); if (t.qMint && S.account) chainLib().then(function (T) { return T.tokenBalance({ rpc: RPC, owner: S.account, mint: t.qMint }); }).then(function (b) { t.qBal = b; if (S.screen === 'token' && S.tick === t.tick) render(); }).catch(function () {});
       chainLib().then(function (T) { return T.creatorFees({ rpc: RPC, pool: t.pool }); }).then(function (f) { t.crFees = f; if (S.screen === 'token' && S.tick === t.tick) render(); }).catch(function () {});
-      apiGet('/api/callouts?mint=' + t.ca).then(function (rows) { if (coMerge(rows).length && S.screen === 'token' && S.tick === t.tick) render(); }).catch(function () {});
+      apiGet('/api/callouts?mint=' + t.ca + coMe()).then(function (rows) { if (coMerge(rows).length && S.screen === 'token' && S.tick === t.tick) render(); }).catch(function () {});
       apiGet('/api/creator/' + t.ca).then(function (e) { t.esc = e; if (S.screen === 'token' && S.tick === t.tick) render(); }).catch(function () {});
       if (S.screen === 'token' && S.tick === t.tick) render();
     }).catch(function (e) { console.warn('[treid] live load failed', e); });
@@ -5161,10 +5173,10 @@
     apiGet('/api/health').then(function (h) { if (!h || !h.ops) return; if (!window.TREID_PARTNER || API_DEV) { PARTNER = h.ops; S.escrowWallet = h.ops; } else if (h.ops !== window.TREID_PARTNER) { S.opsMismatch = true; console.warn('[treid] server ops wallet does not match the pinned one — launching disabled'); render(); } }).catch(function () {});
     var tries = 0; (function coinsLoad() { apiGet('/api/coins').then(function (cs) {
       S.apiOk = true; S.apiWait = 0; cs.filter(Boolean).forEach(liveTok); render();
-      var coAll = function (n) { apiGet('/api/callouts').then(function (rows) { if (coMerge(rows || []).length) render(); }).catch(function () { if (n < 6) setTimeout(function () { coAll(n + 1); }, 5000 * (n + 1)); }); }; coAll(0); setInterval(function () { if (!document.hidden) coAll(6); }, 60e3);   // retried: a server restart must not leave the callouts empty
+      var coAll = function (n) { apiGet('/api/callouts?x=1' + coMe()).then(function (rows) { if (coMerge(rows || []).length) render(); }).catch(function () { if (n < 6) setTimeout(function () { coAll(n + 1); }, 5000 * (n + 1)); }); }; coAll(0); setInterval(function () { if (!document.hidden) coAll(6); }, 60e3);   // retried: a server restart must not leave the callouts empty
       if (S.pendingRoute) { var pr = S.pendingRoute, tp = S.live.filter(function (x) { return x.ca === pr || x.tick.toUpperCase() === String(pr).toUpperCase(); })[0]; S.pendingRoute = null; var rr = routeReady; routeReady = false; var psite = S.pendingSite, pco = S.pendingCo; S.pendingSite = null; S.pendingCo = null; if (tp && pco != null) { liveLoad(tp); S.tick = tp.tick; set({ screen: 'callout', coView: { tick: tp.tick, id: pco } }); } else if (tp && psite) { liveLoad(tp); set({ screen: 'site', site: { tick: tp.tick, th: psite } }); } else if (tp) openToken(tp.tick); else { set({ screen: 'home' }); toast('That coin wasn\'t found'); } routeReady = rr; }
       var es = new EventSource(API + '/api/stream');
-      es.onmessage = function (m) { var ev; try { ev = JSON.parse(m.data); } catch (e) { return; } if (ev.type === 'callout') { coMerge([ev]).forEach(function (x) { coArrive(x.c, x.t); if (!(S.account && x.c.w === S.account)) coPeek(x.c, x.t); }); } else if (ev.type === 'burn') burnsLoad(); else if (ev.type === 'trade') liveTrade(ev); else if (ev.type === 'coin') apiGet('/api/coin/' + ev.mint).then(function (c) { if (c) { var known = S.live.some(function (x) { return x.ca === c.mint; }), t = liveTok(c); if (!known && !isMob()) toast('New on treid: ' + t.name + ' $' + t.tick, t); render(); } }).catch(function () {}); };
+      es.onmessage = function (m) { var ev; try { ev = JSON.parse(m.data); } catch (e) { return; } if (ev.type === 'callout') { coMerge([ev]).forEach(function (x) { coArrive(x.c, x.t); if (!(S.account && x.c.w === S.account)) coPeek(x.c, x.t); }); } else if (ev.type === 'coreact') { var cc = coById(+ev.id); if (cc) { cc.likes = +ev.likes || 0; cc.rt = +ev.rts || 0; var lk = document.querySelectorAll('[data-act="coLike"][data-arg$="|' + (+ev.id) + '"]'); if (lk.length) render(); } } else if (ev.type === 'burn') burnsLoad(); else if (ev.type === 'trade') liveTrade(ev); else if (ev.type === 'coin') apiGet('/api/coin/' + ev.mint).then(function (c) { if (c) { var known = S.live.some(function (x) { return x.ca === c.mint; }), t = liveTok(c); if (!known && !isMob()) toast('New on treid: ' + t.name + ' $' + t.tick, t); render(); } }).catch(function () {}); };
       es.onerror = function () { S.apiOk = es.readyState === 1; };
       es.onopen = function () { S.apiOk = true; apiGet('/api/coins').then(function (cs2) { cs2.filter(Boolean).forEach(liveTok); }).catch(function () {}); };
     }).catch(function (e) { tries++; S.apiWait = tries; if (S.screen === 'pending') render(); console.warn('[treid] indexer not reachable, retrying', e); setTimeout(coinsLoad, Math.min(15000, 1500 * tries)); }); })();   // the server restarts after updates — keep trying instead of hanging
