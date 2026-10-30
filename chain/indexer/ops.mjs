@@ -72,17 +72,20 @@ export function startOps({ conn, dbc, ops, treasury, q, q1, run, mainnet = false
   const hrec = (sig, list, token, dec) => { for (const x of list) { try { run('INSERT OR IGNORE INTO hpay(sig,wallet,mint,token,amt,dec,ts) VALUES(?,?,?,?,?,?,?)', sig, x.owner, x.mint, token, Number(x.amt), dec, Date.now()); } catch {} } };
   // ---- $TREID flywheel: TREID_BUYBACK_PCT of every SOL platform fee (claimed after TREID_MINT was set) buys $TREID on the open market and burns it ----
   run('CREATE TABLE IF NOT EXISTS kv(k TEXT PRIMARY KEY, v TEXT)');
-  if (TREID && !q1("SELECT v FROM kv WHERE k='treid_since'")) run("INSERT INTO kv(k,v) VALUES('treid_since',?)", String(Date.now()));
-  const treidSince = () => +(q1("SELECT v FROM kv WHERE k='treid_since'")?.v || Date.now());
+  const TSK = 'treid_since:' + TREID;   // per mint: switching TREID_MINT (e.g. test token → real one) starts a fresh budget
+  if (TREID && !q1('SELECT v FROM kv WHERE k=?', TSK)) run('INSERT INTO kv(k,v) VALUES(?,?)', TSK, String(Date.now()));
+  const treidSince = () => +(q1('SELECT v FROM kv WHERE k=?', TSK)?.v || Date.now());
   const sumT = (kind) => q1('SELECT COALESCE(SUM(lamports),0) s FROM rlog WHERE mint=? AND kind=?', TREID, kind)?.s || 0;
-  const treidBudget = () => { if (!TREID) return 0; const fees = q("SELECT r.lamports l FROM rlog r JOIN coins c ON c.mint=r.mint WHERE r.kind='pfee' AND r.ts>=? AND (c.quote_mint IS NULL OR c.quote_mint=?)", treidSince(), WSOL).reduce((a, r) => a + r.l, 0);
+  // budget = TREID_BUYBACK_PCT of treid's SOL income since TREID_MINT was set: curve partner fees (pfee) + treid's LP fees after graduation (claimx …|platform|dammP)
+  const treidBudget = () => { if (!TREID) return 0; const fees = q("SELECT r.lamports l FROM rlog r JOIN coins c ON c.mint=r.mint WHERE r.ts>=? AND (c.quote_mint IS NULL OR c.quote_mint=?) AND (r.kind='pfee' OR (r.kind='claimx' AND r.extra LIKE '%|platform|dammP'))", treidSince(), WSOL).reduce((a, r) => a + r.l, 0);
     return Math.max(0, Math.floor(fees * TREID_BB) - sumT('tbuy')); };
   const treidLeft = () => Math.max(0, sumT('tleft') - sumT('tburnr'));   // bought but not yet burned (the part above the swap's guaranteed minimum)
   async function treidBuyback() {
     if (!TREID || !mainnet) return; const tinfo = await conn.getAccountInfo(new PublicKey(TREID)); if (!tinfo) return; const tprog = tinfo.owner, tm = new PublicKey(TREID), ata = getAssociatedTokenAddressSync(tm, ops.publicKey, false, tprog);
     const left = treidLeft(); if (left > 0) { const ai = await conn.getAccountInfo(ata); const have = ai ? unpackAccount(ata, ai, tprog).amount : 0n, amt = BigInt(left) < have ? BigInt(left) : have;
       if (amt > 0n) { const sgr = await send([createBurnCheckedInstruction(ata, tm, ops.publicKey, amt, DEC, [], tprog), memoIx(`treid:tburnr:${TREID}:${amt}`)]); rec(sgr, 0, TREID, 'tburnr', amt); log('ops   $TREID residual burned', amt.toString()); } }
-    const lam = treidBudget(); if (lam < TREID_MIN) return;
+    const bal0 = await conn.getBalance(ops.publicKey), free = bal0 - 0.2e9 - liabilities() - pendingSol(), lam = Math.floor(Math.min(treidBudget(), free));   // never spend SOL that is owed to creators or holders (part of the fees may already sit in the treasury)
+    if (lam < TREID_MIN) return;
     const qr = await (await fetchT(`${JUP}/swap/v1/quote?inputMint=${WSOL}&outputMint=${TREID}&amount=${lam}&slippageBps=300&maxAccounts=40`)).json();
     if (!qr?.outAmount || qr.outputMint !== TREID || qr.inputMint !== WSOL || String(qr.inAmount) !== String(lam)) throw new Error('no $TREID route');
     const sw = await (await fetchT(JUP + '/swap/v1/swap', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ quoteResponse: qr, userPublicKey: ops.publicKey.toBase58(), wrapAndUnwrapSol: true, dynamicComputeUnitLimit: true }) })).json();
