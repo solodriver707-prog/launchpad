@@ -5800,3 +5800,4 @@ html body .hdr-right .wbal .wb-acts .btn.pri{display:inline-flex!important}   /*
 /* logo draws in once per visit; live re-renders must not replay it (it flickered constantly) */
 .booted .tr-bar,.booted .tr-stem{animation:none}
 .booted .lb-spark .draw{animation:none;stroke-dashoffset:0}   /* sparklines were re-drawing from blank on every live update */
+#fxp .fxp-view{cursor:pointer;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}

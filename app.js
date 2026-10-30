@@ -4722,6 +4722,9 @@
   requestAnimationFrame(fxpTick);
   (function () { var sx = null; document.addEventListener('touchstart', function (e) { if (e.target.closest && e.target.closest('#fxp')) { sx = e.touches[0].clientX; } }, { passive: true });
     document.addEventListener('touchend', function (e) { if (sx == null) return; var dx = e.changedTouches[0].clientX - sx; sx = null; if (Math.abs(dx) > 40) { FXP.hold = Date.now() + 9000; fxpShow(FXP.k + (dx < 0 ? 1 : -1)); } }, { passive: true }); })();
+  // tap anywhere on the factory card → next step (left edge → back), like stories; a swipe never becomes a click
+  document.addEventListener('click', function (e) { var v = e.target.closest && e.target.closest('#fxp .fxp-view'); if (!v) return; var r = v.getBoundingClientRect(), back = e.clientX - r.left < r.width * .25;
+    FXP.hold = Date.now() + 9000; fxpShow(FXP.k + (back ? -1 : 1)); });
   function machineSection() {
     FW.cnt[2] = FW.cnt[2] || 1840.5; FW.cnt[5] = FW.cnt[5] || 58210;
     var st = FST.map(function (x, k) { return '<div class="fx-st fx-s' + k + '" data-fst="' + k + '" style="--sc:' + x[2] + ';left:calc(2% + ' + (FSX[k] * .96).toFixed(2) + '%)"><div class="fx-house"><div class="fx-hd"><span class="fx-ico">' + FICO[k] + '</span><span class="fx-n mono">0' + (k + 1) + '</span></div><b class="fx-t">' + x[0] + '</b><small class="fx-sub">' + x[1] + '</small>' +
