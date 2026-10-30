@@ -533,8 +533,8 @@
         (S.walletMenu ? '<div class="wbal"><div class="wb-h"><b>Your balance</b><button class="wb-addr mono" data-act="copyAddr">' + esc(short(S.account)) + ' ' + I.copy + '</button></div>' +
           '<div class="wb-big mono">$' + money(totU) + '</div>' +
           '<div class="wb-sol">' + coinHTML('SOL', 26) + '<b>SOL</b><span class="mono">' + solB.toFixed(4) + ' SOL</span><small class="muted mono">$' + money(solB * SOL_USD) + '</small></div>' +
-          '<div class="wb-acts"><button class="btn pri" data-act="wbDeposit">Deposit</button><button class="btn sec" data-act="wallet" data-arg="' + esc(S.account) + '">Profile</button><button class="btn sec" data-act="notifOpen" aria-label="Notifications">🔔</button>' + (CHAIN_ID !== 'solana:mainnet' ? '<button class="btn sec" data-act="airdrop"' + (S.airdropping ? ' disabled' : '') + '>' + (S.airdropping ? 'Requesting…' : 'Get 1 ' + NET + 'SOL') + '</button>' : '') + '</div>' +
-          (S.wbDep ? '<div class="wb-dep">Send SOL to your wallet address from an exchange or another wallet:<button class="mono" data-act="copyAddr">' + esc(S.account) + ' ' + I.copy + '</button></div>' : '') +
+          '<div class="wb-acts"><button class="btn pri" data-act="recvOpen">Deposit</button><button class="btn sec" data-act="wallet" data-arg="' + esc(S.account) + '">Profile</button><button class="btn sec" data-act="notifOpen" aria-label="Notifications">🔔</button>' + (CHAIN_ID !== 'solana:mainnet' ? '<button class="btn sec" data-act="airdrop"' + (S.airdropping ? ' disabled' : '') + '>' + (S.airdropping ? 'Requesting…' : 'Get 1 ' + NET + 'SOL') + '</button>' : '') + '</div>' +
+          
           '<div class="wb-con">' + (S.wallet && S.wallet.icon ? '<img src="' + esc(S.wallet.icon) + '" alt="">' : '<span class="wb-wi">◎</span>') + '<span><small class="muted">Connected with</small><b>' + esc(S.wallet ? S.wallet.name : 'Wallet') + ' <span class="muted">· external wallet</span></b></span><button class="link wb-dc" data-act="disconnect">Disconnect</button></div>' +
           '<div class="wb-tabs"><div class="seg sm"><button class="' + (S.wbTab !== 'closed' ? 'on' : '') + '" data-act="wbTab" data-arg="open">Open</button><button class="' + (S.wbTab === 'closed' ? 'on' : '') + '" data-act="wbTab" data-arg="closed">Closed</button><button class="' + (S.wbTab === 'rewards' ? 'on' : '') + '" data-act="wbTab" data-arg="rewards">🎁 Rewards</button></div><button class="link" data-act="refresh">↻ Refresh</button></div>' +
           '<div class="wb-list">' + (S.wbTab === 'rewards' ? rwListHTML() : WP.loading ? '<div class="muted wb-empty"><span class="gr-sp"></span> Loading…</div>' : wbOpen.length ? wbOpen.map(function (c) { var up = c.profit >= 0, my = (S.comments[c.t.tick] || []).filter(function (x) { return x.w === S.account && x.reply == null && x.text; }).sort(function (a, z) { return z.t - a.t; })[0];
@@ -3861,6 +3861,20 @@
   function alLoad(t) { if (!PUSH.sub) return; pushPost('alerts', { endpoint: PUSH.sub.endpoint, mint: t.ca }).then(function (j) { S.alerts[t.ca] = j.alerts || []; }).catch(function () { S.alerts[t.ca] = []; }).then(function () { if (S.screen === 'token' && S.tick === t.tick) render(); }); }
   function alSet(t) { var tg = tpTargets(t); if (tg.err) return toast(tg.err); if (!PUSH.sub) return set({ notifOpen: true });
     pushPost('alert', { endpoint: PUSH.sub.endpoint, mint: t.ca, tp: S.tpF.tp ? tg.tp : 0, sl: S.tpF.sl ? tg.sl : 0 }).then(function () { toast('🔔 Alert set — we’ll ping this device'); alLoad(t); }).catch(function (e) { toast(e.message); }); }
+  // ===== Deposit / Receive: your address as a QR code (scan it from an exchange app or another wallet) =====
+  function qrLib() { if (window.qrcode) return Promise.resolve(window.qrcode); return qrLib.p || (qrLib.p = new Promise(function (res, rej) { var sc = document.createElement('script'); sc.src = 'qr.js?v=' + ((document.querySelector('script[src*="app.js"]') || {}).src || '').split('v=')[1]; sc.onload = function () { res(window.qrcode); }; sc.onerror = function () { qrLib.p = null; rej(new Error('qr')); }; document.head.appendChild(sc); })); }
+  function recvModal() {
+    if (!S.recvOpen || !S.account) return '';
+    if (!window.qrcode) qrLib().then(function () { if (S.recvOpen) render(); }).catch(function () {});
+    var qr = ''; if (window.qrcode) { try { var q0 = window.qrcode(0, 'M'); q0.addData(S.account); q0.make(); qr = q0.createSvgTag({ cellSize: 6, margin: 3, scalable: true }); } catch (e) {} }
+    return '<div class="overlay" data-act="recvClose"><div class="terms card-s recv" data-stop><div class="terms-h"><b>Deposit</b><button class="iconbtn" data-act="recvClose" aria-label="Close">✕</button></div>' +
+      '<div class="rv-qr">' + (qr || '<span class="gr-sp"></span>') + '</div>' +
+      '<div class="rv-net">' + coinHTML('SOL', 18) + '<b>Solana network only</b></div>' +
+      '<p class="muted rv-p">Send <b>SOL</b> (or any Solana token) to this address from an exchange or another wallet. Sending from another network (Ethereum, BNB…) loses the funds.</p>' +
+      '<button class="rv-addr mono" data-act="copyAddr">' + esc(S.account) + '</button>' +
+      '<button class="btn pri rv-copy" data-act="copyAddr">' + I.copy + ' Copy address</button>' +
+      (typeof S.balance === 'number' ? '<small class="muted rv-bal">Balance now: <b class="mono">' + S.balance.toFixed(4) + ' SOL</b> · updates when it arrives</small>' : '') + '</div></div>';
+  }
   function footer() {
     return '<footer><div class="wrap foot"><span style="display:flex;align-items:center;gap:8px"><span style="width:22px;height:22px;display:inline-block">' + LOGO + '</span><b style="color:var(--soft)">treid<span class="muted" style="font-weight:600">.fun</span></b></span>' +
       '<span>' + (DEMO ? 'Demo · market data on this page is simulated · wallet connects to Solana ' + CLUSTER : 'Beta on Solana ' + CLUSTER + ' · every coin and trade here is real and on-chain') + '</span>' +
@@ -3892,7 +3906,7 @@
     if (S.screen === 'trench') trSave();
     var detOpen = [].map.call(document.querySelectorAll('#app details'), function (d) { return d.open ? (d.className || 'd') : null; });
     if (S.screen === 'site') { document.getElementById('app').innerHTML = body + siteModal() + walletModal(); document.body.classList.add('on-site'); document.body.classList.remove('has-rail', 'has-rail-min'); return; } document.body.classList.remove('on-site');
-    document.getElementById('app').innerHTML = (RPC_DEV || API_DEV ? '<div class="devbar">⚠ Developer mode — custom ' + [RPC_DEV ? 'RPC' : '', API_DEV ? 'server' : ''].filter(Boolean).join(' + ') + ' (this tab only)</div>' : '') + '<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="ccUp" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3DDC97" stop-opacity=".28"/><stop offset="1" stop-color="#3DDC97" stop-opacity="0"/></linearGradient><linearGradient id="ccDn" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F2708A" stop-opacity=".26"/><stop offset="1" stop-color="#F2708A" stop-opacity="0"/></linearGradient></defs></svg>' + tape() + header() + body + footer() + walletModal() + demoImgModal() + termsModal() + calloutDrawer() + calloutRail() + palette() + walletDrawer() + holderMap() + burnModal() + ctoModal() + coModal() + shareModal() + siteModal() + notifModal();
+    document.getElementById('app').innerHTML = (RPC_DEV || API_DEV ? '<div class="devbar">⚠ Developer mode — custom ' + [RPC_DEV ? 'RPC' : '', API_DEV ? 'server' : ''].filter(Boolean).join(' + ') + ' (this tab only)</div>' : '') + '<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="ccUp" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3DDC97" stop-opacity=".28"/><stop offset="1" stop-color="#3DDC97" stop-opacity="0"/></linearGradient><linearGradient id="ccDn" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F2708A" stop-opacity=".26"/><stop offset="1" stop-color="#F2708A" stop-opacity="0"/></linearGradient></defs></svg>' + tape() + header() + body + footer() + walletModal() + demoImgModal() + termsModal() + calloutDrawer() + calloutRail() + palette() + walletDrawer() + holderMap() + burnModal() + ctoModal() + coModal() + shareModal() + siteModal() + notifModal() + recvModal();
     document.body.classList.toggle('has-rail', S.screen === 'home' && !S.coOpen && !S.railHidden); document.body.classList.toggle('has-rail-min', S.screen === 'home' && !S.coOpen && !!S.railHidden);
     if (fid) { var el = document.getElementById(fid); if (el) { el.focus({ preventScroll: true }); try { if (ss != null) el.setSelectionRange(ss, se); } catch (e) {} } }
     if (S.palOpen && !fid) { var p = document.getElementById('pal'); if (p) p.focus(); }
@@ -4123,6 +4137,8 @@
       case 'notifOpen': S.walletMenu = false; set({ notifOpen: true }); break;
       case 'notifClose': if (e.target.closest('[data-stop]') && !e.target.closest('.iconbtn')) break; set({ notifOpen: false }); break;
       case 'notifOn': pushOn(); break;
+      case 'recvOpen': S.walletMenu = false; set({ recvOpen: true }); clearInterval(S.recvT); S.recvT = setInterval(function () { if (!S.recvOpen) { clearInterval(S.recvT); return; } refreshBalance(); }, 8000); break;
+      case 'recvClose': if (e.target.closest('[data-stop]') && !e.target.closest('.iconbtn')) break; clearInterval(S.recvT); set({ recvOpen: false }); break;
       case 'tpTog': S.tpF[arg] = !S.tpF[arg]; render(); break;
       case 'tpUnit': var tu = arg.split('|'), tt0 = find(S.tick); if (S.tpF[tu[0] + 'U'] !== tu[1] && tt0) { var tgt0 = tpTargets(tt0)[tu[0]]; S.tpF[tu[0] + 'U'] = tu[1]; S.tpF[tu[0] + 'V'] = tu[1] === 'mc' ? (tgt0 > 0 ? String(Math.round(tgt0)) : '') : (tu[0] === 'tp' ? '100' : '40'); } render(); break;
       case 'tpAmt': S.tpF.amt = +arg; render(); break;
