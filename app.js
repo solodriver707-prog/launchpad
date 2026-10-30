@@ -2873,7 +2873,7 @@
       '<div class="presets">' + presets + '</div>' +
       (PS ? '<div class="quote"><div><span class="muted">Route</span><span>SOL → ' + esc(qSymT(t)) + ' (Jupiter) → $' + id + '</span></div><div><span class="muted">Fees</span><span>coin tax ' + q.pct + '% + trading fee + Jupiter route</span></div><div style="padding-top:9px;border-top:1px solid var(--line)"><span class="muted">You receive ≈</span><span style="font-weight:800;font-size:15px">' + fmtNum(q.out) + ' $' + id + (outUsd > 0 ? ' <small class="q-usd">' + usdS(outUsd) + '</small>' : '') + '</span></div></div>' :
       '<div class="quote">' + (q.pct > 0 ? '<div><span class="muted">Coin ' + (q.isBuy ? 'buy' : 'sell') + ' tax (' + q.pct + '%)</span><span style="color:' + taxBg(q.pct) + '">' + f4(q.tax) + ' ' + esc(QS) + '</span></div>' : '') +
-        '<div><span class="muted">Trading fee (' + (+q.fp.toFixed(2)) + '%)' + (q.grad ? '' : ' <em class="q-cr">' + (q.exact ? +(q.fp * 0.4).toFixed(2) : (q.pct > 0 ? FEE.creatorTaxed : FEE.creatorPlain)) + '% to creator</em>') + '</span><span>' + f4(q.fee) + ' ' + esc(QS) + '</span></div>' +
+        '<div><span class="muted">Trading fee (' + (+q.fp.toFixed(2)) + '%)' + (q.grad ? ' <em class="q-cr">' + GRAD_CREATOR + '% to creator</em>' : ' <em class="q-cr">' + (q.exact ? +(q.fp * 0.4).toFixed(2) : (q.pct > 0 ? FEE.creatorTaxed : FEE.creatorPlain)) + '% to creator</em>') + '</span><span>' + f4(q.fee) + ' ' + esc(QS) + '</span></div>' +
         '<div class="q-tot"><span class="muted">Total cost</span><span class="mono">' + (+(q.pct + q.fp).toFixed(2)) + '% · ' + f4((q.tax + q.fee)) + ' ' + esc(QS) + '</span></div>' +
         '<div><span class="muted">Price impact</span><span class="' + (q.impact > 5 ? 'down' : '') + '">' + q.impact.toFixed(2) + '%</span></div>' +
         '<div><span class="muted">Min received (' + S.slip + '% slip)</span><span>' + (q.isBuy ? fmtNum(q.min) + ' $' + id : q.min.toFixed(4) + ' ' + esc(QS)) + '</span></div>' +
@@ -3282,7 +3282,10 @@
   // trading fee, % of each trade. On-chain split of every fee: creator 40% · treid 40% · Meteora (DEX protocol) 20%
   var FEE = { plain: 1, taxed: 0.5, creatorPlain: 0.4, treidPlain: 0.4, dexPlain: 0.2, creatorTaxed: 0.2, treidTaxed: 0.2, dexTaxed: 0.1 };
   function feeOf(t) { return Math.max(t.buy || 0, t.sell || 0) > 0 ? FEE.taxed : FEE.plain; }
-  function creatorCut(t) { var sp = splitOf(t), m = Math.max(t.buy || 0, t.sell || 0); return m > 0 ? +((sp ? m * sp.d / 100 : 0) + FEE.creatorTaxed).toFixed(2) : FEE.creatorPlain; }
+  // after graduation every coin trades on its Meteora DAMM v2 pool at a 0.5% fee: Meteora keeps 20% (0.1%), the LP fees (0.4%) are split
+  // 50/50 between the creator's and treid's locked LP positions → 0.2% to the creator (checked on-chain: migration config, protocol fee default)
+  var GRAD_CREATOR = 0.2;
+  function creatorCut(t) { var sp = splitOf(t), m = Math.max(t.buy || 0, t.sell || 0), base = t.prog >= 100 ? GRAD_CREATOR : m > 0 ? FEE.creatorTaxed : FEE.creatorPlain; return +((m > 0 && sp ? m * sp.d / 100 : 0) + base).toFixed(2); }
   // ===== CREATOR REWARDS: freeze rules + community takeover (CTO) =====
   var DR = { inactive: 48 * 36e5, out: 7 * 864e5, soldOut: 70, fundDays: 14, vestDays: 30, ctoNeed: 10, ctoHold: 1 };
   S.devSeen = {}; S.cto = {}; S.claimed = {}; S.myBurns = []; try { S.myBurns = JSON.parse(localStorage.getItem('dl.myburns') || '[]'); } catch (e) {}
