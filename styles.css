@@ -5851,3 +5851,5 @@ html body .hdr-right .wbal .wb-acts .btn.pri{display:inline-flex!important}   /*
 .c-tl .tl-o{width:7px;height:7px;margin-top:-3.5px;border-width:1px;right:-3px}
 .c-tl .tgl.drag .tl-p{box-shadow:0 0 0 2px color-mix(in srgb,var(--c) 22%,transparent)!important}
 @media (max-width:760px){.c-tl .tl-p{right:12px!important;font-size:10px!important}.c-tl .tl-p b,.c-tl .tl-p em{padding:4px 7px!important}}
+.tps-sl[style*="--lim"]{position:relative}
+.tps-sl[style*="--lim"]:after{content:'';position:absolute;top:9px;height:4px;left:var(--lim);right:0;border-radius:4px;background:repeating-linear-gradient(135deg,rgba(255,255,255,.12) 0 3px,transparent 3px 6px);pointer-events:none}

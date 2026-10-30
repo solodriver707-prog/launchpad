@@ -1963,7 +1963,10 @@
     ch.priceScale('vol').applyOptions({ scaleMargins: { top: .8, bottom: 0 } });
     LW.ma = ch.addLineSeries({ color: 'rgba(216,195,160,.85)', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false, priceFormat: pf });
     ch.subscribeCrosshairMove(lwHover);
-    ch.timeScale().subscribeVisibleLogicalRangeChange(function () { requestAnimationFrame(lwPlace); }); try { new ResizeObserver(function () { requestAnimationFrame(lwPlace); }).observe(host); } catch (e) {} setInterval(function () { if (LW.host && LW.host.isConnected && !document.hidden) lwPlace(); }, 400);
+    ch.timeScale().subscribeVisibleLogicalRangeChange(function () { requestAnimationFrame(lwPlace); }); try { new ResizeObserver(function () { requestAnimationFrame(lwPlace); }).observe(host); } catch (e) {} (function lwLoop() { requestAnimationFrame(lwLoop);   // our overlays (B/S marks, TP/SL lines) follow every zoom / pan / axis-stretch on the same frame, no lag
+      if (!LW.host || !LW.host.isConnected || document.hidden || !LW.bars || !LW.bars.length) return; var m = lwMain(), r = lwConv(LW.bars[LW.bars.length - 1].c), lr = ch.timeScale().getVisibleLogicalRange();
+      var sig = m.priceToCoordinate(r) + '|' + m.priceToCoordinate(r * 1.5) + '|' + (lr ? lr.from.toFixed(3) + ':' + lr.to.toFixed(3) : '') + '|' + LW.host.clientWidth + 'x' + LW.host.clientHeight;
+      if (sig !== LW.sig) { LW.sig = sig; lwPlace(); } })();
     ch.timeScale().subscribeVisibleLogicalRangeChange(function () { var b = document.getElementById('c-now'); if (b) b.style.display = ch.timeScale().scrollPosition() < -15 ? '' : 'none'; });
     LW.chart = ch; LW.host = host; return true;
   }
@@ -3757,7 +3760,7 @@
   function parseMc(s) { var m = String(s || '').trim().toLowerCase().replace(/[$,\s]/g, '').match(/^(\d*\.?\d+)([km]?)$/); return m ? +m[1] * (m[2] === 'k' ? 1e3 : m[2] === 'm' ? 1e6 : 1) : 0; }
   function tpTargets(t) {
     var mc = t.mcN * 1000, F = S.tpF, tp = F.tp ? (F.tpU === 'pct' ? mc * (1 + (parseFloat(F.tpV) || 0) / 100) : parseMc(F.tpV)) : 0, sl = F.sl ? (F.slU === 'pct' ? mc * (1 - (parseFloat(F.slV) || 0) / 100) : parseMc(F.slV)) : 0;
-    var err = !F.tp && !F.sl ? 'Turn on a take profit or a stop loss' : F.tp && !(tp > mc) ? 'Take profit must be above the current market cap' : F.sl && !(sl > 0 && sl < mc) ? 'Stop loss must be below the current market cap' : '';
+    var err = !F.tp && !F.sl ? 'Turn on a take profit or a stop loss' : F.tp && !(tp > mc) ? 'Take profit must be above the current market cap' : F.sl && !(sl > 0 && sl < mc) ? 'Stop loss must be below the current market cap' : F.sl && sl < launchFloor(t) - 1 ? 'Stop loss can’t be below the launch market cap (' + fmtK(launchFloor(t) / 1000) + ') — the price can’t go lower on the curve' : '';
     return { mc: mc, tp: tp, sl: sl, err: err };
   }
   function tpHint(t, k) { var tg = tpTargets(t), v = tg[k]; return v > 0 ? 'at ' + fmtK(v / 1000) + ' MC · ' + chgTxt((v / tg.mc - 1) * 100) : '—'; }
@@ -3770,14 +3773,18 @@
   }
   // GMGN-style: a % slider under each target, and the same targets as lines on the chart you can drag
   var TPMAX = { tp: 1000, sl: 95 };
+  // on the bonding curve the price can't fall below where the coin launched, so a stop loss under that could never fire
+  function launchFloor(t) { if (!t || t.prog >= 100) return 0; var m = Infinity; ensureTicks(t).forEach(function (x) { if (x[1] > 0 && x[1] < m) m = x[1]; }); return m < Infinity ? Math.min(m, t.mcN) * 1000 : 0; }
+  function slMax(t) { var f = launchFloor(t), mc = t.mcN * 1000; return f > 0 && mc > 0 ? Math.max(0, Math.min(TPMAX.sl, (1 - f / mc) * 100)) : TPMAX.sl; }
   function tpPct(t, k) { var tg = tpTargets(t), v = tg[k]; if (!(v > 0) || !(tg.mc > 0)) return 0; return k === 'tp' ? (v / tg.mc - 1) * 100 : (1 - v / tg.mc) * 100; }
   function tpSlPos(k, pct) { var m = TPMAX[k]; pct = Math.max(0, Math.min(m, pct)); return k === 'tp' ? Math.sqrt(pct / m) * 100 : pct / m * 100; }   // TP slider is square-root so +5…+50% stay easy to hit
   function tpSlVal(k, pos) { var m = TPMAX[k]; return k === 'tp' ? Math.pow(pos / 100, 2) * m : pos / 100 * m; }
   function tpRound(p) { return p < 10 ? Math.round(p * 10) / 10 : Math.round(p); }
   function tpSlider(t, k) { var pc = tpPct(t, k);
-    return '<div class="tps-sl ' + k + '"><input type="range" min="0" max="100" step="0.1" data-tpr="' + k + '" value="' + tpSlPos(k, pc).toFixed(1) + '" aria-label="' + (k === 'tp' ? 'Take profit %' : 'Stop loss %') + '" style="--p:' + tpSlPos(k, pc).toFixed(1) + '%">' +
+    var lim = k === 'sl' ? tpSlPos('sl', slMax(t)) : 100;
+    return '<div class="tps-sl ' + k + '"' + (lim < 100 ? ' style="--lim:' + lim.toFixed(1) + '%" title="Below ' + fmtK(launchFloor(t) / 1000) + ' (launch market cap) the price can’t fall on the curve"' : '') + '><input type="range" min="0" max="100" step="0.1" data-tpr="' + k + '" value="' + tpSlPos(k, pc).toFixed(1) + '" aria-label="' + (k === 'tp' ? 'Take profit %' : 'Stop loss %') + '" style="--p:' + tpSlPos(k, pc).toFixed(1) + '%">' +
       '<div class="tps-sk mono">' + (k === 'tp' ? [0, 50, 250, 1000] : [0, 25, 50, 95]).map(function (x, i) { var ps = tpSlPos(k, x); return '<button data-act="tpPick" data-arg="' + k + '|' + x + '" style="left:' + ps.toFixed(1) + '%' + (i === 0 ? ';transform:none' : i === 3 ? ';transform:translateX(-100%)' : '') + '">' + (x ? (k === 'tp' ? '+' : '−') : '') + x + '%</button>'; }).join('') + '</div></div>'; }
-  function tpSetPct(k, pct) { if (!TLD) setTimeout(lwRefit, 0); var t = find(S.tick); if (!t) return; pct = tpRound(Math.max(k === 'tp' ? 0.5 : 0.5, Math.min(TPMAX[k] * (k === 'tp' ? 5 : 1), pct)));
+  function tpSetPct(k, pct) { if (!TLD) setTimeout(lwRefit, 0); var t = find(S.tick); if (!t) return; pct = tpRound(Math.max(k === 'tp' ? 0.5 : Math.min(0.5, slMax(t)), Math.min(k === 'tp' ? TPMAX.tp * 5 : slMax(t), pct)));
     if (S.tpF[k + 'U'] === 'mc') { var mc = t.mcN * 1000; S.tpF[k + 'V'] = String(Math.round(k === 'tp' ? mc * (1 + pct / 100) : mc * (1 - pct / 100))); } else S.tpF[k + 'V'] = String(pct);
     var inp = document.getElementById('tp-' + k); if (inp && document.activeElement !== inp) inp.value = S.tpF[k + 'V']; tpRefresh(t, k); }
   function tpRefresh(t, k) {   // update the TP/SL panel in place (no full re-render while typing or dragging)
@@ -3800,13 +3807,14 @@
     var box = document.getElementById('c-tl'), t = find(S.tick); if (!box) return;
     if (!t || S.side !== 'tpsl' || !LW.chart || !t.live) { if (box._h) { box.innerHTML = ''; box._h = ''; } lwTpAxis(null, null); return; }
     try { var aw = LW.chart.priceScale('right').width(); if (aw && box._aw !== aw) { box._aw = aw; box.style.setProperty('--axw', aw + 'px'); } } catch (e) {}   // lines end exactly at the price axis
-    var main = lwMain(), H = box.clientHeight, tg = tpTargets(t), h = '', ps = position(t), sp = ps ? ps.tok * S.tpF.amt / 100 / (t.supply || 1e9) * 100 : 0,
+    var main = lwMain(), H = box.clientHeight, tg = tpTargets(t), h = '', tops = [], ps = position(t), sp = ps ? ps.tok * S.tpF.amt / 100 / (t.supply || 1e9) * 100 : 0,
       supT = (sp > 0 ? (sp < 0.01 ? '<0.01' : sp < 1 ? sp.toFixed(2) : sp.toFixed(1)) : '0') + '%';   // like GMGN: the tag only says how much it sells (here: % of supply)
     ['tp', 'sl'].forEach(function (k) { if (!S.tpF[k] || !(tg[k] > 0)) return; var y = main.priceToCoordinate(mcToChart(tg[k])), off = '';
       if (y == null || y < 14) { off = y == null ? '' : ' ↑'; y = y == null ? (k === 'tp' ? 14 : H - 14) : 14; } else if (y > H - 14) { y = H - 14; off = ' ↓'; }
       var pc = tpPct(t, k);
-      h += '<div class="tgl ' + k + (TLD && TLD.k === k ? ' drag' : '') + '" data-tl="' + k + '" style="top:' + y.toFixed(1) + 'px"><i></i><span class="tl-p mono" title="' + (k === 'tp' ? 'Take profit +' : 'Stop loss −') + tpRound(pc) + '% · sells ' + supT + ' of the supply"><b>' + (k === 'tp' ? 'TP' : 'SL') + off + '</b><em>' + supT + '</em></span><span class="tl-o"></span></div>'; });
-    if (box._h !== h) { box.innerHTML = h; box._h = h; }
+      tops.push([k, y]); h += '<div class="tgl ' + k + (TLD && TLD.k === k ? ' drag' : '') + '" data-tl="' + k + '" style="top:@' + k + '@"><i></i><span class="tl-p mono" title="' + (k === 'tp' ? 'Take profit +' : 'Stop loss −') + tpRound(pc) + '% · sells ' + supT + ' of the supply"><b>' + (k === 'tp' ? 'TP' : 'SL') + off + '</b><em>' + supT + '</em></span><span class="tl-o"></span></div>'; });
+    if (box._h !== h) { box._h = h; box.innerHTML = tops.reduce(function (a, p) { return a.replace('@' + p[0] + '@', p[1].toFixed(1) + 'px'); }, h); }
+    else tops.forEach(function (p) { var e = box.querySelector('.tgl.' + p[0]); if (e) e.style.top = p[1].toFixed(1) + 'px'; });
     lwTpAxis(t, tg);
   }
   LW.tpl = {};
@@ -3821,8 +3829,6 @@
   function tlMove(e) { if (!TLD) return; var box = document.getElementById('c-tl'), t = find(S.tick); if (!box || !t) return; e.preventDefault();
     var y = e.clientY - box.getBoundingClientRect().top, v = lwMain().coordinateToPrice(Math.max(4, Math.min(box.clientHeight - 4, y))); if (v == null) return;
     var mc = t.mcN * 1000, u = chartToMc(v), d = (u / mc - 1) * 100, k = TLD.k;
-    // dragged through the price: the line changes side (TP ↔ SL). The old line on that side is switched off — the nearer stop/target fires first anyway
-    if ((k === 'tp' && d < -0.5) || (k === 'sl' && d > 0.5)) { var nk = k === 'tp' ? 'sl' : 'tp'; S.tpF[k] = false; S.tpF[nk] = true; TLD.k = nk; k = nk; tpSetPct(k, Math.abs(d)); render(); return; }
     tpSetPct(k, k === 'tp' ? d : -d); }
   document.addEventListener('pointerdown', function (e) { var l = e.target.closest && e.target.closest('#c-tl .tgl'); if (!l) return; e.preventDefault(); e.stopPropagation();
     TLD = { k: l.getAttribute('data-tl') }; try { LW.chart.priceScale('right').applyOptions({ autoScale: false }); } catch (x) {} document.body.classList.add('tl-drag'); try { l.setPointerCapture(e.pointerId); } catch (x) {} l.classList.add('drag'); }, true);
@@ -3830,6 +3836,7 @@
   document.addEventListener('pointerup', function () { if (!TLD) return; document.body.classList.remove('tl-drag'); TLD = null; var b = document.getElementById('c-tl'); if (b) b._h = ''; lwTpsl(); }, true);
   document.addEventListener('pointercancel', function () { TLD = null; document.body.classList.remove('tl-drag'); }, true);
   function tpslPanel(t, pos, bsBar) {
+    if (S.tpF.sl && S.tpF.slU === 'pct' && t.live && parseFloat(S.tpF.slV) > slMax(t) && slMax(t) > 0) S.tpF.slV = String(tpRound(Math.max(0.5, slMax(t) * .5)));   // start inside the reachable range
     var id = esc(t.tick), F = S.tpF, mode = tpMode(t), elig = jtEligible(t);
     var row = function (k, label, cls) { var on = F[k], u = F[k + 'U'];
       return '<div class="tps-row ' + cls + (on ? ' on' : '') + '"><button class="tps-tg" data-act="tpTog" data-arg="' + k + '" role="switch" aria-checked="' + on + '"><i></i><b>' + label + '</b></button>' +
@@ -4541,7 +4548,7 @@
   document.addEventListener('change', function (e) { if (e.target && e.target.hasAttribute && e.target.hasAttribute('data-coimg')) { coPickImage(e.target.files && e.target.files[0]); e.target.value = ''; } });
   document.addEventListener('input', function (e) {
     if (e.target.hasAttribute && e.target.hasAttribute('data-tpv')) { var tk0 = e.target.getAttribute('data-tpv'), tt1 = find(S.tick); S.tpF[tk0 + 'V'] = e.target.value.replace(/[^0-9.,kKmM$]/g, '').replace(',', '.'); if (!tt1) return; tpRefresh(tt1, tk0); lwRefit(); return; }
-    if (e.target.hasAttribute && e.target.hasAttribute('data-tpr')) { var kr = e.target.getAttribute('data-tpr'); e.target.style.setProperty('--p', e.target.value + '%'); tpSetPct(kr, tpSlVal(kr, +e.target.value)); return; }
+    if (e.target.hasAttribute && e.target.hasAttribute('data-tpr')) { var kr = e.target.getAttribute('data-tpr'); tpSetPct(kr, tpSlVal(kr, +e.target.value)); var tr0 = find(S.tick); if (tr0) { var sp0 = tpSlPos(kr, tpPct(tr0, kr)); e.target.value = sp0.toFixed(1); e.target.style.setProperty('--p', sp0.toFixed(1) + '%'); } return; }
     if (e.target.hasAttribute && e.target.hasAttribute('data-burnpct')) { S.burnPct = +e.target.value; var t = find(S.burnTick), pos = t && position(t); if (!pos) return; var tok = pos.tok * S.burnPct / 100;
       var q = function (id, v) { var x = document.getElementById(id); if (x) x.textContent = v; }; q('bt-tok', fmtNum(Math.round(tok)) + ' $' + t.tick); q('bt-sup', (tok / 1e9 * 100).toFixed(3) + '%'); q('bt-usd', '$' + fmtNum(Math.round(tok * price(t))));
       var g = document.querySelector('.bt-go'); if (g) g.textContent = '🔥 Burn ' + S.burnPct + '% of my $' + t.tick; document.querySelectorAll('.bt-pre button').forEach(function (bb) { bb.classList.toggle('on', +bb.getAttribute('data-arg') === S.burnPct); }); return; }
