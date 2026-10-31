@@ -93,6 +93,16 @@ Other ideas: ops low-balance Telegram alert, own domain treid.fun (Phantom trust
 - Creator share after graduation: 0.2% (DAMM v2 0.5%, Meteora protocol 20%, LP fees 50/50 creator/treid; migration config A8gMr… has protocolFeePercent 0 → program default 20% applies).
 - Graceful restart: SIGTERM → no new money tx (HALT 'restarting'), in-flight lock finishes (≤25 s), SSE clients told to reconnect, exit 0. Render can't do zero-downtime with a disk; this is the safe version.
 
+### Done 30–31 Oct 2026
+- Fixes: modal "shake" on live re-renders (overlays keep their open animation once: `ov-still`), logo/sparkline replay, iOS deeplink connect (pre-stored keys `treid.dlpre`, "Almost connected" fallback), factory tap-to-advance.
+- TP/SL GMGN-style: % sliders, draggable TP/SL lines on the chart (`#c-tl`, axis labels via price lines), TP stops at the price, SL can't go below the launch MC (lowest MC in history) while on the curve; overlays follow zoom per frame (`lwLoop`).
+- Branch `dev-share-100` (NOT merged, waiting for the owner's OK): dev share up to 100% for new coins (`dc=1` in metadata), older coins keep the 50% cap.
+- **Callout rewards** (branch `callout-rewards`, waiting for the owner's OK) — like pump.fun's, but funded per trade:
+  - a buy made within 24h of opening someone's callout carries memo `treid:co:<id>` (buyer's own tx; `buildSwap({memo})`, buys only, SOL pairs only).
+  - indexer `callrew.mjs`: caller earns `CALLOUT_SHARE_PCT` (default 25) of treid's fee on that trade (curve: half of trading fee; DAMM: 40% of pool fee; capped at the normal rate so sniper-trap fees don't count). Not for the caller's own buys, the dev's buys, or callouts by the dev; callout must be ≤72h old and about the same coin.
+  - paid daily (UTC) in SOL from ops, min $1, 5 per tx, memo `treid:copay:<wallet>:<lamports>:<day>` → rlog kind `copay` (rebuilt from chain like every payout); owed SOL is kept out of sweep/buyback (`reserved`).
+  - wash trading always loses (1% fee paid, ~0.1% back). API `/api/coearn`, `/api/coearn/<wallet>`, `earn` on each callout. Test: `chain/indexer/callrew_test.mjs`.
+
 ## Older pending items (offered, not confirmed/done)
 - Holders-only page (not started). Telegram alerts: done (`alerts.mjs`, needs env).
 - pump.fun app ideas: Deposit/Receive done (QR); new-callouts badge on mobile nav + pause queue already exist.

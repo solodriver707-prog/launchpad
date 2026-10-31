@@ -54,7 +54,7 @@ const parseSplit = (uri) => { let pair = false, rw = null; try { const u = new U
     if (s) { const p = s.split('.').map(Number); if (p.length === 3 && p.every((x) => Number.isInteger(x) && x >= 0 && x <= 100) && p[0] + p[1] + p[2] === 100) { const d = Math.min(50, p[2]); return { h: p[0], b: p[1] + p[2] - d, d, pair, rw }; } /* dev share capped at 50% on the server too (the rest is burned) */ } } catch {} return { h: 70, b: 20, d: 10, pair, rw }; };
 
 export { parseSplit };
-export function startOps({ conn, dbc, ops, treasury, q, q1, run, mainnet = false, rewardOk = async () => false, quoteUsd = () => 150, poolAuthority, log = console.log, everyMs = 10 * 60e3, liabilities = () => 0, devState = (c) => ({ state: 'active', creator: c.creator }), ready = () => true }) {
+export function startOps({ conn, dbc, ops, treasury, q, q1, run, mainnet = false, rewardOk = async () => false, quoteUsd = () => 150, poolAuthority, log = console.log, everyMs = 10 * 60e3, liabilities = () => 0, reserved = () => 0, devState = (c) => ({ state: 'active', creator: c.creator }), ready = () => true }) {
   const send = (ixs) => { if (HALT.on) throw new Error('ops halted'); return sendTx(conn, ixs, [ops]); },   // nothing leaves the ops wallet once the ledger is broken
     amm = new CpAmm(conn), DAMM_CFG = DAMM_V2_MIGRATION_FEE_ADDRESS[6];
   const rec = (sig, i, mint, kind, amt, extra = null) => { try { run('INSERT OR IGNORE INTO rlog(sig,i,mint,kind,lamports,ts,extra) VALUES(?,?,?,?,?,?,?)', sig, i, mint, kind, Number(amt), Date.now(), extra); } catch (e) { halt(e.message); throw e; } };
@@ -84,7 +84,7 @@ export function startOps({ conn, dbc, ops, treasury, q, q1, run, mainnet = false
     if (!TREID || !mainnet) return; const tinfo = await conn.getAccountInfo(new PublicKey(TREID)); if (!tinfo) return; const tprog = tinfo.owner, tm = new PublicKey(TREID), ata = getAssociatedTokenAddressSync(tm, ops.publicKey, false, tprog);
     const left = treidLeft(); if (left > 0) { const ai = await conn.getAccountInfo(ata); const have = ai ? unpackAccount(ata, ai, tprog).amount : 0n, amt = BigInt(left) < have ? BigInt(left) : have;
       if (amt > 0n) { const sgr = await send([createBurnCheckedInstruction(ata, tm, ops.publicKey, amt, DEC, [], tprog), memoIx(`treid:tburnr:${TREID}:${amt}`)]); rec(sgr, 0, TREID, 'tburnr', amt); log('ops   $TREID residual burned', amt.toString()); } }
-    const bal0 = await conn.getBalance(ops.publicKey), free = bal0 - 0.2e9 - liabilities() - pendingSol(), lam = Math.floor(Math.min(treidBudget(), free));   // never spend SOL that is owed to creators or holders (part of the fees may already sit in the treasury)
+    const bal0 = await conn.getBalance(ops.publicKey), free = bal0 - 0.2e9 - liabilities() - pendingSol() - reserved(), lam = Math.floor(Math.min(treidBudget(), free));   // never spend SOL that is owed to creators or holders (part of the fees may already sit in the treasury)
     if (lam < TREID_MIN) return;
     const qr = await (await fetchT(`${JUP}/swap/v1/quote?inputMint=${WSOL}&outputMint=${TREID}&amount=${lam}&slippageBps=300&maxAccounts=40`)).json();
     if (!qr?.outAmount || qr.outputMint !== TREID || qr.inputMint !== WSOL || String(qr.inAmount) !== String(lam)) throw new Error('no $TREID route');
@@ -258,7 +258,7 @@ export function startOps({ conn, dbc, ops, treasury, q, q1, run, mainnet = false
     return { got };
   }
   async function sweep() {
-    const bal = await conn.getBalance(ops.publicKey), keep = 0.2e9 + liabilities() + pendingSol() + treidBudget();   // never sweep SOL that is owed to creators or holders
+    const bal = await conn.getBalance(ops.publicKey), keep = 0.2e9 + liabilities() + pendingSol() + treidBudget() + reserved();   // never sweep SOL that is owed to creators, holders or callers
     if (treasury && bal > keep + 0.1e9) { const amt = bal - keep; await send([SystemProgram.transfer({ fromPubkey: ops.publicKey, toPubkey: new PublicKey(treasury), lamports: amt })]); log('ops   swept', (amt / 1e9).toFixed(4), 'SOL to treasury'); }
   }
   let busy = false; const status = { bal: null, low: false };

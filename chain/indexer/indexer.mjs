@@ -15,6 +15,7 @@ import dns from 'node:dns/promises';
 import { opsKeypair, startOps, treidCfg, parseSplit } from './ops.mjs';
 import { startRewards } from './rewards.mjs';
 import { startCallouts } from './callouts.mjs';
+import { startCalloutRewards, coMemoOf, CO_SHARE } from './callrew.mjs';
 import { startBubbles } from './bubbles.mjs';
 import { startPush } from './push.mjs';
 import { curveOk } from './curve.mjs';
@@ -170,7 +171,7 @@ let PUSH = null; const clients = new Set(); const push = (ev) => { if (PUSH) PUS
 function buildCoinsSnap() { if (coinsSnap && coinsSnap.busy) return; if (coinsSnap) coinsSnap.busy = true;
   try { const v = q('SELECT mint FROM coins ORDER BY created_slot DESC LIMIT 2000').filter((r) => !HIDDEN.has(r.mint)).map((r) => stats(r.mint, true)), raw = JSON.stringify(v); coinsSnap = { at: Date.now(), v, out: { raw, __gz: zlib.gzipSync(raw, { level: 6 }) } }; }
   catch (e) { if (coinsSnap) coinsSnap.busy = false; throw e; } }
-let CO = null, BUB = null, bubC = new Map(), walC = new Map(), coinsSnap = null, burnsSnap = null; const opsSolC = { v: null };   // callouts (started below, once the helpers exist)
+let CO = null, CR = null, BUB = null, bubC = new Map(), walC = new Map(), coinsSnap = null, burnsSnap = null; const opsSolC = { v: null };   // callouts (started below, once the helpers exist)
 
 // pair tokens: SOL, USDC, USDT always; anything else only if Jupiter lists it as verified with real liquidity (no self-priced fakes)
 const qOk = new Map(), badgeC = new Map();
@@ -304,6 +305,7 @@ async function handle(sig) {
   if (tx.meta?.err) { run('INSERT OR IGNORE INTO seen VALUES(?)', sig); return; }
   const keys = tx.transaction.message.getAccountKeys({ accountKeysFromLookups: tx.meta.loadedAddresses }), ts = (tx.blockTime || Math.floor(Date.now() / 1000)) * 1000, ixs = dbcIxs(tx, keys);
   for (const x of ixs) if (CFG_DISCS.has(x.disc) && x.accts[0]) await addConfig(x.accts[0]);   // a new treid config: account 0 of create_config
+  const coId = coMemoOf(tx, keys);   // bought from a callout on treid? (memo inside the buyer's own transaction)
   let again = false; const inits = poolInits(tx); for (const it of inits) if ((await addCoin(it.mint, tx.slot, ts, it.creator, it.pool)) === 'retry') again = true;
   for (const x of ixs) if (MIG_DISC.has(x.disc)) for (const a of x.accts) { const c = a && q1('SELECT * FROM coins WHERE pool=?', a); if (c && !c.damm) setTimeout(() => checkGrad(c).catch(() => {}), 1500); }
   // swap events emitted by the DBC program itself (CPI through its event authority — can't be faked); the LAST one per pool wins
@@ -330,6 +332,7 @@ async function handle(sig) {
     const rowSig = n++ ? sig + '#' + coin.mint.slice(0, 6) : sig;
     run('INSERT OR IGNORE INTO trades(sig,mint,wallet,side,sol,tokens,price_usd,mcap_usd,slot,ts,sniper,bundle,fee_sol,progress,usd,reserve) VALUES(?,?,?,?,?,?,?,?,?,?,?,0,?,?,?,?)', rowSig, coin.mint, trader, side, sol, tokens, price, price * circ, tx.slot, ts, sniper, fee / QD, Math.min(100, prog), sol * QU, reserve);
     if (SYSW.has(trader)) run('UPDATE trades SET sys=1 WHERE sig=?', rowSig);   // treid's own wallets (tax sales, buybacks) never count as market activity
+    if (coId && buy && CR) CR.attr({ sig: rowSig, id: coId, trader, coin, ts, usd: sol * QU, sys: SYSW.has(trader), treidFeeLam: Math.min(fee * 0.5, inAmt * (tax > 0 ? 0.002 : 0.004)) });   // treid's half of the trading fee (Meteora's cut is separate), never more than the normal rate (sniper-trap fees don't count)
     // bundle = several different wallets buying in the same slot right after launch (where coordinated buys matter)
     if (buy && coin.created_slot > 0 && tx.slot - coin.created_slot <= 20) { const same = q("SELECT DISTINCT wallet FROM trades WHERE mint=? AND slot=? AND side='buy' AND wallet!=?", coin.mint, tx.slot, coin.creator); if (same.length >= 3) run("UPDATE trades SET bundle=1 WHERE mint=? AND slot=? AND side='buy' AND wallet!=?", coin.mint, tx.slot, coin.creator); }
     const t = q1('SELECT * FROM trades WHERE sig=?', rowSig); if (t) push({ type: 'trade', ...t, symbol: coin.symbol });
@@ -347,6 +350,7 @@ async function handle(sig) {
     const rowSig = n++ ? sig + '#' + coin.mint.slice(0, 6) : sig;
     run('INSERT OR IGNORE INTO trades(sig,mint,wallet,side,sol,tokens,price_usd,mcap_usd,slot,ts,sniper,bundle,fee_sol,progress,usd,reserve) VALUES(?,?,?,?,?,?,?,?,?,?,0,0,?,100,?,?)', rowSig, coin.mint, trader, side, sol, tokens, price, price * circ, tx.slot, ts, fee / QD, sol * QU, Number(d.reserve_b_amount) / QD);
     if (SYSW.has(trader)) run('UPDATE trades SET sys=1 WHERE sig=?', rowSig);
+    if (coId && buy && CR) CR.attr({ sig: rowSig, id: coId, trader, coin, ts, usd: sol * QU, sys: SYSW.has(trader), treidFeeLam: Math.min(fee * 0.4, sol * QD * 0.002) });   // treid's LP half of the pool fee after Meteora's 20%
     const t = q1('SELECT * FROM trades WHERE sig=?', rowSig); if (t) push({ type: 'trade', ...t, symbol: coin.symbol });
     console.log('trade ', coin.symbol, side.padEnd(4), sol.toFixed(3), coin.quote_symbol || 'SOL', tokens.toFixed(0), '(DAMM)');
   }
@@ -584,7 +588,8 @@ async function handleReq(req, res) {
       req.on('end', async () => { try { J(await CO.post(JSON.parse(body), ip(req))); } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: pubErr(e) })); } }); return; }
     if (p[1] === 'coreact' && req.method === 'POST') { let body = ''; req.on('data', (d) => { body += d; if (body.length > 3000) req.destroy(); });
       req.on('end', () => { try { J(CO.react(JSON.parse(body), ip(req))); } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: pubErr(e) })); } }); return; }
-    if (p[1] === 'callouts') { const cm = u.searchParams.get('mint') || null, me0 = String(u.searchParams.get('me') || ''), me = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(me0) ? me0 : null; return J(cached('co|' + (cm || '') + '|' + (me || ''), 5e3, () => { const memo = new Map(); return CO.list(cm, me).map((c) => { const k = c.mint + '|' + c.wallet; if (!memo.has(k)) memo.set(k, posStats(c.mint, c.wallet)); return { ...c, ps: memo.get(k) }; }); })); }   // every callout carries its author's live position
+    if (p[1] === 'callouts') { const cm = u.searchParams.get('mint') || null, me0 = String(u.searchParams.get('me') || ''), me = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(me0) ? me0 : null; return J(cached('co|' + (cm || '') + '|' + (me || ''), 5e3, () => { const memo = new Map(); const L = CO.list(cm, me), ern = CR ? CR.byCallout(L.map((c) => c.id)) : {}; return L.map((c) => { const k = c.mint + '|' + c.wallet; if (!memo.has(k)) memo.set(k, posStats(c.mint, c.wallet)); return { ...c, ps: memo.get(k), earn: ern[c.id] || null }; }); })); }   // every callout carries its author's live position
+    if (p[1] === 'coearn') { if (!CR) return J(null); if (p[2]) { const w = String(p[2]); if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(w)) return J(null); return J(cached('cre|' + w, 15e3, () => CR.stats(w))); } return J(cached('cretop', 60e3, () => ({ share: CO_SHARE, top: CR.top(30) }))); }   // callout rewards: one caller's earnings, or the 30-day top callers
     if (p[1] === 'dev' && p[2]) { const w = String(p[2]); if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(w)) return J(null); return J(cached('dev|' + w, 30e3, () => devRecord(w))); }   // creator reputation: every coin this wallet launched on treid
     if (p[1] === 'wallet' && p[2]) { const w = String(p[2]); if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(w)) return J(null); const c0 = walC.get(w); if (c0 && Date.now() - c0.ts < 30e3) return J(c0.v); if (!rate('wal|' + ip(req), 40, 60e3)) return J(c0 ? c0.v : null);
       let sol = null; try { sol = (await conn.getBalance(new PublicKey(w))) / 1e9; } catch {}
@@ -653,6 +658,8 @@ CO = startCallouts({ q, q1, run, push, rate, pinJSON, pinFile, pinataJwt: PINATA
   coinStats: async (mint, wallet) => { const last = q1('SELECT mcap_usd, price_usd FROM trades WHERE mint=? ORDER BY ts DESC, slot DESC LIMIT 1', mint) || {}; let pos = 0;
     let held = false; try { const hs = await holdersCached(mint); const h = hs.find((x) => x.wallet === wallet && !x.curve); if (h) { held = true; pos = h.pct / 100 * SUPPLY * (last.price_usd || 0); } } catch {}
     return { mc: last.mcap_usd || 0, pos, allowed: held && pos >= 1 }; } });   // you must actually hold ≥ $1 of the coin right now (a dust buy doesn't buy a voice)
+run(`CREATE TABLE IF NOT EXISTS rlog(sig TEXT, i INT, mint TEXT, kind TEXT, lamports INT, ts INT, PRIMARY KEY(sig, i))`); try { run('ALTER TABLE rlog ADD COLUMN extra TEXT'); } catch {} run('CREATE TABLE IF NOT EXISTS kv(k TEXT PRIMARY KEY, v TEXT)');
+CR = startCalloutRewards({ conn, ops: OPS, q, q1, run, mainnet: MAINNET, solUsd: () => SOL_USD, ready: () => !!REW && REW.ready(), otherLiab: () => (REW ? REW.liabilities() : 0) });   // callers earn a share of treid's fee on the buys their callouts bring
 CO.restore();
 setInterval(() => push({ type: 'ping', t: Date.now() }), 25e3);               // keeps proxies from closing the stream
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -679,7 +686,7 @@ async function start() {
   REW = startRewards({ conn, dbc, ops: OPS, treasury: PARTNER, q, q1, run, mainnet: MAINNET, quoteUsd: (c) => quoteUsd(c.quote_mint, c.quote_symbol), balances: async (mint) => new Map((await holders(mint)).filter((h) => !h.curve).map((h) => [h.wallet, h.pct / 100 * SUPPLY])) });
   for (let i = 1; ; i++) { try { await REW.rebuild(); break; } catch (e) { console.log('rewards rebuild retry', i, String(e?.message || e).slice(0, 120)); await sleep(Math.min(60e3, 5e3 * i)); } }   // a hole in the ledger could pay the wrong person
   setTimeout(() => REW.cycle(), 30e3); setInterval(() => REW.cycle(), +(process.env.OPS_EVERY_MIN || 10) * 60e3);
-  OPS_ST = startOps({ conn, dbc, ops: OPS, treasury: PARTNER, q, q1, run, mainnet: MAINNET, rewardOk: (m) => quoteAllowed(m), quoteUsd: (c) => quoteUsd(c.quote_mint, c.quote_symbol), devState: (c) => REW.state(c), liabilities: () => REW.liabilities(), ready: () => REW.ready(), poolAuthority: deriveDbcPoolAuthority().toBase58(), everyMs: +(process.env.OPS_EVERY_MIN || 10) * 60e3 });
+  OPS_ST = startOps({ conn, dbc, ops: OPS, treasury: PARTNER, q, q1, run, mainnet: MAINNET, rewardOk: (m) => quoteAllowed(m), quoteUsd: (c) => quoteUsd(c.quote_mint, c.quote_symbol), devState: (c) => REW.state(c), liabilities: () => REW.liabilities(), reserved: () => CR.owed(), ready: () => REW.ready(), poolAuthority: deriveDbcPoolAuthority().toBase58(), everyMs: +(process.env.OPS_EVERY_MIN || 10) * 60e3 });
   const opsBal = () => conn.getBalance(OPS.publicKey).then((b) => { opsSolC.v = b / 1e9; if (MAINNET && b < 0.05e9) console.error('!! ops wallet low on SOL:', b / 1e9); }).catch(() => {}); opsBal(); setInterval(opsBal, 10 * 60e3);
   console.log('ops wallet', OPS.publicKey.toBase58(), '→ treasury', PARTNER);
 }

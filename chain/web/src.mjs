@@ -155,13 +155,14 @@ export async function quote({ rpc, pool, side, amount, slippageBps = 500, expect
   let impact = 0; try { const s0 = Number((vpw.poolState || vpw).sqrtPrice.toString()), s1 = Number((q.nextSqrtPrice || 0).toString()); if (s0 > 0 && s1 > 0) impact = Math.abs(1 - (s1 / s0) ** 2) * 100; } catch {}
   return { out: Number(outRaw.toString()) / div, minOut: Number(minRaw.toString()) / div, feeSol: fee / 10 ** qd, quoteDecimals: qd, quoteMint: cfg.quoteMint.toBase58(), amountIn: amountIn.toString(), minRaw: minRaw.toString(), mode, net: true, impact };
 }
-export async function buildSwap({ rpc, owner, pool, side, amount, slippageBps = 500, expect = null }) {
+export async function buildSwap({ rpc, owner, pool, side, amount, slippageBps = 500, expect = null, memo = null }) {
   owner = pk(owner); const q = await quote({ rpc, pool, side, amount, slippageBps, expect }), cl = client(rpc);
   let tx;
   if (q.graduated) { const { damm } = await poolCtx(rpc, pool, expect), ps = damm.ps, sell = side === 'sell';
     tx = await ammC(rpc).swap2({ payer: owner, pool: damm.pool, inputTokenMint: sell ? ps.tokenAMint : ps.tokenBMint, outputTokenMint: sell ? ps.tokenBMint : ps.tokenAMint, amountIn: new BN(q.amountIn), minimumAmountOut: new BN(q.minRaw),
       tokenAVault: ps.tokenAVault, tokenBVault: ps.tokenBVault, tokenAMint: ps.tokenAMint, tokenBMint: ps.tokenBMint, tokenAProgram: TOKEN_2022_PROGRAM_ID, tokenBProgram: damm.qprog, referralTokenAccount: null, swapMode: 0 }); }
   else tx = await cl.pool.swap2({ owner, pool: pk(pool), swapBaseForQuote: side === 'sell', referralTokenAccount: null, swapMode: q.mode, amountIn: new BN(q.amountIn), minimumAmountOut: new BN(q.minRaw) });
+  if (memo && side === 'buy' && /^treid:co:\d{1,12}$/.test(memo)) tx.add(new TransactionInstruction({ keys: [], programId: pk('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr'), data: Buffer.from(memo) }));   // bought from a callout: credits the caller (no accounts, moves nothing)
   const out = await finish(rpc, [tx], owner, []);
   return { ...out, quote: q };
 }

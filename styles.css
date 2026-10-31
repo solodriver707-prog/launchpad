@@ -5853,3 +5853,18 @@ html body .hdr-right .wbal .wb-acts .btn.pri{display:inline-flex!important}   /*
 @media (max-width:760px){.c-tl .tl-p{right:12px!important;font-size:10px!important}.c-tl .tl-p b,.c-tl .tl-p em{padding:4px 7px!important}}
 .tps-sl[style*="--lim"]{position:relative}
 .tps-sl[style*="--lim"]:after{content:'';position:absolute;top:9px;height:4px;left:var(--lim);right:0;border-radius:4px;background:repeating-linear-gradient(135deg,rgba(255,255,255,.12) 0 3px,transparent 3px 6px);pointer-events:none}
+/* ---- callout rewards ---- */
+.co-cred{display:block;margin-top:8px;font-size:12px;color:var(--soft);text-align:center}
+.co-cred b{color:#E6CB95}
+.co-earn{font-size:11.5px;color:#3DDC97;background:rgba(61,220,151,.08);border:1px solid rgba(61,220,151,.22);border-radius:99px;padding:2px 8px;white-space:nowrap}
+.co-earnb{display:flex;gap:10px;align-items:flex-start;margin:0 12px 10px;padding:10px 12px;border-radius:12px;background:linear-gradient(135deg,rgba(230,203,149,.10),rgba(230,203,149,.03));border:1px solid rgba(230,203,149,.25);font-size:12.5px;line-height:1.45;color:var(--soft)}
+.co-earnb b{color:#F2E3C2}
+.co-top{display:flex;flex-direction:column}
+.co-toph,.co-topr{display:grid;grid-template-columns:minmax(0,1.6fr) 1fr auto;gap:10px;align-items:center;padding:9px 14px;font-size:12.5px}
+.co-toph{font-size:11px;text-transform:uppercase;letter-spacing:.06em}
+.co-topr{background:none;border:0;border-top:1px solid var(--line);color:inherit;text-align:left;cursor:pointer}
+.co-topr:hover{background:rgba(255,255,255,.03)}
+.co-topn{display:flex;align-items:center;gap:8px;min-width:0}.co-topn b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.co-topn em{font-style:normal;color:var(--muted,#6b6b73);width:16px;text-align:right}
+.wp-coe{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;margin:12px 24px 0;padding:10px 14px;border-radius:12px;border:1px solid rgba(61,220,151,.2);background:rgba(61,220,151,.05);font-size:13px}
+@media (max-width:760px){.wp-coe{margin:10px 14px 0}}
