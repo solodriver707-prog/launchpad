@@ -28,7 +28,7 @@
   var B58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
   function b58(n) { var s = ''; for (var i = 0; i < n; i++) s += B58[Math.floor(Math.random() * 58)]; return s; }
   function fakeCA(suf) { suf = suf || 'trd'; return b58(44 - suf.length) + suf; }
-  function short(a) { return a ? a.slice(0, 4) + '…' + a.slice(/treid$/.test(a) ? -5 : -4) : ''; }
+  function short(a) { a = String(a || ''); return a ? esc(a.slice(0, 4) + '…' + a.slice(/treid$/.test(a) ? -5 : -4)) : ''; }   // escaped: addresses come from the server
   function taxBg(t) { return t === 0 ? 'var(--up)' : t <= 3 ? 'var(--yellow)' : t <= 6 ? 'var(--orange)' : 'var(--pink)'; }
   function fmtK(k) { if (!isFinite(k)) k = 0; var sg = k < 0 ? '-' : '', a = Math.abs(k); if (a < 5e-6) return '$0'; if (a > 0 && a < 0.9995) { var d0 = a * 1000; return sg + '$' + (d0 < 100 ? d0.toFixed(2) : Math.round(d0)); } if (a >= 999.995) return sg + '$' + (a / 1000).toFixed(2) + 'M'; if (a >= 99.95) return sg + '$' + Math.round(a) + 'K'; return sg + '$' + a.toFixed(1) + 'K'; }
   var SUB = '₀₁₂₃₄₅₆₇₈₉';
@@ -273,6 +273,7 @@
     off = ev.on('change', function (p) {
       if (!p || !p.accounts) return;
       if (!p.accounts[0]) { set({ wallet: null, account: null, balance: null }); toast('Wallet disconnected'); return; }
+      if (S.account && p.accounts[0].address !== S.account) { S.pos = {}; S.myPs = {}; for (var jk in JT) delete JT[jk]; }   // another account: never show (or sell from) the previous account's positions / orders
       S.walletAcc = p.accounts[0]; set({ account: p.accounts[0].address, balance: null }); refreshBalance();
     });
   }
@@ -623,7 +624,7 @@
     }).join('') + '</div>';
   }
   function redFlags(t) {
-    if (t.live) { var lf = [], L = t.lstat || {}, tm = Math.max(t.buy, t.sell); if (tm >= 6) lf.push('High tax ' + tm + '%'); if (L.top > 48) lf.push('Top 10 hold ' + Math.round(L.top) + '%'); if (L.devSold) lf.push('Dev sold'); if (L.sn >= 12) lf.push('Snipers ' + L.sn.toFixed(0) + '%'); if (L.bu >= 9) lf.push('Bundles ' + L.bu.toFixed(0) + '%'); return lf; }
+    if (t.live) { var lf = [], L = t.lstat || {}, tm = Math.max(t.buy, t.sell), spx = tm > 0 ? splitOf(t) : null; if (tm >= 6) lf.push('High tax ' + tm + '%'); if (spx && spx.d > 50) lf.push('Dev takes ' + spx.d + '% of tax'); if (L.top > 48) lf.push('Top 10 hold ' + Math.round(L.top) + '%'); if (L.devSold) lf.push('Dev sold'); if (L.sn >= 12) lf.push('Snipers ' + L.sn.toFixed(0) + '%'); if (L.bu >= 9) lf.push('Bundles ' + L.bu.toFixed(0) + '%'); return lf; }
     var f = [], h = hash(t.tick), tmax = Math.max(t.buy, t.sell), top10 = 18 + (h % 50);
     if (tmax >= 6) f.push('High tax ' + tmax + '%');
     if (t.sell - t.buy >= 3) f.push('Sell tax ' + t.sell + '%');
@@ -2314,7 +2315,7 @@
     cm.push(c); coArrive(c, t);
   }, 3500);
   // ---- real callouts: wallet-signed, stored by the indexer ----
-  function coClean(x) { return String(x || '').replace(/[\u0000-\u0008\u000B-\u001F\u007F\u202A-\u202E\u2066-\u2069]/g, '').replace(/\n{3,}/g, '\n\n').trim().slice(0, 280); }   // must match indexer/callouts.mjs
+  function coClean(x) { return String(x || '').replace(/[\u0000-\u0008\u000B-\u001F\u007F\u202A-\u202E\u2066-\u2069]/g, '').replace(/\n{3,}/g, '\n\n').trim().slice(0, 2000); }   // must match indexer/callouts.mjs (2000 chars)
   function coFromRow(r) { return { ps: psClean(r.ps), id: Number(r.id), w: String(r.wallet), text: String(r.text || ''), img: safeImg(r.img) && /^https:/.test(r.img) ? r.img : null, t: Number(r.ts) || 0, likes: +r.likes || 0, liked: !!r.liked, rt: +r.rts || 0, rtd: !!r.rtd, reply: r.reply == null ? null : Number(r.reply), mc0: (Number(r.mc) || 0) / 1000 || null, pos: Math.round(Number(r.pos) || 0), real: true, earn: r.earn && +r.earn.buys > 0 ? { buys: +r.earn.buys, sol: +r.earn.earned_sol || 0 } : null }; }
   function coMe() { return S.account ? '&me=' + encodeURIComponent(S.account) : ''; }
   function coById(id) { for (var k in S.comments) { var l = S.comments[k] || []; for (var i = 0; i < l.length; i++) if (l[i].real && l[i].id === id) return l[i]; } return null; }
@@ -2393,7 +2394,7 @@
   function quoteFor(t) {
     var isBuy = S.side === 'buy', amt = parseFloat(String(S.amount).replace(',', '.')) || 0, px = price(t);
     if (paySol(t)) amt = amt * SOL_USD / qUsdT(t) * 0.995;   // estimate after the Jupiter hop
-    var QU = qUsdT(t), sol = isBuy ? amt : amt * px / QU, pct = effTax(t), tax = sol * pct / 100, fp = feeOf(t), fee = sol * fp / 100, net = sol - tax - fee;
+    var QU = qUsdT(t), sol = isBuy ? amt : amt * px / QU, tr0 = snipeNow(t), pct = Math.max(t.buy, t.sell), tax = sol * pct / 100, fp = tr0 > 0 ? Math.max(feeOf(t), tr0 - pct) : feeOf(t), fee = sol * fp / 100, net = sol - tax - fee;   // during the trap its fee REPLACES the trading fee (same on-chain fee); the coin's tax comes on top
     var impact = Math.min(25, net * 3 / Math.sqrt(Math.max(t.mcN, 4)));
     var outTok = isBuy ? net * QU / (px * (1 + impact / 200)) : 0, outSol = isBuy ? 0 : net * (1 - impact / 200);
     var res = { isBuy: isBuy, amt: amt, sol: sol, pct: pct, tax: tax, fp: fp, fee: fee, impact: impact, out: isBuy ? outTok : outSol, min: (isBuy ? outTok : outSol) * (1 - S.slip / 100) };
@@ -3264,7 +3265,10 @@
   // ---- one tax for buy & sell + optional anti-sniper trap ----
   // hybrid trap: 3 equal steps down (mirrors on-chain DBC linear fee scheduler, numberOfPeriod 3)
   var TRAP_STEPS = 3;
-  function trapStepFee(start, base, i) { return Math.round(start - (start - base) * i / TRAP_STEPS); }
+  // what a trade really costs at trap step i: the on-chain trap fee (steps down linearly to the normal trading fee) PLUS the coin's own tax
+  function trapEndFee(tax) { return tax > 0 ? FEE.taxed : FEE.plain; }
+  function trapStepFee(start, tax, i) { return Math.round((start - (start - trapEndFee(tax)) * i / TRAP_STEPS + tax) * 10) / 10; }
+  function normalCost(tax) { return Math.round((tax + trapEndFee(tax)) * 10) / 10; }
   function snipeNow(t, at) { var sn = t.snipe; if (!sn || !sn.on) return 0; var age = ((at || Date.now()) - t.born) / 1000; if (age >= sn.dur) return 0; return trapStepFee(sn.start, Math.max(t.buy, t.sell), Math.floor(age / (sn.dur / TRAP_STEPS))); }
   function trapLeft(t) { return t.snipe && t.snipe.on ? Math.max(0, t.snipe.dur - (Date.now() - t.born) / 1000) : 0; }
   function hgSVG(f) {
@@ -3281,8 +3285,8 @@
     var m = Math.max(t.buy, t.sell), id = esc(t.tick), left = trapFmt(trapLeft(t));
     if (rel) return cls === 'card' ? '<small>TAX</small><b>' + m + '%</b><em>released</em>' : cls === 'head' ? '<b>✓ Trap over</b><small>tax is now ' + m + '%</small>' : '<b>✓ Sniper trap is over</b><small>Normal ' + m + '% tax from now on.</small>';
     if (cls === 'card') return '<small>SNIPER TAX</small><b data-trapv="' + id + '">' + snipeNow(t) + '%</b><em class="mono" data-liqt>' + left + '</em>';
-    if (cls === 'head') return '<span class="lq-big mono" data-trapv="' + id + '">' + snipeNow(t) + '%</span><span class="lq-tx"><b>🪤 Sniper tax</b><small>drops to <i>' + m + '%</i> in <i class="mono" data-liqt>' + left + '</i></small></span>';
-    return '<span class="lq-big mono" data-trapv="' + id + '">' + snipeNow(t) + '%</span><span class="lq-tx"><b>Sniper tax is on</b><small>Buying now costs <i data-trapv="' + id + '">' + snipeNow(t) + '%</i> tax. It steps down every ' + Math.round(t.snipe.dur / TRAP_STEPS) + 's and reaches <i>' + m + '%</i> in <i class="mono" data-liqt>' + left + '</i>.</small></span>';
+    if (cls === 'head') return '<span class="lq-big mono" data-trapv="' + id + '">' + snipeNow(t) + '%</span><span class="lq-tx"><b>🪤 Sniper tax</b><small>drops to <i>' + normalCost(m) + '%</i> in <i class="mono" data-liqt>' + left + '</i></small></span>';
+    return '<span class="lq-big mono" data-trapv="' + id + '">' + snipeNow(t) + '%</span><span class="lq-tx"><b>Sniper tax is on</b><small>Every trade now costs <i data-trapv="' + id + '">' + snipeNow(t) + '%</i> (trap fee + tax), buys and sells. It steps down every ' + Math.round(t.snipe.dur / TRAP_STEPS) + 's and reaches <i>' + normalCost(m) + '%</i> in <i class="mono" data-liqt>' + left + '</i>.</small></span>';
   }
   function trapBox(t, cls) {
     var f = t.snipe ? trapLeft(t) / t.snipe.dur : 0;
@@ -3557,7 +3561,7 @@
       '<text x="' + x1 + '" y="' + (y(base) - 7).toFixed(1) + '" fill="#D6D1C9" font-size="10" text-anchor="end" font-family="JetBrains Mono,monospace">' + base + '%</text>' +
       '<text x="' + x0 + '" y="' + (H - 6) + '" fill="#7A766F" font-size="9" font-family="JetBrains Mono,monospace">launch</text><text x="' + x1 + '" y="' + (H - 6) + '" fill="#7A766F" font-size="9" text-anchor="end" font-family="JetBrains Mono,monospace">+' + (sn.dur < 60 ? sn.dur + 's' : sn.dur / 60 + 'm') + '</text></svg>';
     return '<div class="field taxf"><div class="lbl"><b>Tax <span class="muted" style="font-weight:500;font-size:12px">· same for buys and sells</span></b><span class="mono" style="color:' + taxBg(base) + '">' + base + '%</span></div><div class="txrow">' + steps.join('') + '</div></div>' +
-      '<div class="trap' + (sn.on ? ' on' : '') + '"><div class="trap-t"><span class="trap-ic">🪤</span><span><b>Sniper trap <em class="trap-on">always on</em></b><small>Every coin on treid starts with a sniper trap: buyers in the first seconds pay a high fee that steps down in 3 drops to normal as the timer runs out — no single moment for bots to wait for. Minimum 50% for 30 seconds — make it stronger or longer if you like. Your own initial buy is never affected.</small></span></div>' +
+      '<div class="trap' + (sn.on ? ' on' : '') + '"><div class="trap-t"><span class="trap-ic">🪤</span><span><b>Sniper trap <em class="trap-on">always on</em></b><small>Every coin on treid starts with a sniper trap: buyers in the first seconds pay a high fee that steps down in 3 drops to normal as the timer runs out. Minimum 50% for 30 seconds — make it stronger or longer if you like. Your own initial buy is never affected.</small></span></div>' +
       (sn.on ? (function () {
         var durTxt = function (sec) { return sec < 60 ? sec + 's' : (sec % 60 ? Math.floor(sec / 60) + 'm ' + (sec % 60) + 's' : sec / 60 + 'm'); };
         var at = function (f) { return Math.round(sn.start - (sn.start - base) * f); };
@@ -3565,13 +3569,13 @@
         return '<div class="trap-cfg2"><div class="tc-row"><span class="tc-l">Trap tax</span><div class="tc-seg">' + [50, 65, 80, 90].map(function (v) { return '<button class="' + (sn.start === v ? 'on' : '') + '" data-act="snipeStart" data-arg="' + v + '">' + v + '%</button>'; }).join('') + '</div></div>' +
           '<div class="tc-row"><span class="tc-l">Lasts for</span><div class="tc-seg g">' + [[30, '30s'], [40, '40s'], [45, '45s'], [50, '50s'], [60, '1 min']].map(function (d) { return '<button class="' + (sn.dur === d[0] ? 'on' : '') + '" data-act="snipeDur" data-arg="' + d[0] + '">' + d[1] + '</button>'; }).join('') + '</div></div>' +
           '<div class="tl3"><div class="liq liq-prev" style="--f:.62"><span class="liq-fill"><svg class="liq-w" viewBox="0 0 120 10" preserveAspectRatio="none"><path d="M0 5 Q7.5 0 15 5 T30 5 T45 5 T60 5 T75 5 T90 5 T105 5 T120 5 V10 H0Z"/></svg></span><span class="liq-c"><span class="lq-big mono">' + sn.start + '%</span><span class="lq-tx"><b>What buyers see</b><small>steps down every ' + durTxt(Math.round(sn.dur / TRAP_STEPS)) + ', then tax is <i>' + base + '%</i></small></span></span></div>' +
-            '<div class="tstair">' + [0, 1, 2].map(function (i) { var w = sn.dur / TRAP_STEPS; return '<span style="--h:' + Math.max(.12, trapStepFee(sn.start, base, i) / 100).toFixed(2) + '"><b class="mono">' + trapStepFee(sn.start, base, i) + '%</b><small class="mono">' + Math.round(i * w) + '–' + Math.round((i + 1) * w) + 's</small></span>'; }).join('') + '<span class="done" style="--h:.12"><b class="mono">' + base + '%</b><small>after</small></span></div></div>' +
-          '<div class="tc-ex">💡 A bot buying <b>1 SOL</b> at launch pays <b class="dn">' + (sn.start / 100).toFixed(2) + ' SOL</b> tax. Wait ' + durTxt(Math.round(sn.dur / TRAP_STEPS)) + ' → <b class="dn">' + (trapStepFee(sn.start, base, 1) / 100).toFixed(2) + ' SOL</b>, then <b class="dn">' + (trapStepFee(sn.start, base, 2) / 100).toFixed(2) + ' SOL</b>, and after ' + durTxt(sn.dur) + ' just <b>' + (base / 100).toFixed(2) + ' SOL</b>. No single second to camp — waiting costs price, rushing costs tax.</div></div>';
+            '<div class="tstair">' + [0, 1, 2].map(function (i) { var w = sn.dur / TRAP_STEPS; return '<span style="--h:' + Math.max(.12, trapStepFee(sn.start, base, i) / 100).toFixed(2) + '"><b class="mono">' + trapStepFee(sn.start, base, i) + '%</b><small class="mono">' + Math.round(i * w) + '–' + Math.round((i + 1) * w) + 's</small></span>'; }).join('') + '<span class="done" style="--h:.12"><b class="mono">' + normalCost(base) + '%</b><small>after</small></span></div></div>' +
+          '<div class="tc-ex">💡 A bot buying <b>1 SOL</b> at launch pays <b class="dn">' + (trapStepFee(sn.start, base, 0) / 100).toFixed(2) + ' SOL</b> in fees. Wait ' + durTxt(Math.round(sn.dur / TRAP_STEPS)) + ' → <b class="dn">' + (trapStepFee(sn.start, base, 1) / 100).toFixed(2) + ' SOL</b>, then <b class="dn">' + (trapStepFee(sn.start, base, 2) / 100).toFixed(2) + ' SOL</b>, and after ' + durTxt(sn.dur) + ' just <b>' + (normalCost(base) / 100).toFixed(3) + ' SOL</b>. The trap fee goes 40% to you, 40% to treid, 20% to Meteora.</div></div>';
       })() : '') + '</div>';
   }
   setInterval(function () {
     document.querySelectorAll('[data-trap]').forEach(function (e) { var t = find(e.getAttribute('data-trap')); var v = t ? snipeNow(t) : 0; if (v > 0) e.textContent = '🪤 ' + v + '%'; else e.remove(); });
-    document.querySelectorAll('[data-trapl]').forEach(function (e) { var t = find(e.getAttribute('data-trapl')); if (!t) return; var v = snipeNow(t), m = Math.max(t.buy, t.sell), sm = e.querySelector('small'); if (v > 0) { var left = Math.ceil(t.snipe.dur - (Date.now() - t.born) / 1000); sm.innerHTML = 'tax now <i>' + v + '%</i> → ' + m + '% · ' + (left >= 60 ? Math.floor(left / 60) + 'm ' : '') + (left % 60) + 's left'; } else { e.classList.add('done'); sm.textContent = 'ended — tax is ' + m + '%'; } });
+    document.querySelectorAll('[data-trapl]').forEach(function (e) { var t = find(e.getAttribute('data-trapl')); if (!t) return; var v = snipeNow(t), m = Math.max(t.buy, t.sell), sm = e.querySelector('small'); if (v > 0) { var left = Math.ceil(t.snipe.dur - (Date.now() - t.born) / 1000); sm.innerHTML = 'cost now <i>' + v + '%</i> → ' + normalCost(m) + '% · ' + (left >= 60 ? Math.floor(left / 60) + 'm ' : '') + (left % 60) + 's left'; } else { e.classList.add('done'); sm.textContent = 'ended — tax is ' + m + '%'; } });
   }, 1000);
   function socField(c, k, name, pre, ph) {
     var v = c[k] || '', ok = v.trim().length > 2;
@@ -3672,7 +3676,7 @@
           '<div class="card-s panel pv-sum"><div class="pv-row">' + avatarHTML(preview, 52) + '<div><b>At launch</b><small class="muted">what buyers will see</small></div></div>' +
             '<div class="pv-grid"><div><small>You hold</small><b class="mono" style="color:' + (dq.pct < 3 ? '#3DDC97' : dq.pct < 8 ? '#FFD15C' : '#F2708A') + '">' + dq.pct.toFixed(2) + '%</b></div><div><small>Snipers</small><b class="mono up">0%</b></div><div><small>Bundles</small><b class="mono up">0%</b></div><div><small>Tax</small><b class="mono">' + tmax + '%</b></div></div>' +
             (c.buy > 0 && c.split && c.split.h > 0 ? '<div class="pv-rw">' + (rwOf(c) ? coinHTML(rwOf(c).key, 18) : avatarHTML(preview, 18)) + '<span>Holders get <b>' + c.split.h + '%</b> of the tax, paid in <b>' + esc(rwOf(c) ? rwOf(c).sym : '$' + preview.tick) + '</b></span></div>' : '') +
-            (c.snipe ? '<div class="pv-trap">🪤 Sniper trap: ' + [0, 1, 2].map(function (i) { return trapStepFee(c.snipe.start, tmax, i) + '%'; }).join(' → ') + ' → ' + tmax + '% over ' + (c.snipe.dur < 60 ? c.snipe.dur + 's' : c.snipe.dur / 60 + 'm') + '</div>' : '') + '</div></aside>' +
+            (c.snipe ? '<div class="pv-trap">🪤 Sniper trap: ' + [0, 1, 2].map(function (i) { return trapStepFee(c.snipe.start, tmax, i) + '%'; }).join(' → ') + ' → ' + normalCost(tmax) + '% over ' + (c.snipe.dur < 60 ? c.snipe.dur + 's' : c.snipe.dur / 60 + 'm') + '</div>' : '') + '</div></aside>' +
       '</div></main>';
   }
 
@@ -4491,11 +4495,11 @@
           if (side0 === 'sell') { if (amt > ps0.tok) amt = ps0.tok; if (amt <= 0) { toast('You don\'t hold any $' + t.tick + ' yet — buy first'); break; } }
           if (paySol(t)) { if (typeof S.balance === 'number' && amt > S.balance - 0.01) { toast('Not enough SOL — balance ' + S.balance.toFixed(3)); break; } if (S.busy) break; S.busy = 'Swapping SOL → ' + qSymT(t); render(); toast('Step 1 of 2: swap SOL → ' + qSymT(t) + ' — confirm in your wallet');
             jupSolToPair(t, amt).catch(function (e) { throw /fetch/i.test(String(e && e.message)) ? new Error('Couldn’t reach Jupiter — try again in a moment') : e; }).then(function (got) { S.busy = null; render(); return chainRun('Step 2 of 2: buying $' + t.tick, function (T) { return T.buildSwap({ rpc: RPC, expect: { mint: t.ca, partners: [PARTNER, TREASURY] }, owner: S.account, pool: t.pool, side: 'buy', amount: got, slippageBps: Math.round(S.slip * 100) }); }); })
-              .then(function (b) { S.amount = ''; confettiSmall(); toast('Bought ~' + fmtNum(b.quote.out * (1 - Math.max(t.buy, t.sell) / 100)) + ' $' + t.tick + ' with SOL · on-chain ✓', t); setTimeout(function () { liveLoad(t); refreshBalance(); }, 1200); })
+              .then(function (b) { S.amount = ''; confettiSmall(); toast('Bought ~' + fmtNum(b.quote.out) + ' $' + t.tick + ' with SOL · on-chain ✓', t); setTimeout(function () { liveLoad(t); refreshBalance(); }, 1200); })
               .catch(function (e) { S.busy = null; render(); if (e && e.message !== 'busy') toast(chainErr(e)); });
             break; }
           chainRun(side0 === 'buy' ? 'Buying $' + t.tick : 'Selling $' + t.tick, function (T) { var cr = side0 === 'buy' ? coRef(t) : null; return T.buildSwap({ rpc: RPC, expect: { mint: t.ca, partners: [PARTNER, TREASURY] }, owner: S.account, pool: t.pool, side: side0, amount: amt, slippageBps: Math.round(S.slip * 100), memo: cr ? 'treid:co:' + cr.id : null }); })
-            .then(function (b) { S.amount = ''; S.sellAll = false; if (side0 === 'buy') confettiSmall(); toast((side0 === 'buy' ? 'Bought ~' + fmtNum(b.quote.out * (1 - Math.max(t.buy, t.sell) / 100)) + ' $' + t.tick : 'Sold ' + fmtNum(amt) + ' $' + t.tick + ' for ~' + b.quote.out.toFixed(4) + ' ' + qSymT(t)) + ' · on-chain ✓', t); setTimeout(function () { liveLoad(t); }, 1200); })
+            .then(function (b) { S.amount = ''; S.sellAll = false; if (side0 === 'buy') confettiSmall(); toast((side0 === 'buy' ? 'Bought ~' + fmtNum(b.quote.out) + ' $' + t.tick : 'Sold ' + fmtNum(amt) + ' $' + t.tick + ' for ~' + b.quote.out.toFixed(4) + ' ' + qSymT(t)) + ' · on-chain ✓', t); setTimeout(function () { liveLoad(t); }, 1200); })
             .catch(function (e) { if (e && e.message !== 'busy') toast(chainErr(e)); });
           break;
         }
@@ -5266,6 +5270,7 @@
       if (!DEMO) { HERO.length = 0; S.live.slice().sort(function (a, b) { return b.mcN - a.mcN; }).slice(0, 5).forEach(function (x) { HERO.push(x.tick); }); }
     } else { t.mcN = (c.mcap_usd || 0) / 1000 || t.mcN; t.prog = c.curve_pct || t.prog; t.holders = c.holders != null ? c.holders : t.holders; t.vol = (c.vol_sol || 0) * SOL_USD / 1000; }
     if (c.reserve != null) t.reserve = c.reserve;
+    if (c.mcap_24h > 0) t.mc0 = c.mcap_24h / 1000;   // % change everywhere = vs 24h ago (or launch), not vs when you opened the page
     if (t.qMint) { if (c.quote_usd) t.qUsd = c.quote_usd; if (c.vol_usd != null) t.vol = c.vol_usd / 1000; }
     liveStat(t, c);
     if (c.supply > 0) t.supply = c.supply;
@@ -5309,13 +5314,13 @@
     if (!API) return;
     apiGet('/api/health').then(function (h) { if (!h || !h.ops) return; if (!window.TREID_PARTNER || API_DEV) { PARTNER = h.ops; S.escrowWallet = h.ops; } else if (h.ops !== window.TREID_PARTNER) { S.opsMismatch = true; console.warn('[treid] server ops wallet does not match the pinned one — launching disabled'); render(); } }).catch(function () {});
     var tries = 0; (function coinsLoad() { apiGet('/api/coins').then(function (cs) {
-      S.apiOk = true; S.apiWait = 0; cs.filter(Boolean).forEach(liveTok); render();
+      S.apiOk = true; S.apiWait = 0; cs.filter(Boolean).sort(function (a, b) { return (a.created_at || 0) - (b.created_at || 0); }).forEach(liveTok); render();   // oldest first: the original keeps the plain ticker, a later copycat becomes $PEPE2
       var coAll = function (n) { apiGet('/api/callouts?x=1' + coMe()).then(function (rows) { if (coMerge(rows || []).length) render(); }).catch(function () { if (n < 6) setTimeout(function () { coAll(n + 1); }, 5000 * (n + 1)); }); }; coAll(0); setInterval(function () { if (!document.hidden) coAll(6); }, 60e3);   // retried: a server restart must not leave the callouts empty
       if (S.pendingRoute) { var pr = S.pendingRoute, tp = S.live.filter(function (x) { return x.ca === pr || x.tick.toUpperCase() === String(pr).toUpperCase(); })[0]; S.pendingRoute = null; var rr = routeReady; routeReady = false; var psite = S.pendingSite, pco = S.pendingCo; S.pendingSite = null; S.pendingCo = null; if (tp && pco != null) { liveLoad(tp); S.tick = tp.tick; set({ screen: 'callout', coView: { tick: tp.tick, id: pco } }); } else if (tp && psite) { liveLoad(tp); set({ screen: 'site', site: { tick: tp.tick, th: psite } }); } else if (tp) openToken(tp.tick); else { set({ screen: 'home' }); toast('That coin wasn\'t found'); } routeReady = rr; }
       var es = new EventSource(API + '/api/stream');
       es.onmessage = function (m) { var ev; try { ev = JSON.parse(m.data); } catch (e) { return; } if (ev.type === 'callout') { coMerge([ev]).forEach(function (x) { coArrive(x.c, x.t); if (!(S.account && x.c.w === S.account)) coPeek(x.c, x.t); }); } else if (ev.type === 'coreact') { var cc = coById(+ev.id); if (cc) { cc.likes = +ev.likes || 0; cc.rt = +ev.rts || 0; var lk = document.querySelectorAll('[data-act="coLike"][data-arg$="|' + (+ev.id) + '"]'); if (lk.length) render(); } } else if (ev.type === 'burn') burnsLoad(); else if (ev.type === 'trade') liveTrade(ev); else if (ev.type === 'coin') apiGet('/api/coin/' + ev.mint).then(function (c) { if (c) { var known = S.live.some(function (x) { return x.ca === c.mint; }), t = liveTok(c); if (!known && !isMob()) toast('New on treid: ' + t.name + ' $' + t.tick, t); render(); } }).catch(function () {}); };
       es.onerror = function () { S.apiOk = es.readyState === 1; };
-      es.onopen = function () { S.apiOk = true; apiGet('/api/coins').then(function (cs2) { cs2.filter(Boolean).forEach(liveTok); }).catch(function () {}); };
+      es.onopen = function () { S.apiOk = true; apiGet('/api/coins').then(function (cs2) { cs2.filter(Boolean).sort(function (a, b) { return (a.created_at || 0) - (b.created_at || 0); }).forEach(liveTok); }).catch(function () {}); };
     }).catch(function (e) { tries++; S.apiWait = tries; if (S.screen === 'pending') render(); console.warn('[treid] indexer not reachable, retrying', e); setTimeout(coinsLoad, Math.min(15000, 1500 * tries)); }); })();   // the server restarts after updates — keep trying instead of hanging
   }
   liveStart(); pushInit();

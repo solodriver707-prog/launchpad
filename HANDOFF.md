@@ -16,7 +16,7 @@ Mainnet indexer: https://treid-indexer-mainnet.onrender.com (Render, Docker, `ch
 - Money ledger (`rlog`) is the source of truth for what ops owes; if it can't be written, ops halts (`HALT`), nothing is sent.
 - Unknown tx outcome → `unknown()` halts and exits; Render restarts; startup `rebuild()` reconciles from `treid:*` memos.
 - Ops never opens token accounts for other people.
-- Dev share of tax capped at 50%. Vamp coins only get a 🧛 flag, never blocked.
+- Dev share of tax: up to 100% for coins launched with `dc=1` (from 1 Nov 2026, shown as a red flag above 50%); older coins keep the 50% cap. Vamp coins only get a 🧛 flag, never blocked.
 - Mobile is the main market: test every change at 390×844.
 
 ## State (end of Oct 2026)
