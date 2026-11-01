@@ -404,7 +404,7 @@ async function holders(mint) {   // one row per OWNER (all their token accounts 
     .filter((h) => !h.ops).sort((x, y) => y.pct - x.pct);
 }
 // real on-chain balances (transfers, tax payouts and burns included) — cached, refreshed in the background
-const hCache = new Map(), inflight = new Map(), lbCache = new Map(), iconC = new Map();
+const hCache = new Map(), inflight = new Map(), lbCache = new Map(), iconC = new Map(); let iconB = 0;
 function holdersCached(mint) { const h = hCache.get(mint); if (h?.list && Date.now() - h.ts < 30e3) return Promise.resolve(h.list); if (!inflight.has(mint)) inflight.set(mint, holders(mint).then((l) => { hCache.set(mint, { ts: Date.now(), list: l }); return l; }).finally(() => inflight.delete(mint))); return inflight.get(mint); }
 // simple in-memory rate limiter (per key, n hits per window)
 // short response cache for the heavier read endpoints (a burst of visitors costs one computation, not hundreds of queries each)
@@ -550,9 +550,9 @@ async function handleReq(req, res) {
       if (!h || Date.now() - h.at > 864e5) { if (!rate('ti|' + ip(req), 60, 6e4)) { res.writeHead(429); return res.end(); } h = { at: Date.now(), buf: null, ct: null };
         try { const j = await (await fetchT(JUP + '/tokens/v2/search?query=' + encodeURIComponent(mintQ || sym))).json(), t = (Array.isArray(j) ? j : []).find((x) => x && (mintQ ? x.id === mintQ : (x.isVerified || (x.tags || []).includes('verified')) && String(x.symbol).toLowerCase() === sym.toLowerCase()));
           const url = t && typeof t.icon === 'string' ? new URL(t.icon) : null;
-          if (url && url.protocol === 'https:' && await hostOk(url.hostname)) { const r = await fetchT(url.href), ct = String(r.headers.get('content-type') || '').split(';')[0];
-            if (r.ok && /^image\/(png|jpeg|webp|gif)$/.test(ct)) { const buf = Buffer.from(await r.arrayBuffer()); if (buf.length <= 400e3) { h.buf = buf; h.ct = ct; } } } } catch {}
-        iconC.set(ik, h); if (iconC.size > 500) iconC.delete(iconC.keys().next().value); }
+          if (url && url.protocol === 'https:') { const r = await fetchSafe(url.href, 8000), ct = r ? String(r.headers.get('content-type') || '').split(';')[0] : '';   // every redirect hop re-checked (no SSRF via a redirect)
+            if (r && r.ok && /^image\/(png|jpeg|webp|gif)$/.test(ct)) { const buf = await readCapped(r, 200e3); if (buf) { h.buf = buf; h.ct = ct; } } } } catch {}   // never read more than 200 KB
+        iconC.set(ik, h); iconB += h.buf ? h.buf.length : 0; while (iconC.size > 300 || iconB > 25e6) { const [k0, v0] = iconC.entries().next().value; iconC.delete(k0); iconB -= v0.buf ? v0.buf.length : 0; } }   // bounded memory (count + bytes)
       if (!h.buf) { res.writeHead(404, { 'access-control-allow-origin': '*' }); return res.end(); }
       res.writeHead(200, { 'content-type': h.ct, 'cache-control': 'public, max-age=86400', 'access-control-allow-origin': '*', 'x-content-type-options': 'nosniff', 'content-security-policy': "default-src 'none'" }); return res.end(h.buf); }
     if (p[1] === 'tsearch') {   // token search by name / ticker / address — verified Jupiter tokens only, for the pair & holder-reward pickers
@@ -588,6 +588,7 @@ async function handleReq(req, res) {
       req.on('end', async () => { try { J(await CO.post(JSON.parse(body), ip(req))); } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: pubErr(e) })); } }); return; }
     if (p[1] === 'coreact' && req.method === 'POST') { let body = ''; req.on('data', (d) => { body += d; if (body.length > 3000) req.destroy(); });
       req.on('end', () => { try { J(CO.react(JSON.parse(body), ip(req))); } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: pubErr(e) })); } }); return; }
+    if (['callouts', 'coearn', 'dev', 'pos', 'mytrades', 'vampcheck', 'rewards'].includes(p[1]) && req.method === 'GET' && !rate('rd|' + ip(req), 240, 6e4)) { res.writeHead(429, { 'access-control-allow-origin': '*', 'content-type': 'application/json', 'retry-after': '30' }); return res.end('{"error":"too many requests"}'); }   // reads computed per wallet / coin: a flood of random keys can't pin the CPU
     if (p[1] === 'callouts') { const cm = u.searchParams.get('mint') || null, me0 = String(u.searchParams.get('me') || ''), me = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(me0) ? me0 : null; return J(cached('co|' + (cm || '') + '|' + (me || ''), 5e3, () => { const memo = new Map(); const L = CO.list(cm, me), ern = CR ? CR.byCallout(L.map((c) => c.id)) : {}; return L.map((c) => { const k = c.mint + '|' + c.wallet; if (!memo.has(k)) memo.set(k, posStats(c.mint, c.wallet)); return { ...c, ps: memo.get(k), earn: ern[c.id] || null }; }); })); }   // every callout carries its author's live position
     if (p[1] === 'coearn') { if (!CR) return J(null); if (p[2]) { const w = String(p[2]); if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(w)) return J(null); return J(cached('cre|' + w, 15e3, () => CR.stats(w))); } return J(cached('cretop', 60e3, () => ({ share: CO_SHARE, top: CR.top(30) }))); }   // callout rewards: one caller's earnings, or the 30-day top callers
     if (p[1] === 'dev' && p[2]) { const w = String(p[2]); if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(w)) return J(null); return J(cached('dev|' + w, 30e3, () => devRecord(w))); }   // creator reputation: every coin this wallet launched on treid
