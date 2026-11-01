@@ -1,6 +1,7 @@
 // shared transaction helper for the ops wallet: optional priority fee, and "did it land?" checks on timeouts
 import { Transaction, ComputeBudgetProgram } from '@solana/web3.js';
 import bs58 from 'bs58';
+import { halt } from './lock.mjs';
 
 export const PRIO = Math.max(0, +(process.env.OPS_PRIORITY_MICROLAMPORTS || 0));   // e.g. 20000 on mainnet (~0.000004 SOL per tx at 200k CU)
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -42,12 +43,15 @@ export async function landOrExpire(conn, raw, sig, lastValidBlockHeight) {
     if (st?.err) { const e = new Error('transaction failed: ' + JSON.stringify(st.err)); e.signature = sig; throw e; }
     if (st && (st.confirmationStatus === 'confirmed' || st.confirmationStatus === 'finalized')) return sig;
     const h = await conn.getBlockHeight('confirmed').catch(() => null);
-    if (h != null && h > lastValidBlockHeight + 5) {   // expired: one last look (it may have landed in the final blocks)
+    if (h != null && h > lastValidBlockHeight + 30) {   // a wide margin: a lagging RPC must never report a landed payout as expired   // expired: one last look (it may have landed in the final blocks)
       const st2 = (await conn.getSignatureStatus(sig, { searchTransactionHistory: true }).catch(() => null))?.value;
       if (st2 && !st2.err && st2.confirmationStatus) return sig;
       const e = new Error('expired: ' + (first ? String(first.message || first).slice(0, 120) : 'not confirmed in time')); e.signature = sig; e.expired = true; throw e; }
     if (i % 2 === 1) send(); await sleep(2000);
   }
+  // outcome unknown: EVERY money path stops here (not just the ones that check e.unconfirmed) and the server restarts, so the
+  // ledger rebuild from ops' own on-chain memos decides whether it landed — resending blindly is how double payments happen
+  halt('unknown outcome: ' + String(sig).slice(0, 16)); console.error('!! ops transaction outcome unknown (' + String(sig).slice(0, 16) + ') — ops stopped, restarting to settle it from chain'); setTimeout(() => process.exit(1), 20e3);
   const err = new Error('unconfirmed: RPC unreachable'); err.signature = sig; err.unconfirmed = true; err.reachable = reachable; throw err;
 }
 // read a confirmed tx, retrying while the RPC catches up

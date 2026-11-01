@@ -54,7 +54,7 @@ const parseSplit = (uri) => { let pair = false, rw = null; try { const u = new U
     if (s) { const p = s.split('.').map(Number); if (p.length === 3 && p.every((x) => Number.isInteger(x) && x >= 0 && x <= 100) && p[0] + p[1] + p[2] === 100) { const cap = u.searchParams.get('dc') === '1' ? 100 : 50, d = Math.min(cap, p[2]); return { h: p[0], b: p[1] + p[2] - d, d, pair, rw }; } /* dev share: up to 100% for coins launched with dc=1 (the creator chose it, shown on the coin); older coins keep the 50% cap they launched with (the rest is burned) */ } } catch {} return { h: 70, b: 20, d: 10, pair, rw }; };
 
 export { parseSplit };
-export function startOps({ conn, dbc, ops, treasury, q, q1, run, mainnet = false, rewardOk = async () => false, quoteUsd = () => 150, poolAuthority, log = console.log, everyMs = 10 * 60e3, liabilities = () => 0, reserved = () => 0, devState = (c) => ({ state: 'active', creator: c.creator }), ready = () => true }) {
+export function startOps({ conn, dbc, ops, treasury, q, q1, run, mainnet = false, rewardOk = async () => false, quoteUsd = () => 150, poolAuthority, log = console.log, everyMs = 10 * 60e3, liabilities = () => 0, reserved = () => 0, callerCost = () => 0, devState = (c) => ({ state: 'active', creator: c.creator }), ready = () => true }) {
   const send = (ixs) => { if (HALT.on) throw new Error('ops halted'); return sendTx(conn, ixs, [ops]); },   // nothing leaves the ops wallet once the ledger is broken
     amm = new CpAmm(conn), DAMM_CFG = DAMM_V2_MIGRATION_FEE_ADDRESS[6];
   const rec = (sig, i, mint, kind, amt, extra = null) => { try { run('INSERT OR IGNORE INTO rlog(sig,i,mint,kind,lamports,ts,extra) VALUES(?,?,?,?,?,?,?)', sig, i, mint, kind, Number(amt), Date.now(), extra); } catch (e) { halt(e.message); throw e; } };
@@ -78,7 +78,7 @@ export function startOps({ conn, dbc, ops, treasury, q, q1, run, mainnet = false
   const sumT = (kind) => q1('SELECT COALESCE(SUM(lamports),0) s FROM rlog WHERE mint=? AND kind=?', TREID, kind)?.s || 0;
   // budget = TREID_BUYBACK_PCT of treid's SOL income since TREID_MINT was set: curve partner fees (pfee) + treid's LP fees after graduation (claimx …|platform|dammP)
   const treidBudget = () => { if (!TREID) return 0; const fees = q("SELECT r.lamports l FROM rlog r JOIN coins c ON c.mint=r.mint WHERE r.ts>=? AND (c.quote_mint IS NULL OR c.quote_mint=?) AND (r.kind='pfee' OR (r.kind='claimx' AND r.extra LIKE '%|platform|dammP'))", treidSince(), WSOL).reduce((a, r) => a + r.l, 0);
-    return Math.max(0, Math.floor(fees * TREID_BB) - sumT('tbuy')); };
+    return Math.max(0, Math.floor(Math.max(0, fees - callerCost(treidSince())) * TREID_BB) - sumT('tbuy')); };   // of treid's NET income: what callout callers earned out of those fees is not treid's to spend
   const treidLeft = () => Math.max(0, sumT('tleft') - sumT('tburnr'));   // bought but not yet burned (the part above the swap's guaranteed minimum)
   async function treidBuyback() {
     if (!TREID || !mainnet) return; const tinfo = await conn.getAccountInfo(new PublicKey(TREID)); if (!tinfo) return; const tprog = tinfo.owner, tm = new PublicKey(TREID), ata = getAssociatedTokenAddressSync(tm, ops.publicKey, false, tprog);
@@ -275,5 +275,5 @@ export function startOps({ conn, dbc, ops, treasury, q, q1, run, mainnet = false
     } catch (e) { log('ops   cycle err', e.message); } finally { busy = false; }
   }
   let queued = false; const locked = () => { if (queued) return; queued = true; withLock(cycle).finally(() => { queued = false; }); }; setTimeout(locked, 30e3); setInterval(locked, everyMs);
-  return { cycle, status };
+  return { cycle, status, pending: () => pendingSol() + treidBudget() };   // SOL held for holders' pair payouts + the $TREID budget (other payers must leave it alone)
 }

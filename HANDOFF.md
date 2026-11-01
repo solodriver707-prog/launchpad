@@ -103,6 +103,16 @@ Other ideas: ops low-balance Telegram alert, own domain treid.fun (Phantom trust
   - paid daily (UTC) in SOL from ops, min $1, 5 per tx, memo `treid:copay:<wallet>:<lamports>:<day>` → rlog kind `copay` (rebuilt from chain like every payout); owed SOL is kept out of sweep/buyback (`reserved`).
   - wash trading always loses (1% fee paid, ~0.1% back). API `/api/coearn`, `/api/coearn/<wallet>`, `earn` on each callout. Test: `chain/indexer/callrew_test.mjs`.
 
+### Audit 2 Nov 2026 (4 independent reviews: money code, API, client, economics)
+- Deployed (main): token-icon proxy SSRF/memory fix, per-IP limit on per-key reads, real trap cost shown (trap fee + tax, buys AND sells), red flag "Dev takes X% of tax" (>50%), post-trap snipers flagged (first 3 s after the trap), real 24h change (`mcap_24h`), oldest coin keeps the ticker + copycat check uses site tickers, buy toast double-tax, callouts not cut at 280, previous account data cleared on wallet switch, escaped short addresses.
+- Branch `audit-money-fixes` (waiting for the owner's OK):
+  - ANY unknown send outcome now halts ops and restarts (in `landOrExpire`), not only where callers checked `e.unconfirmed` (creator payouts, buybacks, reward swaps, pair sales could double-pay); expiry margin 5 → 30 blocks.
+  - callout payouts: one wallet that can't receive no longer blocks everyone (per-wallet fallback), rows written in one DB transaction, replies/updates count as their root callout (no window renewal), payouts leave holders' pending SOL and the $TREID budget alone.
+  - $TREID budget is net of what callers earned; ops migration fallback gate $3K → $1K (treid curves graduate at ~$2.2K, so ops could never step in); graduated LP payouts ignore extra positions anyone can open for ops (take the two biggest permanently-locked).
+  - client: Jupiter swaps and TP/SL orders are checked against EVERY token account you own (no other token may leave, no owner change, no delegate, wallet stays system-owned) + refuse Approve/SetAuthority/Assign (`dangerousIx`); Jupiter min-out must match slippage and an independent price; Jupiter sign-in text must not be a treid or other-site sign-in.
+- Owner decisions (from the economics review, not implemented): bigger curve (now 20→60 SOL MC, graduates at ~$6K; Jupiter Studio's minimum is $15K), graduated pool fee 0.5% → 1% (creator/treid 0.2% → 0.4%), keep paused creator fees instead of burning + push before pause, Meteora referral account on our swaps (+~10% revenue), taxed coins with dev share >50% paying the 1% fee, callout rewards only for buys still held after N hours.
+- Known, not fixed: GitHub Pages origin is shared with the owner's other repos (move to treid.fun fixes it); DNS-rebinding window in `fetchSafe`; Jupiter route min-out on the SERVER side (ops buyback/convert) still trusts Jupiter's own numbers.
+
 ## Older pending items (offered, not confirmed/done)
 - Holders-only page (not started). Telegram alerts: done (`alerts.mjs`, needs env).
 - pump.fun app ideas: Deposit/Receive done (QR); new-callouts badge on mobile nav + pause queue already exist.

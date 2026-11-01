@@ -128,7 +128,11 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, q
   async function dammCtx(c) {
     const pool = c.damm ? new PublicKey(c.damm) : deriveDammV2PoolAddress(DAMM_CFG, new PublicKey(c.mint), quoteOf(c)), ps = await amm.fetchPoolState(pool);
     if (ps.tokenAMint.toBase58() !== c.mint || !ps.tokenBMint.equals(quoteOf(c))) throw new Error('graduated pool does not match the coin');
-    const pos = (await amm.getUserPositionByPool(pool, ops.publicKey)).sort((a, b) => (a.position.toBase58() < b.position.toBase58() ? -1 : 1));
+    // only the two positions the migration created (permanently locked, ~50% each): anyone can open an extra empty position owned by ops, which
+    // must not stop the payouts — so take the two biggest locked ones, then order them as before
+    const lockedOf = (p) => BigInt(p.positionState?.permanentLockedLiquidity?.toString?.() || '0');
+    const pos = (await amm.getUserPositionByPool(pool, ops.publicKey)).filter((p) => lockedOf(p) > 0n).sort((a, b) => (lockedOf(b) > lockedOf(a) ? 1 : lockedOf(b) < lockedOf(a) ? -1 : 0)).slice(0, 2)
+      .sort((a, b) => (a.position.toBase58() < b.position.toBase58() ? -1 : 1));
     return { pool, ps, pos, fee: (i) => (pos[i] ? num(getUnClaimLpFee(ps, pos[i].positionState).feeTokenB) : 0) };
   }
   // src: 'dbc' = creator fees still in the bonding curve · 'dammP' / 'dammC' = treid's / the creator's graduated LP position
@@ -264,7 +268,7 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, q
   async function maybeMigrate(c, vp, cfg) {   // Meteora's keeper normally migrates a finished curve within minutes; ops only steps in when it hasn't
     if (num(vp.isMigrated) > 0 || BigInt(vp.quoteReserve.toString()) < BigInt(cfg.migrationQuoteThreshold.toString())) return false;
     const fin = num(vp.finishCurveTimestamp) * 1000; if (!fin || Date.now() - fin < GRAD_WAIT_MS) return false;
-    const gradUsd = Number(cfg.migrationQuoteThreshold.toString()) / 10 ** (c.quote_dec ?? 9) * (quoteUsd(c) || 0); if (gradUsd < 3000) return false;   // ops only pays the migration rent for real graduations, never for a toy curve
+    const gradUsd = Number(cfg.migrationQuoteThreshold.toString()) / 10 ** (c.quote_dec ?? 9) * (quoteUsd(c) || 0); if (gradUsd < 1000) return false;   // ops only pays the migration rent for real graduations, never for a toy curve (treid curves graduate at ~22 SOL ≈ $2.2K at $100/SOL — the old $3K gate blocked them all)
     const r = await dbc.migration.migrateToDammV2({ pool: new PublicKey(c.pool), dammConfig: DAMM_CFG, payer: ops.publicKey });
     const s = await sendTx(conn, r.transaction, [ops, r.firstPositionNftKeypair, r.secondPositionNftKeypair]);   // no memo: the migration tx is already at the size limit
     record(s, [{ mint: c.mint, kind: 'migrate', lamports: 0 }]); log('rewards migrated', c.symbol, 'to DAMM v2'); return true;

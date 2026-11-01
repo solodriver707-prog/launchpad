@@ -7,9 +7,9 @@ run('CREATE TABLE callouts(id INTEGER PRIMARY KEY, mint TEXT, wallet TEXT, ts IN
 const W = () => Keypair.generate().publicKey.toBase58(), caller = W(), buyer = W(), dev = W(), MINT = W(), OTHER = W();
 const coin = { mint: MINT, creator: dev, quote_mint: null }, now = Date.now() - 2 * 864e5;
 run('INSERT INTO callouts VALUES(1,?,?,?,NULL)', MINT, caller, now); run('INSERT INTO callouts VALUES(2,?,?,?,NULL)', OTHER, caller, now);
-let sent = []; const ops = Keypair.generate();
+let sent = [], BAD = null; const ops = Keypair.generate();
 const conn = { getBalance: async () => 10e9, getLatestBlockhash: async () => ({ blockhash: '11111111111111111111111111111111', lastValidBlockHeight: 1e9 }),
-  sendRawTransaction: async (raw) => { sent.push(raw); return 'x'; }, getSignatureStatus: async () => ({ value: { confirmationStatus: 'confirmed' } }), simulateTransaction: async () => ({ value: {} }), getBlockHeight: async () => 1 };
+  sendRawTransaction: async (raw) => { const { Transaction } = await import('@solana/web3.js'); const t = Transaction.from(raw); if (BAD && t.instructions.some((i) => i.keys.some((k) => k.pubkey.toBase58() === BAD))) throw new Error('Transaction simulation failed: bad recipient'); sent.push(raw); return 'x'; }, getSignatureStatus: async () => ({ value: { confirmationStatus: 'confirmed' } }), simulateTransaction: async () => ({ value: {} }), getBlockHeight: async () => 1 };
 const CR = startCalloutRewards({ conn, ops, q, q1, run, solUsd: () => 150, mainnet: true, ready: () => true, log: () => {} });
 const ok = (c, m) => { if (!c) { console.log('FAIL', m); process.exitCode = 1; } else console.log('ok  ', m); };
 const fee = 4e6;   // treid's part: 0.004 SOL on a 1 SOL buy
@@ -39,4 +39,14 @@ const keys = { get: (i) => [new PublicKey('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDL
 ok(coMemoOf({ transaction: { message: { compiledInstructions: [{ programIdIndex: 0, data: Buffer.from('treid:co:42') }] } } }, keys) === 42, 'reads treid:co memo');
 ok(coMemoOf({ transaction: { message: { compiledInstructions: [{ programIdIndex: 0, data: Buffer.from('treid:co:42x') }] } } }, keys) === null, 'ignores malformed memo');
 ok(coMemoOf({ transaction: { message: { compiledInstructions: [{ programIdIndex: 1, data: Buffer.from('treid:co:42') }] } } }, keys) === null, 'only the memo program');
+// replies / updates credit the ROOT callout, inside the root's own window
+run('INSERT INTO callouts VALUES(10,?,?,?,NULL)', MINT, caller, now); run('INSERT INTO callouts VALUES(11,?,?,?,10)', MINT, caller, now + 60 * 3600e3);
+ok(CR.attr({ sig: 'r1', id: 11, trader: buyer, coin, treidFeeLam: fee, usd: 150, ts: now + 61 * 3600e3 })?.caller === caller && q1("SELECT co FROM coattr WHERE sig='r1'").co === 10, 'a reply counts as its root callout');
+ok(!CR.attr({ sig: 'r2', id: 11, trader: buyer, coin, treidFeeLam: fee, usd: 150, ts: now + 80 * 3600e3 }), 'an update can not renew the 72h window');
+// one wallet that can't receive doesn't block the others
+const c2 = W(), c3 = W(); BAD = c2; run('INSERT INTO callouts VALUES(20,?,?,?,NULL)', MINT, c2, now); run('INSERT INTO callouts VALUES(21,?,?,?,NULL)', MINT, c3, now);
+for (let i = 0; i < 10; i++) { CR.attr({ sig: 'x' + i, id: 20, trader: W(), coin, treidFeeLam: fee, usd: 150, ts: now + 3600e3 }); CR.attr({ sig: 'y' + i, id: 21, trader: W(), coin, treidFeeLam: fee, usd: 150, ts: now + 3600e3 }); }
+run("DELETE FROM kv WHERE k='copay_day'"); const n0 = sent.length; await CR.payout();
+ok(CR.owedOf(c3) === 0 && CR.owedOf(c2) > 0 && q1("SELECT v FROM kv WHERE k='copay_day'"), 'bad recipient skipped, others paid, day closed');
+ok(CR.earnedSince(0) > 0, 'earnedSince for the $TREID budget');
 process.exit();

@@ -2369,6 +2369,8 @@
   function jupSolToPair0(t, lam) {
     return fetch(JUP + '/quote?inputMint=' + WSOL + '&outputMint=' + t.qMint + '&amount=' + lam + '&slippageBps=' + Math.round(S.slip * 100)).then(function (r) { return r.json(); }).then(function (qr) {
       if (!qr || !qr.outAmount) throw new Error('No Jupiter route from SOL to ' + qSymT(t)); if (qr.inputMint !== WSOL || qr.outputMint !== t.qMint) throw new Error('Jupiter returned a different route — refusing');
+      var outA = BigInt(String(qr.outAmount)), minA = BigInt(String(qr.otherAmountThreshold || 0)), bps = BigInt(Math.round(S.slip * 100) + 100); if (minA * 10000n < outA * (10000n - bps)) throw new Error('Jupiter’s guaranteed minimum is lower than your slippage allows — refusing');
+      if (t.qUsd > 0 && t.qDec != null) { var vin = lam / 1e9 * SOL_USD, vout = Number(outA) / Math.pow(10, t.qDec) * t.qUsd; if (vin > 1 && vout < vin * 0.7) throw new Error('The Jupiter route would give you far less than the market price — refusing'); }   // independent price check (the route's own numbers come from the same API)
       return fetch(JUP + '/swap', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ quoteResponse: qr, userPublicKey: S.account, wrapAndUnwrapSol: true, dynamicComputeUnitLimit: true }) }).then(function (r) { return r.json(); }).then(function (sw) {
         if (!sw || !sw.swapTransaction) throw new Error('Jupiter couldn’t build the swap');
         var raw = b64Bytes(sw.swapTransaction); return chainLib().then(function (T) { return T.checkSwapTx(raw, S.account, RPC).then(function () { return swapGuard(T, sw.swapTransaction, t.qMint, qr.otherAmountThreshold, lam); }).then(function () { return walletSign([raw]); }); }).then(function (signed) { return rpc('sendTransaction', [bytesB64(signed[0]), { encoding: 'base64', preflightCommitment: 'confirmed', maxRetries: 3 }]); }).then(function (sig) { return waitSig(sig, sw.lastValidBlockHeight); });
@@ -2376,16 +2378,31 @@
   }
   // the Jupiter route is built by an outside API: simulate it and require that YOUR account of the pair token really receives at least the
   // guaranteed minimum, and that no more SOL leaves than the amount you chose (+ fees / account rent)
-  function swapGuard(T, b64, outMint, minOut, lam) {
-    var who = S.account, addrs = T.ataAddrs(who, outMint), min = BigInt(String(minOut || 0)); if (min <= 0n) return Promise.reject(new Error('Jupiter route has no minimum — refusing'));
-    var amt = function (a) { return a && a.data && a.data.parsed && a.data.parsed.info && a.data.parsed.info.mint === outMint && a.data.parsed.info.owner === who ? BigInt(a.data.parsed.info.tokenAmount.amount) : 0n; };
-    return Promise.all([rpc('getBalance', [who, { commitment: 'confirmed' }]), rpc('getMultipleAccounts', [addrs, { encoding: 'jsonParsed', commitment: 'confirmed' }])]).then(function (r) {
-      var solPre = BigInt(r[0].value), tokPre = r[1].value.reduce(function (s0, a) { return s0 + amt(a); }, 0n);
-      return rpc('simulateTransaction', [b64, { encoding: 'base64', sigVerify: false, replaceRecentBlockhash: true, commitment: 'confirmed', accounts: { encoding: 'jsonParsed', addresses: [who].concat(addrs) } }]).then(function (sim) {
-        var v = sim && sim.value; if (!v || !v.accounts) throw new Error('Couldn’t check the Jupiter swap — not signing'); if (v.err) throw new Error('The Jupiter swap fails in simulation — not signing');
-        var solPost = v.accounts[0] ? BigInt(v.accounts[0].lamports) : 0n, tokPost = v.accounts.slice(1).reduce(function (s0, a) { return s0 + amt(a); }, 0n);
-        if (solPre - solPost > BigInt(lam) + 30000000n) throw new Error('The Jupiter swap would take more SOL than you chose — not signing');
-        if (tokPost - tokPre < min) throw new Error('The Jupiter swap wouldn’t deliver the minimum to your wallet — not signing');
+  function swapGuard(T, b64, outMint, minOut, lam) { var min = BigInt(String(minOut || 0)); if (min <= 0n) return Promise.reject(new Error('Jupiter route has no minimum — refusing'));
+    var sp = {}; sp[WSOL] = String(lam); return walletGuard(b64, { spend: sp, solMax: BigInt(lam) + 30000000n, gain: { mint: outMint, min: min } }); }
+  // before the wallet signs a transaction an OUTSIDE API built (Jupiter swaps, Jupiter TP/SL orders): refuse anything that hands over control
+  // (Approve / SetAuthority / Assign), then simulate it against EVERY token account you own and refuse if it would
+  //  · take more SOL than allowed · take any token you didn't choose to spend (or more of it) · change an account's owner or add a delegate
+  //  · leave your wallet owned by a program · not deliver the promised minimum
+  function walletGuard(b64, o) {
+    var who = S.account, TPS = ['TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA', 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb'], accs = [];
+    return chainLib().then(function (T) { var bad = T.dangerousIx(b64Bytes(b64)); if (bad) throw new Error('Refused: ' + bad + ' — not signing');
+      return Promise.all(TPS.map(function (pid) { return rpc('getTokenAccountsByOwner', [who, { programId: pid }, { encoding: 'jsonParsed', commitment: 'confirmed' }]); }).concat([rpc('getBalance', [who, { commitment: 'confirmed' }])])); }).then(function (rs) {
+      rs.slice(0, 2).forEach(function (r) { ((r && r.value) || []).forEach(function (a) { var inf = a.account.data.parsed.info; accs.push({ addr: a.pubkey, mint: inf.mint, pre: BigInt(inf.tokenAmount.amount), del: inf.delegate || null }); }); });
+      var solPre = BigInt(rs[2].value), watch = accs.slice(0, 90);
+      var extra = o.gain ? window.TreidChain.ataAddrs(who, o.gain.mint).filter(function (x) { return !watch.some(function (w) { return w.addr === x; }); }) : [];
+      return rpc('simulateTransaction', [b64, { encoding: 'base64', sigVerify: false, replaceRecentBlockhash: true, commitment: 'confirmed', accounts: { encoding: 'jsonParsed', addresses: [who].concat(watch.map(function (a) { return a.addr; }), extra) } }]).then(function (sim) {
+        var v = sim && sim.value; if (!v || !v.accounts) throw new Error('Couldn’t check the transaction — not signing'); if (v.err) throw new Error('The transaction fails in simulation — not signing');
+        var me = v.accounts[0]; if (me && (me.owner !== '11111111111111111111111111111111' || (me.data && me.data[0] && me.data[0].length))) throw new Error('Refused: it would change who controls your wallet — not signing');
+        var solPost = me ? BigInt(me.lamports) : 0n; if (solPre - solPost > BigInt(o.solMax)) throw new Error('It would take more SOL than you chose — not signing');
+        var spent = {}, got = 0n;
+        watch.forEach(function (a, i) { var p = v.accounts[i + 1], inf = p && p.data && p.data.parsed && p.data.parsed.info, post = inf ? BigInt(inf.tokenAmount.amount) : 0n;
+          if (inf && inf.owner !== who) throw new Error('Refused: it would hand one of your token accounts to someone else — not signing');
+          if (inf && inf.delegate && inf.delegate !== a.del) throw new Error('Refused: it would let someone else move your tokens — not signing');
+          spent[a.mint] = (spent[a.mint] || 0n) + (a.pre - post); if (o.gain && a.mint === o.gain.mint) got += post - a.pre; });
+        extra.forEach(function (x, i) { var p = v.accounts[1 + watch.length + i], inf = p && p.data && p.data.parsed && p.data.parsed.info; if (inf && inf.owner === who && inf.mint === o.gain.mint) got += BigInt(inf.tokenAmount.amount); });
+        for (var m in spent) if (spent[m] > 0n && spent[m] > BigInt((o.spend || {})[m] || 0)) throw new Error('It would move tokens you didn’t choose (or more than you chose) — not signing');
+        if (o.gain && got < o.gain.min) throw new Error('It wouldn’t deliver the minimum to your wallet — not signing');
         return true; }); });
   }
   function qSymT(t) { return t && t.live && t.qMint ? (t.qSym || t.pair) : 'SOL'; }
@@ -3919,25 +3936,14 @@
       if (a || !interactive) return a;
       var f = S.wallet && S.wallet.features && S.wallet.features['solana:signMessage']; if (!f || S.wallet.dl) throw new Error('Open treid in your wallet app’s browser (or use a browser extension) for TP/SL orders');
       return jt('auth/challenge', { body: { walletPubkey: who, type: 'message' } }).then(function (c) {
-        if (!c || typeof c.challenge !== 'string' || c.challenge.length > 2000) throw new Error('Unexpected Jupiter sign-in — stopped');
+        if (!c || typeof c.challenge !== 'string' || c.challenge.length > 2000 || /^\s*treid\s*:/im.test(c.challenge) || (/wants you to sign in/i.test(c.challenge) && !/jup\.ag/i.test(c.challenge))) throw new Error('Unexpected Jupiter sign-in — stopped');   // never sign a treid message or another site's sign-in here
         toast('Sign in to Jupiter — this moves no funds');
         return Promise.resolve(f.signMessage({ account: S.walletAcc, message: new TextEncoder().encode(c.challenge) })).then(function (r) { var sg = (Array.isArray(r) ? r[0] : r).signature;
           if (S.account !== who) throw new Error('Wallet changed — stopped'); return chainLib().then(function (T) { return jt('auth/verify', { body: { type: 'message', walletPubkey: who, signature: T.b58(sg), authMode: 'access_refresh' } }); }); }).then(jtStore); }); });
   }
   // before the wallet signs a transaction Jupiter built: simulate it and check what it does to YOUR balances (whatever its instructions look like)
-  function jtGuard(b64, o) {
-    var who = S.account, mints = o.mints.filter(Boolean), accs = [];
-    return Promise.all(mints.map(function (m) { return rpc('getTokenAccountsByOwner', [who, { mint: m }, { encoding: 'jsonParsed', commitment: 'confirmed' }]); })).then(function (rs) {
-      rs.forEach(function (r, i) { ((r && r.value) || []).forEach(function (a) { accs.push({ addr: a.pubkey, mint: mints[i], pre: BigInt(a.account.data.parsed.info.tokenAmount.amount) }); }); });
-      return rpc('getBalance', [who, { commitment: 'confirmed' }]); }).then(function (b) { var solPre = BigInt(b.value);
-      return rpc('simulateTransaction', [b64, { encoding: 'base64', sigVerify: false, replaceRecentBlockhash: true, commitment: 'confirmed', accounts: { encoding: 'jsonParsed', addresses: [who].concat(accs.map(function (a) { return a.addr; })) } }]).then(function (sim) {
-        var v = sim && sim.value; if (!v || !v.accounts) throw new Error('Couldn’t check Jupiter’s transaction — not signing');
-        if (v.err) throw new Error('Jupiter’s transaction fails in simulation — not signing');
-        var solPost = v.accounts[0] ? BigInt(v.accounts[0].lamports) : 0n; if (solPre - solPost > BigInt(o.solMax)) throw new Error('Jupiter’s transaction would take more SOL than expected — not signing');
-        var spent = {}; accs.forEach(function (a, i) { var p = v.accounts[i + 1], post = p && p.data && p.data.parsed ? BigInt(p.data.parsed.info.tokenAmount.amount) : 0n; spent[a.mint] = (spent[a.mint] || 0n) + (a.pre - post); });
-        for (var m in spent) if (spent[m] > BigInt((o.spend || {})[m] || 0)) throw new Error('Jupiter’s transaction would move more tokens than you chose — not signing');
-        return true; }); });
-  }
+  function jtGuard(b64, o) { return walletGuard(b64, { spend: o.spend || {}, solMax: o.solMax }); }
+
   function jtLoad(t, interactive) {
     JT[t.ca] = 'busy'; if (S.screen === 'token') render();
     return jtToken(interactive).then(function (a) { return a ? jt('orders/history?state=active&mint=' + t.ca + '&limit=50', { tok: a }) : null; })

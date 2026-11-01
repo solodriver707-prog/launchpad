@@ -36,11 +36,12 @@ export function startCalloutRewards({ conn, ops, q, q1, run, solUsd = () => 0, m
   function attr({ sig, id, trader, coin, treidFeeLam, usd, ts, sys = false }) {
     try {
       if (sys || !(treidFeeLam > 0) || (coin.quote_mint && coin.quote_mint !== 'So11111111111111111111111111111111111111112')) return null;   // SOL pairs only: their fees arrive in ops as SOL
-      const c = q1('SELECT id, mint, wallet, ts FROM callouts WHERE id=?', id); if (!c || c.mint !== coin.mint) return null;   // the callout must be about THIS coin
+      let c = q1('SELECT id, mint, wallet, ts, reply FROM callouts WHERE id=?', id); if (c && c.reply != null) c = q1('SELECT id, mint, wallet, ts, reply FROM callouts WHERE id=?', c.reply);   // a reply / update counts as its ROOT callout: same author, the root's own 72h window (updates can't renew it)
+      if (!c || c.reply != null || c.mint !== coin.mint) return null;   // the callout must be about THIS coin
       if (c.wallet === trader || c.wallet === coin.creator || trader === coin.creator) return null;   // not your own buy; the dev already earns creator fees
       if (!(ts >= c.ts && ts - c.ts <= WINDOW_MS)) return null;
       const lam = Math.floor(treidFeeLam * CO_SHARE); if (lam <= 0) return null;
-      const r = run('INSERT OR IGNORE INTO coattr(sig,co,caller,trader,mint,lam,fee_lam,usd,ts) VALUES(?,?,?,?,?,?,?,?,?)', sig, id, c.wallet, trader, coin.mint, lam, Math.floor(treidFeeLam), usd || 0, ts);
+      const r = run('INSERT OR IGNORE INTO coattr(sig,co,caller,trader,mint,lam,fee_lam,usd,ts) VALUES(?,?,?,?,?,?,?,?,?)', sig, c.id, c.wallet, trader, coin.mint, lam, Math.floor(treidFeeLam), usd || 0, ts);
       return r.changes ? { caller: c.wallet, lam } : null;
     } catch (e) { log('callout reward attr err', String(e?.message || e).slice(0, 100)); return null; }
   }
@@ -62,20 +63,25 @@ export function startCalloutRewards({ conn, ops, q, q1, run, solUsd = () => 0, m
     const due = q('SELECT caller, SUM(lam) e FROM coattr WHERE ts < ? GROUP BY caller', Date.parse(today)).map((r) => ({ w: r.caller, lam: Math.max(0, r.e - paidTo(r.caller)) }))   // only buys from before today: a day's total is final
       .filter((x) => x.lam / 1e9 * px >= PAY_USD).sort((a, b) => b.lam - a.lam);
     let paid = 0, n = 0;
+    const send = async (batch) => {   // true = sent and recorded · false = nothing was sent (a definite failure)
+      const ixs = []; for (const x of batch) ixs.push(SystemProgram.transfer({ fromPubkey: ops.publicKey, toPubkey: new PublicKey(x.w), lamports: x.lam }), memoIx(`treid:copay:${x.w}:${x.lam}:${today}`));
+      let sig; try { sig = await sendTx(conn, ixs, [ops]); }
+      catch (e) { if (e.unconfirmed) { halt('unknown outcome: callout payout'); log('!! callout payout status unknown — stopping; the ledger rebuild on restart settles it'); setTimeout(() => process.exit(1), 20e3); throw e; }
+        log('callout payout failed (nothing sent):', batch.length, 'caller(s),', String(e?.message || e).slice(0, 100)); return false; }
+      try { run('BEGIN'); batch.forEach((x, k) => run('INSERT OR IGNORE INTO rlog(sig,i,mint,kind,lamports,ts,extra) VALUES(?,?,?,?,?,?,?)', sig, k, x.w, 'copay', x.lam, Date.now(), today)); run('COMMIT'); }   // all rows or none: a half-written batch would look unpaid after a restart
+      catch (e) { try { run('ROLLBACK'); } catch {} halt(e.message); throw e; }
+      paid += batch.reduce((a, x) => a + x.lam, 0); n += batch.length; return true;
+    };
     for (let i = 0; i < due.length; i += PER_TX) {
       if (HALT.on) return; const batch = due.slice(i, i + PER_TX), sum = batch.reduce((a, x) => a + x.lam, 0);
       const bal = await conn.getBalance(ops.publicKey); if (bal - KEEP - otherLiab() < sum) { log('!! callout rewards: ops wallet short of SOL for today’s payouts — will retry'); return; }
-      const ixs = []; for (const x of batch) ixs.push(SystemProgram.transfer({ fromPubkey: ops.publicKey, toPubkey: new PublicKey(x.w), lamports: x.lam }), memoIx(`treid:copay:${x.w}:${x.lam}:${today}`));
-      let sig;
-      try { sig = await sendTx(conn, ixs, [ops]); }
-      catch (e) { if (e.unconfirmed) { halt('unknown outcome: callout payout'); log('!! callout payout status unknown — stopping; the ledger rebuild on restart settles it'); setTimeout(() => process.exit(1), 20e3); return; }
-        log('callout payout batch failed (nothing sent):', String(e?.message || e).slice(0, 100)); return; }
-      try { batch.forEach((x, k) => run('INSERT OR IGNORE INTO rlog(sig,i,mint,kind,lamports,ts,extra) VALUES(?,?,?,?,?,?,?)', sig, k, x.w, 'copay', x.lam, Date.now(), today)); } catch (e) { halt(e.message); throw e; }
-      paid += sum; n += batch.length;
+      if (await send(batch)) continue;
+      if (batch.length > 1) for (const x of batch) { if (HALT.on) return; await send([x]); }   // one wallet that can't receive must never block everyone else; it is skipped today and retried tomorrow
     }
     run("INSERT OR REPLACE INTO kv(k,v) VALUES('copay_day',?)", today);
     if (n) log('callout rewards paid:', n, 'callers,', (paid / 1e9).toFixed(4), 'SOL');
   }
   setInterval(() => { withLock(payout).catch((e) => log('callout payout err', String(e?.message || e).slice(0, 120))); }, 15 * 60e3);
-  return { attr, stats, top, byCallout, owed: owedAll, owedOf, payout };
+  const earnedSince = (ts) => q1('SELECT COALESCE(SUM(lam),0) s FROM coattr WHERE ts>=?', ts)?.s || 0;   // what callers earned out of treid's fees (the $TREID budget is net of it)
+  return { attr, stats, top, byCallout, owed: owedAll, owedOf, payout, earnedSince };
 }

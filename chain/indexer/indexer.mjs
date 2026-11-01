@@ -663,7 +663,7 @@ CO = startCallouts({ q, q1, run, push, rate, pinJSON, pinFile, pinataJwt: PINATA
     let held = false; try { const hs = await holdersCached(mint); const h = hs.find((x) => x.wallet === wallet && !x.curve); if (h) { held = true; pos = h.pct / 100 * SUPPLY * (last.price_usd || 0); } } catch {}
     return { mc: last.mcap_usd || 0, pos, allowed: held && pos >= 1 }; } });   // you must actually hold ≥ $1 of the coin right now (a dust buy doesn't buy a voice)
 run(`CREATE TABLE IF NOT EXISTS rlog(sig TEXT, i INT, mint TEXT, kind TEXT, lamports INT, ts INT, PRIMARY KEY(sig, i))`); try { run('ALTER TABLE rlog ADD COLUMN extra TEXT'); } catch {} run('CREATE TABLE IF NOT EXISTS kv(k TEXT PRIMARY KEY, v TEXT)');
-CR = startCalloutRewards({ conn, ops: OPS, q, q1, run, mainnet: MAINNET, solUsd: () => SOL_USD, ready: () => !!REW && REW.ready(), otherLiab: () => (REW ? REW.liabilities() : 0) });   // callers earn a share of treid's fee on the buys their callouts bring
+CR = startCalloutRewards({ conn, ops: OPS, q, q1, run, mainnet: MAINNET, solUsd: () => SOL_USD, ready: () => !!REW && REW.ready(), otherLiab: () => (REW ? REW.liabilities() : 0) + (OPS_ST && OPS_ST.pending ? OPS_ST.pending() : 0) });   // callers earn a share of treid's fee on the buys their callouts bring
 CO.restore();
 setInterval(() => push({ type: 'ping', t: Date.now() }), 25e3);               // keeps proxies from closing the stream
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -690,7 +690,7 @@ async function start() {
   REW = startRewards({ conn, dbc, ops: OPS, treasury: PARTNER, q, q1, run, mainnet: MAINNET, quoteUsd: (c) => quoteUsd(c.quote_mint, c.quote_symbol), balances: async (mint) => new Map((await holders(mint)).filter((h) => !h.curve).map((h) => [h.wallet, h.pct / 100 * SUPPLY])) });
   for (let i = 1; ; i++) { try { await REW.rebuild(); break; } catch (e) { console.log('rewards rebuild retry', i, String(e?.message || e).slice(0, 120)); await sleep(Math.min(60e3, 5e3 * i)); } }   // a hole in the ledger could pay the wrong person
   setTimeout(() => REW.cycle(), 30e3); setInterval(() => REW.cycle(), +(process.env.OPS_EVERY_MIN || 10) * 60e3);
-  OPS_ST = startOps({ conn, dbc, ops: OPS, treasury: PARTNER, q, q1, run, mainnet: MAINNET, rewardOk: (m) => quoteAllowed(m), quoteUsd: (c) => quoteUsd(c.quote_mint, c.quote_symbol), devState: (c) => REW.state(c), liabilities: () => REW.liabilities(), reserved: () => CR.owed(), ready: () => REW.ready(), poolAuthority: deriveDbcPoolAuthority().toBase58(), everyMs: +(process.env.OPS_EVERY_MIN || 10) * 60e3 });
+  OPS_ST = startOps({ conn, dbc, ops: OPS, treasury: PARTNER, q, q1, run, mainnet: MAINNET, rewardOk: (m) => quoteAllowed(m), quoteUsd: (c) => quoteUsd(c.quote_mint, c.quote_symbol), devState: (c) => REW.state(c), liabilities: () => REW.liabilities(), reserved: () => CR.owed(), callerCost: (since) => CR.earnedSince(since), ready: () => REW.ready(), poolAuthority: deriveDbcPoolAuthority().toBase58(), everyMs: +(process.env.OPS_EVERY_MIN || 10) * 60e3 });
   const opsBal = () => conn.getBalance(OPS.publicKey).then((b) => { opsSolC.v = b / 1e9; if (MAINNET && b < 0.05e9) console.error('!! ops wallet low on SOL:', b / 1e9); }).catch(() => {}); opsBal(); setInterval(opsBal, 10 * 60e3);
   console.log('ops wallet', OPS.publicKey.toBase58(), '→ treasury', PARTNER);
 }

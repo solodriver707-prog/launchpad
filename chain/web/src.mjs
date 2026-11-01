@@ -244,6 +244,15 @@ export async function checkSwapTx(bytes, owner, rpc) {
       if (!(op === 17 || (op === 9 && a[1]?.equals(me) && a[2]?.equals(me)))) bad('token instruction'); } }
   return true;
 }
+// any transaction built by an outside API (Jupiter Trigger orders): refuse the instructions that hand over control of the wallet or its
+// tokens, whatever else the transaction does — token Approve / ApproveChecked / SetAuthority, system Assign / Allocate (programs are always static keys)
+export function dangerousIx(bytes) {
+  const m = VersionedTransaction.deserialize(Uint8Array.from(bytes)).message, keys = m.staticAccountKeys, TP = [TOKEN_PROGRAM_ID.toBase58(), TOKEN_2022_PROGRAM_ID.toBase58()];
+  for (const ix of m.compiledInstructions) { const p = keys[ix.programIdIndex]?.toBase58(), d = ix.data;
+    if (TP.includes(p) && [4, 6, 13].includes(d[0])) return 'it would give someone else control of your tokens';
+    if (p === '11111111111111111111111111111111' && d.length >= 4 && [1, 8, 9, 10].includes(Buffer.from(d).readUInt32LE(0))) return 'it would change who controls your wallet'; }
+  return null;
+}
 // burn your own tokens of a treid coin (permanent) — with a memo so it's recognisable on-chain
 export async function buildBurn({ rpc, owner, mint, amount }) {
   owner = pk(owner); const m = pk(mint), raw = BigInt(Math.floor(amount * 10 ** RULES.decimals)); if (raw <= 0n) throw new Error('Nothing to burn');
