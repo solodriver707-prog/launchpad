@@ -97,7 +97,7 @@ Other ideas: ops low-balance Telegram alert, own domain treid.fun (Phantom trust
 - Fixes: modal "shake" on live re-renders (overlays keep their open animation once: `ov-still`), logo/sparkline replay, iOS deeplink connect (pre-stored keys `treid.dlpre`, "Almost connected" fallback), factory tap-to-advance.
 - TP/SL GMGN-style: % sliders, draggable TP/SL lines on the chart (`#c-tl`, axis labels via price lines), TP stops at the price, SL can't go below the launch MC (lowest MC in history) while on the curve; overlays follow zoom per frame (`lwLoop`).
 - Branch `dev-share-100` (NOT merged, waiting for the owner's OK): dev share up to 100% for new coins (`dc=1` in metadata), older coins keep the 50% cap.
-- **Callout rewards** (branch `callout-rewards`, waiting for the owner's OK) — like pump.fun's, but funded per trade:
+- **Callout rewards** (merged 1 Nov 2026) — like pump.fun's, but funded per trade:
   - a buy made within 24h of opening someone's callout carries memo `treid:co:<id>` (buyer's own tx; `buildSwap({memo})`, buys only, SOL pairs only).
   - indexer `callrew.mjs`: caller earns `CALLOUT_SHARE_PCT` (default 25) of treid's fee on that trade (curve: half of trading fee; DAMM: 40% of pool fee; capped at the normal rate so sniper-trap fees don't count). Not for the caller's own buys, the dev's buys, or callouts by the dev; callout must be ≤72h old and about the same coin.
   - paid daily (UTC) in SOL from ops, min $1, 5 per tx, memo `treid:copay:<wallet>:<lamports>:<day>` → rlog kind `copay` (rebuilt from chain like every payout); owed SOL is kept out of sweep/buyback (`reserved`).
