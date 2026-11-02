@@ -28,7 +28,8 @@ export function startCallouts({ q, q1, run, push, rate, coinStats, pinJSON, pinF
     const mint = String(body.mint || ''), wallet = session || String(body.wallet || ''), ts = session ? Date.now() : +body.ts, reply = body.reply == null || body.reply === '' ? null : +body.reply, text = String(body.text || '');
     const image = body.image ? imageOf(body.image) : null; if (image && !pinataJwt) throw new Error('image uploads are off right now');
     if (!clean(text) && !image) throw new Error('write something first');
-    if (text && text !== clean(text)) throw new Error('unsupported characters or too long (2000 max)');
+    if (text && text !== clean(text)) throw new Error('unsupported characters or too long');
+    if (text.length > 280) throw new Error('a callout is short and to the point: 280 characters max');   // new posts only; older longer ones still display
     if (!(Math.abs(Date.now() - ts) <= 2 * 60e3)) throw new Error('signature expired — try again');
     if (!q1('SELECT 1 FROM coins WHERE mint=?', mint)) throw new Error('unknown coin');
     if (reply != null && !q1('SELECT 1 FROM callouts WHERE id=? AND mint=?', reply, mint)) throw new Error('reply target not found');
