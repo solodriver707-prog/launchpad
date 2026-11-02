@@ -202,6 +202,12 @@
   function setC(p) { for (var k in p) S.c[k] = p[k]; render(); }
 
   // ================= TOASTS + CONFETTI =================
+  // new deploy → a small "Update available · Reload" pill (GitHub Pages lets browsers keep the old page for ~10 min)
+  (function () { var me = (document.currentScript && /[?&]v=(\d+)/.exec(document.currentScript.src) || [])[1], shown = false; if (!me) return;
+    function check() { if (shown || document.hidden) return; fetch(location.pathname + '?nocache=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.text(); }).then(function (h) {
+      var v = (/app\.js\?v=(\d+)/.exec(h) || [])[1]; if (!v || v === me || shown) return; shown = true;
+      var b = document.createElement('button'); b.className = 'upd-pill'; b.innerHTML = '↻ New version — <b>Reload</b>'; b.onclick = function () { location.reload(); }; document.body.appendChild(b); }).catch(function () {}); }
+    setInterval(check, 120e3); document.addEventListener('visibilitychange', check); setTimeout(check, 15e3); })();
   function toast(msg, tok) {
     var box = document.getElementById('toasts');
     var el = document.createElement('div');
