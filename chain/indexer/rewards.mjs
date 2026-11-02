@@ -2,7 +2,8 @@
 // The ops wallet is the pool "creator" of treid coins; the creator's trading fees stay in the Meteora pool until paid out.
 //   era "dev" / "cto" (a creator wallet is in charge):
 //     active → paid automatically once ≥ $1 has built up, or on demand ("Claim now", from $1)
-//     48h idle → paused: the fees are claimed and used to buy back & burn the coin
+//     72h idle → paused: the fees are claimed and used to buy back & burn the coin (not paid back); "Resume my fees" (or any activity) restarts payouts
+//     activity = a trade in the coin, "I'm still here", a callout / update on the coin, or "Claim now"
 //     7d idle, or ≥70% of the bag gone (sold, transferred away, or both) → out
 //   era "out": 50% buyback & burn, 50% treid platform · holders can elect a new lead (applicant ≥1%, support ≥10% held for 24h)
 // After graduation the same rules apply to the creator's half of the DAMM v2 pool fees (ops holds both permanently locked LP positions:
@@ -23,7 +24,7 @@ const sendTx = (...a) => { if (HALT.on) throw new Error('ops halted'); return se
 import { rwOut } from './ops.mjs';
 import { verifySig } from './sig.mjs';
 
-export const RULES = { idleFreezeMs: 48 * 3600e3, idleOutMs: 7 * 864e5, soldOut: 70, ctoApplyPct: 1, ctoSupportPct: 10, ctoHoldMs: 24 * 36e5 };
+export const RULES = { idleFreezeMs: 72 * 3600e3, idleOutMs: 7 * 864e5, soldOut: 70, ctoApplyPct: 1, ctoSupportPct: 10, ctoHoldMs: 24 * 36e5 };
 const SUPPLY = 1e9, MEMO = new PublicKey('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr');
 const memo = (s) => new TransactionInstruction({ keys: [], programId: MEMO, data: Buffer.from(s) });
 export const pingMessage = (mint, ts) => `treid: I'm still here — ${mint} — ${ts}`;
@@ -106,7 +107,9 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, q
     const k = c.mint + '|' + wallet, cur = (balNow.has(k) ? balNow.get(k) : bal) + burned, stored = q1('SELECT peak FROM rpeak WHERE mint=? AND wallet=? AND since=?', c.mint, wallet, since)?.peak || 0;
     peak = Math.max(peak, cur, stored); if (peak > stored) run('INSERT OR REPLACE INTO rpeak VALUES(?,?,?,?)', c.mint, wallet, since, peak);
     const drop = peak > 0 ? (peak - cur) / peak * 100 : 0, soldPct = peak > 0 ? Math.min(100, sold / peak * 100) : 0;   // dump-and-rebuy between checks still counts
-    const lastPing = q1(`SELECT MAX(ts) t FROM rlog WHERE mint=? AND kind='ping' AND ts>=? AND (extra IS NULL OR extra=?)`, c.mint, since, wallet).t || 0, last = Math.max(since, lastTrade, lastPing);
+    const lastPing = q1(`SELECT MAX(ts) t FROM rlog WHERE mint=? AND kind='ping' AND ts>=? AND (extra IS NULL OR extra=?)`, c.mint, since, wallet).t || 0;
+    let lastCo = 0; try { lastCo = q1('SELECT MAX(ts) t FROM callouts WHERE mint=? AND wallet=? AND ts>=?', c.mint, wallet, since)?.t || 0; } catch {}   // a callout / update on your own coin is showing up too
+    const lastClaim = +(q1('SELECT v FROM kv WHERE k=?', 'claimed:' + c.mint + ':' + wallet)?.v || 0), last = Math.max(since, lastTrade, lastPing, lastCo, lastClaim >= since ? lastClaim : 0);
     return { bal: cur, peak, sold: Math.max(drop, soldPct), last, idle: Date.now() - last };
   }
   function state(c) {
@@ -345,7 +348,8 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, q
   async function claimNow({ mint, wallet, ts, sig }) {
     needReady(); const c = coin(mint); fresh(ts); if (!verify(claimMessage(mint, ts), sig, wallet, ts)) throw new Error('bad signature'); guard('claim', wallet, sig);
     return withLock(async () => { const st = state(c); if (wallet !== st.creator) throw new Error('only the current creator can claim');
-      if (st.state !== 'active') throw new Error(st.state === 'frozen' ? 'payouts are paused — tap “I’m still here” first' : 'creator is out');
+      if (st.state !== 'active') throw new Error(st.state === 'frozen' ? 'payouts are paused — tap “Resume my fees” first' : 'creator is out');
+      run('CREATE TABLE IF NOT EXISTS kv(k TEXT PRIMARY KEY, v TEXT)'); run('INSERT OR REPLACE INTO kv(k,v) VALUES(?,?)', 'claimed:' + c.mint + ':' + wallet, String(Date.now()));   // claiming counts as showing up
       const vpw = await dbc.state.getPool(new PublicKey(c.pool)), src = await creatorSources(c, vpw.poolState || vpw), inPool = src.list.reduce((a, x) => a + x[1], 0);
       if (inPool < units(c, CLAIM_USD)) throw new Error('claims start at $1 — keep building fees');
       const before = sum(c.mint, 'pay'); let s = null; for (const [from, amt] of src.list) if (amt >= units(c, 0.05)) s = await payout(c, amt, wallet, 'pay', from); const paid = sum(c.mint, 'pay') - before;

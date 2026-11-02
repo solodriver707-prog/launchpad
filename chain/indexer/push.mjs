@@ -111,5 +111,6 @@ export function startPush({ q, q1, run, pub, priv, subject, log = console.log })
   } catch {} }, 60e3);
   function onEvent(ev) { try { if (ev.type === 'trade') onTrade(ev); else if (ev.type === 'grad') onGrad(ev); else if (ev.type === 'callout') onCallout(ev); } catch (e) { log('push err', String(e?.message || e).slice(0, 100)); } }
   log('push   on,', q1('SELECT COUNT(*) n FROM pushsub').n, 'subscriptions');
-  return { on: true, publicKey: pub, save, drop, onEvent, send, alertAdd, alertList, alertDel };
+  function toWallet(wallet, msg) { if (!isAddr(String(wallet || ''))) return 0; const subs = q('SELECT * FROM pushsub WHERE wallet=? LIMIT 20', wallet); for (const row of subs) send(row, msg); return subs.length; }
+  return { on: true, publicKey: pub, save, drop, onEvent, send, toWallet, alertAdd, alertList, alertDel };
 }
