@@ -3415,7 +3415,7 @@
       var stE = E.era === 'out' ? ['r', 'Creator is out', E.why === 'sold' ? 'Creator sold their bag' : 'The creator left — holders can elect a new lead']
         : E.state === 'frozen' ? ['y', 'Paused', 'No ' + roleW + ' activity for ' + durE(E.idleMs) + ' — rewards now buy back & burn $' + esc(symOf(t))]
         : isCto ? ['b', 'Community takeover', 'Led by ' + esc(who(E.creator)) + ' since ' + ago(E.cto.at) + ' ago · same rules apply'] : ['g', 'Active', 'Paid to the creator automatically, straight from the pool'];
-      var tiles = E.era === 'out' ? [['Bought back & burned', solf(E.buybackSol)], ['To treid platform', solf(E.platformSol || 0)], ['Takeover', (E.apps || []).length ? (E.apps.length + ' applying') : 'open']]
+      var tiles = E.era === 'out' ? [['Bought back & burned', solf(E.buybackSol)], ['Waiting in pool', solf(E.pendingSol)], ['Takeover', (E.apps || []).length ? (E.apps.length + ' applying') : 'open']]
         : isCto ? [['Paid to lead', solf(E.paidSol)], ['Waiting in pool', solf(E.pendingSol)], ['Bought back & burned', solf(E.buybackSol)]]
         : [['Paid to creator', solf(E.paidSol)], ['Waiting in pool', solf(E.pendingSol)], ['Bought back & burned', solf(E.buybackSol)]];
       var dhm = function (ms) { var m = Math.max(1, Math.round(ms / 60000)), d = Math.floor(m / 1440), h = Math.floor(m % 1440 / 60), mm = m % 60; return d ? d + 'd' + (h ? ' ' + h + 'h' : '') : h ? h + 'h' + (mm && h < 10 ? ' ' + mm + 'm' : '') : mm + 'm'; };
