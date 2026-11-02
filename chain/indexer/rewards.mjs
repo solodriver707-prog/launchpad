@@ -190,26 +190,29 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, q
       const qt = dbc.pool.swapQuote2({ virtualPool: vpw.poolState ? vpw : { poolState: vp }, config: cfg, swapBaseForQuote: false, amountIn: new BN(amount), slippageBps: slip, hasReferral: false, currentPoint: cp, swapMode: SwapMode.ExactIn });
       if (!qt.minimumAmountOut || !(qt.minimumAmountOut.gtn(0))) throw new Error('buyback quote has no minimum out — not swapping unprotected');
       const sw = await dbc.pool.swap2({ owner: ops.publicKey, pool: new PublicKey(c.pool), swapBaseForQuote: false, referralTokenAccount: null, swapMode: SwapMode.ExactIn, amountIn: new BN(amount), minimumAmountOut: qt.minimumAmountOut });
-      sig = await sendTx(conn, new Transaction().add(...sw.instructions, memo(`treid:buyback:${c.mint}:${amount}:${claimSig}`)), [ops]);
+      sig = await bbSend(c, new Transaction().add(...sw.instructions, memo(`treid:buyback:${c.mint}:${amount}:${claimSig}`)));
     } else if (migrated) {   // graduated: swap on the coin's own DAMM v2 pool (where its liquidity lives), same slippage rule
       const d = await dammCtx(c), cp = await getCurrentPoint(conn, d.ps.activationType);
       const qt = amm.getQuote2({ inputTokenMint: d.ps.tokenBMint, slippage: 0, poolState: d.ps, currentPoint: cp, hasReferral: false, tokenADecimal: 6, tokenBDecimal: c.quote_dec ?? 9, swapMode: 0, amountIn: new BN(amount) });
       const minOut = BigInt(qt.outputAmount.toString()) * BigInt(10000 - 200 - (c.tax_bps || 0)) / 10000n;
       const sw = await amm.swap2({ payer: ops.publicKey, pool: d.pool, inputTokenMint: d.ps.tokenBMint, outputTokenMint: d.ps.tokenAMint, amountIn: new BN(amount), minimumAmountOut: new BN(minOut.toString()), tokenAVault: d.ps.tokenAVault, tokenBVault: d.ps.tokenBVault,
         tokenAMint: d.ps.tokenAMint, tokenBMint: d.ps.tokenBMint, tokenAProgram: TOKEN_2022_PROGRAM_ID, tokenBProgram: await qprogOf(c), referralTokenAccount: null, swapMode: 0 });
-      sig = await sendTx(conn, new Transaction().add(...sw.instructions, memo(`treid:buyback:${c.mint}:${amount}:${claimSig}`)), [ops]);
+      sig = await bbSend(c, new Transaction().add(...sw.instructions, memo(`treid:buyback:${c.mint}:${amount}:${claimSig}`)));
     } else throw new Error('curve finished — buyback waits for the migration');
     record(sig, [{ mint: c.mint, kind: 'buyback', lamports: amount, extra: claimSig }]);
+    try { run('INSERT OR REPLACE INTO kv(k,v) VALUES(?,?)', 'bbpend:' + c.mint, JSON.stringify({ sig, at: Date.now() })); } catch (e) { halt(e.message); throw e; }
     const t = await getTxRetry(conn, sig), tb = (arr) => (arr || []).filter((b) => b.mint === c.mint && b.owner === ops.publicKey.toBase58()).reduce((s, b) => s + BigInt(b.uiTokenAmount.amount), 0n);
-    if (!t) { halt('buyback receipt unreadable: ' + String(sig).slice(0, 16)); throw new Error('buyback receipt unreadable — ops stopped so the bought tokens are never paid out as tax'); }
+    const kvj = (k, o) => { try { if (o == null) run('DELETE FROM kv WHERE k=?', k); else run('INSERT OR REPLACE INTO kv(k,v) VALUES(?,?)', k, JSON.stringify(o)); } catch (e) { halt(e.message); throw e; } };
+    if (!t) { halt('buyback receipt unreadable: ' + String(sig).slice(0, 16)); throw new Error('buyback receipt unreadable — ops stopped; the tax cycle settles it before touching this coin'); }   // bbpend stays: the bought tokens are never paid out as tax
     const got = tb(t.meta.postTokenBalances) - tb(t.meta.preTokenBalances);   // burn exactly what this swap bought
-    if (got > 0n) { const k = 'toburn:' + c.mint, add = (d) => run('INSERT OR REPLACE INTO kv(k,v) VALUES(?,?)', k, String((BigInt(q1('SELECT v FROM kv WHERE k=?', k)?.v || 0) + d) > 0n ? BigInt(q1('SELECT v FROM kv WHERE k=?', k)?.v || 0) + d : 0n));
-      add(got);   // owed to the burn until the burn lands: the tax cycle burns it first if this step dies halfway (never pays it out)
-      await stamp(c.mint, 'burntok', Number(got), null, [createBurnCheckedInstruction(ata, mint, ops.publicKey, got, 6, [], TOKEN_2022_PROGRAM_ID)]);
-      add(-got); }
+    if (got > 0n) kvj('toburn:' + c.mint, { sig, amt: String(got) });   // owed to the burn until the burn lands (the tax cycle burns it first if this step dies)
+    kvj('bbpend:' + c.mint, null);
+    if (got > 0n) { await stamp(c.mint, 'burntok', Number(got), sig, [createBurnCheckedInstruction(ata, mint, ops.publicKey, got, 6, [], TOKEN_2022_PROGRAM_ID)]); kvj('toburn:' + c.mint, null); }
     const cl1 = await closeIfEmpty(c); if (cl1) await sendTx(conn, [cl1], [ops]).catch(() => {});   // empty again → close it, rent back to ops
     log('rewards buyback', c.symbol, (amount / 10 ** (c.quote_dec ?? 9)).toFixed(4), c.quote_symbol || 'SOL', '→ burned', (Number(got) / 1e6).toFixed(0), 'tokens');
   }
+  // a buyback whose outcome is unknown: remember its signature, so the tax cycle reads the receipt (once the RPC answers) and burns what it bought
+  async function bbSend(c, tx) { try { return await sendTx(conn, tx, [ops]); } catch (e) { if (e && e.unconfirmed && e.signature) { try { run('INSERT OR REPLACE INTO kv(k,v) VALUES(?,?)', 'bbpend:' + c.mint, JSON.stringify({ sig: e.signature, at: Date.now() })); } catch (e2) { halt(e2.message); } } throw e; } }
   // finish every claim whose step 2 hasn't happened (crash, timeout, missing receiver account, failed buyback…)
   const settledSet = () => new Set(q(`SELECT extra FROM rlog WHERE kind IN ('pay','platform','buyback','pay0') AND extra IS NOT NULL`).map((r) => String(r.extra).split('|').pop()));
   const isSettled = (sig, purpose, done) => (purpose === 'split' ? done.has(sig + '#p') && done.has(sig + '#b') : done.has(sig));
