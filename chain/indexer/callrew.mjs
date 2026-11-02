@@ -65,6 +65,7 @@ export function startCalloutRewards({ conn, ops, q, q1, run, solUsd = () => 0, m
     let paid = 0, n = 0;
     const send = async (batch) => {   // true = sent and recorded · false = nothing was sent (a definite failure)
       const ixs = []; for (const x of batch) ixs.push(SystemProgram.transfer({ fromPubkey: ops.publicKey, toPubkey: new PublicKey(x.w), lamports: x.lam }), memoIx(`treid:copay:${x.w}:${x.lam}:${today}`));
+      if (HALT.on) throw new Error('ops halted');   // a shutdown / unknown outcome elsewhere: nothing more leaves the ops wallet
       let sig; try { sig = await sendTx(conn, ixs, [ops]); }
       catch (e) { if (e.unconfirmed) { halt('unknown outcome: callout payout'); log('!! callout payout status unknown — stopping; the ledger rebuild on restart settles it'); setTimeout(() => process.exit(1), 20e3); throw e; }
         log('callout payout failed (nothing sent):', batch.length, 'caller(s),', String(e?.message || e).slice(0, 100)); return false; }
