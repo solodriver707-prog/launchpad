@@ -266,7 +266,7 @@
       if (!acc) { set({ connecting: null }); if (!silent) toast('Wallet did not share an account'); return; }
       try { localStorage.setItem(LS.wallet, w.name); } catch (e) {}
       S.walletAcc = acc; set({ wallet: w, account: acc.address, connecting: null, walletOpen: false, balance: null });
-      listen(w); refreshBalance();
+      listen(w); refreshBalance(); posNow();
       if (!silent) toast(w.name + ' connected · ' + short(acc.address));
     }).catch(function (err) {
       set({ connecting: null });
@@ -274,6 +274,7 @@
     });
   }
   var off = null;
+  function posNow() { setTimeout(function () { var tt = S.screen === 'token' && find(S.tick); if (tt && tt.live && typeof livePos === 'function') livePos(tt); }, 0); }   // just connected on a coin page: show what you hold right away (not after the 20 s refresh)
   function listen(w) {
     if (off) { try { off(); } catch (e) {} off = null; }
     var ev = w.features['standard:events']; if (!ev) return;
@@ -281,7 +282,7 @@
       if (!p || !p.accounts) return;
       if (!p.accounts[0]) { set({ wallet: null, account: null, balance: null }); toast('Wallet disconnected'); return; }
       if (S.account && p.accounts[0].address !== S.account) { S.pos = {}; S.myPs = {}; for (var jk in JT) delete JT[jk]; }   // another account: never show (or sell from) the previous account's positions / orders
-      S.walletAcc = p.accounts[0]; set({ account: p.accounts[0].address, balance: null }); refreshBalance();
+      S.walletAcc = p.accounts[0]; set({ account: p.accounts[0].address, balance: null }); refreshBalance(); posNow();
     });
   }
   function disconnect() {
@@ -518,7 +519,7 @@
     var preChips = pre.map(function (p) { return '<button class="cpp-q' + (isOn(p) ? ' on' : '') + '" data-act="rwPre" data-arg="' + esc(p[1]) + '">' + preIcon(p, 20) + '$' + esc(p[0]) + '</button>'; }).join('');
     return '<div class="field cpp rwp"><div class="spk-h"><b>Holders get paid in</b><span class="spk-lock">' + ICO.lock + 'Locked forever at launch</span></div>' +
       '<div class="cpp-row"><div class="cpp-sel' + (!r ? ' rwp-sel-own' : '') + '">' + sel + '</div>' +
-      '<div class="cpp-s">' + I.search + '<input data-rwq value="' + esc(S.rwq) + '" placeholder="Search name, ticker or paste contract address" autocomplete="off" spellcheck="false"><div class="cpp-drop" id="rw-drop" style="display:none"></div></div></div>' +
+      '<div class="cpp-s">' + I.search + '<input id="rw-q" data-rwq value="' + esc(S.rwq) + '" placeholder="Search name, ticker or paste contract address" autocomplete="off" spellcheck="false"><div class="cpp-drop" id="rw-drop" style="display:none"></div></div></div>' +
       '<div class="cpp-quick drag-scroll rwp-first">' + own + (q.mint !== WSOL && q.mint !== USDC_MINT ? '<button class="cpp-q' + (r && r.mint === q.mint ? ' on' : '') + '" data-act="rwPick" data-arg="' + esc(q.mint) + '">' + coinHTML(q.key, 20) + esc(q.sym) + ' <small class="muted">pair</small></button>' : '') + '</div>' +
       tabs + '<div class="cpp-quick drag-scroll">' + preChips + '</div>' +
       (S.rwBusy ? '<small class="rpp-st">Checking token…</small>' : S.rwErr ? '<small class="rpp-st bad">' + esc(S.rwErr) + '</small>' : r && r.warn ? '<small class="rpp-st warn">⚠ ' + esc(r.warn) + '</small>' : '') +
@@ -1890,7 +1891,7 @@
   function tsList() { return all().filter(function (t) { return !t.archived; }).sort(function (a, b) { return chgOver(b, 360) * Math.log10(b.vol * 1000 + 10) - chgOver(a, 360) * Math.log10(a.vol * 1000 + 10); }).slice(0, 14); }
   function tsCard(t, i) { var c = chgOver(t, 360), up = c >= 0;
     return '<button class="ts-card" data-act="open" data-arg="' + esc(t.tick) + '"><span class="ts-img">' + avatarHTML(t, 240) + '</span><span class="ts-rk mono">#' + (i + 1) + '</span>' + (vampOf(t) ? '<span class="ts-vamp" title="Possible copy">🧛</span>' : '') +
-      '<span class="ts-bot"><b class="ts-n">' + esc(t.name) + '</b><span class="ts-r"><small class="mono">$' + esc(symOf(t)) + '</small><em class="mono ' + (up ? 'up' : 'down') + '">' + (up ? '▲ ' : '▼ ') + Math.abs(c).toFixed(1) + '%</em></span>' +
+      '<span class="ts-bot"><b class="ts-n">' + esc(t.name) + '</b><span class="ts-r"><small class="mono">$' + esc(symOf(t)) + '</small><em class="mono ' + (Math.abs(c) < 0.05 ? 'muted' : up ? 'up' : 'down') + '" title="change over the last 6 hours">' + (Math.abs(c) < 0.05 ? '' : up ? '▲ ' : '▼ ') + Math.abs(c).toFixed(1) + '% <small>6h</small></em></span>' +
       '<span class="ts-r"><b class="mono ts-mc">' + fmtK(t.mcN) + '</b>' + lbSpark(t, 70, 22, 'ts' + i) + '</span><span class="ts-cv"><i style="width:' + Math.min(100, t.prog).toFixed(0) + '%"></i></span></span></button>'; }
   function tsMount() {
     var slot = document.getElementById('ts-slot'); if (!slot) return;
@@ -4540,6 +4541,7 @@
           var side0 = S.side, ps0 = S.pos[t.tick] || { tok: 0 };
           var qb0 = qBalT(t); if (!paySol(t) && side0 === 'buy' && qb0 != null && amt > qb0 - (t.qMint ? 0 : 0.003)) { toast('Not enough ' + qSymT(t) + ' — balance ' + (qb0 >= 1000 ? fmtNum(qb0) : qb0.toFixed(3))); break; }
           if (t.qMint && typeof S.balance === 'number' && S.balance < 0.003) { toast('You need a little SOL for network fees'); break; }
+          if (side0 === 'sell' && !(ps0.tok > 0) && !S.posChecked) { S.posChecked = true; toast('Checking your balance…'); livePos(t).then(function () { setTimeout(function () { S.posChecked = false; }, 15e3); if (S.pos[t.tick] && S.pos[t.tick].tok > 0) toast('Balance loaded — tap Sell again'); else toast('You don\'t hold any $' + symOf(t) + ' yet — buy first'); }); break; }
           if (side0 === 'sell') { if (amt > ps0.tok) amt = ps0.tok; if (amt <= 0) { toast('You don\'t hold any $' + symOf(t) + ' yet — buy first'); break; } }
           if (paySol(t)) { if (typeof S.balance === 'number' && amt > S.balance - 0.01) { toast('Not enough SOL — balance ' + S.balance.toFixed(3)); break; } if (S.busy) break; S.busy = 'Swapping SOL → ' + qSymT(t); render(); toast('Step 1 of 2: swap SOL → ' + qSymT(t) + ' — confirm in your wallet');
             jupSolToPair(t, amt).catch(function (e) { throw /fetch/i.test(String(e && e.message)) ? new Error('Couldn’t reach Jupiter — try again in a moment') : e; }).then(function (got) { S.busy = null; render(); return chainRun('Step 2 of 2: buying $' + symOf(t), function (T) { return T.buildSwap({ rpc: RPC, expect: { mint: t.ca, partners: [PARTNER, TREASURY] }, owner: S.account, pool: t.pool, side: 'buy', amount: got, slippageBps: Math.round(S.slip * 100), referral: TREASURY }); }); })

@@ -13,7 +13,7 @@ import zlib from 'node:zlib';
 import net from 'node:net';
 import dns from 'node:dns/promises';
 import { opsKeypair, startOps, treidCfg, parseSplit } from './ops.mjs';
-import { startRewards } from './rewards.mjs';
+import { startRewards, RULES as REW_RULES } from './rewards.mjs';
 import { startCallouts } from './callouts.mjs';
 import { startCalloutRewards, coMemoOf, CO_SHARE } from './callrew.mjs';
 import { startBubbles } from './bubbles.mjs';
@@ -207,7 +207,8 @@ const imgTotal = () => { if (Date.now() - imgTot.at > 10 * 60e3) { imgTot = { v:
 const imgMiss = (mint, ban) => { try { run('INSERT OR REPLACE INTO cimg(mint,b,ct,data,at) VALUES(?,?,?,?,?)', mint, ban, null, null, Date.now()); } catch {} return null; };
 function coinImage(mint, ban) {
   const row = q1('SELECT ct, data, at FROM cimg WHERE mint=? AND b=?', mint, ban); if (row && row.data) return Promise.resolve({ ct: row.ct, data: Buffer.from(row.data) });
-  const mm = memImg.get(mint + '|' + ban); if (mm) { memImg.delete(mint + '|' + ban); memImg.set(mint + '|' + ban, mm); return Promise.resolve(mm); }   // over the disk quota: recently used images live in memory (LRU, 80 MB) if (row && Date.now() - row.at < 10 * 60e3) return Promise.resolve(null);   // remembered miss: retry in 10 min
+  const mm = memImg.get(mint + '|' + ban); if (mm) { memImg.delete(mint + '|' + ban); memImg.set(mint + '|' + ban, mm); return Promise.resolve(mm); }   // over the disk quota: recently used images live in memory (LRU, 80 MB)
+  if (row && Date.now() - row.at < 10 * 60e3) return Promise.resolve(null);   // remembered miss: retry in 10 min
   const k = mint + '|' + ban; if (imgBusy.has(k)) return imgBusy.get(k);
   const pr = (async () => { const c = q1('SELECT uri FROM coins WHERE mint=?', mint); if (!c?.uri) return null;
     const mr = await fetchAny(ipfsUrls(c.uri)); let meta = null; try { const mb = mr && await readCapped(mr, 64e3); meta = mb && JSON.parse(mb.toString('utf8')); } catch {} const src = meta && (ban ? meta.banner : meta.image); if (typeof src !== 'string') return imgMiss(mint, ban);
@@ -504,10 +505,10 @@ async function jtProxy(req, res, u, p) {
 }
 const server = http.createServer((req, res) => { handleReq(req, res).catch((e) => { console.log('req err', String(e?.message || e).slice(0, 160)); try { if (!res.headersSent) res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end('{"ok":false}'); } catch {} }); }).listen(PORT, () => console.log('API on :' + PORT));
 async function handleReq(req, res) {
-  const u = new URL(req.url, 'http://x'), p = u.pathname.split('/').filter(Boolean), J = (o) => { const body = typeof o === 'object' && o && o.__gz ? null : JSON.stringify(o), gz = /\bgzip\b/.test(String(req.headers['accept-encoding'] || ''));   // big answers go out gzipped (the coin list shrinks ~8x)
-    if (o && o.__gz) { res.writeHead(200, { 'content-type': 'application/json', 'access-control-allow-origin': '*', 'cache-control': 'no-store', ...(gz ? { 'content-encoding': 'gzip', vary: 'Accept-Encoding' } : {}) }); return res.end(gz ? o.__gz : o.raw); }
-    if (gz && body.length > 4096) { res.writeHead(200, { 'content-type': 'application/json', 'access-control-allow-origin': '*', 'cache-control': 'no-store', 'content-encoding': 'gzip', vary: 'Accept-Encoding' }); return res.end(zlib.gzipSync(body, { level: 6 })); }
-    res.writeHead(200, { 'content-type': 'application/json', 'access-control-allow-origin': '*', 'cache-control': 'no-store' }); res.end(body); };
+  const u = new URL(req.url, 'http://x'), p = u.pathname.split('/').filter(Boolean), J = (o, st = 200) => { const body = typeof o === 'object' && o && o.__gz ? null : JSON.stringify(o), gz = /\bgzip\b/.test(String(req.headers['accept-encoding'] || ''));   // big answers go out gzipped (the coin list shrinks ~8x)
+    if (o && o.__gz) { res.writeHead(st, { 'content-type': 'application/json', 'access-control-allow-origin': '*', 'cache-control': 'no-store', ...(gz ? { 'content-encoding': 'gzip', vary: 'Accept-Encoding' } : {}) }); return res.end(gz ? o.__gz : o.raw); }
+    if (gz && body.length > 4096) { res.writeHead(st, { 'content-type': 'application/json', 'access-control-allow-origin': '*', 'cache-control': 'no-store', 'content-encoding': 'gzip', vary: 'Accept-Encoding' }); return res.end(zlib.gzipSync(body, { level: 6 })); }
+    res.writeHead(st, { 'content-type': 'application/json', 'access-control-allow-origin': '*', 'cache-control': 'no-store' }); res.end(body); };
   if (req.method === 'OPTIONS') { res.writeHead(204, { 'access-control-allow-origin': '*', 'access-control-allow-headers': 'authorization, *', 'access-control-allow-methods': 'GET,POST' }); return res.end(); }
   // coin metadata (image / description) posted by the site at launch — first write wins. TODO mainnet: pin to IPFS instead.
   if (p[1] === 'upload' && req.method === 'POST') {   // before launch: pin image(s) + metadata JSON to IPFS, return the permanent URI
@@ -580,7 +581,7 @@ async function handleReq(req, res) {
       if (!esc || Date.now() - esc.at > 60e3) { const vp = (await dbc.state.getPool(new PublicKey(c.pool)).catch(() => null))?.poolState; esc = { at: Date.now(), on: !!(OPS && vp && vp.creator.toBase58() === OPS.publicKey.toBase58()), pending: vp ? Number(vp.creatorQuoteFee.toString()) / 10 ** (c.quote_dec ?? 9) : 0 }; escCache.set(k, esc); }
       if (!esc.on || !REW) return J({ escrow: false, dev: c.creator });
       const st = REW.state(c), L = (x) => x / 10 ** (c.quote_dec ?? 9), apps = st.era === 'out' ? await REW.applications(c).catch(() => []) : [];
-      return J({ escrow: true, dev: c.creator, era: st.era, creator: st.creator, cto: st.cto ? { lead: st.cto.lead, at: st.cto.at, fundSol: L(st.cto.fund), paidSol: L(st.cto.paid), vestedSol: L(st.cto.vested) } : null, apps, state: st.state, why: st.why, idleMs: st.idle, lastActive: st.last, soldPct: st.sold, quote: c.quote_symbol || 'SOL', quoteUsd: quoteUsd(c.quote_mint, c.quote_symbol), pendingSol: Math.max(0, esc.pending - L(st.fund)), paidSol: L(st.paid), buybackSol: L(st.buyback), burnedTokens: st.burnedTokens / 1e6, fundSol: L(st.fund), grantedSol: L(st.granted), platformSol: L(st.granted), fundEndsAt: st.fundEndsAt, rules: { freezeH: 48, outD: 7, soldOut: 70, applyPct: 1, supportPct: 10 }, log: REW.logFor(c.mint) });
+      return J({ escrow: true, dev: c.creator, era: st.era, creator: st.creator, cto: st.cto ? { lead: st.cto.lead, at: st.cto.at, fundSol: L(st.cto.fund), paidSol: L(st.cto.paid), vestedSol: L(st.cto.vested) } : null, apps, state: st.state, why: st.why, idleMs: st.idle, lastActive: st.last, soldPct: st.sold, quote: c.quote_symbol || 'SOL', quoteUsd: quoteUsd(c.quote_mint, c.quote_symbol), pendingSol: Math.max(0, esc.pending - L(st.fund)), paidSol: L(st.paid), buybackSol: L(st.buyback), burnedTokens: st.burnedTokens / 1e6, fundSol: L(st.fund), grantedSol: L(st.granted), platformSol: L(st.granted), fundEndsAt: st.fundEndsAt, rules: { freezeH: REW_RULES.idleFreezeMs / 36e5, outD: REW_RULES.idleOutMs / 864e5, soldOut: 70, applyPct: 1, supportPct: 10 }, log: REW.logFor(c.mint) });
     }
     if (['cto', 'claim', 'ping'].includes(p[1]) && req.method === 'POST' && !rate('act|' + ip(req), 30, 36e5)) { res.writeHead(429, { 'access-control-allow-origin': '*' }); return res.end('{"ok":false,"error":"too many requests — try again later"}'); }
     if (p[1] === 'cto' && (p[2] === 'apply' || p[2] === 'vote') && req.method === 'POST') { let body = ''; req.on('data', (d) => { body += d; if (body.length > 6000) req.destroy(); });
@@ -647,7 +648,9 @@ async function handleReq(req, res) {
     if (p[1] === 'bubbles' && p[2]) { if (!rate('bub|' + ip(req), 30, 60e3)) return J({ error: 'slow down' }, 429); const k = 'bub|' + p[2], c0 = bubC.get(k); if (c0 && Date.now() - c0.ts < (c0.v?.done ? 60e3 : 6e3)) return J(c0.v);
       try { const v = await BUB.map(p[2]); if (!v) return J({ error: 'unknown coin' }, 404); bubC.set(k, { ts: Date.now(), v }); if (bubC.size > 500) bubC.delete(bubC.keys().next().value); return J(v); } catch (e) { return J({ error: 'bubble map unavailable' }, 503); } }
     if (p[1] === 'holders') { const withPs = (l) => l.slice(0, 300).map((x) => (x.curve || x.pool ? x : { ...x, ps: posStats(p[2], x.wallet, x.pct / 100 * SUPPLY) }));   // position value, spent and profit per holder
-      const h = hCache.get(p[2]); if (h?.list && Date.now() - h.ts < 15e3) return J(cached('hp|' + p[2] + '|' + h.ts, 15e3, () => withPs(h.list))); if (!q1('SELECT 1 FROM coins WHERE mint=?', p[2])) return J([]); if (!inflight.has(p[2])) inflight.set(p[2], holders(p[2]).finally(() => inflight.delete(p[2]))); const l = await inflight.get(p[2]); hCache.set(p[2], { ts: Date.now(), list: l }); return J(withPs(l)); }
+      const h = hCache.get(p[2]); if (h?.list && Date.now() - h.ts < 15e3) return J(cached('hp|' + p[2] + '|' + h.ts, 15e3, () => withPs(h.list))); if (!q1('SELECT 1 FROM coins WHERE mint=?', p[2])) return J([]);
+      if (!inflight.has(p[2]) && (!holderSlots() || !rate('hscan|' + ip(req), 20, 60e3))) return J(h?.list ? withPs(h.list) : []);   // a fresh scan is a getProgramAccounts: at most 3 at a time and 20/min per visitor (else the last list)
+      if (!inflight.has(p[2])) inflight.set(p[2], holders(p[2]).finally(() => inflight.delete(p[2]))); const l = await inflight.get(p[2]); hCache.set(p[2], { ts: Date.now(), list: l }); return J(withPs(l)); }
     res.writeHead(404, { 'access-control-allow-origin': '*' }); res.end('{}');
   } catch (e) { res.writeHead(500, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ error: pubErr(e) })); }
 }
@@ -664,7 +667,8 @@ CO = startCallouts({ q, q1, run, push, rate, pinJSON, pinFile, pinataJwt: PINATA
     return { mc: last.mcap_usd || 0, pos, allowed: held && pos >= 1 }; } });   // you must actually hold ≥ $1 of the coin right now (a dust buy doesn't buy a voice)
 run(`CREATE TABLE IF NOT EXISTS rlog(sig TEXT, i INT, mint TEXT, kind TEXT, lamports INT, ts INT, PRIMARY KEY(sig, i))`); try { run('ALTER TABLE rlog ADD COLUMN extra TEXT'); } catch {} run('CREATE TABLE IF NOT EXISTS kv(k TEXT PRIMARY KEY, v TEXT)');
 CR = startCalloutRewards({ conn, ops: OPS, q, q1, run, mainnet: MAINNET, solUsd: () => SOL_USD, ready: () => !!REW && REW.ready(), otherLiab: () => (REW ? REW.liabilities() : 0) + (OPS_ST && OPS_ST.pending ? OPS_ST.pending() : 0) });   // callers earn a share of treid's fee on the buys their callouts bring
-CO.restore();
+const sleep0 = (ms) => new Promise((r) => setTimeout(r, ms));
+const coRestored = Promise.race([Promise.resolve().then(() => CO.restore()).catch((e) => console.log('callout restore err', String(e?.message || e).slice(0, 100))), sleep0(60e3)]);   // callouts must be back BEFORE old trades are replayed, or their callers' earnings are never credited
 setInterval(() => push({ type: 'ping', t: Date.now() }), 25e3);               // keeps proxies from closing the stream
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let syncing = false; const lastSync = new Map();
@@ -678,6 +682,7 @@ async function syncAll() {   // safety net for missed websocket messages: every 
   } finally { syncing = false; }
 }
 async function start() {
+  await coRestored;
   // full history first (retrying until it works) — nothing that depends on history starts before this succeeds
   for (let i = 1; ; i++) { try { await solPrice(); await quotePrices().catch(() => {}); await backfill(); break; } catch (e) { console.log('startup retry', i, String(e?.message || e).slice(0, 120)); await sleep(Math.min(60e3, 5e3 * i)); } }
   ready = true; setInterval(solPrice, 60e3); setInterval(() => quotePrices().catch(() => {}), 60e3);
@@ -687,7 +692,7 @@ async function start() {
   retier(); setInterval(() => loadConfigs().catch(() => {}), 24 * 36e5);   // full config rescan only daily (new configs are picked up from their own create tx)
   console.log('watching', configs.size, 'treid configs (partners', PARTNERS.join(', '), ')');
   if (!OPS) return;
-  REW = startRewards({ conn, dbc, ops: OPS, treasury: PARTNER, q, q1, run, mainnet: MAINNET, quoteUsd: (c) => quoteUsd(c.quote_mint, c.quote_symbol), balances: async (mint) => new Map((await holders(mint)).filter((h) => !h.curve).map((h) => [h.wallet, h.pct / 100 * SUPPLY])) });
+  REW = startRewards({ conn, dbc, ops: OPS, treasury: PARTNER, q, q1, run, mainnet: MAINNET, quoteUsd: (c) => quoteUsd(c.quote_mint, c.quote_symbol), balances: async (mint) => new Map((await holdersCached(mint)).filter((h) => !h.curve).map((h) => [h.wallet, h.pct / 100 * SUPPLY])) });
   for (let i = 1; ; i++) { try { await REW.rebuild(); break; } catch (e) { console.log('rewards rebuild retry', i, String(e?.message || e).slice(0, 120)); await sleep(Math.min(60e3, 5e3 * i)); } }   // a hole in the ledger could pay the wrong person
   setTimeout(() => REW.cycle(), 30e3); setInterval(() => REW.cycle(), +(process.env.OPS_EVERY_MIN || 10) * 60e3);
   // creator reminders (push to the creator's own devices): 24 h and 6 h before their coin's fees pause for inactivity — once per quiet spell
