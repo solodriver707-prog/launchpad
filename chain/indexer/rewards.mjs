@@ -112,10 +112,17 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, q
     const lastClaim = +(q1('SELECT v FROM kv WHERE k=?', 'claimed:' + c.mint + ':' + wallet)?.v || 0), last = Math.max(since, lastTrade, lastPing, lastCo, lastClaim >= since ? lastClaim : 0);
     return { bal: cur, peak, sold: Math.max(drop, soldPct), last, idle: Date.now() - last };
   }
+  // why the last creator/lead went out ('sold' | 'idle') — saved when it happens; older outs are worked out once from their trades (display only)
+  function outWhy(c) {
+    const k = 'outwhy:' + c.mint, v = q1('SELECT v FROM kv WHERE k=?', k)?.v; if (v) return v;
+    try { const out = lastOf(c.mint, 'out'); if (!out?.extra) return null; const cto = q1("SELECT * FROM rlog WHERE mint=? AND kind='cto' AND ts<? ORDER BY ts DESC LIMIT 1", c.mint, out.ts);
+      const a = activity(c, out.extra, cto ? cto.ts : c.created_at || 0, cto ? (cto.lamports || 0) / 1e6 : null), w = a.sold >= RULES.soldOut ? 'sold' : 'idle';
+      run('INSERT OR REPLACE INTO kv(k,v) VALUES(?,?)', k, w); return w; } catch { return null; }
+  }
   function state(c) {
     const e = era(c);
     const base = { era: e.type, creator: e.wallet || null, fund: 0, paid: sum(c.mint, 'pay'), buyback: sum(c.mint, 'buyback'), burnedTokens: sum(c.mint, 'burntok'), granted: sum(c.mint, 'platform'), lastPay: lastOf(c.mint, 'pay')?.ts || 0 };
-    if (e.type === 'out') return { ...base, state: 'out', outAt: e.start, idle: 0, sold: 0, last: e.start };
+    if (e.type === 'out') return { ...base, state: 'out', why: outWhy(c), outAt: e.start, idle: 0, sold: 0, last: e.start };
     const a = activity(c, e.wallet, e.start, e.type === 'cto' ? e.startBag : null); let st = 'active', why = null;
     // out: sold/moved 70%+ of the peak bag AND kept under 0.5% of supply (a dev trimming 10% → 2% keeps a real stake and stays in), or 7 days away · paused: 72h away
     if (a.sold >= RULES.soldOut && a.bal < RULES.keepPct / 100 * SUPPLY) { st = 'out'; why = 'sold'; } else if (a.idle >= RULES.idleOutMs) { st = 'out'; why = 'idle'; } else if (a.idle >= RULES.idleFreezeMs) st = 'frozen';
@@ -322,7 +329,7 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, q
     const cfg = cfgCache.get(c.mint) || await dbc.state.getPoolConfig(vp.config); cfgCache.set(c.mint, cfg); if (await maybeMigrate(c, vp, cfg).catch((er) => { log('rewards migrate err', c.symbol, er.message.slice(0, 100)); return false; })) return;   // fees are picked up next cycle
     const e = era(c); if (e.wallet) balNow.set(c.mint + '|' + e.wallet, await walletBal(c.mint, e.wallet));
     let st = state(c);
-    if (st.era !== 'out' && st.state === 'out') { await stamp(c.mint, 'out', 0, st.creator); log('rewards creator out', c.symbol, st.why); st = state(c); }
+    if (st.era !== 'out' && st.state === 'out') { try { run('INSERT OR REPLACE INTO kv(k,v) VALUES(?,?)', 'outwhy:' + c.mint, st.why || 'idle'); } catch {} await stamp(c.mint, 'out', 0, st.creator); log('rewards creator out', c.symbol, st.why); st = state(c); }
     if (st.era === 'out') { if (await tryApprove(c)) st = state(c); }
     const src = await creatorSources(c, vp);
     if (src.platform >= units(c, PAY_USD)) await payout(c, src.platform, treasury, 'platform', 'dammP');   // treid's LP share → treasury
