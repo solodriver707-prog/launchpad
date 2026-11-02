@@ -329,8 +329,8 @@ async function handle(sig) {
     const price = sq ? Number(getPriceFromSqrtPrice(sq, 6, coin.quote_dec ?? 9)) * QU : (tokens ? sol * QU / tokens : 0);
     const prog = targetRaw ? reserveRaw / targetRaw * 100 : (q1('SELECT progress p FROM trades WHERE mint=? ORDER BY ts DESC LIMIT 1', coin.mint)?.p || 0), reserve = reserveRaw / QD;
     if (targetRaw && !gradTarget.has(coin.mint)) gradTarget.set(coin.mint, targetRaw / QD);
-    const trapEnd = coin.trap_secs > 0 ? coin.created_at + coin.trap_secs * 1000 : 0;   // bots that wait out the sniper trap buy in the first seconds after it ends — they count as snipers too
-    const sniper = buy && trader !== coin.creator && ((coin.created_slot > 0 ? tx.slot - coin.created_slot <= 4 : ts - coin.created_at <= 2000) || (trapEnd && ts >= trapEnd && ts - trapEnd <= 3000)) ? 1 : 0;   // ~1.5s after launch: faster than a human
+    const trapEnd = coin.trap_secs > 0 ? coin.created_at + coin.trap_secs * 1000 : 0;   // bots that wait out the sniper trap land in the very first second after it ends (a person clicking + approving in a wallet takes several seconds) — they count as snipers too
+    const sniper = buy && trader !== coin.creator && ((coin.created_slot > 0 ? tx.slot - coin.created_slot <= 4 : ts - coin.created_at <= 2000) || (trapEnd && ts >= trapEnd && ts - trapEnd <= 1000)) ? 1 : 0;   // ~1.5s after launch: faster than a human
     const rowSig = n++ ? sig + '#' + coin.mint.slice(0, 6) : sig;
     run('INSERT OR IGNORE INTO trades(sig,mint,wallet,side,sol,tokens,price_usd,mcap_usd,slot,ts,sniper,bundle,fee_sol,progress,usd,reserve) VALUES(?,?,?,?,?,?,?,?,?,?,?,0,?,?,?,?)', rowSig, coin.mint, trader, side, sol, tokens, price, price * circ, tx.slot, ts, sniper, fee / QD, Math.min(100, prog), sol * QU, reserve);
     if (SYSW.has(trader)) run('UPDATE trades SET sys=1 WHERE sig=?', rowSig);   // treid's own wallets (tax sales, buybacks) never count as market activity

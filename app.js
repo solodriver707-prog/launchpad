@@ -624,7 +624,7 @@
     }).join('') + '</div>';
   }
   function redFlags(t) {
-    if (t.live) { var lf = [], L = t.lstat || {}, tm = Math.max(t.buy, t.sell), spx = tm > 0 ? splitOf(t) : null; if (tm >= 6) lf.push('High tax ' + tm + '%'); if (spx && spx.d > 50) lf.push('Dev takes ' + spx.d + '% of tax'); if (L.top > 48) lf.push('Top 10 hold ' + Math.round(L.top) + '%'); if (L.devSold) lf.push('Dev sold'); if (L.sn >= 12) lf.push('Snipers ' + L.sn.toFixed(0) + '%'); if (L.bu >= 9) lf.push('Bundles ' + L.bu.toFixed(0) + '%'); return lf; }
+    if (t.live) { var lf = [], L = t.lstat || {}, tm = Math.max(t.buy, t.sell), spx = tm > 0 ? splitOf(t) : null; if (tm >= 6) lf.push('High tax ' + tm + '%'); if (spx && tm > 3 && spx.d > 50) lf.push('Dev takes ' + spx.d + '% of ' + tm + '% tax'); /* a small tax to the dev is like a creator fee — only a big tax mostly to the dev is a warning */ if (L.top > 48) lf.push('Top 10 hold ' + Math.round(L.top) + '%'); if (L.devSold) lf.push('Dev sold'); if (L.sn >= 12) lf.push('Snipers ' + L.sn.toFixed(0) + '%'); if (L.bu >= 9) lf.push('Bundles ' + L.bu.toFixed(0) + '%'); return lf; }
     var f = [], h = hash(t.tick), tmax = Math.max(t.buy, t.sell), top10 = 18 + (h % 50);
     if (tmax >= 6) f.push('High tax ' + tmax + '%');
     if (t.sell - t.buy >= 3) f.push('Sell tax ' + t.sell + '%');
@@ -3548,12 +3548,12 @@
     var rows = ['h', 'b', 'd'].map(function (k) { var c0 = SPC[k]; return '<div class="spr" style="--c:' + c0[0] + '"><span class="spr-l"><span class="sp-ic">' + ICO[c0[1]] + '</span>' + c0[2] + '</span>' + (sp.p === 'custom' ? '<span class="spr-rg"><input type="range" min="0" max="100" step="5" value="' + sp[k] + '" data-split="' + k + '">' + '</span>' : '<span class="spr-fill"><i style="width:' + sp[k] + '%;background:' + c0[3] + '"></i></span>') + '<b class="mono" data-spv="' + k + '">' + sp[k] + '%</b><small class="mono" data-spx="' + k + '">' + ex(k) + ' of each trade</small></div>'; }).join('');
     return '<div class="spk"><div class="spk-h"><b>Where the tax goes</b><span class="spk-lock">' + ICO.lock + 'Locked forever at launch</span></div><div class="spk-chips">' + chips + '</div>' +
       '<div class="spk-viz"><div class="spk-big" data-spbig>' + splitBar(sp, 'big') + '</div>' + rows + '</div>' + rewardPick(c) +
-      '<small class="spk-note">' + (S.c.split && S.c.split.d > 50 ? '<b class="spk-warn">Dev gets ' + S.c.split.d + '% of the tax — traders see this on your coin page. </b>' : '') + 'Buyers also pay a ' + FEE.taxed + '% trading fee (total ' + (base + FEE.taxed) + '% per trade): ' + FEE.creatorTaxed + '% of it goes to you, ' + FEE.treidTaxed + '% to treid, ' + FEE.dexTaxed + '% to Meteora. It never comes out of this split.</small></div>';
+      '<small class="spk-note">' + (S.c.split && S.c.split.d > 50 && S.c.buy > 3 ? '<b class="spk-warn">Dev gets ' + S.c.split.d + '% of a ' + S.c.buy + '% tax — traders see a warning on your coin page. </b>' : '') + 'Buyers also pay a ' + FEE.taxed + '% trading fee (total ' + (base + FEE.taxed) + '% per trade): ' + FEE.creatorTaxed + '% of it goes to you, ' + FEE.treidTaxed + '% to treid, ' + FEE.dexTaxed + '% to Meteora. It never comes out of this split.</small></div>';
   }
   function spUpdate() {
     var sp = S.c.split, base = S.c.buy; ['h', 'b', 'd'].forEach(function (k) { var v = document.querySelector('[data-spv="' + k + '"]'), x = document.querySelector('[data-spx="' + k + '"]'), r = document.querySelector('[data-split="' + k + '"]'); if (v) v.textContent = sp[k] + '%'; if (x) x.textContent = (base * sp[k] / 100).toFixed(2).replace(/\.?0+$/, '') + '% of each trade'; if (r && +r.value !== sp[k]) r.value = sp[k]; });
     var bg = document.querySelector('[data-spbig]'); if (bg) bg.innerHTML = splitBar(sp, 'big');
-    var nt = document.querySelector('.spk-note'), w = nt && nt.querySelector('.spk-warn'); if (nt) { if (sp.d > 50) { if (!w) { w = document.createElement('b'); w.className = 'spk-warn'; nt.insertBefore(w, nt.firstChild); } w.textContent = 'Dev gets ' + sp.d + '% of the tax — traders see this on your coin page. '; } else if (w) w.remove(); }
+    var nt = document.querySelector('.spk-note'), w = nt && nt.querySelector('.spk-warn'); if (nt) { if (sp.d > 50 && S.c.buy > 3) { if (!w) { w = document.createElement('b'); w.className = 'spk-warn'; nt.insertBefore(w, nt.firstChild); } w.textContent = 'Dev gets ' + sp.d + '% of a ' + S.c.buy + '% tax — traders see a warning on your coin page. '; } else if (w) w.remove(); }
   }
   function taxSplitPanel(t) {
     var sp = splitOf(t), m = Math.max(t.buy, t.sell);
