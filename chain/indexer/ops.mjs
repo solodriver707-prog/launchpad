@@ -62,6 +62,8 @@ export function startOps({ conn, dbc, ops, treasury, q, q1, run, mainnet = false
   // rebuild (from our on-chain memos) records it — retrying blindly could pay or swap the same amount twice
   const unknown = (where) => { halt('unknown outcome: ' + where); log('!! ops stopped —', where, '— restarting so the ledger rebuild settles it'); setTimeout(() => process.exit(1), 20e3); };
   // tokens in ops' coin account that already belong to holders (from a round that stopped half way) — not split again
+  const kvBig = (k) => BigInt(q1('SELECT v FROM kv WHERE k=?', k)?.v || 0), kvSet = (k, v) => run('INSERT OR REPLACE INTO kv(k,v) VALUES(?,?)', k, String(v > 0n ? v : 0n));
+  const bcarryGet = (mint) => kvBig('bcarry:' + mint), bcarrySet = (mint, v) => kvSet('bcarry:' + mint, v);   // burn share of a round that never finished (burned next round, never re-split)
   const carryGet = (mint) => BigInt(q1('SELECT v FROM kv WHERE k=?', 'carry:' + mint)?.v || 0), carrySet = (mint, v) => run('INSERT OR REPLACE INTO kv(k,v) VALUES(?,?)', 'carry:' + mint, String(v > 0n ? v : 0n));
   const qmOf = (c) => new PublicKey(c.quote_mint || WSOL), isSol = (c) => !c.quote_mint || c.quote_mint === WSOL;
   // pair-token payouts: quote that was bought for holders but not yet paid out (from the on-chain receipts → survives restarts)
@@ -210,7 +212,11 @@ export function startOps({ conn, dbc, ops, treasury, q, q1, run, mainnet = false
     const accs = (await conn.getProgramAccounts(TOKEN_2022_PROGRAM_ID, { filters: [{ memcmp: { offset: 0, bytes: c.mint } }] })).map((a) => { try { return unpackAccount(a.pubkey, a.account, TOKEN_2022_PROGRAM_ID); } catch { return null; } }).filter(Boolean);
     const wa = (a) => getTransferFeeAmount(a)?.withheldAmount || 0n, withheld = accs.filter((a) => wa(a) > 0n).sort((x, y) => (wa(y) > wa(x) ? 1 : -1)).slice(0, MAX_ACCTS);
     const mintInfo = await getMint(conn, mint, 'confirmed', TOKEN_2022_PROGRAM_ID), inMint = getTransferFeeConfig(mintInfo)?.withheldAmount || 0n;   // tax anyone "harvested to the mint" is collected too
-    const opsAcc = accs.find((a) => a.address.equals(opsAta)), stranded = opsAcc ? opsAcc.amount : 0n;   // tokens left in ops from an interrupted cycle are distributed now
+    const opsAcc = accs.find((a) => a.address.equals(opsAta));
+    { const owe = kvBig('toburn:' + c.mint), amt = opsAcc ? (owe < opsAcc.amount ? owe : opsAcc.amount) : 0n;   // a creator-fee buyback whose burn never landed: those tokens are the burn's, never tax
+      if (amt > 0n) { const sgt = await send([createBurnCheckedInstruction(opsAta, mint, ops.publicKey, amt, DEC, [], TOKEN_2022_PROGRAM_ID), memoIx(`treid:burntok:${c.mint}:${amt}`)]); rec(sgt, 0, c.mint, 'burntok', amt); opsAcc.amount -= amt; }
+      if (owe > 0n) kvSet('toburn:' + c.mint, 0n); }
+    const stranded = opsAcc ? opsAcc.amount : 0n;   // tokens left in ops from an interrupted cycle are distributed now
     const total = withheld.reduce((s, a) => s + wa(a), 0n) + inMint + stranded;
     if (Number(total) / 10 ** DEC * px < HARVEST_USD) return null;   // not worth the transactions yet
     const lastH = q1("SELECT MAX(ts) t FROM rlog WHERE mint=? AND kind='taxburn'", c.mint)?.t || 0, realTax = (q1('SELECT COALESCE(SUM(usd),0) v FROM trades WHERE mint=? AND ts>? AND wallet<>?', c.mint, lastH, ops.publicKey.toBase58())?.v || 0) * (c.tax_bps || 0) / 1e4;
@@ -224,16 +230,20 @@ export function startOps({ conn, dbc, ops, treasury, q, q1, run, mainnet = false
     if (inPair && (pendingQ(c.mint) > 0 || (rwT && pendingRw(c.mint) > 0))) { const hl = await holderList(c);   // leftovers from an earlier round first
       if (rwT && pendingRw(c.mint) > 0) await payQuote(c, hl, px, rwT).catch(() => {}); if (!rwT && pendingQ(c.mint) > 0) await payQuote(c, hl, px).catch(() => {}); }
     const net = (l) => l.map((x) => ({ ...x, amt: x.amt - x.amt * BigInt(c.tax_bps || 0) / 10000n }));   // receipts show what lands in the wallet (the coin's own transfer tax is held back on arrival)
-    const carry0 = carryGet(c.mint), carry = carry0 < got ? carry0 : got, fresh = got - carry;   // carried holder tokens aren't split again
-    const burnAmt = fresh * BigInt(sp.b) / 100n, devAmt = fresh * BigInt(sp.d) / 100n; let holdAmt = got - burnAmt - devAmt; const holdAll = holdAmt;
+    const carry0 = carryGet(c.mint), carry = carry0 < got ? carry0 : got, bc0 = bcarryGet(c.mint), bcarry = bc0 < got - carry ? bc0 : got - carry, fresh = got - carry - bcarry;   // carried holder / burn tokens aren't split again
+    const burnAmt = fresh * BigInt(sp.b) / 100n + bcarry, devAmt = fresh * BigInt(sp.d) / 100n; let holdAmt = got - burnAmt - devAmt; const holdAll = holdAmt;
     let devBurn = false, devTo = c.creator; try { const ds = devState(c); devBurn = ds.era === 'out' || ds.state !== 'active'; devTo = ds.creator || c.creator; } catch {}
-    if (devAmt > 0n && !devBurn) { const devAta = getAssociatedTokenAddressSync(mint, new PublicKey(devTo), false, TOKEN_2022_PROGRAM_ID); if (!(await conn.getAccountInfo(devAta))) devBurn = true;   // ops never opens accounts for others
-      else { const sgd = await send([createTransferCheckedInstruction(opsAta, mint, devAta, ops.publicKey, devAmt, DEC, [], TOKEN_2022_PROGRAM_ID)]); hrec(sgd, net([{ owner: devTo, mint: c.mint, amt: devAmt }]), c.mint, DEC); } }
+    if (devAmt > 0n && !devBurn) { const devAta = getAssociatedTokenAddressSync(mint, new PublicKey(devTo), false, TOKEN_2022_PROGRAM_ID); if (!(await conn.getAccountInfo(devAta))) devBurn = true; }   // ops never opens accounts for others
+    // written down BEFORE the first transfer: if this round dies halfway (unknown outcome → halt → restart), the next round knows which tokens
+    // are holders' and which are the burn's, and splits only new tax — the dev can never be paid twice out of holders' money
+    try { carrySet(c.mint, holdAmt); bcarrySet(c.mint, burnAmt + (devBurn ? devAmt : 0n)); } catch (e) { halt(e.message); throw e; }
+    if (devAmt > 0n && !devBurn) { const devAta = getAssociatedTokenAddressSync(mint, new PublicKey(devTo), false, TOKEN_2022_PROGRAM_ID);
+      { const sgd = await send([createTransferCheckedInstruction(opsAta, mint, devAta, ops.publicKey, devAmt, DEC, [], TOKEN_2022_PROGRAM_ID)]); hrec(sgd, net([{ owner: devTo, mint: c.mint, amt: devAmt }]), c.mint, DEC); } }
     const hs = holdersOf(accs, new Set([poolAuthority, ops.publicKey.toBase58(), c.creator, devTo])), held = hs.reduce((s, a) => s + a.total, 0n), minAmt = BigInt(Math.ceil(SHARE_USD / px * 10 ** DEC));
     let paid = 0n, n = 0, aborted = false, inQuote = false, saleUnsure = false;
     if (inPair && holdAmt > 0n && held > 0n) {   // holders chose the pair token: sell their share on the coin's pool, then pay it out
-      try { const out = await sellForQuote(c, holdAmt); inQuote = true; log('ops   sold', f0(holdAmt), 'tokens for', (Number(out) / 10 ** (c.quote_dec ?? 9)).toFixed(6), c.quote_symbol || 'SOL', '(holders)', c.symbol); }
-      catch (e) { if (e.unconfirmed) { aborted = true; saleUnsure = true; inQuote = false; holdAmt = 0n; log('ops   pair sale status unknown — stopping', c.symbol); }   // never pay twice
+      try { const out = await sellForQuote(c, holdAmt); inQuote = true; carrySet(c.mint, 0n); log('ops   sold', f0(holdAmt), 'tokens for', (Number(out) / 10 ** (c.quote_dec ?? 9)).toFixed(6), c.quote_symbol || 'SOL', '(holders)', c.symbol); }
+      catch (e) { if (e.unconfirmed) { aborted = true; saleUnsure = true; inQuote = false; holdAmt = 0n; try { carrySet(c.mint, 0n); } catch {} log('ops   pair sale status unknown — stopping', c.symbol); }   // never pay twice
         else log('ops   pair sale failed — paying holders in the coin this round', c.symbol, e.message.slice(0, 80)); } }
     if (inQuote) { let viaRw = false;
       let unsure = false; if (rwT) { try { await convertTo(c, rwT); viaRw = true; } catch (e) { if (e.unconfirmed) unsure = true; log('ops   reward swap', unsure ? 'status unknown — holders wait for the next round' : 'failed — paying holders in ' + (c.quote_symbol || 'SOL') + ' this round', c.symbol, e.message.slice(0, 80)); } }
@@ -241,9 +251,9 @@ export function startOps({ conn, dbc, ops, treasury, q, q1, run, mainnet = false
     else if (holdAmt > 0n && held > 0n) {
       const shares = hs.map((a) => ({ to: a.to, owner: a.owner.toBase58(), mint: c.mint, amt: holdAmt * a.total / held })).filter((x) => x.amt >= minAmt), ix = (x) => createTransferCheckedInstruction(opsAta, mint, x.to, ops.publicKey, x.amt, DEC, [], TOKEN_2022_PROGRAM_ID);
       for (let i = 0; i < shares.length; i += 16) { const batch = shares.slice(i, i + 16);   // 16 transfers per tx (fits the size limit with the compute budget)
-        try { const sgb = await send(batch.map(ix)); hrec(sgb, net(batch), c.mint, DEC); paid += batch.reduce((s, x) => s + x.amt, 0n); n += batch.length; }
+        try { const sgb = await send(batch.map(ix)); hrec(sgb, net(batch), c.mint, DEC); paid += batch.reduce((s, x) => s + x.amt, 0n); n += batch.length; carrySet(c.mint, holdAmt - paid); }
         catch (e) { if (e.unconfirmed) { aborted = true; log('ops   batch unconfirmed — stopping, next cycle redistributes what is left', c.symbol); break; }   // never resend a batch that may have landed
-          for (const x of batch) { try { const sgx = await send([ix(x)]); hrec(sgx, net([x]), c.mint, DEC); paid += x.amt; n++; } catch (e2) { if (e2.unconfirmed) { aborted = true; break; } log('ops   skip holder', x.to.toBase58().slice(0, 6), e2.message.slice(0, 60)); } } } }
+          for (const x of batch) { try { const sgx = await send([ix(x)]); hrec(sgx, net([x]), c.mint, DEC); paid += x.amt; n++; carrySet(c.mint, holdAmt - paid); } catch (e2) { if (e2.unconfirmed) { aborted = true; break; } log('ops   skip holder', x.to.toBase58().slice(0, 6), e2.message.slice(0, 60)); } } } }
     }
     const now = (await getAccount(conn, opsAta, 'confirmed', TOKEN_2022_PROGRAM_ID)).amount, toBurn = aborted ? (burnAmt + (devBurn ? devAmt : 0n) < now ? burnAmt + (devBurn ? devAmt : 0n) : now) : now;   // normally everything still here (burn share + unpaid dust + inactive creator's share); after an unsure batch, only the burn part — holders get the rest next cycle
     const devPaid = devBurn ? 0n : devAmt, ixs = [];
@@ -251,7 +261,7 @@ export function startOps({ conn, dbc, ops, treasury, q, q1, run, mainnet = false
     ixs.push(...[['taxburn', toBurn, null], ['taxdev', devPaid, devBurn ? null : devTo], ['taxhold', paid, String(n)]].map(([k, a, x]) => memoIx(`treid:${k}:${c.mint}:${a}` + (x ? ':' + x : ''))));
     const sg = await send(ixs);
     [['taxburn', toBurn, null], ['taxdev', devPaid, devBurn ? null : devTo], ['taxhold', paid, String(n)]].forEach(([k, a, x], i) => rec(sg, i, c.mint, k, a, x));
-    try { carrySet(c.mint, aborted && !saleUnsure ? now - toBurn : 0n); } catch (e) { halt(e.message); }   // exactly what is still in ops' account (a batch that did land isn't counted again)   // holders' unpaid part waits for the next round, unsplit
+    try { carrySet(c.mint, aborted && !saleUnsure ? now - toBurn : 0n); bcarrySet(c.mint, 0n); } catch (e) { halt(e.message); }   // exactly what is still in ops' account (a batch that did land isn't counted again)   // holders' unpaid part waits for the next round, unsplit
     try { const a = await getAccount(conn, opsAta, 'confirmed', TOKEN_2022_PROGRAM_ID); if (a.amount === 0n && !(getTransferFeeAmount(a)?.withheldAmount > 0n)) await send([createCloseAccountInstruction(opsAta, ops.publicKey, ops.publicKey, [], TOKEN_2022_PROGRAM_ID)]); } catch {}   // rent back to ops
     const f = (x) => (Number(x) / 10 ** DEC).toFixed(0);
     log('ops   tax', c.symbol, 'harvested', f(got), 'burn', f(toBurn), 'dev', devBurn ? 'burned' : f(devAmt), 'holders', f(paid), 'to', n);
