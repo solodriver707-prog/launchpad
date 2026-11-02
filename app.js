@@ -3407,7 +3407,7 @@
         : isCto ? [['Paid to lead', solf(E.paidSol)], ['Waiting in pool', solf(E.pendingSol)], ['Bought back & burned', solf(E.buybackSol)]]
         : [['Paid to creator', solf(E.paidSol)], ['Waiting in pool', solf(E.pendingSol)], ['Bought back & burned', solf(E.buybackSol)]];
       var dhm = function (ms) { var m = Math.max(1, Math.round(ms / 60000)), d = Math.floor(m / 1440), h = Math.floor(m % 1440 / 60), mm = m % 60; return d ? d + 'd' + (h ? ' ' + h + 'h' : '') : h ? h + 'h' + (mm && h < 10 ? ' ' + mm + 'm' : '') : mm + 'm'; };
-      var whenE = function (ts) { var dt = new Date(ts); return dt.toLocaleDateString(undefined, { weekday: 'short' }) + ' ' + dt.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }); };
+      var whenE = function (ts) { var dt = new Date(ts); return dt.toLocaleDateString('en-US', { weekday: 'short' }) + ' ' + dt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }); };   // English like the rest of the site, 24h clock, the viewer's own time zone
       var PAUSE = (R0.idleFreezeH || 72) * 36e5, OUTMS = (R0.idleOutD || 7) * 864e5, toPause = PAUSE - E.idleMs, toOut = OUTMS - E.idleMs, seenAt = E.lastActive ? +new Date(E.lastActive) : Date.now() - E.idleMs;
       var cdE = E.state === 'frozen' ? ['y', 'Paused', toOut > 0 ? roleW + ' out in <b>' + dhm(toOut) + '</b> unless they return' : roleW + ' leaving now', 'since ' + whenE(seenAt + PAUSE)]
         : toPause <= 0 ? ['y', 'Pausing…', 'no activity for 72h — payouts stop now', '']
