@@ -624,7 +624,7 @@
     }).join('') + '</div>';
   }
   function redFlags(t) {
-    if (t.live) { var lf = [], L = t.lstat || {}, tm = Math.max(t.buy, t.sell), spx = tm > 0 ? splitOf(t) : null; if (tm >= 6) lf.push('High tax ' + tm + '%'); if (spx && spx.d > 50) lf.push('Dev takes ' + spx.d + '% of tax'); if (L.top > 48) lf.push('Top 10 hold ' + Math.round(L.top) + '%'); if (L.devSold) lf.push('Dev sold'); if (L.sn >= 12) lf.push('Snipers ' + L.sn.toFixed(0) + '%'); if (L.bu >= 9) lf.push('Bundles ' + L.bu.toFixed(0) + '%'); return lf; }
+    if (t.live) { var lf = [], L = t.lstat || {}, tm = Math.max(t.buy, t.sell), spx = tm > 0 ? splitOf(t) : null; if (tm >= 6) lf.push('High tax ' + tm + '%'); if (spx && tm > 3 && spx.d > 50) lf.push('Dev takes ' + spx.d + '% of ' + tm + '% tax'); /* a small tax to the dev is like a creator fee — only a big tax mostly to the dev is a warning */ if (L.top > 48) lf.push('Top 10 hold ' + Math.round(L.top) + '%'); if (L.devSold) lf.push('Dev sold'); if (L.sn >= 12) lf.push('Snipers ' + L.sn.toFixed(0) + '%'); if (L.bu >= 9) lf.push('Bundles ' + L.bu.toFixed(0) + '%'); return lf; }
     var f = [], h = hash(t.tick), tmax = Math.max(t.buy, t.sell), top10 = 18 + (h % 50);
     if (tmax >= 6) f.push('High tax ' + tmax + '%');
     if (t.sell - t.buy >= 3) f.push('Sell tax ' + t.sell + '%');
