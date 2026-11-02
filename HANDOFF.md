@@ -139,3 +139,8 @@ Other ideas: ops low-balance Telegram alert, own domain treid.fun (Phantom trust
 - ~~Creator fee share after graduation~~ — 0.2% (see Done 30 Oct).
 - ~~Creator side-wallet reward farming~~ — DECIDED 30 Oct 2026: leave as is (a side-wallet buy is a normal buy; direct transfers already count toward the 70% rule).
 - Is the 10-min tax interval affordable at real volume? (watch ops SOL in /api/health)
+
+## Audit 2026-11-03
+- Deployed: holdings load right after connect (+ re-check before refusing a sell); image "remembered miss" cache was swallowed by a `//` comment (fixed); `/api/holders` scans limited (3 at a time, 20/min per IP); API `rules.freezeH` now 72 from RULES; callouts restored before old trades are replayed; HTTP status codes on bubbles errors; chart avg entry/exit lines at today's SOL price (`avgEntryMcQ`/`avgExitMcQ`); trending card shows 6h change; rewards-search input keeps focus.
+- Branch `money-safety` (NOT deployed, needs owner approval): tax rounds recorded before the first transfer and settled from on-chain `treid:txr` memos after a crash; buyback burns tracked (`bbpend`/`toburn`, one per coin) so bought tokens are never split as tax; no buyback / pair sale without a minimum-out; takeover support checked every cycle while an application is open; callout payouts re-check HALT. Reviewed twice by an independent pass.
+- Known, not changed: ops Jupiter route check validates SOL + output only; DAMM LP positions [0]/[1] are ordered by address (50/50 today, so no effect); `/api/rewards/<wallet>` shows hidden-coin receipts on purpose.
