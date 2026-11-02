@@ -332,8 +332,13 @@
     if (!f) return Promise.reject(new Error('This wallet can\'t sign transactions here — try Phantom, Solflare or Backpack'));
     // a wallet window that never answers must not leave the page stuck on "Selling…": after 90 s we give up (nothing is sent — we only
     // send what comes back signed, and a late signature is ignored), so the user can simply try again
-    var late = false, ask = Promise.resolve(f.signTransaction.apply(f, list.map(function (b) { return { account: S.walletAcc, transaction: b, chain: CHAIN_ID }; }))).then(function (r) { if (late) throw new Error('busy'); return r.map(function (x) { return x.signedTransaction; }); });
-    return Promise.race([ask, new Promise(function (_, no) { setTimeout(function () { late = true; no(new Error('Your wallet didn’t answer — open ' + (w.name || 'your wallet') + ' (unlock it if needed) and try again. Nothing was sent.')); }, 90e3); })]);
+    // after 10 s without an answer the button becomes tappable again ("try again"); tapping it drops this request (a late signature is ignored)
+    var late = false, stop, slow = setTimeout(function () { if (!late) { S.signSlow = true; render(); } }, 10e3), hard = setTimeout(function () { stop(new Error('Your wallet didn’t answer — open ' + (w.name || 'your wallet') + ' (unlock it if needed) and try again. Nothing was sent.')); }, 90e3);
+    var gone = new Promise(function (_, no) { stop = function (e) { if (late) return; late = true; clearTimeout(slow); clearTimeout(hard); S.signSlow = false; S.signCancel = null; no(e); }; });
+    S.signCancel = function () { stop(new Error('busy')); };
+    var ask = Promise.resolve(f.signTransaction.apply(f, list.map(function (b) { return { account: S.walletAcc, transaction: b, chain: CHAIN_ID }; }))).then(function (r) { if (late) throw new Error('busy'); late = true; clearTimeout(slow); clearTimeout(hard); S.signSlow = false; S.signCancel = null; return r.map(function (x) { return x.signedTransaction; }); },
+      function (e) { if (!late) { late = true; clearTimeout(slow); clearTimeout(hard); S.signSlow = false; S.signCancel = null; } throw e; });
+    return Promise.race([ask, gone]);
   }
   // ===== phones: connect & sign through the Phantom / Solflare app, then come straight back to this browser tab =====
   var WICON = { phantom: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDgiIGhlaWdodD0iMTA4IiB2aWV3Qm94PSIwIDAgMTA4IDEwOCIgZmlsbD0ibm9uZSI+CjxyZWN0IHdpZHRoPSIxMDgiIGhlaWdodD0iMTA4IiByeD0iMjYiIGZpbGw9IiNBQjlGRjIiLz4KPHBhdGggZmlsbC1ydWxlPSJldmVub2RkIiBjbGlwLXJ1bGU9ImV2ZW5vZGQiIGQ9Ik00Ni41MjY3IDY5LjkyMjlDNDIuMDA1NCA3Ni44NTA5IDM0LjQyOTIgODUuNjE4MiAyNC4zNDggODUuNjE4MkMxOS41ODI0IDg1LjYxODIgMTUgODMuNjU2MyAxNSA3NS4xMzQyQzE1IDUzLjQzMDUgNDQuNjMyNiAxOS44MzI3IDcyLjEyNjggMTkuODMyN0M4Ny43NjggMTkuODMyNyA5NCAzMC42ODQ2IDk0IDQzLjAwNzlDOTQgNTguODI1OCA4My43MzU1IDc2LjkxMjIgNzMuNTMyMSA3Ni45MTIyQzcwLjI5MzkgNzYuOTEyMiA2OC43MDUzIDc1LjEzNDIgNjguNzA1MyA3Mi4zMTRDNjguNzA1MyA3MS41NzgzIDY4LjgyNzUgNzAuNzgxMiA2OS4wNzE5IDY5LjkyMjlDNjUuNTg5MyA3NS44Njk5IDU4Ljg2ODUgODEuMzg3OCA1Mi41NzU0IDgxLjM4NzhDNDcuOTkzIDgxLjM4NzggNDUuNjcxMyA3OC41MDYzIDQ1LjY3MTMgNzQuNDU5OEM0NS42NzEzIDcyLjk4ODQgNDUuOTc2OCA3MS40NTU2IDQ2LjUyNjcgNjkuOTIyOVpNODMuNjc2MSA0Mi41Nzk0QzgzLjY3NjEgNDYuMTcwNCA4MS41NTc1IDQ3Ljk2NTggNzkuMTg3NSA0Ny45NjU4Qzc2Ljc4MTYgNDcuOTY1OCA3NC42OTg5IDQ2LjE3MDQgNzQuNjk4OSA0Mi41Nzk0Qzc0LjY5ODkgMzguOTg4NSA3Ni43ODE2IDM3LjE5MzEgNzkuMTg3NSAzNy4xOTMxQzgxLjU1NzUgMzcuMTkzMSA4My42NzYxIDM4Ljk4ODUgODMuNjc2MSA0Mi41Nzk0Wk03MC4yMTAzIDQyLjU3OTVDNzAuMjEwMyA0Ni4xNzA0IDY4LjA5MTYgNDcuOTY1OCA2NS43MjE2IDQ3Ljk2NThDNjMuMzE1NyA0Ny45NjU4IDYxLjIzMyA0Ni4xNzA0IDYxLjIzMyA0Mi41Nzk1QzYxLjIzMyAzOC45ODg1IDYzLjMxNTcgMzcuMTkzMSA2NS43MjE2IDM3LjE5MzFDNjguMDkxNiAzNy4xOTMxIDcwLjIxMDMgMzguOTg4NSA3MC4yMTAzIDQyLjU3OTVaIiBmaWxsPSIjRkZGREY4Ii8+Cjwvc3ZnPg==', solflare: 'data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz48c3ZnIGlkPSJTIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MCA1MCI+PGRlZnM+PHN0eWxlPi5jbHMtMXtmaWxsOiMwMjA1MGE7c3Ryb2tlOiNmZmVmNDY7c3Ryb2tlLW1pdGVybGltaXQ6MTA7c3Ryb2tlLXdpZHRoOi41cHg7fS5jbHMtMntmaWxsOiNmZmVmNDY7fTwvc3R5bGU+PC9kZWZzPjxyZWN0IGNsYXNzPSJjbHMtMiIgeD0iMCIgd2lkdGg9IjUwIiBoZWlnaHQ9IjUwIiByeD0iMTIiIHJ5PSIxMiIvPjxwYXRoIGNsYXNzPSJjbHMtMSIgZD0iTTI0LjIzLDI2LjQybDIuNDYtMi4zOCw0LjU5LDEuNWMzLjAxLDEsNC41MSwyLjg0LDQuNTEsNS40MywwLDEuOTYtLjc1LDMuMjYtMi4yNSw0LjkzbC0uNDYuNS4xNy0xLjE3Yy42Ny00LjI2LS41OC02LjA5LTQuNzItNy40M2wtNC4zLTEuMzhoMFpNMTguMDUsMTEuODVsMTIuNTIsNC4xNy0yLjcxLDIuNTktNi41MS0yLjE3Yy0yLjI1LS43NS0zLjAxLTEuOTYtMy4zLTQuNTF2LS4wOGgwWk0xNy4zLDMzLjA2bDIuODQtMi43MSw1LjM0LDEuNzVjMi44LjkyLDMuNzYsMi4xMywzLjQ2LDUuMThsLTExLjY1LTQuMjJoMFpNMTMuNzEsMjAuOTVjMC0uNzkuNDItMS41NCwxLjEzLTIuMTcuNzUsMS4wOSwyLjA1LDIuMDUsNC4wOSwyLjcxbDQuNDIsMS40Ni0yLjQ2LDIuMzgtNC4zNC0xLjQyYy0yLS42Ny0yLjg0LTEuNjctMi44NC0yLjk2TTI2LjgyLDQyLjg3YzkuMTgtNi4wOSwxNC4xMS0xMC4yMywxNC4xMS0xNS4zMiwwLTMuMzgtMi01LjI2LTYuNDMtNi43MmwtMy4zNC0xLjEzLDkuMTQtOC43Ny0xLjg0LTEuOTYtMi43MSwyLjM4LTEyLjgxLTQuMjJjLTMuOTcsMS4yOS04Ljk3LDUuMDktOC45Nyw4Ljg5LDAsLjQyLjA0LjgzLjE3LDEuMjktMy4zLDEuODgtNC42MywzLjYzLTQuNjMsNS44LDAsMi4wNSwxLjA5LDQuMDksNC41NSw1LjIybDIuNzUuOTItOS41Miw5LjE0LDEuODQsMS45NiwyLjk2LTIuNzEsMTQuNzMsNS4yMmgwWiIvPjwvc3ZnPg==' };   // the wallets' own icons (from their official wallet-adapter packages)
@@ -418,10 +423,10 @@
   function chainRun(label, build, again) {
     if (S.netBad) { toast('Network check failed: the connection isn’t ' + CLUSTER + ' — transactions are blocked'); return Promise.reject(new Error('busy')); }
     if (S.busy) { toast('Finish the current transaction first'); return Promise.reject(new Error('busy')); }
-    S.busy = label; render(); toast(label + ' — confirm in your wallet');
+    S.busy = label; var my = S.busyId = (S.busyId || 0) + 1, free = function () { if (S.busyId === my) { S.busy = null; render(); } }; render(); toast(label + ' — confirm in your wallet');
     return chainLib().then(function (T) {
       return build(T).then(function (b) { return walletSign(b.bytes, b).then(function (signed) { S.busy = 'Confirming on-chain…'; render(); return T.sendAll({ rpc: RPC, signed: T.cosign(signed, b.cosigners), lastValidBlockHeight: b.lastValidBlockHeight }); }).then(function (sigs) { b.sigs = sigs; return b; }); });
-    }).then(function (b) { S.busy = null; render(); setTimeout(refreshBalance, 1500); [2500, 8000].forEach(function (ms) { setTimeout(function () { var tt = S.screen === 'token' && find(S.tick); if (tt && tt.live) livePos(tt); }, ms); }); return b; }, function (e) { S.busy = null; render();
+    }).then(function (b) { free(); setTimeout(refreshBalance, 1500); [2500, 8000].forEach(function (ms) { setTimeout(function () { var tt = S.screen === 'token' && find(S.tick); if (tt && tt.live) livePos(tt); }, ms); }); return b; }, function (e) { free();
       // the transaction expired before it was sent (a wallet window open for over ~60 s) and nothing went through: build a fresh one and ask once more
       if (e && e.expired && !e.sent && !again) { toast('That took a bit long and the transaction expired — please sign the fresh one'); return chainRun(label, build, true); }
       throw e; });
@@ -2936,7 +2941,7 @@
         '<div><span class="muted">Min received (' + S.slip + '% slip)</span><span>' + (q.isBuy ? fmtNum(q.min) + ' $' + sid : q.min.toFixed(4) + ' ' + esc(QS)) + '</span></div>' +
         '<div style="padding-top:9px;border-top:1px solid var(--line)"><span class="muted">You receive ≈</span><span style="font-weight:800;font-size:15px">' + (q.isBuy ? fmtNum(q.out) + ' $' + sid : q.out.toFixed(4) + ' ' + esc(QS)) + (outUsd > 0 ? ' <small class="q-usd">' + usdS(outUsd) + '</small>' : '') + '</span></div></div>') +
       (trapLeft(t) > 0 ? trapBox(t, 'buy') : '') +
-      '<button class="big-btn btn ' + (!S.account ? 'pri' : q.isBuy ? 'up-b' : 'down-b') + '" data-act="trade" data-arg="' + id + '"' + (S.busy ? ' disabled' : '') + '>' + (S.busy ? esc(S.busy) + '…' : !S.account ? 'Connect wallet to trade' : (q.isBuy ? 'Buy $' : 'Sell $') + id) + '</button>' + (q.isBuy && coRef(t) ? '<small class="co-cred">📣 This buy credits <b>' + esc(walletName(coRef(t).w)) + '</b>’s callout — costs you nothing extra</small>' : '') +
+      '<button class="big-btn btn ' + (!S.account ? 'pri' : q.isBuy ? 'up-b' : 'down-b') + '" data-act="trade" data-arg="' + id + '"' + (S.busy && !S.signSlow ? ' disabled' : '') + '>' + (S.signSlow ? 'No answer from wallet — tap to try again' : S.busy ? esc(S.busy) + '…' : !S.account ? 'Connect wallet to trade' : (q.isBuy ? 'Buy $' : 'Sell $') + id) + '</button>' + (q.isBuy && coRef(t) ? '<small class="co-cred">📣 This buy credits <b>' + esc(walletName(coRef(t).w)) + '</b>’s callout — costs you nothing extra</small>' : '') +
       '<span class="note">' + (t.live ? 'Real on-chain coin' + NETP + ' — every buy and sell is signed by your wallet.' : 'Demo coin — trades here are simulated, nothing is sent on-chain.') + '</span></section>';
     var posCard = pos ? (function () {
       var ps = t.live && S.myPs && S.myPs[t.ca] && S.myPs[t.ca].trades > 0 ? S.myPs[t.ca] : null, U2 = qUsdT(t);
@@ -3714,7 +3719,7 @@
             '<li><b>Show up at least once every 72h</b>: a trade in your coin, “I’m still here” (free signature), a callout or update about your coin, or “Claim now”. We push a reminder 24h and 6h before.</li>' +
             '<li><b>Miss it</b> → your fees pause and buy back & burn your coin until you tap “Resume my fees” (paused fees are not paid back).</li>' +
             '<li><b>You’re out</b> (the community can take over) after 7 days away, or if you sell/move 70%+ of your peak bag <i>and</i> keep under 0.5% of supply.</li></ul></div>' +
-          '<button class="big-btn btn pri" data-act="launch"' + (S.busy ? ' disabled' : '') + '>' + (S.busy ? esc(S.busy) + '…' : S.account ? 'Launch on-chain' + NETP + '' : 'Connect wallet to launch') + '</button>' +
+          '<button class="big-btn btn pri" data-act="launch"' + (S.busy && !S.signSlow ? ' disabled' : '') + '>' + (S.signSlow ? 'No answer from wallet — tap to try again' : S.busy ? esc(S.busy) + '…' : S.account ? 'Launch on-chain' + NETP + '' : 'Connect wallet to launch') + '</button>' +
           (S.account && DEMO ? '<button class="demo-l" data-act="demoLaunch">No ' + NET + 'SOL? Try a demo launch instead</button>' : '') +
           '<span class="note">' + (CHAIN_ID === 'solana:devnet' ? 'Devnet beta: your coin is created on the Solana test network.' : 'Your coin is created on-chain on Meteora (Solana mainnet).') + ' Your wallet signs every step.</span>' +
         '</section>' +
@@ -4520,6 +4525,7 @@
       case 'mlaunch': newLaunch(); break;
       case 'trade':
         if (!S.account) { set({ walletOpen: true }); break; }
+        if (S.signSlow && S.signCancel) { S.signCancel(); S.busy = null; S.busyId = (S.busyId || 0) + 1; }   // wallet silent 10s+ → this tap starts over
         var t = find(arg), amt = parseFloat(String(S.amount).replace(',', '.')) || 0;
         if (!t) break;
         if (amt <= 0) { toast('Enter an amount first'); break; }
@@ -4553,6 +4559,7 @@
       case 'demoLaunch': S.demoLaunch = true; document.querySelector('[data-act=launch]') && document.querySelector('[data-act=launch]').click(); S.demoLaunch = false; break;
       case 'launch':
         if (!S.account) { set({ walletOpen: true }); toast('Connect a wallet to launch'); break; }
+        if (S.signSlow && S.signCancel) { S.signCancel(); S.busy = null; S.busyId = (S.busyId || 0) + 1; }   // wallet silent 10s+ → this tap starts over
         if (S.opsMismatch) { toast('Launching is paused: server configuration check failed. Please try again later.'); break; }
         var c = S.c;
         if (!c.name.trim() || c.tick.length < 2) { toast('Add a name and a ticker (2+ characters)'); break; }
