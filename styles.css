@@ -5871,3 +5871,6 @@ html body .hdr-right .wbal .wb-acts .btn.pri{display:inline-flex!important}   /*
 .spk-note .spk-warn{color:#F2B05E;font-weight:700}
 .cr-know{margin:14px 0 12px;padding:12px 14px;border-radius:12px;border:1px solid rgba(230,203,149,.25);background:rgba(230,203,149,.05);font-size:12.5px;line-height:1.5;color:var(--soft)}
 .cr-know b{color:#F2E3C2}.cr-know ul{margin:6px 0 0;padding-left:18px}.cr-know li{margin:3px 0}
+/* your average entry / exit: small tags like the TP/SL ones, value on the price axis */
+.c-avg{position:absolute;inset:0;pointer-events:none;z-index:2;overflow:hidden}
+.avg-tag{position:absolute;right:calc(var(--axw,60px) + 8px);transform:translateY(-50%);font:700 9px var(--mono);letter-spacing:.05em;color:var(--c);border:1px solid var(--c);border-radius:2px;padding:2px 5px;background:rgba(17,17,19,.75);white-space:nowrap}

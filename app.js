@@ -2012,8 +2012,9 @@
     LW.ma.setData(ma); LW.ma.applyOptions({ visible: !!S.cma });
     LW.M = lwMarks(t, bars); LW.byT = {}; bars.forEach(function (x) { LW.byT[lwTime(x.t)] = x; }); requestAnimationFrame(lwPlace);
     if (av) { var mcv = function (u) { var v = S.chartMode === 'price' ? u / 1e9 : u; return S.cden === 'sol' ? v / SOL_USD : v; };
-      if (av.en) LW.lines.push({ s: main, l: main.createPriceLine({ price: mcv(av.en), color: '#5AA8FF', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'Avg entry ' + lwFmt(mcv(av.en)) }) });
-      if (av.ex) LW.lines.push({ s: main, l: main.createPriceLine({ price: mcv(av.ex), color: '#FF9A3C', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'Avg exit ' + lwFmt(mcv(av.ex)) }) }); }
+      if (av.en) LW.lines.push({ s: main, l: main.createPriceLine({ price: mcv(av.en), color: '#5AA8FF', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, axisLabelTextColor: '#fff', title: '' }) });   // value on the axis only; a small tag on the line (lwAvgTags)
+      if (av.ex) LW.lines.push({ s: main, l: main.createPriceLine({ price: mcv(av.ex), color: '#FF9A3C', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, axisLabelTextColor: '#fff', title: '' }) }); }
+    LW.avgV = av ? { en: av.en ? mcv(av.en) : null, ex: av.ex ? mcv(av.ex) : null } : null;
     LW.chart.priceScale('right').applyOptions({ mode: S.cscale });
     if (fresh) { var tsc = LW.chart.timeScale(); tsc.applyOptions({ barSpacing: 9 }); tsc.scrollToRealTime(); requestAnimationFrame(function () { if (LW.chart) LW.chart.timeScale().scrollToRealTime(); }); LW.chart.priceScale('right').applyOptions({ autoScale: true }); }
     lwLegend(null);
@@ -2027,7 +2028,13 @@
   }
   function lwBarAt(time) { for (var i = LW.bars.length - 1; i >= 0; i--) if (lwTime(LW.bars[i].t) === time) return LW.bars[i]; return null; }
   function lwHover(p) { lwLegend(p && p.time != null ? lwBarAt(p.time) : null); }
-  function lwPlace() { lwPlace0(); if (!TLD) lwTpsl(); }
+  function lwPlace() { lwPlace0(); if (!TLD) lwTpsl(); lwAvgTags(); }
+  function lwAvgTags() {   // tiny "AVG IN" / "AVG OUT" tags on your average entry / exit lines (same style as the TP/SL tags)
+    var box = document.getElementById('c-avg'); if (!box) return; var V = LW.avgV, h = '';
+    if (V && LW.chart) { var m = lwMain(), H = box.clientHeight; try { var aw = LW.chart.priceScale('right').width(); if (aw) box.style.setProperty('--axw', aw + 'px'); } catch (e) {}
+      [['en', 'AVG IN', '#5AA8FF'], ['ex', 'AVG OUT', '#FF9A3C']].forEach(function (x) { if (V[x[0]] == null) return; var y = m.priceToCoordinate(V[x[0]]); if (y == null || y < 6 || y > H - 6) return;
+        h += '<span class="avg-tag" style="top:' + y.toFixed(1) + 'px;--c:' + x[2] + '">' + x[1] + '</span>'; }); }
+    if (box._h !== h) { box._h = h; box.innerHTML = h; } }
   function lwPlace0() {   // our own markers: B / S coins in the candle's colour, anchored to the candle, stacked when several share one
     var box = document.getElementById('c-mk'); if (!box || !LW.chart || !LW.M) return; var main = lwMain(), ts = LW.chart.timeScale(), st = {}, h = '', W = box.clientWidth;
     LW.M.forEach(function (m) { var bar = LW.byT[m.time]; if (!bar) return; var x = ts.timeToCoordinate(m.time); if (x == null || x < -10 || x > W - 60) return;
@@ -2057,7 +2064,7 @@
     var full = S.chartMode === 'price' ? 'Price' : 'Market Cap';
     return '<div class="c-legend"><div class="c-lt"><b>$' + esc(symOf(t)) + '/' + esc(pairLabel(t.pair)) + '</b> <span class="muted">' + full + ' (' + (S.cden === 'sol' ? 'SOL' : 'USD') + ') · ' + esc((TFS.filter(function (x) { return x[0] === S.tf; })[0] || TFS[0])[1]) + ' · treid</span></div><div class="c-ohlc mono" id="c-ohlc"></div></div>' +
       '<div class="c-scale"><button class="' + (S.cscale === 2 ? 'on' : '') + '" data-act="cscale" data-arg="2" title="Percent scale">%</button><button class="' + (S.cscale === 1 ? 'on' : '') + '" data-act="cscale" data-arg="1" title="Log scale">log</button><button data-act="cauto" title="Auto-fit price scale">auto</button></div>' +
-      '<div class="c-mk" id="c-mk"></div><div class="c-tl" id="c-tl"></div><button class="c-live" id="c-now" data-act="cnow" style="display:none">Back to now →</button><div class="cm-tip" id="cmtip"></div>';
+      '<div class="c-mk" id="c-mk"></div><div class="c-tl" id="c-tl"></div><div class="c-avg" id="c-avg"></div><button class="c-live" id="c-now" data-act="cnow" style="display:none">Back to now →</button><div class="cm-tip" id="cmtip"></div>';
   }
   function chartRedraw() { lwMount(); }
   function chartToolbar(t) {
@@ -4045,7 +4052,7 @@
     if (detOpen.some(Boolean)) { var dets = document.querySelectorAll('#app details'); detOpen.forEach(function (cl, i) { if (cl && dets[i] && (dets[i].className || 'd') === cl) dets[i].open = true; }); }   // keep opened sections open across live re-renders
     if (S.screen === 'callout') drawShareCard();
     if (S.share) drawShare();
-    if (S.screen === 'token') { lwMount(); requestAnimationFrame(lwTpsl); }
+    if (S.screen === 'token') { lwMount(); requestAnimationFrame(function () { lwTpsl(); lwAvgTags(); }); }
     if (S.screen === 'home') tsMount();
     if (S.screen === 'trench') trMount();
     pushWatchSig();
