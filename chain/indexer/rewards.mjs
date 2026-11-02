@@ -181,6 +181,7 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, q
     log('rewards', kind, c.symbol, (amount / 10 ** (c.quote_dec ?? 9)).toFixed(4), c.quote_symbol || 'SOL', '→', dest.slice(0, 6)); return s;
   }
   async function buybackExact(c, amount, claimSig) {
+    if (q1('SELECT 1 FROM kv WHERE k IN (?,?)', 'bbpend:' + c.mint, 'toburn:' + c.mint)) throw new Error('an earlier buyback burn is still being settled — this one waits');   // one tracked buyback per coin at a time (the claim stays unsettled and is retried)
     const mint = new PublicKey(c.mint), ata = getAssociatedTokenAddressSync(mint, ops.publicKey, false, TOKEN_2022_PROGRAM_ID);
     const vpw = await dbc.state.getPool(new PublicKey(c.pool)), vp = vpw.poolState || vpw, cfg = await dbc.state.getPoolConfig(vp.config);
     const migrated = num(vp.isMigrated) > 0, done = migrated || BigInt(vp.quoteReserve.toString()) >= BigInt(cfg.migrationQuoteThreshold.toString());
@@ -199,8 +200,8 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, q
         tokenAMint: d.ps.tokenAMint, tokenBMint: d.ps.tokenBMint, tokenAProgram: TOKEN_2022_PROGRAM_ID, tokenBProgram: await qprogOf(c), referralTokenAccount: null, swapMode: 0 });
       sig = await bbSend(c, new Transaction().add(...sw.instructions, memo(`treid:buyback:${c.mint}:${amount}:${claimSig}`)));
     } else throw new Error('curve finished — buyback waits for the migration');
+    try { run('INSERT OR REPLACE INTO kv(k,v) VALUES(?,?)', 'bbpend:' + c.mint, JSON.stringify({ sig, at: Date.now() })); } catch (e) { halt(e.message); throw e; }   // first: whatever fails next, the bought tokens stay tracked
     record(sig, [{ mint: c.mint, kind: 'buyback', lamports: amount, extra: claimSig }]);
-    try { run('INSERT OR REPLACE INTO kv(k,v) VALUES(?,?)', 'bbpend:' + c.mint, JSON.stringify({ sig, at: Date.now() })); } catch (e) { halt(e.message); throw e; }
     const t = await getTxRetry(conn, sig), tb = (arr) => (arr || []).filter((b) => b.mint === c.mint && b.owner === ops.publicKey.toBase58()).reduce((s, b) => s + BigInt(b.uiTokenAmount.amount), 0n);
     const kvj = (k, o) => { try { if (o == null) run('DELETE FROM kv WHERE k=?', k); else run('INSERT OR REPLACE INTO kv(k,v) VALUES(?,?)', k, JSON.stringify(o)); } catch (e) { halt(e.message); throw e; } };
     if (!t) { halt('buyback receipt unreadable: ' + String(sig).slice(0, 16)); throw new Error('buyback receipt unreadable — ops stopped; the tax cycle settles it before touching this coin'); }   // bbpend stays: the bought tokens are never paid out as tax

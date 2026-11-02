@@ -71,7 +71,8 @@ export function startOps({ conn, dbc, ops, treasury, q, q1, run, mainnet = false
   // crash / unknown outcome the ledger rebuilt from chain says exactly what landed. The next round settles the old one from that — nothing is
   // split twice, nobody is paid twice, and what didn't land is carried (holders' part to holders, the burn's to the burn, the dev's to the dev).
   function settleRound(mint) {
-    const R = kvJ('taxround:' + mint); if (!R) return;
+    const R = kvJ('taxround:' + mint); if (!R) return true;
+    if (R.at && Date.now() - R.at < 3 * 60e3) return false;   // let every tx of that round land or expire first
     const fin = landed(mint, R.r + '|f') > 0n || !!q1("SELECT 1 FROM rlog WHERE kind='txr' AND mint=? AND extra=?", mint, R.r + '|f');
     if (fin) { carrySet(mint, 0n); bcarrySet(mint, 0n); dcarrySet(mint, 0n); }
     else { const sold = !!q1("SELECT 1 FROM rlog WHERE kind='txr' AND mint=? AND extra=?", mint, R.r + '|s'), hold = BigInt(R.hold), h = landed(mint, R.r + '|h');
@@ -230,7 +231,8 @@ export function startOps({ conn, dbc, ops, treasury, q, q1, run, mainnet = false
     // creator-fee buybacks whose burn didn't finish: those tokens belong to the burn, never to the tax split
     const bp = kvJ('bbpend:' + c.mint); if (bp) { const t = await getTxRetry(conn, bp.sig);
       if (!t) { const st = Date.now() - (bp.at || 0) > 10 * 60e3 ? (await conn.getSignatureStatuses([bp.sig], { searchTransactionHistory: true })).value[0] : undefined;
-        if (st === null) { kvJSet('bbpend:' + c.mint, null); log('ops   buyback never landed', c.symbol); } else { log('ops   buyback receipt still unreadable — tax waits', c.symbol); return null; } }   // long expired and unknown to the chain → it never happened
+        if (st === null && !q1('SELECT 1 FROM rlog WHERE sig=?', bp.sig)) { kvJSet('bbpend:' + c.mint, null); log('ops   buyback never landed', c.symbol); }   // unknown to the chain AND not in the rebuilt ledger
+        else { if (Date.now() - (bp.at || 0) > 3 * 36e5) console.error('!! ' + c.symbol + ': buyback receipt ' + bp.sig.slice(0, 12) + ' unreadable for 3h+ — this coin\'s tax is on hold'); else log('ops   buyback receipt still unreadable — tax waits', c.symbol); return null; } }   // long expired and unknown to the chain → it never happened
       else if (t.meta.err) kvJSet('bbpend:' + c.mint, null);
       else { const tb = (arr) => (arr || []).filter((b) => b.mint === c.mint && b.owner === ops.publicKey.toBase58()).reduce((s2, b) => s2 + BigInt(b.uiTokenAmount.amount), 0n), g = tb(t.meta.postTokenBalances) - tb(t.meta.preTokenBalances);
         try { if (g > 0n && !kvJ('toburn:' + c.mint)) kvJSet('toburn:' + c.mint, { sig: bp.sig, amt: String(g) }); kvJSet('bbpend:' + c.mint, null); } catch (e) { halt(e.message); throw e; } } }
@@ -242,7 +244,7 @@ export function startOps({ conn, dbc, ops, treasury, q, q1, run, mainnet = false
           try { kvJSet('toburn:' + c.mint, null); } catch (e) { halt(e.message); throw e; } rec(sgt, 0, c.mint, 'burntok', amt, tbn.sig); }
         else kvJSet('toburn:' + c.mint, null);
         try { const a2 = await getAccount(conn, opsAta, 'confirmed', TOKEN_2022_PROGRAM_ID); opsAcc = a2; } catch { opsAcc = null; } } }
-    try { settleRound(c.mint); } catch (e) { halt(e.message); throw e; }
+    let settled; try { settled = settleRound(c.mint); } catch (e) { halt(e.message); throw e; } if (settled === false) return null;   // a round from under 3 min ago: its last txs may still land
     const stranded = opsAcc ? opsAcc.amount : 0n;   // tokens left in ops from an interrupted cycle are distributed now
     const total = withheld.reduce((s, a) => s + wa(a), 0n) + inMint + stranded;
     if (Number(total) / 10 ** DEC * px < HARVEST_USD) return null;   // not worth the transactions yet
@@ -264,7 +266,7 @@ export function startOps({ conn, dbc, ops, treasury, q, q1, run, mainnet = false
     // written down BEFORE the first transfer: if this round dies halfway (unknown outcome → halt → restart), the next round knows which tokens
     // are holders' and which are the burn's, and splits only new tax — the dev can never be paid twice out of holders' money
     const RID = createHash('sha256').update(c.mint + ':' + Date.now() + ':' + Math.random()).digest('hex').slice(0, 10), tag = (part) => RID + '|' + part, txr = (amt, part) => memoIx(`treid:txr:${c.mint}:${amt}:${tag(part)}`);
-    try { kvJSet('taxround:' + c.mint, { r: RID, hold: String(holdAmt), burn: String(burnAmt), dev: String(devAmt), devBurn }); carrySet(c.mint, 0n); bcarrySet(c.mint, 0n); dcarrySet(c.mint, 0n); } catch (e) { halt(e.message); throw e; }   // the round record now holds them
+    try { kvJSet('taxround:' + c.mint, { at: Date.now(), r: RID, hold: String(holdAmt), burn: String(burnAmt), dev: String(devAmt), devBurn }); carrySet(c.mint, 0n); bcarrySet(c.mint, 0n); dcarrySet(c.mint, 0n); } catch (e) { halt(e.message); throw e; }   // the round record now holds them
     if (devAmt > 0n && !devBurn) { const devAta = getAssociatedTokenAddressSync(mint, new PublicKey(devTo), false, TOKEN_2022_PROGRAM_ID);
       const sgd = await send([createTransferCheckedInstruction(opsAta, mint, devAta, ops.publicKey, devAmt, DEC, [], TOKEN_2022_PROGRAM_ID), txr(devAmt, 'd')]); rec(sgd, 0, c.mint, 'txr', devAmt, tag('d')); hrec(sgd, net([{ owner: devTo, mint: c.mint, amt: devAmt }]), c.mint, DEC); }   // if this fails the round stops here; the next one settles it (the dev's share is kept for the dev)
     const hs = holdersOf(accs, new Set([poolAuthority, ops.publicKey.toBase58(), c.creator, devTo])), held = hs.reduce((s, a) => s + a.total, 0n), minAmt = BigInt(Math.ceil(SHARE_USD / px * 10 ** DEC));
