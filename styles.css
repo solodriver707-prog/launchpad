@@ -5869,3 +5869,5 @@ html body .hdr-right .wbal .wb-acts .btn.pri{display:inline-flex!important}   /*
 .wp-coe{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;margin:12px 24px 0;padding:10px 14px;border-radius:12px;border:1px solid rgba(61,220,151,.2);background:rgba(61,220,151,.05);font-size:13px}
 @media (max-width:760px){.wp-coe{margin:10px 14px 0}}
 .spk-note .spk-warn{color:#F2B05E;font-weight:700}
+.cr-know{margin:14px 0 12px;padding:12px 14px;border-radius:12px;border:1px solid rgba(230,203,149,.25);background:rgba(230,203,149,.05);font-size:12.5px;line-height:1.5;color:var(--soft)}
+.cr-know b{color:#F2E3C2}.cr-know ul{margin:6px 0 0;padding-left:18px}.cr-know li{margin:3px 0}

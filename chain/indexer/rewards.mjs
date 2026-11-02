@@ -4,7 +4,7 @@
 //     active → paid automatically once ≥ $1 has built up, or on demand ("Claim now", from $1)
 //     72h idle → paused: the fees are claimed and used to buy back & burn the coin (not paid back); "Resume my fees" (or any activity) restarts payouts
 //     activity = a trade in the coin, "I'm still here", a callout / update on the coin, or "Claim now"
-//     7d idle, or ≥70% of the bag gone (sold, transferred away, or both) → out
+//     7d idle, or ≥70% of the bag gone (sold, transferred away, or both) with less than 0.5% of supply left → out
 //   era "out": 50% buyback & burn, 50% treid platform · holders can elect a new lead (applicant ≥1%, support ≥10% held for 24h)
 // After graduation the same rules apply to the creator's half of the DAMM v2 pool fees (ops holds both permanently locked LP positions:
 // the first one is treid's share, the second the creator's). If Meteora's keeper hasn't migrated a finished curve after GRAD_WAIT, ops does it.
@@ -24,7 +24,7 @@ const sendTx = (...a) => { if (HALT.on) throw new Error('ops halted'); return se
 import { rwOut } from './ops.mjs';
 import { verifySig } from './sig.mjs';
 
-export const RULES = { idleFreezeMs: 72 * 3600e3, idleOutMs: 7 * 864e5, soldOut: 70, ctoApplyPct: 1, ctoSupportPct: 10, ctoHoldMs: 24 * 36e5 };
+export const RULES = { idleFreezeMs: 72 * 3600e3, idleOutMs: 7 * 864e5, soldOut: 70, keepPct: 0.5, ctoApplyPct: 1, ctoSupportPct: 10, ctoHoldMs: 24 * 36e5 };
 const SUPPLY = 1e9, MEMO = new PublicKey('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr');
 const memo = (s) => new TransactionInstruction({ keys: [], programId: MEMO, data: Buffer.from(s) });
 export const pingMessage = (mint, ts) => `treid: I'm still here — ${mint} — ${ts}`;
@@ -117,7 +117,7 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, q
     const base = { era: e.type, creator: e.wallet || null, fund: 0, paid: sum(c.mint, 'pay'), buyback: sum(c.mint, 'buyback'), burnedTokens: sum(c.mint, 'burntok'), granted: sum(c.mint, 'platform'), lastPay: lastOf(c.mint, 'pay')?.ts || 0 };
     if (e.type === 'out') return { ...base, state: 'out', outAt: e.start, idle: 0, sold: 0, last: e.start };
     const a = activity(c, e.wallet, e.start, e.type === 'cto' ? e.startBag : null); let st = 'active', why = null;
-    if (a.sold >= RULES.soldOut) { st = 'out'; why = 'sold'; } else if (a.idle >= RULES.idleOutMs) { st = 'out'; why = 'idle'; } else if (a.idle >= RULES.idleFreezeMs) st = 'frozen';
+    if (a.sold >= RULES.soldOut && a.bal < RULES.keepPct / 100 * SUPPLY) { st = 'out'; why = 'sold'; }   // sold/moved 70%+ of the peak bag AND kept under 0.5% of supply (a dev trimming 10% → 2% keeps a real stake and stays in) else if (a.idle >= RULES.idleOutMs) { st = 'out'; why = 'idle'; } else if (a.idle >= RULES.idleFreezeMs) st = 'frozen';
     const r = { ...base, ...a, paid: sum(c.mint, 'pay', e.start), state: st, why, outAt: null };
     if (e.type === 'cto') r.cto = { lead: e.wallet, at: e.start, fund: 0, paid: 0, vested: 0, owed: 0 };
     return r;

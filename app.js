@@ -3345,18 +3345,18 @@
   function drSave() { try { localStorage.setItem('dl.devseen', JSON.stringify(S.devSeen)); localStorage.setItem('dl.cto', JSON.stringify(S.cto)); localStorage.setItem('dl.claimed', JSON.stringify(S.claimed)); } catch (e) {} }
   function devPing(t) { if (t && S.account && t.creator === S.account) { S.devSeen[t.tick] = Date.now(); drSave(); } }
   function devStatus(t) {
-    var now = Date.now(), age = Math.max(0, now - t.born), mine = !!(t.creator && t.creator === S.account), r = rng(hash(t.tick + 'dv')), last, sold = 0;
+    var now = Date.now(), age = Math.max(0, now - t.born), mine = !!(t.creator && t.creator === S.account), r = rng(hash(t.tick + 'dv')), last, sold = 0, bagPct = null;
     if (t.creator && t.devPct != null) { // user-launched: real data
       last = Math.max(t.born, S.devSeen[t.tick] || 0, (S.trades.filter(function (x) { return x.tick === t.tick && x.wallet === t.creator; }).pop() || {}).t || 0);
       var peak = 0, bal = 0; S.trades.filter(function (x) { return x.tick === t.tick && x.wallet === t.creator && x.tokens; }).sort(function (a, b) { return a.t - b.t; }).forEach(function (x) { bal += x.side === 'buy' ? x.tokens : -x.tokens; peak = Math.max(peak, bal); });
-            sold = peak > 0 ? Math.max(0, Math.min(100, (peak - Math.max(0, bal)) / peak * 100)) : 0;
+            sold = peak > 0 ? Math.max(0, Math.min(100, (peak - Math.max(0, bal)) / peak * 100)) : 0; bagPct = Math.max(0, bal) / 1e9 * 100;
     } else {
       var rm = riskMetrics(t); sold = rm[0].val === 'SOLD' ? 100 : Math.round(r() * r() * 82);
       var roll = r(), ago = roll < .7 ? r() * 40 * 36e5 : roll < .85 ? (50 + r() * 110) * 36e5 : (8 + r() * 14) * 864e5;
       last = Math.max(t.born, now - Math.min(age, ago));
     }
     var idle = now - last, why = null, state = 'active', outAt = null;
-    if (sold >= DR.soldOut) { state = 'out'; why = 'sold'; outAt = last; }
+    if (sold >= DR.soldOut && (bagPct == null || bagPct < 0.5)) { state = 'out'; why = 'sold'; outAt = last; }
     else if (idle >= DR.out) { state = 'out'; why = 'idle'; outAt = last + DR.out; }
     else if (idle >= DR.inactive) { state = 'inactive'; why = 'idle'; }
     var cto = S.cto[t.tick] || null;
@@ -3409,7 +3409,7 @@
         '<div class="cr-money">' + tiles.map(function (m) { return '<div><small>' + m[0] + '</small><b class="mono">' + m[1] + '</b></div>'; }).join('') + '</div>' + meterE +
         (mineE && E.era !== 'out' ? '<div class="cr-acts"><button class="btn sec" data-act="devHere" data-arg="' + esc(t.tick) + '">' + (E.state === 'frozen' ? '▶ Resume my fees' : '✋ I’m still here') + '</button>' + (E.state === 'active' ? '<button class="btn pri" data-act="devClaimNow" data-arg="' + esc(t.tick) + '"' + (E.pendingSol < 0.0001 || S.busy ? ' disabled' : '') + '>Claim now · ' + solf(E.pendingSol) + '</button>' : '') + '</div>' : '') +
         ctoBox + (logE ? '<div class="cr-logs">' + logE + '</div>' : '') +
-        '<details class="cr-rules"><summary>How the rules work</summary><ul><li>Rewards stay in the Meteora pool until they’re paid. treid’s automated wallet holds the pool’s creator role and pays them out under these rules — never anywhere else. An active creator is <b>paid straight from the pool</b> automatically once rewards reach $1, or any time with “Claim now” (from $1).</li><li>The creator must show up at least once every <b>72h</b>: a trade in the coin, “I’m still here” (a free wallet signature), a callout or update about the coin, or “Claim now” all count. treid sends a push reminder 24h and 6h before the deadline.</li><li>Miss it → payouts pause and the rewards meanwhile <b>buy back & burn</b> the coin (they are not paid back later). “Resume my fees” restarts payouts from that moment.</li><li><b>7 days</b> inactive, or the creator sells <b>or moves to another wallet 70%+</b> of their peak bag (selling and sending are added together; the rule covers the creator’s launch wallet) → creator is out: from then on <b>50%</b> of their rewards buys back & burns the coin and <b>50%</b> goes to the treid platform, until the community takes over.</li><li><b>Community takeover:</b> a holder with ' + (R0.applyPct || 1) + '%+ applies with a plan; holders support with a free signature. At ' + (R0.supportPct || 10) + '% of supply, held for 24 hours in a row, the new lead takes over and earns all future rewards — under the same rules.</li><li>Every step is an on-chain transaction — tap any line above to verify.</li></ul></details></section>';
+        '<details class="cr-rules"><summary>How the rules work</summary><ul><li>Rewards stay in the Meteora pool until they’re paid. treid’s automated wallet holds the pool’s creator role and pays them out under these rules — never anywhere else. An active creator is <b>paid straight from the pool</b> automatically once rewards reach $1, or any time with “Claim now” (from $1).</li><li>The creator must show up at least once every <b>72h</b>: a trade in the coin, “I’m still here” (a free wallet signature), a callout or update about the coin, or “Claim now” all count. treid sends a push reminder 24h and 6h before the deadline.</li><li>Miss it → payouts pause and the rewards meanwhile <b>buy back & burn</b> the coin (they are not paid back later). “Resume my fees” restarts payouts from that moment.</li><li><b>7 days</b> inactive, or the creator sells <b>or moves to another wallet 70%+</b> of their peak bag <b>and keeps less than 0.5% of supply</b> (selling and sending are added together; the rule covers the creator’s launch wallet) → creator is out: from then on <b>50%</b> of their rewards buys back & burns the coin and <b>50%</b> goes to the treid platform, until the community takes over.</li><li><b>Community takeover:</b> a holder with ' + (R0.applyPct || 1) + '%+ applies with a plan; holders support with a free signature. At ' + (R0.supportPct || 10) + '% of supply, held for 24 hours in a row, the new lead takes over and earns all future rewards — under the same rules.</li><li>Every step is an on-chain transaction — tap any line above to verify.</li></ul></details></section>';
     }
     if (t.live) {   // real coin: rewards are SOL sitting in the pool, the creator claims them straight to their wallet
       var f = t.crFees, mine = !!(S.account && f && S.account === f.creator), u = f ? f.unclaimed : null, uTxt = u == null ? '…' : (u < 0.0001 && u > 0 ? '<0.0001' : u.toFixed(4)) + ' ' + esc(qSymT(t));
@@ -3687,6 +3687,11 @@
           realPairPicker(c) + taxPicker(c) + splitPicker(c) + devBuyPicker(c) + vanityPicker(c) +
           '<div class="fsec"><i>3</i>Community</div>' +
           '<div class="socrow"><span class="soc-l">Socials <small>optional · shown as buttons on your coin</small></span><div class="socgrid">' + socField(c, 'x', 'X', '', 'Paste X link') + socField(c, 'tg', 'Telegram', '', 'Paste Telegram link') + socField(c, 'web', 'Website', '', 'Paste website link') + '</div></div>' +
+          '<div class="cr-know"><b>📋 Your creator rules — read before launching</b><ul>' +
+            '<li><b>You earn</b> ' + FEE.creatorPlain + '% of every trade on the curve (' + FEE.creatorTaxed + '% on taxed coins) and 0.4% after graduation, plus your share of the tax — paid automatically.</li>' +
+            '<li><b>Show up at least once every 72h</b>: a trade in your coin, “I’m still here” (free signature), a callout or update about your coin, or “Claim now”. We push a reminder 24h and 6h before.</li>' +
+            '<li><b>Miss it</b> → your fees pause and buy back & burn your coin until you tap “Resume my fees” (paused fees are not paid back).</li>' +
+            '<li><b>You’re out</b> (the community can take over) after 7 days away, or if you sell/move 70%+ of your peak bag <i>and</i> keep under 0.5% of supply.</li></ul></div>' +
           '<button class="big-btn btn pri" data-act="launch"' + (S.busy ? ' disabled' : '') + '>' + (S.busy ? esc(S.busy) + '…' : S.account ? 'Launch on-chain' + NETP + '' : 'Connect wallet to launch') + '</button>' +
           (S.account && DEMO ? '<button class="demo-l" data-act="demoLaunch">No ' + NET + 'SOL? Try a demo launch instead</button>' : '') +
           '<span class="note">' + (CHAIN_ID === 'solana:devnet' ? 'Devnet beta: your coin is created on the Solana test network.' : 'Your coin is created on-chain on Meteora (Solana mainnet).') + ' Your wallet signs every step.</span>' +
