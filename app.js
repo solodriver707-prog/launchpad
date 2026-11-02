@@ -1995,7 +1995,8 @@
   function lwAvg(t) {   // your average entry / exit market cap in USD (server stats first, then your own trades)
     if (!S.account) return null; var b = { u: 0, k: 0 }, s = { u: 0, k: 0 };
     S.trades.forEach(function (x) { if (x.tick !== t.tick || !(x.mine || x.wallet === S.account)) return; var px = x.price || price(t), usd = x.usd != null ? x.usd : x.sol * SOL_USD, tok = x.tokens || usd / px; var o = x.side === 'buy' ? b : s; o.u += usd; o.k += tok; });
-    var ps = t.ca && S.myPs && S.myPs[t.ca], en = ps && ps.avgEntryMc > 0 ? ps.avgEntryMc : b.k > 0 ? b.u / b.k * 1e9 : 0, ex = ps && ps.avgExitMc > 0 ? ps.avgExitMc : s.k > 0 ? s.u / s.k * 1e9 : 0;   // exit at the market cap you sold at (not net of sell tax/fees)
+    var ps = t.ca && S.myPs && S.myPs[t.ca], en = ps && ps.avgEntryMc > 0 ? ps.avgEntryMc : b.k > 0 ? b.u / b.k * 1e9 : 0, ex = ps && ps.avgExitMc > 0 ? ps.avgExitMc : s.k > 0 ? s.u / s.k * 1e9 : 0;
+    if (t.live && !t.qMint && ps && SOL_USD > 0) { if (ps.avgEntryMcQ > 0) en = ps.avgEntryMcQ * SOL_USD; if (ps.avgExitMcQ > 0) ex = ps.avgExitMcQ * SOL_USD; }   // SOL coins: the chart is drawn at today's SOL price, so the lines are too   // exit at the market cap you sold at (not net of sell tax/fees)
     return en || ex ? { en: en, ex: ex } : null;
   }
   function lwMarks(t, bars) {
@@ -2995,7 +2996,7 @@
   S.cpq = ''; S.cpTab = 'crypto';
   try { var CP = JSON.parse(localStorage.getItem('dl.cpairs') || '{}'); Object.keys(CP).forEach(function (k) { PAIR_INFO[k] = CP[k]; }); } catch (e) {}
   // ---- sign in once (24 h): the wallet signs one message, the server hands back a session token — no popup for every callout ----
-  function psClean(p) { if (!p || typeof p !== 'object') return null; var o = {}; ['value', 'spent', 'got', 'profit', 'profitPct', 'avgEntryMc', 'avgExitMc', 'soldPct', 'supplyPct', 'held', 'trades'].forEach(function (k) { o[k] = Number(p[k]) || 0; }); return o; }
+  function psClean(p) { if (!p || typeof p !== 'object') return null; var o = {}; ['value', 'spent', 'got', 'profit', 'profitPct', 'avgEntryMc', 'avgExitMc', 'avgEntryMcQ', 'avgExitMcQ', 'soldPct', 'supplyPct', 'held', 'trades'].forEach(function (k) { o[k] = Number(p[k]) || 0; }); return o; }
   function money(v) { v = Math.abs(v); return v >= 1e6 ? (v / 1e6).toFixed(2) + 'M' : v >= 1e4 ? (v / 1e3).toFixed(1) + 'K' : v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
   function moneyS(v) { v = Math.abs(v); return v >= 1e6 ? (v / 1e6).toFixed(2) + 'M' : v >= 1e3 ? (v / 1e3).toFixed(v >= 1e5 ? 0 : 2) + 'K' : v.toFixed(2); }
   function psStatus(ps) { return ps.held < 1 ? 'Sold all' : ps.soldPct >= 1 ? 'Sold ' + Math.round(ps.soldPct) + '%' : 'Holding'; }
