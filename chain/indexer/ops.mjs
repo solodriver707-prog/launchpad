@@ -274,6 +274,9 @@ export function startOps({ conn, dbc, ops, treasury, q, q1, run, mainnet = false
       if (!HALT.on) await sweep();
     } catch (e) { log('ops   cycle err', e.message); } finally { busy = false; }
   }
+  // the treasury's wrapped-SOL account receives Meteora's referral share of trades made on treid (a swap never creates it) — opened once, by ops
+  if (mainnet && treasury) setTimeout(() => withLock(async () => { try { const ata = getAssociatedTokenAddressSync(new PublicKey(WSOL), new PublicKey(treasury), true);
+    if (!HALT.on && !(await conn.getAccountInfo(ata))) { await send([createAssociatedTokenAccountIdempotentInstruction(ops.publicKey, ata, new PublicKey(treasury), new PublicKey(WSOL))]); log('ops   opened the treasury wSOL account for referral fees', ata.toBase58()); } } catch (e) { log('ops   referral account later:', e.message.slice(0, 80)); } }), 60e3);
   let queued = false; const locked = () => { if (queued) return; queued = true; withLock(cycle).finally(() => { queued = false; }); }; setTimeout(locked, 30e3); setInterval(locked, everyMs);
   return { cycle, status, pending: () => pendingSol() + treidBudget() };   // SOL held for holders' pair payouts + the $TREID budget (other payers must leave it alone)
 }

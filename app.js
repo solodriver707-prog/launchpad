@@ -77,7 +77,7 @@
   var LOGO = '<span class="logo" aria-hidden="true"><svg viewBox="0 0 40 40"><defs><linearGradient id="trG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FBF3E2"/><stop offset=".55" stop-color="#D8C3A0"/><stop offset="1" stop-color="#A88D5F"/></linearGradient></defs><polygon class="tr-bar" points="5,13 34,4.5 34,13.5 5,22" fill="url(#trG)" stroke="url(#trG)" stroke-width="3" stroke-linejoin="round"/><polygon class="tr-stem" points="14.5,24.5 24,21.7 24,36 14.5,36" fill="#EDE9E1" stroke="#EDE9E1" stroke-width="3" stroke-linejoin="round"/></svg></span>';
 
   // ================= DATA =================
-  function gradK() { return DEMO ? 69 : Math.round(60 * SOL_USD / 1000); }   // real curve graduates at ~60 SOL of market cap
+  function gradK() { return DEMO ? 69 : Math.round(420 * SOL_USD / 1000); }   // new coins graduate at ~420 SOL of market cap (like pump.fun)
   function curveMc(prog) { return 5 + Math.max(0, Math.min(100, prog)) / 100 * 64; }
   function mk(name, tick, kind, skinI, bgI, eyes, mouth, acc, buy, sell, pair, mcN, c24, prog, ageM, holders, soc, rewards, burn) {
     if (prog < 100) mcN = curveMc(prog) * (0.97 + (hash(tick) % 7) / 100);
@@ -2915,7 +2915,7 @@
       '<div class="presets">' + presets + '</div>' +
       (PS ? '<div class="quote"><div><span class="muted">Route</span><span>SOL → ' + esc(qSymT(t)) + ' (Jupiter) → $' + id + '</span></div><div><span class="muted">Fees</span><span>coin tax ' + q.pct + '% + trading fee + Jupiter route</span></div><div style="padding-top:9px;border-top:1px solid var(--line)"><span class="muted">You receive ≈</span><span style="font-weight:800;font-size:15px">' + fmtNum(q.out) + ' $' + id + (outUsd > 0 ? ' <small class="q-usd">' + usdS(outUsd) + '</small>' : '') + '</span></div></div>' :
       '<div class="quote">' + (q.pct > 0 ? '<div><span class="muted">Coin ' + (q.isBuy ? 'buy' : 'sell') + ' tax (' + q.pct + '%)</span><span style="color:' + taxBg(q.pct) + '">' + f4(q.tax) + ' ' + esc(QS) + '</span></div>' : '') +
-        '<div><span class="muted">Trading fee (' + (+q.fp.toFixed(2)) + '%)' + (q.grad ? ' <em class="q-cr">' + GRAD_CREATOR + '% to creator</em>' : ' <em class="q-cr">' + (q.exact ? +(q.fp * 0.4).toFixed(2) : (q.pct > 0 ? FEE.creatorTaxed : FEE.creatorPlain)) + '% to creator</em>') + '</span><span>' + f4(q.fee) + ' ' + esc(QS) + '</span></div>' +
+        '<div><span class="muted">Trading fee (' + (+q.fp.toFixed(2)) + '%)' + (q.grad ? ' <em class="q-cr">' + gradCreator(t) + '% to creator</em>' : ' <em class="q-cr">' + (q.exact ? +(q.fp * 0.4).toFixed(2) : (q.pct > 0 ? FEE.creatorTaxed : FEE.creatorPlain)) + '% to creator</em>') + '</span><span>' + f4(q.fee) + ' ' + esc(QS) + '</span></div>' +
         '<div class="q-tot"><span class="muted">Total cost</span><span class="mono">' + (+(q.pct + q.fp).toFixed(2)) + '% · ' + f4((q.tax + q.fee)) + ' ' + esc(QS) + '</span></div>' +
         '<div><span class="muted">Price impact</span><span class="' + (q.impact > 5 ? 'down' : '') + '">' + q.impact.toFixed(2) + '%</span></div>' +
         '<div><span class="muted">Min received (' + S.slip + '% slip)</span><span>' + (q.isBuy ? fmtNum(q.min) + ' $' + id : q.min.toFixed(4) + ' ' + esc(QS)) + '</span></div>' +
@@ -3332,10 +3332,11 @@
   // trading fee, % of each trade. On-chain split of every fee: creator 40% · treid 40% · Meteora (DEX protocol) 20%
   var FEE = { plain: 1, taxed: 0.5, creatorPlain: 0.4, treidPlain: 0.4, dexPlain: 0.2, creatorTaxed: 0.2, treidTaxed: 0.2, dexTaxed: 0.1 };
   function feeOf(t) { return Math.max(t.buy || 0, t.sell || 0) > 0 ? FEE.taxed : FEE.plain; }
-  // after graduation every coin trades on its Meteora DAMM v2 pool at a 0.5% fee: Meteora keeps 20% (0.1%), the LP fees (0.4%) are split
+  // after graduation every coin trades on its Meteora DAMM v2 pool (0.5% fee for coins launched before Nov 2026, 1% after): Meteora keeps 20% (0.1%), the LP fees (0.4%) are split
   // 50/50 between the creator's and treid's locked LP positions → 0.2% to the creator (checked on-chain: migration config, protocol fee default)
-  var GRAD_CREATOR = 0.2;
-  function creatorCut(t) { var sp = splitOf(t), m = Math.max(t.buy || 0, t.sell || 0), base = t.prog >= 100 ? GRAD_CREATOR : m > 0 ? FEE.creatorTaxed : FEE.creatorPlain; return +((m > 0 && sp ? m * sp.d / 100 : 0) + base).toFixed(2); }
+  var GRAD_CREATOR = 0.2;   // v1 coins (0.5% pool); v2 coins (1% pool) → 0.4% — see gradCreator(t)
+  function gradCreator(t) { return +(((t && t.gradFee) || 50) / 100 * 0.4).toFixed(2); }   // the creator's half of the LP fee after Meteora's 20%
+  function creatorCut(t) { var sp = splitOf(t), m = Math.max(t.buy || 0, t.sell || 0), base = t.prog >= 100 ? gradCreator(t) : m > 0 ? FEE.creatorTaxed : FEE.creatorPlain; return +((m > 0 && sp ? m * sp.d / 100 : 0) + base).toFixed(2); }
   // ===== CREATOR REWARDS: freeze rules + community takeover (CTO) =====
   var DR = { inactive: 48 * 36e5, out: 7 * 864e5, soldOut: 70, fundDays: 14, vestDays: 30, ctoNeed: 10, ctoHold: 1 };
   S.devSeen = {}; S.cto = {}; S.claimed = {}; S.myBurns = []; try { S.myBurns = JSON.parse(localStorage.getItem('dl.myburns') || '[]'); } catch (e) {}
@@ -4500,11 +4501,11 @@
           if (t.qMint && typeof S.balance === 'number' && S.balance < 0.003) { toast('You need a little SOL for network fees'); break; }
           if (side0 === 'sell') { if (amt > ps0.tok) amt = ps0.tok; if (amt <= 0) { toast('You don\'t hold any $' + t.tick + ' yet — buy first'); break; } }
           if (paySol(t)) { if (typeof S.balance === 'number' && amt > S.balance - 0.01) { toast('Not enough SOL — balance ' + S.balance.toFixed(3)); break; } if (S.busy) break; S.busy = 'Swapping SOL → ' + qSymT(t); render(); toast('Step 1 of 2: swap SOL → ' + qSymT(t) + ' — confirm in your wallet');
-            jupSolToPair(t, amt).catch(function (e) { throw /fetch/i.test(String(e && e.message)) ? new Error('Couldn’t reach Jupiter — try again in a moment') : e; }).then(function (got) { S.busy = null; render(); return chainRun('Step 2 of 2: buying $' + t.tick, function (T) { return T.buildSwap({ rpc: RPC, expect: { mint: t.ca, partners: [PARTNER, TREASURY] }, owner: S.account, pool: t.pool, side: 'buy', amount: got, slippageBps: Math.round(S.slip * 100) }); }); })
+            jupSolToPair(t, amt).catch(function (e) { throw /fetch/i.test(String(e && e.message)) ? new Error('Couldn’t reach Jupiter — try again in a moment') : e; }).then(function (got) { S.busy = null; render(); return chainRun('Step 2 of 2: buying $' + t.tick, function (T) { return T.buildSwap({ rpc: RPC, expect: { mint: t.ca, partners: [PARTNER, TREASURY] }, owner: S.account, pool: t.pool, side: 'buy', amount: got, slippageBps: Math.round(S.slip * 100), referral: TREASURY }); }); })
               .then(function (b) { S.amount = ''; confettiSmall(); toast('Bought ~' + fmtNum(b.quote.out) + ' $' + t.tick + ' with SOL · on-chain ✓', t); setTimeout(function () { liveLoad(t); refreshBalance(); }, 1200); })
               .catch(function (e) { S.busy = null; render(); if (e && e.message !== 'busy') toast(chainErr(e)); });
             break; }
-          chainRun(side0 === 'buy' ? 'Buying $' + t.tick : 'Selling $' + t.tick, function (T) { var cr = side0 === 'buy' ? coRef(t) : null; return T.buildSwap({ rpc: RPC, expect: { mint: t.ca, partners: [PARTNER, TREASURY] }, owner: S.account, pool: t.pool, side: side0, amount: amt, slippageBps: Math.round(S.slip * 100), memo: cr ? 'treid:co:' + cr.id : null }); })
+          chainRun(side0 === 'buy' ? 'Buying $' + t.tick : 'Selling $' + t.tick, function (T) { var cr = side0 === 'buy' ? coRef(t) : null; return T.buildSwap({ rpc: RPC, expect: { mint: t.ca, partners: [PARTNER, TREASURY] }, owner: S.account, pool: t.pool, side: side0, amount: amt, slippageBps: Math.round(S.slip * 100), memo: cr ? 'treid:co:' + cr.id : null, referral: TREASURY }); })
             .then(function (b) { S.amount = ''; S.sellAll = false; if (side0 === 'buy') confettiSmall(); toast((side0 === 'buy' ? 'Bought ~' + fmtNum(b.quote.out) + ' $' + t.tick : 'Sold ' + fmtNum(amt) + ' $' + t.tick + ' for ~' + b.quote.out.toFixed(4) + ' ' + qSymT(t)) + ' · on-chain ✓', t); setTimeout(function () { liveLoad(t); }, 1200); })
             .catch(function (e) { if (e && e.message !== 'busy') toast(chainErr(e)); });
           break;
@@ -4546,7 +4547,7 @@
             var fsU = S.wallet && S.wallet.features['solana:signMessage'], tsU = Date.now(), whoU = S.account;   // the upload is signed by your wallet (protects the IPFS account from spam)
             var up = API ? (fsU ? Promise.resolve(fsU.signMessage({ account: S.walletAcc, message: new TextEncoder().encode(siteMsg('treid: upload \u2014 ' + whoU + ' \u2014 ' + tsU)) })) : Promise.reject(new Error('This wallet can’t sign messages — try Phantom or Solflare'))).then(function (r) { var sg = (Array.isArray(r) ? r[0] : r).signature; return chainLib().then(function (T) { return T.b58(sg); }); }).then(function (sigU) { return Promise.race([fetch(API + '/api/upload', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ wallet: whoU, ts: tsU, sig: sigU, name: cc0.name, symbol: cc0.tick, description: (cc0.desc || '').trim(), image: cc0.img || null, banner: cc0.banner || null, x: cc0.x, tg: cc0.tg, web: cc0.web }) }).then(function (r) { return r.json(); }), new Promise(function (r) { setTimeout(function () { r({}); }, 25000); })]); }).catch(function (e) { return { error: e && e.message }; }) : Promise.resolve({});
             return up; }).then(function (up) { S.busy = null; if (API && !API_DEV && !(up && up.uri)) throw new Error((up && up.error) || 'Couldn’t save your logo to IPFS — please try again'); var g = grindT; return chainRun('Launching $' + c.tick, function (T) {
-            return T.buildCreate({ rpc: RPC, payer: S.account, partner: PARTNER, treasury: TREASURY, mintSecret: g.secret, extraFeeSol: vf1, escrow: S.escrowWallet || null, name: cc0.name, symbol: cc0.tick, uri: coinUri('MINT'.repeat(11), cc0, up && up.uri), taxBps: tax0 * 100, trapBps: Math.max(50, sn0.start || 50) * 100, trapSecs: Math.max(30, sn0.dur || 30), devBuySol: dq2.sol, quoteMint: qq1.sol ? null : qq1.mint, mc0: qq1.sol ? null : 20 * SOL_USD / qq1.usd, mc1: qq1.sol ? null : 60 * SOL_USD / qq1.usd });
+            return T.buildCreate({ rpc: RPC, payer: S.account, partner: PARTNER, treasury: TREASURY, mintSecret: g.secret, extraFeeSol: vf1, escrow: S.escrowWallet || null, name: cc0.name, symbol: cc0.tick, uri: coinUri('MINT'.repeat(11), cc0, up && up.uri), taxBps: tax0 * 100, trapBps: Math.max(50, sn0.start || 50) * 100, trapSecs: Math.max(30, sn0.dur || 30), devBuySol: dq2.sol, quoteMint: qq1.sol ? null : qq1.mint, mc0: qq1.sol ? null : 28 * SOL_USD / qq1.usd, mc1: qq1.sol ? null : 420 * SOL_USD / qq1.usd });
           }); }).then(function (b) {
             var coin = { mint: b.mint, pool: b.pool, config: b.config, creator: S.account, name: cc0.name, symbol: cc0.tick, uri: b.uri, tax_bps: tax0 * 100, trap_bps: Math.max(50, sn0.start || 50) * 100, trap_secs: Math.max(30, sn0.dur || 30), created_at: Date.now(), mcap_usd: 20 * SOL_USD, curve_pct: 0, holders: dq2.sol > 0 ? 1 : 0, quote_mint: qq1.mint, quote_symbol: qq1.sym, quote_usd: qUsd(qq1), quote_dec: qq1.dec };
             var nt2 = liveTok(coin); nt2.tick = cc0.tick; nt2.spec = cc0.spec; nt2.img = cc0.img; nt2.banner = cc0.banner || null; nt2.desc = (cc0.desc || '').trim(); nt2.split = tax0 > 0 && cc0.split ? { p: cc0.split.p, h: cc0.split.h, b: cc0.split.b, d: cc0.split.d } : null;
@@ -5277,6 +5278,7 @@
     } else { t.mcN = (c.mcap_usd || 0) / 1000 || t.mcN; t.prog = c.curve_pct || t.prog; t.holders = c.holders != null ? c.holders : t.holders; t.vol = (c.vol_sol || 0) * SOL_USD / 1000; }
     if (c.reserve != null) t.reserve = c.reserve;
     if (c.mcap_24h > 0) t.mc0 = c.mcap_24h / 1000;   // % change everywhere = vs 24h ago (or launch), not vs when you opened the page
+    if (c.grad_fee_bps) t.gradFee = c.grad_fee_bps;   // pool fee after graduation (0.5% old coins, 1% new)
     if (t.qMint) { if (c.quote_usd) t.qUsd = c.quote_usd; if (c.vol_usd != null) t.vol = c.vol_usd / 1000; }
     liveStat(t, c);
     if (c.supply > 0) t.supply = c.supply;

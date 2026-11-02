@@ -137,13 +137,13 @@ const curveRej = new Set();
 async function treidCurve(k, cf) { if (!MAINNET) return true; const ok = curveOk(cf, await quoteDec(cf.quoteMint.toBase58())); if (!ok && !curveRej.has(k)) { curveRej.add(k); console.log('skip  config with a non-treid curve', k); } return ok; }
 async function loadConfigs() {
   if (!PARTNERS.length) return; const cs = (await Promise.all(PARTNERS.map((w) => dbc.state.getPoolConfigsByOwner(new PublicKey(w))))).flat();
-  for (const c of cs) { const k = c.publicKey.toBase58(); if (!configs.has(k) && treidConfig(c.account) && configs.size < 1e6 && await treidCurve(k, c.account)) configs.add(k); }   // an RPC error throws → the caller retries (never "not treid")   // which ones get a live stream is decided by retier()
+  for (const c of cs) { const k = c.publicKey.toBase58(); cfgFee.set(k, Number(c.account.migratedPoolFeeBps?.toString?.() ?? 50)); if (!configs.has(k) && treidConfig(c.account) && configs.size < 1e6 && await treidCurve(k, c.account)) configs.add(k); }   // an RPC error throws → the caller retries (never "not treid")   // which ones get a live stream is decided by retier()
 }
-const cfgFound = new Map();   // configs seen being created (their coin may not be indexed yet) → counted as active
+const cfgFound = new Map(), cfgFee = new Map();   // config → pool fee after graduation (bps): 50 for v1 coins, 100 for v2   // configs seen being created (their coin may not be indexed yet) → counted as active
 async function addConfig(k) {   // one new config, read on its own (never a rescan of every config)
   if (configs.has(k)) return true; if (configs.size >= 1e6) return false;
   const cf = await dbc.state.getPoolConfig(new PublicKey(k)).catch(() => null); if (!cf || !treidConfig(cf) || !(await treidCurve(k, cf))) return false;
-  configs.add(k); cfgFound.set(k, Date.now()); watch(k); for (const ms of [6e3, 25e3]) setTimeout(() => syncAddress(k, 100).catch(() => {}), ms); return true;   // its pool may be created before the stream is up
+  cfgFee.set(k, Number(cf.migratedPoolFeeBps?.toString?.() ?? 50)); configs.add(k); cfgFound.set(k, Date.now()); watch(k); for (const ms of [6e3, 25e3]) setTimeout(() => syncAddress(k, 100).catch(() => {}), ms); return true;   // its pool may be created before the stream is up
 }
 function watch(k) { if (watched.has(k)) return; watched.set(k, conn.onLogs(new PublicKey(k), (l) => { if (!l.err) enqueue(l.signature); }, 'confirmed')); }
 function unwatch(k) { const id = watched.get(k); if (id == null) return; watched.delete(k); conn.removeOnLogsListener(id).catch(() => {}); }
@@ -352,7 +352,7 @@ async function handle(sig) {
     const rowSig = n++ ? sig + '#' + coin.mint.slice(0, 6) : sig;
     run('INSERT OR IGNORE INTO trades(sig,mint,wallet,side,sol,tokens,price_usd,mcap_usd,slot,ts,sniper,bundle,fee_sol,progress,usd,reserve) VALUES(?,?,?,?,?,?,?,?,?,?,0,0,?,100,?,?)', rowSig, coin.mint, trader, side, sol, tokens, price, price * circ, tx.slot, ts, fee / QD, sol * QU, Number(d.reserve_b_amount) / QD);
     if (SYSW.has(trader)) run('UPDATE trades SET sys=1 WHERE sig=?', rowSig);
-    if (coId && buy && CR) CR.attr({ sig: rowSig, id: coId, trader, coin, ts, usd: sol * QU, sys: SYSW.has(trader), treidFeeLam: Math.min(fee * 0.4, sol * QD * 0.002) });   // treid's LP half of the pool fee after Meteora's 20%
+    if (coId && buy && CR) CR.attr({ sig: rowSig, id: coId, trader, coin, ts, usd: sol * QU, sys: SYSW.has(trader), treidFeeLam: Math.min(fee * 0.4, sol * QD * (cfgFee.get(coin.config) || 50) / 1e4 * 0.4) });   // treid's LP half of the pool fee after Meteora's 20%
     const t = q1('SELECT * FROM trades WHERE sig=?', rowSig); if (t) push({ type: 'trade', ...t, symbol: coin.symbol });
     console.log('trade ', coin.symbol, side.padEnd(4), sol.toFixed(3), coin.quote_symbol || 'SOL', tokens.toFixed(0), '(DAMM)');
   }
@@ -450,7 +450,7 @@ function stats(mint, list = false, scanOk = true) {
   const sp = c.tax_bps > 0 ? parseSplit(c.uri) : null;   // the split ops ACTUALLY applies (an invalid or missing one falls back to 70/20/10; dev share capped at 50% unless the coin launched with dc=1)
   let rwst = null; try { const r = q1('SELECT COUNT(DISTINCT wallet) w, COUNT(DISTINCT sig) n, MAX(ts) last FROM hpay WHERE mint=? AND wallet != ?', mint, c.creator); if (r && r.w) rwst = { wallets: r.w, payouts: r.n, last: r.last }; } catch {}   // holders paid (receipts), dev share excluded
   const ref24 = q1('SELECT mcap_usd m FROM trades WHERE mint=? AND ts<=? AND sys=0 ORDER BY ts DESC LIMIT 1', mint, Date.now() - 864e5) || q1('SELECT mcap_usd m FROM trades WHERE mint=? ORDER BY ts ASC LIMIT 1', mint);   // market cap 24h ago (or at launch) → a real "24h change"
-  return { ...c, mcap_24h: ref24?.m || null, rewards_stats: rwst, supply: SUPPLY - burned, burned, split_applied: sp ? { h: sp.h, b: sp.b, d: sp.d, pair: !!sp.pair, rw: sp.rw || null } : null, vamp: vampOf(mint), tax_paid: po, reserve: last?.reserve || 0, grad_target: gradTarget.get(mint) || 0, quote_usd: quoteUsd(c.quote_mint, c.quote_symbol), vol_usd: agg.volusd || 0, holders: real ? real.length : bal.length, dev_pct: devN / SUPPLY * 100, dev_sold: !!devBuy && devN < 1, top10_pct: top10 / SUPPLY * 100, sol_usd: SOL_USD, mcap_usd: last?.mcap_usd || 0, curve_pct: last?.progress || 0, trades: agg.n, vol_sol: agg.vol || 0, buys: agg.buys || 0, sells: agg.sells || 0, traders: agg.traders, snipers_pct: (agg.snipeTok || 0) / SUPPLY * 100, bundles_pct: (agg.bundleTok || 0) / SUPPLY * 100 };
+  return { ...c, grad_fee_bps: cfgFee.get(c.config) || 50, mcap_24h: ref24?.m || null, rewards_stats: rwst, supply: SUPPLY - burned, burned, split_applied: sp ? { h: sp.h, b: sp.b, d: sp.d, pair: !!sp.pair, rw: sp.rw || null } : null, vamp: vampOf(mint), tax_paid: po, reserve: last?.reserve || 0, grad_target: gradTarget.get(mint) || 0, quote_usd: quoteUsd(c.quote_mint, c.quote_symbol), vol_usd: agg.volusd || 0, holders: real ? real.length : bal.length, dev_pct: devN / SUPPLY * 100, dev_sold: !!devBuy && devN < 1, top10_pct: top10 / SUPPLY * 100, sol_usd: SOL_USD, mcap_usd: last?.mcap_usd || 0, curve_pct: last?.progress || 0, trades: agg.n, vol_sol: agg.vol || 0, buys: agg.buys || 0, sells: agg.sells || 0, traders: agg.traders, snipers_pct: (agg.snipeTok || 0) / SUPPLY * 100, bundles_pct: (agg.bundleTok || 0) / SUPPLY * 100 };
 }
 // errors our own code throws on purpose are meant for the user; anything else (library, RPC, database, parser) gets a generic text
 const pubErr = (e) => { const m = String(e?.message || ''); if (e && e.constructor === Error && !e.code && m && m.length < 200 && !/sqlite|database|ECONN|ENOTFOUND|EAI_AGAIN|fetch failed|timed? ?out|abort|socket|JSON|Unexpected token|failed to get|getaddrinfo|status code|Cannot read|is not a function|undefined|\bat \S+:\d+/i.test(m)) return m; console.log('err (hidden)', m.slice(0, 160)); return 'something went wrong — try again'; };

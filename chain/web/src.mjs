@@ -12,21 +12,23 @@ import { DynamicBondingCurveClient, buildCurveWithMarketCap, TokenType, TokenDec
 import { CpAmm, calculateTransferFeeExcludedAmount } from '@meteora-ag/cp-amm-sdk';
 
 // ---- treid rules (must match chain/scripts/01_launch.mjs) ----
-export const RULES = { minTrapBps: 5000, minTrapSecs: 30, trapSteps: 3, feePlainBps: 100, feeTaxedBps: 50, maxTaxBps: 1000, creatorFeePct: 50, mc0Sol: 20, mc1Sol: 60, supply: 1e9, decimals: 6 };
+export const RULES = { minTrapBps: 5000, minTrapSecs: 30, trapSteps: 3, feePlainBps: 100, feeTaxedBps: 50, maxTaxBps: 1000, creatorFeePct: 50, mc0Sol: 28, mc1Sol: 420, gradFeeBps: 100, supply: 1e9, decimals: 6 };
+// curve versions treid has launched (every old coin keeps passing the pin check): v1 20→60 SOL MC, 0.5% pool after graduation · v2 (Nov 2026, like pump.fun) 28→420 SOL MC (~86 SOL raised, ~79% of supply sold on the curve), 1% pool after graduation
+export const CURVES = [{ ratio: 3, gradFeeBps: 50 }, { ratio: 15, gradFeeBps: 100 }];
 const conns = {}; const C = (rpc) => conns[rpc] || (conns[rpc] = new Connection(rpc, 'confirmed'));
 const client = (rpc) => new DynamicBondingCurveClient(C(rpc), 'confirmed');
 const amms = {}; const ammC = (rpc) => amms[rpc] || (amms[rpc] = new CpAmm(C(rpc)));
 const DAMM_CFG = DAMM_V2_MIGRATION_FEE_ADDRESS[6], DBC_PROGRAM = new PublicKey('dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN');   // treid curves migrate into Meteora's customizable DAMM v2 config
 const pk = (x) => (x instanceof PublicKey ? x : new PublicKey(x));
 
-export function curveFor({ taxBps = 0, trapBps = 5000, trapSecs = 30, quoteDecimals = 9, mc0 = RULES.mc0Sol, mc1 = RULES.mc1Sol }) {
+export function curveFor({ taxBps = 0, trapBps = 5000, trapSecs = 30, quoteDecimals = 9, mc0 = RULES.mc0Sol, mc1 = RULES.mc1Sol, gradFeeBps = RULES.gradFeeBps }) {
   const trap = Math.min(9000, Math.max(RULES.minTrapBps, trapBps | 0)), secs = Math.max(RULES.minTrapSecs, trapSecs | 0), tax = Math.min(RULES.maxTaxBps, Math.max(0, taxBps | 0));
   return buildCurveWithMarketCap({
     token: { tokenType: TokenType.Token2022, tokenBaseDecimal: TokenDecimal.SIX, tokenQuoteDecimal: quoteDecimals, tokenAuthorityOption: TokenAuthorityOption.Immutable, totalTokenSupply: RULES.supply, leftover: 0 },
     fee: { baseFeeParams: { baseFeeMode: BaseFeeMode.FeeSchedulerLinear, feeSchedulerParam: { startingFeeBps: trap, endingFeeBps: tax > 0 ? RULES.feeTaxedBps : RULES.feePlainBps, numberOfPeriod: RULES.trapSteps, totalDuration: secs } },
       dynamicFeeEnabled: false, collectFeeMode: CollectFeeMode.QuoteToken, creatorTradingFeePercentage: RULES.creatorFeePct, poolCreationFee: 0, enableFirstSwapWithMinFee: true },
     migration: { migrationOption: MigrationOption.MET_DAMM_V2, migrationFeeOption: MigrationFeeOption.Customizable, migrationFee: { feePercentage: 0, creatorFeePercentage: 0 },
-      migratedPoolFee: { collectFeeMode: MigratedCollectFeeMode.Compounding, dynamicFee: DammV2DynamicFeeMode.Disabled, poolFeeBps: 50, compoundingFeeBps: 0 } },
+      migratedPoolFee: { collectFeeMode: MigratedCollectFeeMode.Compounding, dynamicFee: DammV2DynamicFeeMode.Disabled, poolFeeBps: gradFeeBps, compoundingFeeBps: 0 } },
     liquidityDistribution: { partnerPermanentLockedLiquidityPercentage: 50, partnerLiquidityPercentage: 0, creatorPermanentLockedLiquidityPercentage: 50, creatorLiquidityPercentage: 0 },
     lockedVesting: { totalLockedVestingAmount: 0, numberOfVestingPeriod: 0, cliffUnlockAmount: 0, totalVestingDuration: 0, cliffDurationFromMigrationTime: 0 },
     activationType: ActivationType.Timestamp, initialMarketCap: mc0, migrationMarketCap: mc1,
@@ -111,11 +113,12 @@ export function curveOk(cf, quoteDecimals) {
   try { const n = (x) => Number(x?.toString?.() ?? x), bf = cf.poolFees.baseFee, taxBps = n(cf.transferFeeFlag) ? n(cf.transferFeeBasisPoints) : 0, trapBps = Math.round(n(bf.cliffFeeNumerator) / 1e5), trapSecs = n(bf.firstFactor) * n(bf.secondFactor);
     if (n(bf.baseFeeMode) !== BaseFeeMode.FeeSchedulerLinear || n(bf.firstFactor) !== RULES.trapSteps || trapBps < RULES.minTrapBps || trapBps > 9000 || trapSecs < RULES.minTrapSecs || trapSecs > 86400 || taxBps > RULES.maxTaxBps) return false;
     const mc0 = Number(getPriceFromSqrtPrice(cf.sqrtStartPrice, 6, quoteDecimals)) * RULES.supply; if (!(mc0 > 0) || !isFinite(mc0)) return false;
-    const want = curveFor({ taxBps, trapBps, trapSecs, quoteDecimals, mc0, mc1: mc0 * RULES.mc1Sol / RULES.mc0Sol }), wb = want.poolFees.baseFee;
+    const ver = CURVES.find((v) => v.gradFeeBps === n(cf.migratedPoolFeeBps)); if (!ver) return false;
+    const want = curveFor({ taxBps, trapBps, trapSecs, quoteDecimals, mc0, mc1: mc0 * ver.ratio, gradFeeBps: ver.gradFeeBps }), wb = want.poolFees.baseFee;
     if (!nearBig(want.sqrtStartPrice, cf.sqrtStartPrice, 2e-6) || !nearBig(want.migrationQuoteThreshold, cf.migrationQuoteThreshold, 1e-4)) return false;
     if (['cliffFeeNumerator', 'firstFactor', 'secondFactor', 'thirdFactor'].some((k) => n(wb[k]) !== n(bf[k]))) return false;
     if (['migrationOption', 'migrationFeeOption', 'activationType', 'collectFeeMode', 'creatorTradingFeePercentage'].some((k) => n(want[k]) !== n(cf[k]))) return false;
-    if (n(cf.migratedPoolFeeBps) !== 50 || n(cf.migratedCollectFeeMode) !== MigratedCollectFeeMode.Compounding || n(cf.migratedDynamicFee) !== 0 || n(cf.migratedCompoundingFeeBps) !== 0 || n(cf.enableFirstSwapWithMinFee) !== 1 || n(cf.poolCreationFee) !== 0 || n(cf.migrationFeePercentage) !== 0 || n(cf.creatorMigrationFeePercentage) !== 0) return false;
+    if (n(cf.migratedCollectFeeMode) !== MigratedCollectFeeMode.Compounding || n(cf.migratedDynamicFee) !== 0 || n(cf.migratedCompoundingFeeBps) !== 0 || n(cf.enableFirstSwapWithMinFee) !== 1 || n(cf.poolCreationFee) !== 0 || n(cf.migrationFeePercentage) !== 0 || n(cf.creatorMigrationFeePercentage) !== 0) return false;
     const pts = (c) => (c || []).filter((p) => p.liquidity.toString() !== '0'), a = pts(want.curve), b = pts(cf.curve); if (!b.length || a.length !== b.length) return false;
     return a.every((p, i) => nearBig(p.sqrtPrice, b[i].sqrtPrice, 1e-4) && nearBig(p.liquidity, b[i].liquidity, 1e-4));
   } catch { return false; } }
@@ -155,13 +158,16 @@ export async function quote({ rpc, pool, side, amount, slippageBps = 500, expect
   let impact = 0; try { const s0 = Number((vpw.poolState || vpw).sqrtPrice.toString()), s1 = Number((q.nextSqrtPrice || 0).toString()); if (s0 > 0 && s1 > 0) impact = Math.abs(1 - (s1 / s0) ** 2) * 100; } catch {}
   return { out: Number(outRaw.toString()) / div, minOut: Number(minRaw.toString()) / div, feeSol: fee / 10 ** qd, quoteDecimals: qd, quoteMint: cfg.quoteMint.toBase58(), amountIn: amountIn.toString(), minRaw: minRaw.toString(), mode, net: true, impact };
 }
-export async function buildSwap({ rpc, owner, pool, side, amount, slippageBps = 500, expect = null, memo = null }) {
+export async function buildSwap({ rpc, owner, pool, side, amount, slippageBps = 500, expect = null, memo = null, referral = null }) {
   owner = pk(owner); const q = await quote({ rpc, pool, side, amount, slippageBps, expect }), cl = client(rpc);
+  // Meteora referral: treid's own account for the pair token gets 20% of Meteora's protocol cut on this trade — the trader pays exactly the same.
+  // Only on the bonding curve, and only if that account already exists (the swap never creates accounts for anyone).
+  let ref = null; if (referral && !q.graduated) { try { const qm = pk(q.quoteMint), mi = await C(rpc).getAccountInfo(qm), ata = mi && getAssociatedTokenAddressSync(qm, pk(referral), true, mi.owner); if (ata && (await C(rpc).getAccountInfo(ata))) ref = ata; } catch {} }
   let tx;
   if (q.graduated) { const { damm } = await poolCtx(rpc, pool, expect), ps = damm.ps, sell = side === 'sell';
     tx = await ammC(rpc).swap2({ payer: owner, pool: damm.pool, inputTokenMint: sell ? ps.tokenAMint : ps.tokenBMint, outputTokenMint: sell ? ps.tokenBMint : ps.tokenAMint, amountIn: new BN(q.amountIn), minimumAmountOut: new BN(q.minRaw),
       tokenAVault: ps.tokenAVault, tokenBVault: ps.tokenBVault, tokenAMint: ps.tokenAMint, tokenBMint: ps.tokenBMint, tokenAProgram: TOKEN_2022_PROGRAM_ID, tokenBProgram: damm.qprog, referralTokenAccount: null, swapMode: 0 }); }
-  else tx = await cl.pool.swap2({ owner, pool: pk(pool), swapBaseForQuote: side === 'sell', referralTokenAccount: null, swapMode: q.mode, amountIn: new BN(q.amountIn), minimumAmountOut: new BN(q.minRaw) });
+  else tx = await cl.pool.swap2({ owner, pool: pk(pool), swapBaseForQuote: side === 'sell', referralTokenAccount: ref, swapMode: q.mode, amountIn: new BN(q.amountIn), minimumAmountOut: new BN(q.minRaw) });
   if (memo && side === 'buy' && /^treid:co:\d{1,12}$/.test(memo)) tx.add(new TransactionInstruction({ keys: [], programId: pk('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr'), data: Buffer.from(memo) }));   // bought from a callout: credits the caller (no accounts, moves nothing)
   const out = await finish(rpc, [tx], owner, []);
   return { ...out, quote: q };
