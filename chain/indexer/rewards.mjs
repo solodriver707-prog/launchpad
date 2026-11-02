@@ -299,7 +299,7 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, q
     const apps = q(`SELECT extra, ts FROM rlog WHERE mint=? AND kind='ctoapply' AND ts>=? ORDER BY ts`, c.mint, e.start), votes = q('SELECT voter, applicant FROM ctovotes WHERE mint=? AND round=?', c.mint, e.start);
     const m = await bals(c.mint), banned = pastLeads(c), seen = new Set();
     return apps.map((a) => { const [wallet, ...plan] = (a.extra || '').split('|'); return { wallet, plan: plan.join(' '), at: a.ts }; }).filter((a) => !seen.has(a.wallet) && seen.add(a.wallet) && !banned.has(a.wallet))
-      .map((a) => { const sup = new Set([a.wallet]); for (const v of votes) if (v.applicant === a.wallet && !banned.has(v.voter)) sup.add(v.voter);
+      .map((a) => { const sup = new Set(); for (const v of votes) if (v.applicant === a.wallet && v.voter !== a.wallet && !banned.has(v.voter)) sup.add(v.voter);   // only OTHER holders count — the applicant's own bag is not support
         const tok = [...sup].reduce((s, w) => s + (m.get(w) || 0), 0), own = m.get(a.wallet) || 0;
         return { ...a, supporters: sup.size, supportPct: tok / SUPPLY * 100, ownPct: own / SUPPLY * 100, eligible: own / SUPPLY * 100 >= RULES.ctoApplyPct }; })
       .sort((x, y) => y.supportPct - x.supportPct);

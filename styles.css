@@ -5891,3 +5891,6 @@ html body .hdr-right .wbal .wb-acts .btn.pri{display:inline-flex!important}   /*
 .upd-pill{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:9999;padding:9px 16px;border-radius:999px;border:1px solid rgba(255,255,255,.18);background:#1b1b1f;color:#e9e9ec;font-size:13px;box-shadow:0 8px 30px rgba(0,0,0,.5);cursor:pointer;white-space:nowrap}
 .upd-pill b{color:#3DDC97}
 @media (max-width:700px){.upd-pill{bottom:calc(84px + env(safe-area-inset-bottom))}}
+
+.cto-how{margin:2px 0 10px;padding-left:18px;display:flex;flex-direction:column;gap:5px;font-size:12px;line-height:1.4;color:var(--soft)}
+.cto-how b{color:var(--text,#fff);font-weight:600}
