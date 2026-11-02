@@ -1939,12 +1939,15 @@
   function lwTimeFmt(ts) { var d = new Date(ts * 1000); return d.getDate() + ' ' + LW_MON[d.getMonth()] + ' ' + lwP2(d.getHours()) + ':' + lwP2(d.getMinutes()); }
   function lwTick(ts, type) { var d = new Date(ts * 1000); return type === 0 ? String(d.getFullYear()) : type === 1 ? LW_MON[d.getMonth()] : type === 2 ? String(d.getDate()) : lwP2(d.getHours()) + ':' + lwP2(d.getMinutes()); }
   function lwBars(t) {
-    var tk = ensureTicks(t).slice().sort(function (a, z) { return a[0] - z[0]; }), b = tfMs(), out = [], cur = null, prevC = tk.length ? tk[0][1] : t.mcN;
+    var tk = ensureTicks(t).slice().sort(function (a, z) { return a[0] - z[0]; }), b = tfMs(), out = [], cur = null, prevR = 0;
+    if (S.cden === 'sol' && !t.qMint) { var lr = (tk.filter(function (x) { return x[3] > 0; })[0] || [0, 0, 0, 0])[3]; tk = tk.map(function (x) { if (x[3] > 0) lr = x[3]; return lr > 0 ? [x[0], x[1] / lr * SOL_USD, x[2], 0] : x; }); }   // SOL view: every point at ITS OWN SOL price (lwConv then divides by today's), so SOL's moves don't show as the coin's
+    var prevC = tk.length ? tk[0][1] : t.mcN;
     for (var i = 0; i < tk.length; i++) { var x = tk[i]; if (!(x[2] > 0) && i < tk.length - 1) { if (!cur && !out.length) prevC = x[1]; continue; }   // zero-volume ticks are price references, not trades
       var bt = Math.floor(x[0] / b) * b;
-      if (!cur || cur.t !== bt) { if (cur) out.push(cur); cur = { t: bt, o: prevC, h: Math.max(prevC, x[1]), l: Math.min(prevC, x[1]), c: x[1], v: 0 }; }
+      // a candle opens at the previous close re-priced at TODAY's SOL price: a quiet gap of days is shown as a gap, not as one giant candle made by SOL's own move
+      if (!cur || cur.t !== bt) { if (cur) out.push(cur); var o = x[3] > 0 && prevR > 0 ? prevC * x[3] / prevR : prevC; cur = { t: bt, o: o, h: Math.max(o, x[1]), l: Math.min(o, x[1]), c: x[1], v: 0 }; }
       else { cur.h = Math.max(cur.h, x[1]); cur.l = Math.min(cur.l, x[1]); cur.c = x[1]; }
-      cur.v += x[2] || 0; prevC = x[1]; }
+      cur.v += x[2] || 0; prevC = x[1]; if (x[3] > 0) prevR = x[3]; }
     if (cur) out.push(cur);
     return out;
   }
@@ -4097,7 +4100,7 @@
     if (!real && t.prog < 100) { t.prog = Math.max(0, Math.min(100, t.prog + dir * sol * 0.25)); t.mcN = Math.max(t.mcN * .985, Math.min(t.mcN * 1.015, curveMc(t.prog))); if (t.prog >= 100) t.mcN = Math.max(t.mcN, 69); }
     if (real) { if (real.holders != null) t.holders = real.holders; } else if (side === 'buy' && Math.random() < 0.4) t.holders += 1;
     t.hist.push(t.mcN); if (t.hist.length > 160) t.hist.shift(); athOf(t);
-    if (t.tk) { t.tk.push([real ? real.ts : Date.now(), t.mcN, sol]); if (t.tk.length > 5000) t.tk.splice(0, 500); }
+    if (t.tk) { t.tk.push([real ? real.ts : Date.now(), t.mcN, sol, real && real.usd > 0 && sol > 0 ? real.usd / sol : 0]); if (t.tk.length > 5000) t.tk.splice(0, 500); }
     var tr = { tick: t.tick, side: side, sol: sol, wallet: wallet || pickWallet(), t: Date.now(), tax: sol * effTax(t) / 100, mine: !!mine, price: price(t), sig: b58(64) }; tr.tokens = sol * SOL_USD / tr.price;
     if (real) { tr.t = real.ts; tr.tokens = real.tokens; tr.tax = real.fee; tr.sig = real.sig; tr.sniper = real.sniper; tr.bundle = real.bundle; tr.real = true; if (real.usd != null) tr.usd = real.usd; tr.mine = !!(S.account && wallet === S.account); }
     S.trades.unshift(tr); if (S.trades.length > 400) { for (var ti = S.trades.length - 1; ti >= 0 && S.trades.length > 400; ti--) { var ox = S.trades[ti], ot = find(ox.tick); if (ox.mine || (ot && ot.creator && ox.wallet === ot.creator) || (ot && ot.devPct != null)) continue; S.trades.splice(ti, 1); } if (S.trades.length > 900) S.trades.pop(); }
@@ -5311,7 +5314,7 @@
       S.trades = S.trades.filter(function (x) { return x.tick !== t.tick; });
       rows.forEach(function (x) { S.trades.push({ tick: t.tick, usd: Number(x.usd) || 0, side: x.side === 'sell' ? 'sell' : 'buy', sol: Number(x.sol) || 0, wallet: String(x.wallet), t: Number(x.ts) || 0, tax: x.fee_sol, mine: !!(S.account && x.wallet === S.account), price: x.price_usd, sig: x.sig, tokens: x.tokens, sniper: x.sniper, bundle: x.bundle, real: true }); });
       S.trades.sort(function (a, b) { return b.t - a.t; });
-      t.tk = rows.length ? [[t.born, rows[0].mcap_usd / 1000, 0]].concat(rows.map(function (x) { return [x.ts, x.mcap_usd / 1000, x.sol]; })) : [[t.born, t.mcN, 0], [Date.now(), t.mcN, 0]];
+      t.tk = rows.length ? [[t.born, rows[0].mcap_usd / 1000, 0]].concat(rows.map(function (x) { return [x.ts, x.mcap_usd / 1000, x.sol, x.sol > 0 && x.usd > 0 ? x.usd / x.sol : 0]; })) : [[t.born, t.mcN, 0], [Date.now(), t.mcN, 0]];
       t.tk.push([Date.now(), t.mcN, 0]); t.hist = t.tk.slice(-160).map(function (x) { return x[1]; });
       if (res[1]) t.lh = res[1];
       if (!t.auth) rpc('getAccountInfo', [t.ca, { encoding: 'jsonParsed', commitment: 'confirmed' }]).then(function (r) { var inf = r && r.value && r.value.data && r.value.data.parsed && r.value.data.parsed.info; if (inf) { var tfx = (inf.extensions || []).filter(function (x) { return x.extension === 'transferFeeConfig'; })[0], bps = tfx ? Number((tfx.state.newerTransferFee || {}).transferFeeBasisPoints || 0) : 0; t.auth = { mint: !inf.mintAuthority, freeze: !inf.freezeAuthority, taxBps: bps }; t.buy = t.sell = bps / 100; if (S.screen === 'token' && S.tick === t.tick) render(); } }).catch(function () {});
