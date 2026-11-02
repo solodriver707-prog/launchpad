@@ -1940,12 +1940,13 @@
   function lwTick(ts, type) { var d = new Date(ts * 1000); return type === 0 ? String(d.getFullYear()) : type === 1 ? LW_MON[d.getMonth()] : type === 2 ? String(d.getDate()) : lwP2(d.getHours()) + ':' + lwP2(d.getMinutes()); }
   function lwBars(t) {
     var tk = ensureTicks(t).slice().sort(function (a, z) { return a[0] - z[0]; }), b = tfMs(), out = [], cur = null, prevR = 0;
-    if (S.cden === 'sol' && !t.qMint) { var lr = (tk.filter(function (x) { return x[3] > 0; })[0] || [0, 0, 0, 0])[3]; tk = tk.map(function (x) { if (x[3] > 0) lr = x[3]; return lr > 0 ? [x[0], x[1] / lr * SOL_USD, x[2], 0] : x; }); }   // SOL view: every point at ITS OWN SOL price (lwConv then divides by today's), so SOL's moves don't show as the coin's
+    // SOL pairs, both views: every point is taken at ITS OWN SOL price and shown at TODAY's (lwConv divides by it for SOL) — the chart
+    // moves only when the coin moves; SOL's own swings between trades never show up as fake gaps or giant candles. The last candle = live market cap.
+    if (!t.qMint) { var lr = (tk.filter(function (x) { return x[3] > 0; })[0] || [0, 0, 0, 0])[3]; tk = tk.map(function (x) { if (x[3] > 0) lr = x[3]; return lr > 0 ? [x[0], x[1] / lr * SOL_USD, x[2], 0] : x; }); }   // SOL view: every point at ITS OWN SOL price (lwConv then divides by today's), so SOL's moves don't show as the coin's
     var prevC = tk.length ? tk[0][1] : t.mcN;
     for (var i = 0; i < tk.length; i++) { var x = tk[i]; if (!(x[2] > 0) && i < tk.length - 1) { if (!cur && !out.length) prevC = x[1]; continue; }   // zero-volume ticks are price references, not trades
       var bt = Math.floor(x[0] / b) * b;
-      // a candle opens at the previous close re-priced at TODAY's SOL price: a quiet gap of days is shown as a gap, not as one giant candle made by SOL's own move
-      if (!cur || cur.t !== bt) { if (cur) out.push(cur); var o = x[3] > 0 && prevR > 0 ? prevC * x[3] / prevR : prevC; cur = { t: bt, o: o, h: Math.max(o, x[1]), l: Math.min(o, x[1]), c: x[1], v: 0 }; }
+      if (!cur || cur.t !== bt) { if (cur) out.push(cur); var o = t.qMint && x[3] > 0 && prevR > 0 ? prevC * x[3] / prevR : prevC; cur = { t: bt, o: o, h: Math.max(o, x[1]), l: Math.min(o, x[1]), c: x[1], v: 0 }; }
       else { cur.h = Math.max(cur.h, x[1]); cur.l = Math.min(cur.l, x[1]); cur.c = x[1]; }
       cur.v += x[2] || 0; prevC = x[1]; if (x[3] > 0) prevR = x[3]; }
     if (cur) out.push(cur);
@@ -3394,7 +3395,7 @@
   function crBadge0(t) { var d = devStatus(t); return d.state === 'out' ? '<span class="crb out" title="Dev is out — open for community takeover">DEV OUT</span>' : d.state === 'cto' ? '<span class="crb cto" title="Community takeover">CTO</span>' : d.state === 'inactive' ? '<span class="crb idle" title="Dev inactive for 72h+ — rewards paused">DEV AWAY</span>' : ''; }
   function crPanel(t) {
     if (t.live && t.esc && t.esc.escrow) { var E = t.esc, R0 = E.rules || {}, who = function (w) { return S.account && w === S.account ? 'You' : walletName ? walletName(w) : short(w); };
-      var mineE = !!(S.account && E.creator && S.account === E.creator), solf = function (v) { return (v > 0 && v < 0.0001 ? '<0.0001' : (+v || 0).toFixed(4)) + ' ' + esc(E.quote || 'SOL'); }, durE = function (ms) { return durH(Math.max(1, ms / 60000)); };
+      var mineE = !!(S.account && E.creator && S.account === E.creator), solf = function (v) { return (v > 0 && v < 0.0001 ? '<0.0001' : (+v || 0).toFixed(4)) + '<i class="cr-u"> ' + esc(E.quote || 'SOL') + '</i>'; }, durE = function (ms) { return durH(Math.max(1, ms / 60000)); };
       var isCto = E.era === 'cto', roleW = isCto ? 'lead' : 'creator', RoleW = isCto ? 'Lead' : 'Creator';
       var stE = E.era === 'out' ? ['r', 'Creator is out', E.why === 'sold' ? 'Creator sold their bag' : 'The creator left — holders can elect a new lead']
         : E.state === 'frozen' ? ['y', 'Paused', 'No ' + roleW + ' activity for ' + durE(E.idleMs) + ' — rewards now buy back & burn $' + esc(symOf(t))]
@@ -3402,7 +3403,15 @@
       var tiles = E.era === 'out' ? [['Bought back & burned', solf(E.buybackSol)], ['To treid platform', solf(E.platformSol || 0)], ['Takeover', (E.apps || []).length ? (E.apps.length + ' applying') : 'open']]
         : isCto ? [['Paid to lead', solf(E.paidSol)], ['Waiting in pool', solf(E.pendingSol)], ['Bought back & burned', solf(E.buybackSol)]]
         : [['Paid to creator', solf(E.paidSol)], ['Waiting in pool', solf(E.pendingSol)], ['Bought back & burned', solf(E.buybackSol)]];
-      var meterE = E.era !== 'out' ? '<div class="cr-meter"><div class="cr-ml"><small>Activity timer</small><small class="mono">' + (E.state === 'active' ? 'pauses in ' + durE(72 * 36e5 - E.idleMs) : roleW + ' out in ' + durE(7 * 864e5 - E.idleMs)) + '</small></div><span class="cr-bar"><i style="width:' + Math.min(100, E.idleMs / (7 * 864e5) * 100).toFixed(1) + '%"></i><em style="left:' + (72 / 168 * 100).toFixed(1) + '%" title="72h: paused"></em></span><div class="cr-ml"><small class="muted">last seen ' + ago(E.lastActive) + ' ago</small><small class="muted">48h pause · 7d out</small></div></div>' +
+      var dhm = function (ms) { var m = Math.max(1, Math.round(ms / 60000)), d = Math.floor(m / 1440), h = Math.floor(m % 1440 / 60), mm = m % 60; return d ? d + 'd' + (h ? ' ' + h + 'h' : '') : h ? h + 'h' + (mm && h < 10 ? ' ' + mm + 'm' : '') : mm + 'm'; };
+      var whenE = function (ts) { var dt = new Date(ts); return dt.toLocaleDateString(undefined, { weekday: 'short' }) + ' ' + dt.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }); };
+      var PAUSE = (R0.idleFreezeH || 72) * 36e5, OUTMS = (R0.idleOutD || 7) * 864e5, toPause = PAUSE - E.idleMs, toOut = OUTMS - E.idleMs, seenAt = E.lastActive ? +new Date(E.lastActive) : Date.now() - E.idleMs;
+      var cdE = E.state === 'frozen' ? ['y', 'Paused', toOut > 0 ? roleW + ' out in <b>' + dhm(toOut) + '</b> unless they return' : roleW + ' leaving now', 'since ' + whenE(seenAt + PAUSE)]
+        : toPause <= 0 ? ['y', 'Pausing…', 'no activity for 72h — payouts stop now', '']
+        : [toPause < 24 * 36e5 ? (toPause < 6 * 36e5 ? 'r' : 'y') : 'g', 'Pauses in', '<b>' + dhm(toPause) + '</b>', 'deadline ' + whenE(seenAt + PAUSE)];
+      var meterE = E.era !== 'out' ? '<div class="cr-meter cr-cd s-' + cdE[0] + '"><div class="cr-cdt"><small>' + cdE[1] + '</small><span>' + cdE[2] + '</span></div>' + (cdE[3] ? '<small class="muted cr-cdw">' + cdE[3] + '</small>' : '') +
+        '<span class="cr-bar"><i style="width:' + Math.min(100, E.idleMs / OUTMS * 100).toFixed(1) + '%"></i><em style="left:' + (PAUSE / OUTMS * 100).toFixed(1) + '%" title="72h: paused"></em></span>' +
+        '<div class="cr-ticks"><small style="left:0">seen ' + ago(seenAt) + ' ago</small><small style="left:' + (PAUSE / OUTMS * 100).toFixed(1) + '%;transform:translateX(-50%)">72h pause</small><small style="right:0">7d out</small></div></div>' +
         '<div class="cr-meter"><div class="cr-ml"><small>' + RoleW + ' sold of peak bag</small><small class="mono ' + (E.soldPct >= 70 ? 'down' : E.soldPct >= 40 ? 'warn' : '') + '">' + Math.round(E.soldPct) + '%</small></div><span class="cr-bar sold"><i style="width:' + Math.min(100, E.soldPct) + '%"></i><em style="left:70%" title="70%: out"></em></span></div>' : '';
       // takeover voting (creator out)
       var ctoBox = '';

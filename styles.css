@@ -5874,3 +5874,16 @@ html body .hdr-right .wbal .wb-acts .btn.pri{display:inline-flex!important}   /*
 /* your average entry / exit: small tags like the TP/SL ones, value on the price axis */
 .c-avg{position:absolute;inset:0;pointer-events:none;z-index:2;overflow:hidden}
 .avg-tag{position:absolute;right:calc(var(--axw,60px) + 8px);transform:translateY(-50%);font:700 9px var(--mono);letter-spacing:.05em;color:var(--c);border:1px solid var(--c);border-radius:2px;padding:2px 5px;background:rgba(17,17,19,.75);white-space:nowrap}
+
+/* creator rewards: clear countdown, nothing spills out of the tiles */
+.cr-cd{padding:9px 10px;border-radius:10px;border:1px solid var(--line);background:rgba(255,255,255,.02);gap:5px}
+.cr-cdt{display:flex;align-items:baseline;justify-content:space-between;gap:8px;min-width:0}
+.cr-cdt small{font-size:11px;color:var(--soft);white-space:nowrap}
+.cr-cdt span{font-size:12px;color:var(--soft);text-align:right;min-width:0;overflow-wrap:anywhere}.cr-cdt span b{font-size:16px;color:var(--text,#fff);font-weight:700}
+.cr-cd.s-y .cr-cdt span b,.cr-cd.s-y .cr-cdt small{color:#FFD15C}.cr-cd.s-r .cr-cdt span b,.cr-cd.s-r .cr-cdt small{color:#FF8C96}
+.cr-cdw{font-size:10.5px;margin-top:-3px;text-align:right}
+.cr-cd .cr-ticks small{font-size:9.5px}
+.cr-money b .cr-u{font-style:normal;font-size:10px;color:var(--muted);font-weight:500}
+.cr-money b{font-size:12.5px}
+.cr-money small{overflow:hidden;text-overflow:ellipsis}
+.cr-cdt span b{font-family:var(--mono,ui-monospace,monospace)}
