@@ -685,8 +685,15 @@
     ];
   }
   // board cards show the coin's activity; the risk checks (dev, top 10, snipers, bundles) are on the coin page ("What we can see")
+  function paidTile(t) {   // 🎁 what the tax has paid holders so far (USD at today's prices) · coins without a holder share: 🔥 share of supply burned
+    var sp = splitOf(t), tp = t.taxPaid || {};
+    if (sp && sp.h > 0 && Math.max(t.buy, t.sell) > 0) { var usd = (tp.holders || 0) * price(t) + (tp.holders_q || 0) * qUsdT(t);
+      return ['🎁 PAID', '$' + (usd >= 1000 ? fmtK(usd / 1000).replace('$', '') : usd >= 10 ? Math.round(usd) : usd > 0 ? usd.toFixed(2) : '0'), 'Paid to holders from the tax so far' + (tp.n ? ' · ' + tp.n + ' payouts' : '')]; }
+    var bp = t.supply > 0 && t.supply < 1e9 ? (1e9 - t.supply) / 1e9 * 100 : 0;
+    return ['🔥 BURNED', (bp >= 10 ? bp.toFixed(0) : bp >= 0.1 ? bp.toFixed(1) : bp > 0 ? '<0.1' : '0') + '%', 'Share of the supply burned for good'];
+  }
   function statTiles(t) {
-    var tx = t.live ? (t.nTx || 0) : lstats(t).tx, R = [['HOLDERS', fmtNum(t.holders || 0), 'Wallets holding this coin'], ['VOL 24H', fmtK(t.vol), 'Traded in the last 24 hours'], ['TXNS', fmtNum(tx), 'Buys and sells so far'], ['ATH', fmtK(athOf(t)), 'Highest market cap so far']];
+    var R = [['HOLDERS', fmtNum(t.holders || 0), 'Wallets holding this coin'], ['VOL 24H', fmtK(t.vol), 'Traded in the last 24 hours'], paidTile(t), ['ATH', fmtK(athOf(t)), 'Highest market cap so far']];
     return '<div class="risk st-tiles">' + R.map(function (m) { return '<span class="rk-t lv-n" data-tip="' + esc(m[2]) + '"><span class="rk-l">' + m[0] + '</span><b class="mono">' + m[1] + '</b></span>'; }).join('') + '</div>';
   }
   function riskTiles(t) {
