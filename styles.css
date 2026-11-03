@@ -6125,6 +6125,7 @@ header + .tape{position:relative;z-index:1}
 /* phones: the coin action row is a fixed grid now, so the old right-edge fade mask (from the scrolling version) must go — it hid the share button */
 @media (max-width:760px){
   html body main.tp-env section.tp-banner .hs-pills{-webkit-mask:none!important;mask:none!important;overflow:visible!important}
+}
 /* ===== coin page on a computer: the coin banner sits in the middle column (between callouts and buy/sell) with MC, volume, liquidity,
    holders and ATH inside it like pump.fun — banner look, TAX and PAIRED WITH kept ===== */
 .tb-kpi{display:none}
@@ -6165,3 +6166,39 @@ header + .tape{position:relative;z-index:1}
 @media (min-width:761px) and (max-width:1250px){
   html body main.tp-env .tp-main section.tp-banner{grid-template-columns:auto minmax(0,1fr)!important;grid-template-areas:"av id" "key key" "kpi kpi"!important}
 }
+/* ===== trades table: sortable + filterable headers (dexscreener style), trader at the right edge next to the Solscan link ===== */
+.trow.h .th{display:flex;align-items:center;gap:4px;min-width:0}
+.trow.h .th.r{justify-content:flex-end}
+.trow.h .th-l{min-height:0;padding:0;border:0;background:none;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit;cursor:pointer;white-space:nowrap}
+.trow.h .th-l:hover{color:var(--text)}
+.trow.h .th.sorted .th-l{color:var(--text)}
+.trow.h .th-f{display:inline-grid;place-items:center;min-height:0;width:20px;height:20px;padding:0;border:0;border-radius:6px;background:none;color:var(--faint);cursor:pointer;opacity:.75;font-size:11px}
+.trow.h .th-f:hover{opacity:1;color:var(--text);background:rgba(255,255,255,.06)}
+.trow.h .th-f.on{opacity:1;color:#7FB6FF;background:rgba(127,182,255,.14)}
+.trow .maker .bdg{margin:0 2px 0 0}
+@media (min-width:761px){
+  .trow{grid-template-columns:minmax(64px,.7fr) minmax(70px,.7fr) minmax(84px,1fr) minmax(76px,1fr) minmax(84px,1fr) minmax(104px,1.1fr) minmax(190px,1.6fr) 40px!important;gap:12px!important}
+  .trow .mk-cell{justify-content:flex-end;gap:2px}
+  .trow .mk-f{opacity:.35}
+  .trow:hover .mk-f,.trow .mk-f.on{opacity:1}
+  .trow>*:nth-child(8){justify-self:end}
+}
+.tp-chips{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.tp-chips .chip{min-height:30px;font-size:12px}
+.modal.tpm{width:min(440px,calc(100vw - 32px));display:flex;flex-direction:column;gap:12px;padding:0 0 16px!important;overflow:hidden}
+.tpm-h{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--line)}
+.tpm-h b{font-size:15px}
+.modal.tpm>*:not(.tpm-h){margin:0 16px}
+.tpm-pre{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding-bottom:12px;border-bottom:1px solid var(--line)}
+.tpm-pre button{min-height:42px;border-radius:10px;border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--text);font:700 13px Manrope,sans-serif;cursor:pointer}
+.tpm-pre button:hover{border-color:rgba(255,255,255,.25)}
+.tpm-pre button.on{background:var(--ivory);color:#0b0b0c;border-color:var(--ivory)}
+.tpm-in{display:flex;align-items:center;border:1px solid var(--line);border-radius:11px;overflow:hidden;background:#0d0d10}
+.tpm-in span{padding:0 12px;color:var(--muted);font-size:12.5px;min-width:44px}
+.tpm-in input{flex:1;min-width:0;border:0!important;background:none!important;border-radius:0!important;min-height:44px}
+.tpm-in em{font-style:normal;padding:0 12px;color:var(--muted);font-size:12px;border-left:1px solid var(--line);align-self:stretch;display:flex;align-items:center;background:rgba(255,255,255,.03)}
+.tpm-f{display:flex;justify-content:center;gap:10px;padding-top:4px}
+.tpm-f .btn{min-width:110px}
+.tpm-me{align-self:flex-start;font-size:12.5px}
+.modal.tpm small{font-size:11.5px;line-height:1.45}
+@media (max-width:760px){.trow.h .th-f{width:24px;height:24px}}

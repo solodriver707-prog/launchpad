@@ -2221,13 +2221,12 @@
     tcEl.style.left = x + 'px'; tcEl.style.top = y + 'px';
   });
   document.addEventListener('scroll', function () { if (tcEl) { tcEl.remove(); tcEl = null; tcFor = null; } }, true);
-  function makerHTML(addr, t) {
+  function makerHTML(addr, t, badgesFirst) {
     var w = WMAP[addr], me = S.account && addr === S.account, dev = addr === devOf(t);
-    var av = '<span class="av" style="width:20px;height:20px">' + A.svg(walletSpec(addr)) + '</span>';
-    return '<button class="maker" data-act="wallet" data-arg="' + esc(addr) + '" title="Open wallet">' + av + '<span>' + (me ? 'You' : w && w.n ? '@' + w.n : short(addr)) + '</span>' +
-      (dev ? '<span class="bdg dev">DEV</span>' : '') + (me ? '<span class="bdg you">YOU</span>' : '') + '</button>';
+    var av = '<span class="av" style="width:20px;height:20px">' + A.svg(walletSpec(addr)) + '</span>', bd = (dev ? '<span class="bdg dev">DEV</span>' : '') + (me ? '<span class="bdg you">YOU</span>' : '');
+    return '<button class="maker" data-act="wallet" data-arg="' + esc(addr) + '" title="Open wallet">' + (badgesFirst ? bd : '') + av + '<span>' + (me ? 'You' : w && w.n ? '@' + w.n : short(addr)) + '</span>' + (badgesFirst ? '' : bd) + '</button>';
   }
-  S.pos = {}; S.tpFilter = 'all'; S.tpMaker = null; S.minSol = ''; S.absTime = false; S.chartMode = 'mc'; S.slip = 5; S.slipOpen = false; S.tpQueue = 0; S.comments = {};
+  S.pos = {}; S.tpFilter = 'all'; S.tpMaker = null; S.minSol = ''; S.tpSort = null; S.tpF = {}; S.tpFlt = null; S.absTime = false; S.chartMode = 'mc'; S.slip = 5; S.slipOpen = false; S.tpQueue = 0; S.comments = {};
   // trades are always shown and filtered in SOL — on a coin paired with another token, its value converted to SOL
   function solOf(tr, t) { t = t || find(tr.tick); return t && t.live && t.qMint && tr.usd != null && SOL_USD > 0 ? tr.usd / SOL_USD : tr.sol; }
   function tradeMatches(tr) {
@@ -2237,8 +2236,37 @@
     if (S.tpFilter === 'whale' && solOf(tr) < 2) return false;
     if (S.tpFilter === 'mine' && !tr.mine) return false;
     var m = parseFloat(S.minSol); if (m > 0 && solOf(tr) < m) return false;
+    for (var fk in S.tpF) { var F = S.tpF[fk], v = tpVal(tr, fk); if (F && F.min != null && v < F.min) return false; if (F && F.max != null && v > F.max) return false; }
     return true;
   }
+  // trades table: every number column can be sorted (tap the header) and filtered (the funnel) — like dexscreener
+  function tpVal(tr, k) { var t = find(tr.tick), usd = tr.usd != null ? tr.usd : tr.sol * SOL_USD;
+    return k === 'usd' ? usd : k === 'sol' ? solOf(tr, t) : k === 'tok' ? (tr.tokens || usd / ((tr.price || (t ? price(t) : 0)) || 1)) : k === 'px' ? (tr.price || 0) : k === 't' ? tr.t : 0; }
+  function tpRows(tt) { var r = tt.filter(tradeMatches); if (S.tpSort) { var k = S.tpSort.k, d = S.tpSort.d; r = r.slice().sort(function (a, b) { return (tpVal(a, k) - tpVal(b, k)) * d; }); } return r.slice(0, 100); }
+  var FUN = '<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg>';
+  function tpHead(key, label, opt) { opt = opt || {}; var so = S.tpSort && S.tpSort.k === key ? (S.tpSort.d > 0 ? ' ↑' : ' ↓') : '', fon = key === 'type' ? S.tpFilter !== 'all' : key === 'maker' ? !!S.tpMaker : !!S.tpF[key];
+    return '<span class="th' + (opt.r ? ' r' : '') + (so ? ' sorted' : '') + '">' + (opt.sort === false ? '<span class="th-l">' + label + '</span>' : '<button class="th-l" data-act="tpSort" data-arg="' + key + '" title="Sort">' + label + so + '</button>') +
+      (opt.filter === false ? '' : '<button class="th-f' + (fon ? ' on' : '') + '" data-act="tpFlt" data-arg="' + key + '" title="Filter">' + FUN + '</button>') + '</span>'; }
+  function tpFltModal(t) {
+    var k = S.tpFlt; if (!k) return ''; var sid = esc(symOf(t)), F = S.tpF[k] || {};
+    var title = { usd: 'Filter amount USD', sol: 'Filter amount SOL', tok: 'Filter amount $' + sid, type: 'Filter type', maker: 'Filter trader' }[k], body = '';
+    if (k === 'type') body = '<div class="tpm-pre">' + [['all', 'All trades'], ['buy', 'Buys only'], ['sell', 'Sells only'], ['whale', 'Whales (2+ SOL)'], ['mine', 'Mine']].map(function (f) { return '<button class="' + (S.tpFilter === f[0] ? 'on' : '') + '" data-act="tpType" data-arg="' + f[0] + '">' + f[1] + '</button>'; }).join('') + '</div>';
+    else if (k === 'maker') body = '<input class="inp mono" id="tpm-w" placeholder="Paste a wallet address" value="' + esc(S.tpMaker || '') + '" autocomplete="off" spellcheck="false">' + (S.account ? '<button class="link tpm-me" data-act="tpMe">Use my wallet</button>' : '') + '<small class="muted">Tip: tap the funnel next to any trader in the table to see only their buys and sells.</small>';
+    else { var pre = k === 'usd' ? [[10, '>$10'], [50, '>$50'], [100, '>$100'], [500, '>$500'], [1000, '>$1,000'], [5000, '>$5,000']] : k === 'sol' ? [[0.1, '>0.1'], [0.5, '>0.5'], [1, '>1'], [5, '>5'], [10, '>10'], [50, '>50']] : [];
+      var u = k === 'usd' ? '$' : k === 'sol' ? 'SOL' : '$' + sid;
+      body = (pre.length ? '<div class="tpm-pre">' + pre.map(function (p) { return '<button class="' + (F.min === p[0] && F.max == null ? 'on' : '') + '" data-act="tpPre" data-arg="' + p[0] + '">' + p[1] + (k === 'sol' ? ' SOL' : '') + '</button>'; }).join('') + '</div>' : '') +
+        '<label class="tpm-in"><span>Min</span><input class="inp mono" id="tpm-min" inputmode="decimal" value="' + (F.min != null ? F.min : '') + '" placeholder="0"><em>' + u + '</em></label>' +
+        '<label class="tpm-in"><span>Max</span><input class="inp mono" id="tpm-max" inputmode="decimal" value="' + (F.max != null ? F.max : '') + '" placeholder="no limit"><em>' + u + '</em></label>'; }
+    return '<div class="overlay center" data-act="tpFltX"><div class="modal tpm" data-stop role="dialog" aria-label="' + esc(title) + '"><div class="tpm-h"><b>' + title + '</b><button class="iconbtn" data-act="tpFltX" aria-label="Close">✕</button></div>' + body +
+      (k === 'type' ? '' : '<div class="tpm-f"><button class="btn pri" data-act="tpApply">✓ Apply</button><button class="btn sec" data-act="tpClear">Clear</button></div>') + '</div></div>';
+  }
+  function tpChips() { var c = [], sid = function () { var t = find(S.tick); return t ? '$' + symOf(t) : 'tokens'; };
+    if (S.tpFilter !== 'all') c.push(['type', { buy: 'Buys', sell: 'Sells', whale: 'Whales', mine: 'Mine' }[S.tpFilter]]);
+    if (S.tpMaker) c.push(['maker', 'Trader ' + short(S.tpMaker)]);
+    ['usd', 'sol', 'tok'].forEach(function (k) { var F = S.tpF[k]; if (!F) return; var u = k === 'usd' ? function (v) { return '$' + fmtNum(v); } : k === 'sol' ? function (v) { return v + ' SOL'; } : function (v) { return fmtNum(v); }, n = k === 'usd' ? 'USD' : k === 'sol' ? 'SOL' : sid();
+      c.push([k, n + ' ' + (F.min != null && F.max != null ? u(F.min) + '–' + u(F.max) : F.min != null ? '> ' + u(F.min) : '< ' + u(F.max))]); });
+    if (S.tpSort) c.push(['sort', 'Sorted by ' + { t: 'age', usd: 'USD', sol: 'SOL', tok: 'amount', px: 'price' }[S.tpSort.k] + (S.tpSort.d > 0 ? ' ↑' : ' ↓')]);
+    return c.length ? '<div class="tp-chips">' + c.map(function (x) { return '<button class="chip on" data-act="tpChipX" data-arg="' + x[0] + '">' + esc(x[1]) + ' ✕</button>'; }).join('') + (c.length > 1 ? '<button class="link" data-act="tpChipX" data-arg="all">Clear all</button>' : '') + '</div>' : ''; }
   function timeTxt(ts) { if (!S.absTime) return ago(ts); var d = new Date(ts); return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2) + ':' + ('0' + d.getSeconds()).slice(-2); }
   function tradeRow(tr, t, enter) {
     var buy = tr.side === 'buy', usd = tr.usd != null ? tr.usd : tr.sol * SOL_USD, w = Math.min(100, usd / (5 * SOL_USD) * 100), px = tr.price || price(t), tok = tr.tokens || usd / px;
@@ -2247,8 +2275,8 @@
       '<span class="ty">' + (buy ? 'Buy' : 'Sell') + (usd >= 2 * SOL_USD ? ' <span class="bdg whale2" title="Whale">' + I.gem + '</span>' : '') + '</span>' +
       '<span class="r">$' + (usd >= 1000 ? (usd / 1000).toFixed(2) + 'K' : usd.toFixed(2)) + '</span>' +
       '<span class="r">' + (function (v) { return v >= 1000 ? fmtNum(v) : v.toFixed(v < 0.01 ? 4 : 3); })(solOf(tr, t)) + '</span><span class="r">' + fmtNum(tok) + '</span><span class="r">' + fmtPrice(px) + '</span>' +
-      '<span class="mk-cell">' + makerHTML(tr.wallet, t) + '<button class="mk-f' + (S.tpMaker === tr.wallet ? ' on' : '') + '" data-act="maker" data-arg="' + (S.tpMaker === tr.wallet ? '' : esc(tr.wallet)) + '" title="' + (S.tpMaker === tr.wallet ? 'Show all wallets' : 'Only this wallet\'s trades') + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg></button></span>' +
-      '<span class="r"><button class="txb" data-act="wallet" data-arg="' + esc(tr.wallet) + '" aria-label="Open wallet details"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></button></span></div>';
+      '<span class="mk-cell">' + makerHTML(tr.wallet, t, true) + '<button class="mk-f' + (S.tpMaker === tr.wallet ? ' on' : '') + '" data-act="maker" data-arg="' + (S.tpMaker === tr.wallet ? '' : esc(tr.wallet)) + '" title="' + (S.tpMaker === tr.wallet ? 'Show all wallets' : 'Only this wallet\'s trades') + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg></button></span>' +
+      '<span class="r">' + (tr.sig && tr.real ? '<a class="txb" data-act="txOpen" target="_blank" rel="noopener" href="https://solscan.io/tx/' + esc(tr.sig) + (CHAIN_ID === 'solana:devnet' ? '?cluster=devnet' : '') + '" title="View on Solscan" aria-label="View transaction on Solscan">' : '<button class="txb" data-act="wallet" data-arg="' + esc(tr.wallet) + '" aria-label="Open wallet details">') + '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>' + (tr.sig && tr.real ? '</a>' : '</button>') + '</span></div>';
   }
   function holdersOf(t) {
     if (t.live && !t.lh) return [{ a: 'curve', pct: 100, label: 'Loading holders…', kind: 'curve' }];   // real coins: never invented wallets
@@ -3010,13 +3038,13 @@
       '<div class="tt-wrap"><button class="tt-new" id="tt-new" data-act="ttNew" style="display:none"></button><div id="cmts" class="tt-list' + (ttAll ? ' all' : '') + '">' + (ttAll ? allLiveHTML() : threadHTML(t, cmAll)) + '</div></div></aside>';
     var body = '';
     if (S.tpTab === 'trades') {
-      var rows = tt.filter(tradeMatches).slice(0, 40);
+      var rows = tpRows(tt);
       body = '<div class="tfilters"><div class="seg">' + [['all', 'All'], ['buy', 'Buys'], ['sell', 'Sells'], ['whale', 'Whales'], ['mine', 'Mine']].map(function (f) { return '<button class="' + (S.tpFilter === f[0] ? 'on' : '') + '" data-act="tpf" data-arg="' + f[0] + '">' + f[1] + '</button>'; }).join('') + '</div>' +
-        '<label class="minsol"><span class="muted">Min SOL</span><input id="minsol" class="inp" inputmode="decimal" data-bind="minSol" value="' + esc(S.minSol) + '" placeholder="0"></label>' +
-        (S.tpMaker ? '<button class="chip on" data-act="maker" data-arg="">Wallet ' + esc(short(S.tpMaker)) + ' ✕</button>' : '') +
+        tpChips() +
         '<span class="paused" id="tp-paused" style="display:none" data-act="resume">Paused · <b id="tp-qn">0</b> new trades — click to resume</span></div>' +
-        '<div class="tbl" id="tp-tbl"><div class="trow h"><button class="link" data-act="abs" style="min-height:0;font-size:12px">' + (S.absTime ? 'Time ⇄' : 'Age ⇄') + '</button><span>Type</span><span class="r">USD</span><span class="r">SOL</span><span class="r">$' + sid + '</span><span class="r">Price</span><span>Maker</span><span class="r">Txn</span></div>' +
-        '<div id="tp-trades">' + (rows.length ? rows.map(function (x) { return tradeRow(x, t); }).join('') : '<div class="muted" style="padding:24px;text-align:center">No trades match these filters</div>') + '</div></div>';
+        '<div class="tbl" id="tp-tbl"><div class="trow h"><span class="th"><button class="th-l" data-act="tpSort" data-arg="t" title="Sort">' + (S.absTime ? 'Time' : 'Age') + (S.tpSort && S.tpSort.k === 't' ? (S.tpSort.d > 0 ? ' ↑' : ' ↓') : '') + '</button><button class="th-f" data-act="abs" title="Switch between age and clock time">⇄</button></span>' +
+          tpHead('type', 'Type', { sort: false }) + tpHead('usd', 'USD', { r: 1 }) + tpHead('sol', 'SOL', { r: 1 }) + tpHead('tok', '$' + sid, { r: 1 }) + tpHead('px', 'Price', { r: 1, filter: false }) + tpHead('maker', 'Trader', { r: 1, sort: false }) + '<span class="r">Txn</span></div>' +
+        '<div id="tp-trades">' + (rows.length ? rows.map(function (x) { return tradeRow(x, t); }).join('') : '<div class="muted" style="padding:24px;text-align:center">No trades match these filters</div>') + '</div></div>' + tpFltModal(t);
     } else if (S.tpTab === 'thread') {
       var cm = seedComments(t);
       body = (coCanPost(t) && !coOpen() ? '<button class="btn sec co-newwide" data-act="coNew">+ New callout</button>' : '') + coComposer(t, id, 'Say something about $' + sid + '…') +
@@ -3110,9 +3138,10 @@
   S.trades.forEach(function (tr) { var t = find(tr.tick); tr.wallet = pickWallet(); tr.price = t ? price(t) * (1 + (Math.random() - 0.5) * 0.12) : 0; tr.tokens = tr.sol * SOL_USD / (tr.price || 1); tr.sig = b58(64); });
   function tpNewTrade(tr, t) {
     var tb = document.getElementById('tp-trades'); if (!tb || S.tpTab !== 'trades' || !tradeMatches(tr)) return;
+    if (S.tpSort && !(S.tpSort.k === 't' && S.tpSort.d < 0)) return;   // a sorted table isn't newest-first: the next redraw places it
     var tbl = document.getElementById('tp-tbl');
     if (tbl && tbl.matches(':hover')) { S.tpQueue++; var p = document.getElementById('tp-paused'); if (p) { p.style.display = ''; document.getElementById('tp-qn').textContent = S.tpQueue; } return; }
-    tb.insertAdjacentHTML('afterbegin', tradeRow(tr, t, true)); while (tb.children.length > 40) tb.removeChild(tb.lastChild);
+    tb.insertAdjacentHTML('afterbegin', tradeRow(tr, t, true)); while (tb.children.length > 100) tb.removeChild(tb.lastChild);
   }
 
   // ---- compact pair picker with search by name / ticker / contract address ----
@@ -4394,7 +4423,7 @@
     if (!el) return;
     var act = el.getAttribute('data-act'), arg = el.getAttribute('data-arg');
     if (/^(home|trenches|create|leaders|trendList|burnPage|watchPage|open|coPage|lbCo)$/.test(act) || (el.closest('.mnav') && act !== 'coToggle')) { S.coOpen = false; S.walletView = null; S.hmap = null; S.share = null; S.walletMenu = false; S.palOpen = false; S.coModal = null; S.burnOpen = false; S.mFilt = false; pvClose && pvClose(); }   // going somewhere closes every panel and sheet
-    if (el.tagName === 'A' && act !== 'how' && act !== 'dlArm' && act !== 'dlTapGo') e.preventDefault();
+    if (el.tagName === 'A' && act !== 'how' && act !== 'dlArm' && act !== 'dlTapGo' && act !== 'txOpen') e.preventDefault();
     switch (act) {
       case 'bg': if (e.target === el) set({ walletOpen: false, palOpen: false, walletView: null }); break;
       case 'railHide': S.railHidden = true; S.railNew = 0; try { localStorage.setItem('dl.rail', '0'); } catch (er) {} render(); break;
@@ -4597,6 +4626,18 @@
       case 'copyW': copy(arg, 'Wallet address copied'); break;
       case 'trackW': var ti = S.trackWallets.indexOf(arg); if (ti === -1) S.trackWallets.push(arg); else S.trackWallets.splice(ti, 1); try { localStorage.setItem('gp.track', JSON.stringify(S.trackWallets)); } catch (er) {} render(); toast(ti === -1 ? 'Tracking ' + walletName(arg) : 'Stopped tracking'); break;
       case 'tpf': set({ tpFilter: arg, tpQueue: 0 }); break;
+      case 'txOpen': break;   // a plain link to Solscan (opens in a new tab)
+      case 'tpSort': { var cur = S.tpSort; set({ tpSort: cur && cur.k === arg ? (cur.d < 0 ? { k: arg, d: 1 } : null) : { k: arg, d: -1 } }); break; }   // biggest first → smallest first → off
+      case 'tpFlt': set({ tpFlt: arg }); setTimeout(function () { var i = document.getElementById(arg === 'maker' ? 'tpm-w' : 'tpm-min'); if (i) i.focus(); }, 40); break;
+      case 'tpFltX': if (e.target === el || el.tagName === 'BUTTON') set({ tpFlt: null }); break;
+      case 'tpType': set({ tpFilter: arg, tpFlt: null, tpQueue: 0 }); break;
+      case 'tpMe': set({ tpMaker: S.account, tpFlt: null }); break;
+      case 'tpPre': S.tpF[S.tpFlt] = { min: +arg }; set({ tpFlt: null }); break;
+      case 'tpApply': { var k0 = S.tpFlt; if (k0 === 'maker') { var wv = ((document.getElementById('tpm-w') || {}).value || '').trim(); S.tpMaker = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(wv) ? wv : null; if (wv && !S.tpMaker) { toast('That isn’t a wallet address'); break; } }
+        else { var pn = function (id) { var v = String((document.getElementById(id) || {}).value || '').replace(',', '.').replace(/[^0-9.]/g, ''); return v === '' ? null : +v; }, mn = pn('tpm-min'), mx = pn('tpm-max'); if (mn == null && mx == null) delete S.tpF[k0]; else S.tpF[k0] = { min: mn, max: mx }; }
+        set({ tpFlt: null }); break; }
+      case 'tpClear': if (S.tpFlt === 'maker') S.tpMaker = null; else delete S.tpF[S.tpFlt]; set({ tpFlt: null }); break;
+      case 'tpChipX': if (arg === 'all') { S.tpF = {}; S.tpMaker = null; S.tpFilter = 'all'; S.tpSort = null; } else if (arg === 'type') S.tpFilter = 'all'; else if (arg === 'maker') S.tpMaker = null; else if (arg === 'sort') S.tpSort = null; else delete S.tpF[arg]; render(); break;
       case 'maker': set({ tpMaker: arg || null, tpTab: 'trades', tpQueue: 0, walletView: null }); break;
       case 'abs': set({ absTime: !S.absTime }); break;
       case 'resume': set({ tpQueue: 0 }); break;
