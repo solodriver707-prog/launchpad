@@ -6125,4 +6125,43 @@ header + .tape{position:relative;z-index:1}
 /* phones: the coin action row is a fixed grid now, so the old right-edge fade mask (from the scrolling version) must go — it hid the share button */
 @media (max-width:760px){
   html body main.tp-env section.tp-banner .hs-pills{-webkit-mask:none!important;mask:none!important;overflow:visible!important}
+/* ===== coin page on a computer: the coin banner sits in the middle column (between callouts and buy/sell) with MC, volume, liquidity,
+   holders and ATH inside it like pump.fun — banner look, TAX and PAIRED WITH kept ===== */
+.tb-kpi{display:none}
+@media (min-width:761px){
+  .tp-main>.tp-banner{margin:0!important}
+  .tp-main>.kst{display:none!important}
+  .tp-banner .tb-kpi{display:flex;align-items:flex-end;gap:22px;margin-left:auto;flex:none;padding:0 4px}
+  .tb-kpi>div{display:flex;flex-direction:column;align-items:flex-end;gap:2px;white-space:nowrap}
+  .tb-kpi small{font-size:11px;color:rgba(255,255,255,.62)}
+  .tb-kpi b{font-size:15px;font-weight:700;color:#fff;text-shadow:0 1px 6px rgba(0,0,0,.6)}
+  .tb-kpi .big b{font-size:24px;font-weight:800;display:flex;align-items:center;gap:8px}
+  .tb-kpi .chgpill{font-size:11px}
+  .tp-banner .tp-key{margin-left:0!important}
+  .tp-banner .tp-id{flex:1 1 auto;min-width:0}
+  .tp-banner .tb-av{order:1}.tp-banner .tp-id{order:2}.tp-banner .tp-key{order:3}
+  .tp-banner .hs-pills{flex-wrap:wrap}
+}
+/* middle column too narrow for one row: the numbers go on their own row, spread out */
+@media (min-width:761px){
+  .tp-banner .tb-kpi{order:5;width:100%;margin:6px 0 0;justify-content:space-between;padding:10px 4px 0;border-top:1px solid rgba(255,255,255,.08)}
+  .tb-kpi>div{align-items:flex-start}
+}
+/* final word for the banner in the middle column (computer): logo | name + links | TAX + PAIRED WITH, numbers strip underneath */
+@media (min-width:761px){
+  html body main.tp-env .tp-main section.tp-banner{display:grid!important;grid-template-columns:auto minmax(0,1fr) auto!important;grid-template-areas:"av id key" "kpi kpi kpi"!important;align-items:center!important;column-gap:16px!important;row-gap:12px!important;padding:14px 16px 0!important;min-height:0!important;flex-wrap:nowrap!important}
+  html body main.tp-env .tp-main section.tp-banner>.tb-bg{grid-area:auto!important}
+  html body main.tp-env .tp-main section.tp-banner>.tb-av{grid-area:av!important;margin:0!important;align-self:center}
+  html body main.tp-env .tp-main section.tp-banner>.tb-av .av{width:64px!important;height:64px!important}
+  html body main.tp-env .tp-main section.tp-banner>.tp-id{grid-area:id!important;min-width:0!important;flex:none!important}
+  html body main.tp-env .tp-main section.tp-banner .title-xl{font-size:24px!important}
+  html body main.tp-env .tp-main section.tp-banner .hs-pills{display:flex!important;flex-wrap:wrap!important;gap:6px!important;margin:6px 0 0!important;width:auto!important;padding:0!important}
+  html body main.tp-env .tp-main section.tp-banner .hs-pills .pill{min-height:30px!important;font-size:12px!important;padding:0 10px!important}
+  html body main.tp-env .tp-main section.tp-banner .hs-pills .iconbtn{width:30px!important;height:30px!important;min-height:0!important;min-width:0!important}
+  html body main.tp-env .tp-main section.tp-banner>.tp-key{grid-area:key!important;display:flex!important;gap:8px!important;margin:0!important;width:auto!important;align-self:center}
+  html body main.tp-env .tp-main section.tp-banner>.tb-kpi{grid-area:kpi!important;display:flex!important;justify-content:space-between;align-items:flex-end;width:auto!important;margin:0 -16px!important;padding:10px 18px 12px!important;border-top:1px solid rgba(255,255,255,.08);background:rgba(8,8,10,.62);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+  html body main.tp-env .tp-main section.tp-banner>.tb-kpi>div{align-items:flex-start}
+}
+@media (min-width:761px) and (max-width:1250px){
+  html body main.tp-env .tp-main section.tp-banner{grid-template-columns:auto minmax(0,1fr)!important;grid-template-areas:"av id" "key key" "kpi kpi"!important}
 }
