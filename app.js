@@ -498,7 +498,9 @@
   function tokSearch(q, dropId, act) {   // name / ticker search through the server (verified tokens only), results drawn without re-rendering the page
     clearTimeout(S.tsT); var el = function () { return document.getElementById(dropId); };
     if (q.length < 2) { if (el()) el().style.display = 'none'; return; }
-    S.tsT = setTimeout(function () { (API ? apiGet('/api/tsearch?q=' + encodeURIComponent(q)) : Promise.resolve([])).catch(function () { return []; }).then(function (list) { var d = el(); if (!d) return; d.innerHTML = tokDrop(list, act, q); d.style.display = 'flex'; if (act === 'rwPick') rwMark(d, list, true); else if (act === 'qpick') rwMark(d, list, false); }); }, 250);
+    S.tsT = setTimeout(function () { (API ? apiGet('/api/tsearch?q=' + encodeURIComponent(q)) : Promise.resolve([])).catch(function () { return null; }).then(function (list) { var d = el(); if (!d) return;
+      if (list === null) { d.innerHTML = '<div class="muted cpp-none"><span class="gr-sp"></span> Search is reconnecting — retrying…</div>'; d.style.display = 'flex'; clearTimeout(S.tsR); S.tsR = setTimeout(function () { var inp = d.parentNode && d.parentNode.querySelector('input'); if (inp && inp.value.trim() === q) tokSearch(q, dropId, act); }, 4000); return; }   // the server was briefly away (e.g. a restart): don't claim "not found"
+      d.innerHTML = tokDrop(list, act, q); d.style.display = 'flex'; if (act === 'rwPick') rwMark(d, list, true); else if (act === 'qpick') rwMark(d, list, false); }); }, 250);
   }
   function rwSelect(mint, pre) {
     if (mint === 'coin') { setC({ rw: 'coin' }); S.rwErr = ''; return; }
