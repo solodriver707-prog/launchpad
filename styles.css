@@ -6418,3 +6418,7 @@ html body .fx-l.fx-r{-webkit-mask-image:linear-gradient(90deg,transparent,#000 3
 }
 @media (min-width:761px){html body main.tp-env .tp-main section.tp-banner>.tp-key{top:calc(50% - 33px)!important;bottom:auto!important;margin:0!important}}
 @media (min-width:761px){html body main.tp-env .tp-main section.tp-banner>.tp-key{grid-area:auto!important;grid-row:auto!important;grid-column:auto!important}}
+/* copycat badge: our own vampire-face icon */
+.vamp-ic{width:1.15em;height:1.15em;display:inline-block;vertical-align:-.2em;filter:drop-shadow(0 1px 2px rgba(0,0,0,.5))}
+.vampb .vamp-ic,.mr-v .vamp-ic,.ts-vamp .vamp-ic{width:20px;height:20px}
+.cs-warn .vamp-ic{width:18px;height:18px;margin-right:4px}
