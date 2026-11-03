@@ -482,6 +482,7 @@
     var A0 = A, ix = function (arr, v) { return Math.max(0, arr.indexOf(v)).toString(36); }, sp = c.spec || {};
     var q = 'c=' + ix(A0.KINDS, sp.kind) + ix(A0.SKINS, sp.skin) + ix(A0.BGS, sp.bg) + ix(A0.EYES, sp.eyes) + ix(A0.MOUTHS, sp.mouth) + ix(A0.ACCS, sp.acc);
     if (c.buy > 0 && c.split) q += '&s=' + c.split.h + '.' + c.split.b + '.' + c.split.d + (c.split.d > 50 ? '&dc=1' : '') + (rwUri(c) && c.split.h > 0 ? '&r=' + rwUri(c) : '');
+    if (c.lk) q += '&lk=' + c.lk;   // launched as a locked launch (the server then looks for the lock escrow and shows the badge only when it exists on-chain)
     if (c.f) q += '&f=' + c.f;   // creator fees → X / GitHub / another wallet
     var base = (ipfsUri ? ipfsUri : (API || 'https://treid.fun') + '/api/meta/' + mint) + '?' + q, add = function (k, v) { v = String(v || '').replace(/^https?:\/\//, '').replace(/^@/, '').trim(); if (v && (base + '&' + k + '=' + encodeURIComponent(v)).length <= 200) base += '&' + k + '=' + encodeURIComponent(v); };
     if (base.length > 200) throw new Error('Coin settings too long to store on-chain — pick a shorter fee receiver or reward token');
@@ -677,7 +678,7 @@
     if (t.live) { var L = t.lstat || {}; dev = L.dev || 0; top = L.top >= 10 ? Math.round(L.top) : +(L.top || 0).toFixed(1); sn = +(L.sn || 0).toFixed(1); bu = +(L.bu || 0).toFixed(1); devSold = !!L.devSold; }
     else if (t.devPct != null) { var lb = liveBal(t), dv = lb.filter(function (x) { return x.a === t.creator; })[0]; var anyTr = S.trades.some(function (x) { return x.tick === t.tick && x.tokens; }); dev = lb.length || anyTr ? (dv ? dv.pct : 0) : t.devPct; top = lb.slice(0, 10).reduce(function (a, x) { return a + x.pct; }, 0); if (!lb.length) top = anyTr ? 0 : Math.max(t.devPct, 0); top = top >= 10 ? Math.round(top) : +top.toFixed(1); sn = 0; bu = 0; devSold = !!(t.devPct > 0 && anyTr && !dv); }
     return [
-      { k: 'dev', lab: 'DEV', val: devSold ? 'SOLD' : dev.toFixed(1) + '%', lv: devSold ? 'r' : lv(dev, 3, 8), tip: devSold ? 'The creator already sold their tokens' : 'Share of supply the creator still holds' },
+      { k: 'dev', lab: t.devLock && lockLive(t) ? 'DEV 🔒' : 'DEV', val: devSold ? 'SOLD' : dev.toFixed(1) + '%', lv: devSold ? 'r' : t.devLock && lockLive(t) && t.devLock.locked_pct >= dev * .9 ? 'g' : lv(dev, 3, 8), tip: devSold ? 'The creator already sold their tokens' : t.devLock && lockLive(t) ? 'Share of supply the creator holds — ' + t.devLock.locked_pct.toFixed(2) + '% of it is locked on-chain until ' + lockDate(t.devLock.unlock_start) + ', then unlocks daily until ' + lockDate(t.devLock.unlock_end) : 'Share of supply the creator still holds' },
       { k: 'top', lab: 'TOP 10', val: top + '%', lv: lv(top, 30, 45), tip: 'Share of supply held by the 10 biggest wallets (excl. curve)' },
       { k: 'sn', lab: 'SNIPERS', val: sn + '%', lv: lv(sn, 5, 12), tip: 'Supply bought by bots in the first seconds after launch' },
       { k: 'bu', lab: 'BUNDLES', val: bu + '%', lv: lv(bu, 4, 9), tip: 'Supply bought by linked wallets in the same block' }
@@ -3179,7 +3180,7 @@
       '<span class="muted" style="font-size:12.5px;line-height:1.55">' + (t.prog >= 100 ? 'Liquidity is live on Meteora.' : curveSol + ' ' + esc(qSymT(t)) + ' in the curve. Graduates to Meteora at 100%.') + '</span></section>';
     var mbuy = '<div class="m-bar"><button class="m-b" data-act="mSide" data-arg="buy">Buy</button><button class="m-s" data-act="mSide" data-arg="sell">Sell</button><span class="m-tx mono">' + (trapLeft(t) > 0 ? '🪤 ' + snipeNow(t) + '%' : 'tax ' + tmax + '%') + '</span></div>';
     return mbuy + '<main class="wrap tp-env" style="padding-top:14px;--coin:' + ((t.spec && t.spec.bg) || '#2A2418') + '"><div class="tp-glow" aria-hidden="true">' + avatarHTML(t, 300) + '</div><button class="link" data-act="home">' + I.back + 'Back to board</button>' +
-      '<div class="tp-grid3">' + thread + '<div class="tp-main">' + head + banEditModal(t) + vampWarn + kstats + chart + tabsHTML + '</div><aside class="tp-side">' + panel + posCard + activity + (t.desc ? '<section class="card-s panel about-b"><div class="ab-h">' + avatarHTML(t, 26) + '<b>About $' + sid + '</b></div><p class="ab-t' + (t.desc.length > 220 && !S.descOpen ? ' clamp' : '') + '">' + esc(t.desc) + '</p>' + (t.desc.length > 220 ? '<button class="ab-more" data-act="descToggle">' + (S.descOpen ? 'Show less' : 'Show more') + '</button>' : '') + '</section>' : '') + taxSplitPanel(t) + crPanel(t) + safety + curve + '</aside></div></main>';
+      '<div class="tp-grid3">' + thread + '<div class="tp-main">' + head + banEditModal(t) + lockBar(t) + vampWarn + kstats + chart + tabsHTML + '</div><aside class="tp-side">' + panel + posCard + activity + (t.desc ? '<section class="card-s panel about-b"><div class="ab-h">' + avatarHTML(t, 26) + '<b>About $' + sid + '</b></div><p class="ab-t' + (t.desc.length > 220 && !S.descOpen ? ' clamp' : '') + '">' + esc(t.desc) + '</p>' + (t.desc.length > 220 ? '<button class="ab-more" data-act="descToggle">' + (S.descOpen ? 'Show less' : 'Show more') + '</button>' : '') + '</section>' : '') + taxSplitPanel(t) + crPanel(t) + safety + curve + '</aside></div></main>';
   }
   // give seeded trades real makers / prices
   S.trades.forEach(function (tr) { var t = find(tr.tick); tr.wallet = pickWallet(); tr.price = t ? price(t) * (1 + (Math.random() - 0.5) * 0.12) : 0; tr.tokens = tr.sol * SOL_USD / (tr.price || 1); tr.sig = b58(64); });
@@ -3608,7 +3609,30 @@
   function vampOf0(t) { if (t.live) { if (!t.vamp || !t.vamp.mint) return null; var o = S.live.filter(function (x) { return x.ca === t.vamp.mint; })[0]; return o || { tick: String(t.vamp.symbol || '?'), name: String(t.vamp.name || ''), ca: t.vamp.mint }; } if (t._vamp === undefined) t._vamp = vampMatch(t.tick, t.name, t.born, t); return t._vamp; }
   function vampBadge(t) { var o = vampOf(t); return o ? '<span class="vampb" title="Same name as $' + esc(symOf(o)) + ', an older coin — check the contract address before buying">' + VAMP + '</span>' : ''; }
   function vampNote(c) { var o = vampMatch(c.tick, c.name, 0, null); return o ? VAMP + ' <b>$' + esc(symOf(o)) + '</b> (' + esc(o.name) + ') already exists on treid. You can still launch, but your coin will show a <b>“Possible copy”</b> badge.' : ''; }
-  function crBadge(t) { return crBadge0(t) + vampBadge(t); }
+  function crBadge(t) { return crBadge0(t) + lockBadge(t) + vampBadge(t); }
+  // ---- locked dev bag (verified on-chain by the treid server: the creator's own Jupiter Lock escrow, no cancel, no recipient change) ----
+  function lockDate(sec) { return new Date(sec * 1000).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }); }
+  function lockLive(t) { var L = t.devLock; return !!(L && L.unlock_end * 1000 > Date.now() && L.locked_pct > 0.001); }
+  function lockTip(t) { var L = t.devLock, pre = Date.now() < L.unlock_start * 1000;
+    return L.locked_pct.toFixed(2) + '% of supply locked on-chain (Jupiter Lock) by the creator. ' + (pre ? 'Nothing unlocks until ' + lockDate(L.unlock_start) + ', then a little every day until ' + lockDate(L.unlock_end) + '.' : 'Unlocking a little every day until ' + lockDate(L.unlock_end) + '.') + ' Nobody can cancel it. It covers the launch buy only — DYOR.'; }
+  function lockBadge(t) { if (!t.live || !lockLive(t)) return ''; var L = t.devLock, pre = Date.now() < L.unlock_start * 1000, d = Math.max(1, Math.ceil(((pre ? L.unlock_start : L.unlock_end) * 1000 - Date.now()) / 864e5));
+    return '<span class="lkb' + (pre ? '' : ' un') + '" title="' + esc(lockTip(t)) + '">🔒<b>' + (pre ? 'LOCKED ' + d + 'D' : 'UNLOCKING') + '</b></span>'; }
+  function lockBar(t) {
+    if (!t.live) return '';
+    var mine = S.account && S.account === t.creator;
+    if (!t.devLock) return t.lockIntent && mine && t.lockDays ? '<button class="lkfix" data-act="lockFinish">🔒 Finish locking your dev bag (' + t.lockDays + ' days) — one signature</button>' : '';
+    if (!lockLive(t)) return '';
+    var L = t.devLock, now = Date.now() / 1000, span = Math.max(1, L.unlock_end - L.start), pc = function (x) { return Math.max(0, Math.min(100, (x - L.start) / span * 100)).toFixed(1); }, cl = (devnetQ());
+    return '<div class="lkbar" title="' + esc(lockTip(t)) + '"><span class="lk-ic">🔒</span><span class="lk-t"><b>Dev bag locked</b><span>' + L.locked_pct.toFixed(2) + '% of supply · ' + (now < L.unlock_start ? 'unlocks from ' + lockDate(L.unlock_start) : 'unlocking daily') + ' · free on ' + lockDate(L.unlock_end) + '</span></span>' +
+      '<span class="lk-tr"><i class="cl" style="width:' + pc(L.unlock_start) + '%"></i><i class="nw" style="left:' + pc(now) + '%"></i></span>' +
+      (L.escrows && L.escrows[0] ? '<a class="lk-a" target="_blank" rel="noopener" href="https://solscan.io/account/' + esc(L.escrows[0]) + cl + '">Check lock ↗</a>' : '') + '</div>';
+  }
+  function devnetQ() { return CHAIN_ID === 'solana:devnet' ? '?cluster=devnet' : ''; }
+  function lockNow(t, days) {   // the creator's whole bag of this coin → Jupiter Lock (one signature)
+    return chainRun('Locking your dev bag for ' + days + ' days', function (T) { return T.buildLock({ rpc: RPC, owner: S.account, mint: t.ca, days: days }); }).then(function (b) {
+      t.devLock = { total_pct: b.total / 1e6 / 1e9 * 100, inside_pct: b.total / 1e6 / 1e9 * 100, locked_pct: b.total / 1e6 / 1e9 * 100, start: Math.floor(Date.now() / 1000), unlock_start: b.unlockStart, unlock_end: b.unlockEnd, days: days, escrows: [b.escrow] }; t.lkLocal = { at: Date.now(), v: t.devLock };
+      toast('🔒 Your dev bag is locked on-chain until ' + lockDate(b.unlockStart) + ' ✓'); render(); return b; });
+  }
   function crBadge0(t) { if (t.live && t.esc && t.esc.escrow) { var e = t.esc; return e.era === 'out' || e.state === 'out' ? '<span class="crb out" title="' + (e.why === 'sold' ? 'The creator sold their bag' : 'The creator left') + ' — creator rewards now buy back & burn">DEV OUT</span>' : e.era === 'cto' ? '<span class="crb cto" title="Community takeover">CTO</span>' : e.state === 'frozen' ? '<span class="crb idle" title="Creator inactive for 72h+ — rewards paused">DEV AWAY</span>' : ''; }
     var d = devStatus(t); return d.state === 'out' ? '<span class="crb out" title="Dev is out — open for community takeover">DEV OUT</span>' : d.state === 'cto' ? '<span class="crb cto" title="Community takeover">CTO</span>' : d.state === 'inactive' ? '<span class="crb idle" title="Dev inactive for 72h+ — rewards paused">DEV AWAY</span>' : ''; }
   function crPanel(t) {
@@ -3745,7 +3769,22 @@
       '<div class="devb-row"><label class="devb-in" for="c-devbuy"><input id="c-devbuy" inputmode="decimal" data-bind="c.devBuy" value="' + esc(c.devBuy || '') + '" placeholder="0.0" autocomplete="off"><span class="devb-u">' + coinHTML('SOL', 20) + 'SOL</span></label>' +
       '<div class="devb-q">' + ['0', '0.1', '0.5', '1', '2', '5'].map(function (v) { return '<button class="' + (String(c.devBuy || '0') === v ? 'on' : '') + '" data-act="devbuy" data-arg="' + v + '">' + (v === '0' ? 'None' : v) + '</button>'; }).join('') + '</div></div>' +
       '<div class="devb-res ' + lv + '"><div class="devb-n"><span><small>You get</small><b class="mono">' + fmtNum(Math.round(q.tok)) + '</b><em>$' + esc(c.tick || 'TICKER') + '</em></span><span class="devb-p"><small>Share of supply</small><b class="mono">' + q.pct.toFixed(2) + '%</b></span></div>' +
-      '<div class="devb-bar"><i style="width:' + Math.min(100, q.pct / 20 * 100).toFixed(2) + '%"></i><u style="left:15%"><em>3%</em></u><u style="left:40%"><em>8%</em></u><u style="left:100%"><em>20%+</em></u></div><div class="devb-note">' + note + (!q.isSol && q.solIn > 0 ? ' · your ' + q.solIn + ' SOL is swapped to ≈' + niceQ(q.sol) + ' ' + esc(q.sym) + ' first (Jupiter)' : '') + '</div></div></div>';
+      '<div class="devb-bar"><i style="width:' + Math.min(100, q.pct / 20 * 100).toFixed(2) + '%"></i><u style="left:15%"><em>3%</em></u><u style="left:40%"><em>8%</em></u><u style="left:100%"><em>20%+</em></u></div><div class="devb-note">' + note + (!q.isSol && q.solIn > 0 ? ' · your ' + q.solIn + ' SOL is swapped to ≈' + niceQ(q.sol) + ' ' + esc(q.sym) + ' first (Jupiter)' : '') + '</div></div>' + devLockPicker(c, q) + '</div>';
+  }
+  // ---- "Locked launch": the initial buy goes into a Jupiter Lock escrow nobody can cancel; nothing unlocks for the first third, then a little every day ----
+  var LOCK_PLANS = { 30: { cliff: 10, days: 20 }, 90: { cliff: 30, days: 60 }, 180: { cliff: 60, days: 120 } };
+  function lockOf(c) { var d = +c.lock || 0, q = devQuote(String(c.devBuy || '').replace(',', '.')); return LOCK_PLANS[d] && q.tok > 0 ? d : 0; }
+  function devLockPicker(c, q) {
+    if (!(q.tok > 0)) return '';
+    var d = lockOf(c), pl = LOCK_PLANS[d], tax = Math.max(c.buy || 0, c.sell || 0);
+    var opts = [[0, 'Off'], [30, '30 days'], [90, '90 days'], [180, '180 days']].map(function (o) { return '<button class="' + (d === o[0] ? 'on' : '') + '" data-act="devlock" data-arg="' + o[0] + '">' + o[1] + '</button>'; }).join('');
+    var body = !pl ? '<div class="dlk-off">Off — your initial buy stays in your wallet and you can sell it any time.</div>' :
+      '<div class="dlk-tl"><div class="dlk-seg l" style="flex:' + pl.cliff + '"><b>🔒 ' + pl.cliff + ' days</b><small>nothing unlocks</small></div><div class="dlk-seg u" style="flex:' + pl.days + '"><b>' + pl.days + ' days</b><small>unlocks a little every day</small></div></div>' +
+      '<div class="dlk-ax mono"><span>Launch</span><span style="left:' + (pl.cliff / d * 100).toFixed(1) + '%">day ' + pl.cliff + '</span><span>day ' + d + ' · all free</span></div>' +
+      '<ul class="dlk-facts"><li>Locked on-chain with <b>Jupiter Lock</b> — nobody can cancel it or change who gets it, not you and not treid.</li>' +
+      '<li>Your coin shows <b>🔒 Dev bag locked</b> with the unlock dates — buyers can check the escrow themselves.</li>' +
+      '<li>Your wallet signs <b>one more time</b> right after the launch to lock it.' + (tax > 0 ? ' Your coin’s ' + tax + '% tax applies when the tokens move into the lock.' : '') + '</li></ul>';
+    return '<div class="dlk' + (pl ? ' on' : '') + '"><div class="dlk-h"><b>🔒 Locked launch</b><span class="muted">lock your initial buy · optional · builds trust</span></div><div class="dlk-q">' + opts + '</div>' + body + '</div>';
   }
   // ---- preview demo coins with your own images (stored only in this browser) ----
   var DIMG = {}; try { DIMG = JSON.parse(localStorage.getItem('dl.demoimgs') || '{}'); } catch (e) {}
@@ -4624,6 +4663,8 @@
       case 'demoImgsClose': if (e.target === el || el.tagName === 'BUTTON') set({ demoImgOpen: false }); break;
       case 'demoImgsReset': BASE.forEach(function (t) { if (DIMG[t.tick]) delete t.img; }); DIMG = {}; try { localStorage.removeItem('dl.demoimgs'); } catch (er) {} render(); break;
       case 'devbuy': setC({ devBuy: arg === '0' ? '' : arg }); break;
+      case 'devlock': setC({ lock: +arg || 0 }); break;
+      case 'lockFinish': var tlk = find(S.tick); if (tlk && tlk.lockDays && S.account === tlk.creator) lockNow(tlk, tlk.lockDays).catch(function (e) { if (e && e.message !== 'busy') toast('Lock failed: ' + chainErr(e)); }); break;
       case 'feeK': setC({ feeK: arg }); setTimeout(function () { var i = document.getElementById('c-feev'); if (i && arg !== 'me') i.focus(); }, 30); break;
       case 'ctax': setC(+arg > 0 ? { buy: +arg, sell: +arg } : { buy: 0, sell: 0 }); break;
       case 'qpick': qSelect(arg); break;
@@ -4876,7 +4917,7 @@
         var dq2 = devQuote(String(c.devBuy || '').replace(',', '.'));
         if (dq2.isSol && dq2.sol > 0 && typeof S.balance === 'number' && dq2.sol > S.balance) { toast('Not enough ' + NET + 'SOL for a ' + dq2.sol + ' SOL buy — balance ' + S.balance.toFixed(3)); break; }
         if (!S.demoLaunch) {
-          var tax0 = Math.max(c.buy, c.sell), sn0 = c.snipe || {}, cc0 = JSON.parse(JSON.stringify({ name: c.name.trim(), tick: c.tick, spec: c.spec, split: c.split, rw: rwOf(c) ? { mint: rwOf(c).mint } : 'coin', buy: c.buy, sell: c.sell, x: c.x, tg: c.tg, web: c.web, f: fp0.v || null, desc: c.desc, img: c.img, banner: c.banner, snipe: sn0, pair: c.pair, q: c.q || null }));
+          var tax0 = Math.max(c.buy, c.sell), sn0 = c.snipe || {}, cc0 = JSON.parse(JSON.stringify({ name: c.name.trim(), tick: c.tick, spec: c.spec, split: c.split, rw: rwOf(c) ? { mint: rwOf(c).mint } : 'coin', buy: c.buy, sell: c.sell, x: c.x, tg: c.tg, web: c.web, f: fp0.v || null, lk: lockOf(c) || null, desc: c.desc, img: c.img, banner: c.banner, snipe: sn0, pair: c.pair, q: c.q || null }));
           var solB = dq2.isSol ? dq2.sol : dq2.solIn, qq1 = qOf(c);
           if (typeof S.balance === 'number' && S.balance < solB + 0.03) { toast('You need about ' + (solB + 0.03).toFixed(2) + ' ' + NET + 'SOL (coin creation ≈ 0.03 SOL' + (solB ? ' + your ' + solB + ' SOL buy' : '') + ')'); break; }
           var vc1 = c.van && c.van.mode === 'custom' && (c.van.suf || '').length >= 3, suf1 = vc1 ? c.van.suf : 'trd', vf1 = vc1 ? vanFee(suf1.length) : 0, grindT = null;
@@ -4904,6 +4945,8 @@
             if (cc0.x || cc0.tg || cc0.web) { nt2.soc = true; nt2.links = { demo: false, web: linkOf(cc0.web), x: cc0.x ? linkOf(/[\/.]/.test(cc0.x) ? cc0.x : 'x.com/' + cc0.x.replace(/^@/, '')) : null, tg: cc0.tg ? linkOf(/[\/.]/.test(cc0.tg) ? cc0.tg : 't.me/' + cc0.tg.replace(/^@/, '')) : null }; }
             S.c = { name: '', tick: '', desc: '', x: '', tg: '', web: '', pair: 'SOL', q: null, buy: 0, sell: 0, img: null, banner: null, devBuy: '', spec: { kind: pick(A.KINDS), skin: pick(A.SKINS), bg: pick(A.BGS), eyes: 'normal', mouth: 'smile', acc: 'none' } };
             openToken(nt2.tick); confetti(); toast('$' + symOf(nt2) + ' is live on-chain' + NETP + ' ✓', nt2);
+            if (cc0.lk) { nt2.lockIntent = true; nt2.lockDays = cc0.lk; setTimeout(function () {   // step 2: the launch buy goes into the lock (a second signature)
+              lockNow(nt2, cc0.lk).catch(function (e) { if (e && e.message !== 'busy') toast('Your coin is live, but the lock wasn’t made: ' + chainErr(e) + ' — press “Finish locking” on your coin page'); render(); }); }, 1200); }
           }).catch(function (e) { gEl.remove(); if (S.busy && /^Finding/.test(S.busy)) { S.busy = null; render(); } if (e && e.message !== 'busy') toast('Launch failed: ' + chainErr(e)); });
           break;
         }
@@ -5632,7 +5675,7 @@
   if (window.TREID_PARTNER) S.escrowWallet = window.TREID_PARTNER;
   S.api = API; S.apiOk = false;
   function apiGet(path) { return fetch(API + path, { cache: 'no-store' }).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); }); }
-  function liveStat(t, c) { if (c.tax_paid) t.taxPaid = c.tax_paid; t.lstat = { dev: c.dev_pct || 0, top: c.top10_pct || 0, sn: c.snipers_pct || 0, bu: c.bundles_pct || 0, devSold: !!c.dev_sold }; }
+  function liveStat(t, c) { if (c.tax_paid) t.taxPaid = c.tax_paid; t.devLock = c.dev_lock || (t.lkLocal && Date.now() - t.lkLocal.at < 10 * 60e3 ? t.lkLocal.v : null);   /* the server re-checks the chain every ~30 s — keep the just-made lock until it does */ t.lockIntent = !!c.lock_intent; if (c.uri) { try { t.lockDays = +new URL(c.uri).searchParams.get('lk') || 0; } catch (e) {} } t.lstat = { dev: c.dev_pct || 0, top: c.top10_pct || 0, sn: c.snipers_pct || 0, bu: c.bundles_pct || 0, devSold: !!c.dev_sold }; }
   function safeImg(u) { return typeof u === 'string' && (/^data:image\/(png|jpe?g|gif|webp);base64,[A-Za-z0-9+\/=]+$/.test(u) || /^https:\/\/[^\s"'<>\\]+$/.test(u)) ? u : null; }
   function trustedMeta(u) { try { var h = new URL(u).hostname; return /\/ipfs\//.test(u) && (h === 'gateway.pinata.cloud' || /\.mypinata\.cloud$/.test(h) || h === 'ipfs.io'); } catch (e) { return false; } }
   function liveTok(c) {

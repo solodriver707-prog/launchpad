@@ -19,6 +19,7 @@ import { startCalloutRewards, coMemoOf, CO_SHARE } from './callrew.mjs';
 import { startBubbles } from './bubbles.mjs';
 import { startPush } from './push.mjs';
 import { curveOk } from './curve.mjs';
+import { lockCache } from './devlock.mjs';
 import { fetchT, JUP } from './txutil.mjs';
 import { HALT, lockIdle } from './lock.mjs';
 let OPS_ST = null;
@@ -79,6 +80,7 @@ async function qMult(m) {   // current UI multiplier of a scaled-UI-amount token
   if (!(v > 0)) v = 1; multC.set(m, { v, at: Date.now() }); return v; }
 const KNOWN_Q = { [WSOL]: 'SOL', EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v: 'USDC', Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB: 'USDT', '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU': 'USDC' };
 const conn = new Connection(RPC, { commitment: 'confirmed', wsEndpoint: WS, fetch: (u, o) => fetch(u, { ...o, signal: AbortSignal.timeout(30e3) }) });   // a stalled RPC call can never freeze the ops loops
+const LOCKS = lockCache(conn);   // "Locked launch": the creator's launch buy in a Jupiter Lock escrow (verified on-chain, cached)
 const dbc = new DynamicBondingCurveClient(conn, 'confirmed'), amm = new CpAmm(conn);
 let DB_PATH = process.env.DB || 'treid.db', db;
 try { db = new DatabaseSync(DB_PATH); db.exec('CREATE TABLE IF NOT EXISTS _w(x INT); DROP TABLE _w;'); }   // the persistent disk must be writable
@@ -455,7 +457,8 @@ function stats(mint, list = false, scanOk = true) {
   const bal = q(`SELECT wallet, SUM(CASE WHEN side='buy' THEN tokens ELSE -tokens END) n FROM trades WHERE mint=? GROUP BY wallet HAVING n > 0.5 ORDER BY n DESC`, mint);
   const devBuy = q1(`SELECT 1 x FROM trades WHERE mint=? AND wallet=? AND side='buy' LIMIT 1`, mint, c.creator);
   const recent = (q1('SELECT MAX(ts) t FROM trades WHERE mint=?', mint)?.t || 0) > Date.now() - 36e5, lh = liveHolders(mint, scanOk && (!list || recent)), real = lh ? lh.filter((h) => !h.curve) : null;
-  const devN = real ? (real.find((h) => h.wallet === c.creator)?.pct || 0) / 100 * SUPPLY : bal.find(b => b.wallet === c.creator)?.n || 0;
+  const lk = LOCKS.get(c, recent);   // verified lock escrow (null when none / not launched as a locked launch)
+  const devN = (real ? (real.find((h) => h.wallet === c.creator)?.pct || 0) / 100 * SUPPLY + (lk?.inside || 0) : bal.find(b => b.wallet === c.creator)?.n || 0);   // trades never saw the move into the lock → the trade count already includes it
   const top10 = Math.min(SUPPLY, real ? real.slice(0, 10).reduce((s, h) => s + h.pct / 100 * SUPPLY, 0) : bal.slice(0, 10).reduce((s, b) => s + b.n, 0));
   const po = OPS && REW ? q1(`SELECT COALESCE(SUM(CASE WHEN kind='taxburn' THEN lamports END),0)/1e6 burned, COALESCE(SUM(CASE WHEN kind='taxhold' THEN lamports END),0)/1e6 holders, COALESCE(SUM(CASE WHEN kind='taxdev' THEN lamports END),0)/1e6 dev, COUNT(CASE WHEN kind='taxhold' THEN 1 END) n, COALESCE(SUM(CASE WHEN kind='taxholdq' THEN lamports END),0) * 1.0 / ${10 ** (c.quote_dec ?? 9)} holders_q FROM rlog WHERE mint=? AND kind IN ('taxburn','taxdev','taxhold','taxholdq')`, mint) : null;   // from on-chain receipts → survives restarts
   const burned = supplyC.get(mint)?.v || 0; if (!supplyC.has(mint) || Date.now() - supplyC.get(mint).ts > 60e3) burnedOf(mint).catch(() => {});   // refreshed in the background
@@ -463,7 +466,7 @@ function stats(mint, list = false, scanOk = true) {
   let rwst = null; try { const r = q1('SELECT COUNT(DISTINCT wallet) w, COUNT(DISTINCT sig) n, MAX(ts) last FROM hpay WHERE mint=? AND wallet != ?', mint, c.creator); if (r && r.w) rwst = { wallets: r.w, payouts: r.n, last: r.last }; } catch {}   // holders paid (receipts), dev share excluded
   const ref24 = q1('SELECT mcap_usd m FROM trades WHERE mint=? AND ts<=? AND sys=0 ORDER BY ts DESC LIMIT 1', mint, Date.now() - 864e5) || q1('SELECT mcap_usd m FROM trades WHERE mint=? ORDER BY ts ASC LIMIT 1', mint);   // market cap 24h ago (or at launch) → a real "24h change"
   let banV = 0; try { banV = q1("SELECT at FROM meta WHERE mint=? AND banner LIKE 'data:%'", mint)?.at || 0; } catch {}   // a banner the creator changed later (cache-busting version)
-  return { ...c, banner_v: banV, grad_fee_bps: cfgFee.get(c.config) || 50, mcap_24h: ref24?.m || null, rewards_stats: rwst, supply: SUPPLY - burned, burned, split_applied: sp ? { h: sp.h, b: sp.b, d: sp.d, pair: !!sp.pair, rw: sp.rw || null } : null, vamp: vampOf(mint), tax_paid: po, reserve: last?.reserve || 0, grad_target: gradTarget.get(mint) || 0, quote_usd: quoteUsd(c.quote_mint, c.quote_symbol), vol_usd: agg.volusd || 0, holders: real ? real.length : bal.length, dev_pct: devN / SUPPLY * 100, dev_sold: !!devBuy && devN < 1, top10_pct: top10 / SUPPLY * 100, sol_usd: SOL_USD, mcap_usd: last?.mcap_usd || 0, curve_pct: last?.progress || 0, trades: agg.n, vol_sol: agg.vol || 0, buys: agg.buys || 0, sells: agg.sells || 0, traders: agg.traders, snipers_pct: (agg.snipeTok || 0) / SUPPLY * 100, bundles_pct: (agg.bundleTok || 0) / SUPPLY * 100 };
+  return { ...c, banner_v: banV, grad_fee_bps: cfgFee.get(c.config) || 50, mcap_24h: ref24?.m || null, rewards_stats: rwst, supply: SUPPLY - burned, burned, split_applied: sp ? { h: sp.h, b: sp.b, d: sp.d, pair: !!sp.pair, rw: sp.rw || null } : null, vamp: vampOf(mint), tax_paid: po, reserve: last?.reserve || 0, grad_target: gradTarget.get(mint) || 0, quote_usd: quoteUsd(c.quote_mint, c.quote_symbol), vol_usd: agg.volusd || 0, holders: real ? real.length : bal.length, dev_pct: devN / SUPPLY * 100, lock_intent: LOCKS.wants(c), dev_lock: lk ? { total_pct: lk.total / SUPPLY * 100, inside_pct: lk.inside / SUPPLY * 100, locked_pct: lk.locked / SUPPLY * 100, start: lk.start, unlock_start: lk.unlockStart, unlock_end: lk.unlockEnd, days: lk.days, escrows: lk.escrows } : null, dev_sold: !!devBuy && devN < 1, top10_pct: top10 / SUPPLY * 100, sol_usd: SOL_USD, mcap_usd: last?.mcap_usd || 0, curve_pct: last?.progress || 0, trades: agg.n, vol_sol: agg.vol || 0, buys: agg.buys || 0, sells: agg.sells || 0, traders: agg.traders, snipers_pct: (agg.snipeTok || 0) / SUPPLY * 100, bundles_pct: (agg.bundleTok || 0) / SUPPLY * 100 };
 }
 // errors our own code throws on purpose are meant for the user; anything else (library, RPC, database, parser) gets a generic text
 const pubErr = (e) => { const m = String(e?.message || ''); if (e && e.constructor === Error && !e.code && m && m.length < 200 && !/sqlite|database|ECONN|ENOTFOUND|EAI_AGAIN|fetch failed|timed? ?out|abort|socket|JSON|Unexpected token|failed to get|getaddrinfo|status code|Cannot read|is not a function|undefined|\bat \S+:\d+/i.test(m)) return m; console.log('err (hidden)', m.slice(0, 160)); return 'something went wrong — try again'; };
@@ -742,7 +745,7 @@ async function start() {
   retier(); setInterval(() => loadConfigs().catch(() => {}), 24 * 36e5);   // full config rescan only daily (new configs are picked up from their own create tx)
   console.log('watching', configs.size, 'treid configs (partners', PARTNERS.join(', '), ')');
   if (!OPS) return;
-  REW = startRewards({ conn, dbc, ops: OPS, treasury: PARTNER, q, q1, run, mainnet: MAINNET, quoteUsd: (c) => quoteUsd(c.quote_mint, c.quote_symbol), balances: async (mint) => new Map((await holdersCached(mint)).filter((h) => !h.curve).map((h) => [h.wallet, h.pct / 100 * SUPPLY])) });
+  REW = startRewards({ conn, dbc, ops: OPS, treasury: PARTNER, q, q1, run, mainnet: MAINNET, quoteUsd: (c) => quoteUsd(c.quote_mint, c.quote_symbol), lockedOf: async (c) => (await LOCKS.fresh(c))?.inside || 0, balances: async (mint) => new Map((await holdersCached(mint)).filter((h) => !h.curve).map((h) => [h.wallet, h.pct / 100 * SUPPLY])) });
   for (let i = 1; ; i++) { try { await REW.rebuild(); break; } catch (e) { console.log('rewards rebuild retry', i, String(e?.message || e).slice(0, 120)); await sleep(Math.min(60e3, 5e3 * i)); } }   // a hole in the ledger could pay the wrong person
   setTimeout(() => REW.cycle(), 30e3); setInterval(() => REW.cycle(), +(process.env.OPS_EVERY_MIN || 10) * 60e3);
   // creator reminders (push to the creator's own devices): 24 h and 6 h before their coin's fees pause for inactivity — once per quiet spell

@@ -10,6 +10,7 @@ import BN from 'bn.js';
 import { getSwapQuoteTransferFees, DynamicBondingCurveClient, buildCurveWithMarketCap, TokenType, TokenDecimal, TokenAuthorityOption, BaseFeeMode, CollectFeeMode,
   MigrationOption, MigrationFeeOption, MigratedCollectFeeMode, DammV2DynamicFeeMode, ActivationType, deriveDbcPoolAddress, deriveDammV1MigrationMetadataAddress, SwapMode, getCurrentPoint, deriveDammV2PoolAddress, DAMM_V2_MIGRATION_FEE_ADDRESS, getPriceFromSqrtPrice } from '@meteora-ag/dynamic-bonding-curve-sdk';
 import { CpAmm, calculateTransferFeeExcludedAmount } from '@meteora-ag/cp-amm-sdk';
+import { LockClient, CancelMode, UpdateRecipientMode, deriveEscrow } from '@meteora-ag/met-lock-sdk';
 
 // ---- treid rules (must match chain/scripts/01_launch.mjs) ----
 export const RULES = { minTrapBps: 5000, minTrapSecs: 30, trapSteps: 3, feePlainBps: 100, feeTaxedBps: 50, maxTaxBps: 1000, creatorFeePct: 50, mc0Sol: 28, mc1Sol: 420, gradFeeBps: 100, supply: 1e9, decimals: 6 };
@@ -340,3 +341,27 @@ export const dl = {
   seal(obj, theirPk, mySk) { const shared = nacl.box.before(bs58dec(theirPk), bs58dec(mySk)), nonce = nacl.randomBytes(24), box = nacl.box.after(new TextEncoder().encode(JSON.stringify(obj)), nonce, shared); return { nonce: bs58enc(nonce), payload: bs58enc(box) }; },
   dec: bs58dec, enc: bs58enc,
 };
+
+// ---- Locked launch: the creator's own bag goes into Meteora/Jupiter Lock (audited; Token-2022 ok). Nobody can cancel it or change who gets it.
+// Schedule: the first third of the time nothing unlocks (cliff), then it unlocks a little every day until the end.
+export const LOCK_PLANS = { 30: { cliff: 10, days: 20 }, 90: { cliff: 30, days: 60 }, 180: { cliff: 60, days: 120 } };
+export async function buildLock({ rpc, owner, mint, amountRaw, days, startAt = null }) {
+  const plan = LOCK_PLANS[days]; if (!plan) throw new Error('pick 30, 90 or 180 days');
+  owner = pk(owner); mint = pk(mint); const conn = C(rpc), lc = new LockClient(conn, 'confirmed'), base = Keypair.generate(), DAY = 86400;
+  if (amountRaw == null) {   // lock everything the wallet holds of this coin (its launch buy) — read from its own token account, retried while the launch settles
+    const ata = getAssociatedTokenAddressSync(mint, owner, false, TOKEN_2022_PROGRAM_ID);
+    for (let i = 0; i < 8 && !(amountRaw > 0n); i++) { try { amountRaw = BigInt((await conn.getTokenAccountBalance(ata, 'confirmed')).value.amount); } catch { amountRaw = 0n; } if (!(amountRaw > 0n)) await new Promise((r) => setTimeout(r, 1500)); }
+    if (!(amountRaw > 0n)) throw new Error('No tokens of this coin in your wallet to lock');
+  }
+  const mi = await getMint(conn, mint, 'confirmed', TOKEN_2022_PROGRAM_ID), tf = getTransferFeeConfig(mi), ep = BigInt((await conn.getEpochInfo()).epoch), fee = tf ? (ep >= BigInt(tf.newerTransferFee.epoch) ? tf.newerTransferFee : tf.olderTransferFee) : null;
+  const bps = BigInt(fee ? fee.transferFeeBasisPoints : 0), have = BigInt(amountRaw.toString());
+  const total = bps > 0n ? have * (10000n - bps) / 10000n - 1n : have;   // the coin's own transfer tax is paid on the way into the lock: what's locked is what arrives
+  if (total <= 0n) throw new Error('nothing to lock');
+  const per = total / BigInt(plan.days), cliffAmt = total - per * BigInt(plan.days);   // the rounding remainder unlocks with the first day after the cliff
+  const now = BigInt(startAt || Math.floor(Date.now() / 1000)), cliffTime = now + BigInt(plan.cliff * DAY);
+  const tx = await lc.createVestingEscrowV2({ base: base.publicKey, sender: owner, isSenderMultiSig: false, payer: owner, tokenMint: mint, vestingStartTime: new BN(now.toString()), cliffTime: new BN(cliffTime.toString()),
+    frequency: new BN(DAY), cliffUnlockAmount: new BN(cliffAmt.toString()), amountPerPeriod: new BN(per.toString()), numberOfPeriod: new BN(plan.days), recipient: owner,
+    updateRecipientMode: UpdateRecipientMode.NONE, cancelMode: CancelMode.NONE, tokenProgram: TOKEN_2022_PROGRAM_ID });
+  const out = await finish(rpc, [tx], owner, [base]);
+  return { ...out, escrow: deriveEscrow(base.publicKey).toBase58(), total: total.toString(), unlockStart: Number(cliffTime), unlockEnd: Number(cliffTime) + plan.days * DAY };
+}

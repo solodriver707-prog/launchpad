@@ -46,7 +46,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const DAMM_CFG = DAMM_V2_MIGRATION_FEE_ADDRESS[6], GRAD_WAIT_MS = +(process.env.GRAD_WAIT_MIN ?? 10) * 60e3;   // the "customizable" DAMM v2 config treid coins migrate into
 const num = (x) => Number(x?.toString?.() ?? x ?? 0);
 
-export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, quoteUsd = () => 150, mainnet = false, log = console.log }) {
+export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, quoteUsd = () => 150, mainnet = false, log = console.log, lockedOf = async () => 0 }) {
   const amm = new CpAmm(conn);
   const units = (c, usd) => { const p = quoteUsd(c) || 0, d = 10 ** (c.quote_dec ?? 9); return p > 0 ? Math.ceil(usd / p * d) : Infinity; };   // no price → never act
   run(`CREATE TABLE IF NOT EXISTS rlog(sig TEXT, i INT, mint TEXT, kind TEXT, lamports INT, ts INT, PRIMARY KEY(sig, i))`);
@@ -352,7 +352,7 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, q
   async function cycleCoin(c) {
     const vpw = await dbc.state.getPool(new PublicKey(c.pool)), vp = vpw?.poolState || vpw; if (!vp || vp.creator.toBase58() !== ops.publicKey.toBase58()) { lastDone.set(c.mint, Date.now()); return; }
     const cfg = cfgCache.get(c.mint) || await dbc.state.getPoolConfig(vp.config); cfgCache.set(c.mint, cfg); if (await maybeMigrate(c, vp, cfg).catch((er) => { log('rewards migrate err', c.symbol, er.message.slice(0, 100)); return false; })) return;   // fees are picked up next cycle
-    const e = era(c); if (e.wallet) balNow.set(c.mint + '|' + e.wallet, await walletBal(c.mint, e.wallet));
+    const e = era(c); if (e.wallet) balNow.set(c.mint + '|' + e.wallet, await walletBal(c.mint, e.wallet) + (e.wallet === c.creator ? await lockedOf(c) : 0));   // tokens in the creator's own lock escrow are still theirs — locking is not selling (an RPC failure throws → this cycle is skipped, never a false 'out')
     let st = state(c);
     if (st.era !== 'out' && st.state === 'out') { try { run('INSERT OR REPLACE INTO kv(k,v) VALUES(?,?)', 'outwhy:' + c.mint, st.why || 'idle'); } catch {} await stamp(c.mint, 'out', 0, st.creator || undefined); log('rewards creator out', c.symbol, st.why); st = state(c); }
     if (st.era === 'out') { if (await tryApprove(c)) st = state(c); }
