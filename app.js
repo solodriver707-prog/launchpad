@@ -1876,7 +1876,7 @@
     if (t.live && API && !t._spk && !t._spkL) { t._spkL = 1; apiGet('/api/trades/' + t.ca).then(function (rows) { t._spk = rows.slice().reverse().map(function (x) { return x.mcap_usd / 1000; }).filter(function (v) { return v > 0; }); var el = document.querySelector('#tc .ar-ch'); if (el && find(HERO[tcI]) === t) el.innerHTML = arChart(t, w, h); }).catch(function () {}); }
     var d = t._spk && t._spk.length > 1 ? t._spk.slice() : (t.live ? [] : ensureTicks(t).map(function (x) { return x[1]; })); d.push(t.mcN); d = d.filter(function (v) { return v > 0; });
     if (d.length > 90) { var st = d.length / 90, o = []; for (var i = 0; i < 90; i++) o.push(d[Math.floor(i * st)]); o.push(d[d.length - 1]); d = o; }
-    if (d.length < 2) return '';
+    if (d.length < 6) return '';   /* too few trades for a chart that means anything */
     var mx = Math.max.apply(null, d), mn = Math.min.apply(null, d), sp = (mx - mn) || mx * .02 || 1, up = d[d.length - 1] >= d[0], col = up ? '#3DDC97' : '#F2708A', gid = 'arg' + (up ? 'u' : 'd');
     var pts = d.map(function (v, i) { return [i * w / (d.length - 1), h - 8 - (v - mn) / sp * (h - 20)]; }), line = 'M' + pts.map(function (q) { return q[0].toFixed(1) + ' ' + q[1].toFixed(1); }).join(' L'), L = pts[pts.length - 1];
     return '<svg viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="' + gid + '" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="' + col + '" stop-opacity=".3"/><stop offset="1" stop-color="' + col + '" stop-opacity="0"/></linearGradient></defs>' +
@@ -1890,7 +1890,7 @@
         '<span class="ar-id">' + avatarHTML(t, 64) + '<span><b>' + esc(t.name) + '</b><small class="mono">$' + sid + '</small></span></span>' +
         '<span class="ar-mc"><small>Market cap</small><b class="mono">' + fmtK(t.mcN) + '<em class="' + (c >= 0 ? 'up' : 'down') + '">' + chgTxt(c) + '</em></b></span>' +
         '<span class="ar-kv"><span><small>24h vol</small><b class="mono">' + fmtK(t.vol) + '</b></span><span><small>Holders</small><b class="mono">' + fmtNum(t.holders) + '</b></span><span><small>Paired with</small><b>' + coinHTML(t.pair, 16) + esc(pairLabel(t.pair)) + '</b></span><span><small>Tax</small><b class="mono ar-tax">' + tm + '%</b></span></span></div>' +
-      '<div class="ar-r"><span class="ar-ch">' + arChart(t, 600, 200) + '</span></div></div>';
+      '<div class="ar-r"><span class="ar-ch">' + arChart(t, 1000, 160) + '</span></div></div>';
   }
   // the trades that flow under the arena: real ones from the server (≥ $5), plus every new one as it happens
   S.arTape = [];
