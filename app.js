@@ -2413,7 +2413,7 @@
   // ---- Buy with SOL on pair coins: SOL → pair token via Jupiter, then the normal pool buy (mainnet only — Jupiter has no devnet) ----
   var JUP = 'https://lite-api.jup.ag/swap/v1';
   function jupOn(t) { return CHAIN_ID === 'solana:mainnet' && !!(t && t.live && t.qMint); }
-  function paySol(t) { return jupOn(t) && S.side === 'buy' && !!S.paySol && !(S.wallet && S.wallet.dl); }
+  function paySol(t) { return jupOn(t) && S.side === 'buy' && S.paySol !== false && !(S.wallet && S.wallet.dl); }   // default: pay with SOL (swapped to the pair token for you) — nobody has to hold the pair token
   function b64Bytes(x) { var b = atob(x), u = new Uint8Array(b.length); for (var i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u; }
   function bytesB64(u) { var s0 = ''; for (var i = 0; i < u.length; i++) s0 += String.fromCharCode(u[i]); return btoa(s0); }
   // waits for a FINAL answer: confirmed, failed, or expired (blockhash past its last valid height — it can never land). Never "gave up while it could still land".
@@ -4628,7 +4628,15 @@
           S.busy = 'Finding address …' + suf1; render();
           var gBox = document.getElementById('toasts'), gEl = document.createElement('div'); gEl.className = 'toast grind-t'; gEl.innerHTML = '<span class="gr-sp"></span><span>Finding your address <b class="mono">…' + esc(suf1) + '</b> <small class="mono" id="gr-n"></small></span>'; if (gBox) gBox.appendChild(gEl);
           var gStart = Date.now();
-          chainLib().then(function (T) { return dq2.isSol || !dq2.sol ? T : T.tokenBalance({ rpc: RPC, owner: S.account, mint: qq1.mint }).then(function (hb) { if (hb < dq2.sol) throw new Error('You have ' + fmtNum(hb) + ' ' + qq1.sym + ' — not enough for a ' + dq2.sol + ' ' + qq1.sym + ' buy'); return T; }); })
+          chainLib().then(function (T) { return dq2.isSol || !dq2.sol ? T : T.tokenBalance({ rpc: RPC, owner: S.account, mint: qq1.mint }).then(function (hb) { if (hb >= dq2.sol) return T;
+            // not enough of the pair token for your initial buy: swap the rest from SOL first (Jupiter), like buyers do — nobody needs to hold the pair token
+            var need = dq2.sol - hb, solNeed = need * qq1.usd / SOL_USD * 1.04, who0 = S.account, pt = { live: true, qMint: qq1.mint, qSym: qq1.sym, pair: qq1.key, qUsd: qq1.usd, qDec: qq1.dec };
+            if (!(qq1.usd > 0)) throw new Error('No price for ' + qq1.sym + ' right now — try again in a moment');
+            if (typeof S.balance === 'number' && S.balance < solNeed + 0.03 + vf1) throw new Error('You need about ' + (solNeed + 0.03 + vf1).toFixed(3) + ' SOL (≈' + solNeed.toFixed(3) + ' SOL becomes ' + niceQ(need) + ' ' + qq1.sym + ' for your initial buy + coin creation)');
+            gEl.querySelector('span:last-child').innerHTML = 'Step 1 of 2: swapping <b>' + solNeed.toFixed(3) + ' SOL → ' + esc(qq1.sym) + '</b> for your initial buy — confirm in your wallet';
+            return jupSolToPair0(pt, Math.ceil(solNeed * 1e9)).then(function (sig) { return swapDelivered(sig, who0, qq1.mint); }).then(function (got) {
+              if (!(got > 0)) throw new Error('The swap to ' + qq1.sym + ' didn’t arrive — nothing was launched');
+              var have = hb + got, dp = Math.pow(10, Math.min(6, qq1.dec || 6)); dq2.sol = Math.floor(Math.min(dq2.sol, have) * dp) / dp; gEl.querySelector('span:last-child').innerHTML = 'Step 2 of 2: finding your address <b class="mono">…' + esc(suf1) + '</b> <small class="mono" id="gr-n"></small>'; return T; }); }); })
           .then(function (T) { return T.grind(suf1, { onProgress: function (n, exp) { var el = document.getElementById('gr-n'); if (!el) return; var rate = n / Math.max(0.2, (Date.now() - gStart) / 1000), left = Math.max(0, (exp - n) / rate); el.textContent = fmtNum(n) + ' tried · ' + (n >= exp ? 'any moment now — it\'s luck' : left < 5 ? 'almost there' : '~' + (left < 90 ? Math.ceil(left) + 's' : Math.ceil(left / 60) + ' min') + ' left'); } }); })
           .then(function (g) { gEl.remove(); grindT = g; S.busy = 'Saving logo…'; render();
             var fsU = S.wallet && S.wallet.features['solana:signMessage'], tsU = Date.now(), whoU = S.account;   // the upload is signed by your wallet (protects the IPFS account from spam)
