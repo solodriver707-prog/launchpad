@@ -6055,3 +6055,48 @@ header{z-index:45}   /* above the callouts rail (40): the wallet / notification 
   html body .tp-env .tp-banner .hs-pills .pill{font-size:11px!important;padding:0 7px!important}
   html body .tp-env .tp-banner .hs-pills .pill .maker .bdg{display:none}
 }
+/* ===== phones: coin info block — one clean, aligned layout (final word; everything lines up on the same 14px edge) =====
+   banner · logo + name · "created … by …" · [CA][Coin site][★][share] · [TAX | PAIRED WITH] */
+@media (max-width:760px){
+  html body main.tp-env section.tp-banner{display:grid!important;grid-template-columns:auto minmax(0,1fr)!important;grid-template-areas:none!important;column-gap:12px!important;row-gap:0!important;padding:0 0 14px!important;align-items:end!important}
+  html body main.tp-env section.tp-banner>.tb-bg{grid-column:1/-1!important;grid-row:1!important}
+  html body main.tp-env section.tp-banner>.tb-av{grid-column:1!important;grid-row:2!important;margin:-34px 0 0 14px!important;align-self:end}
+  html body main.tp-env section.tp-banner>.tb-av .av{width:72px!important;height:72px!important}
+  html body main.tp-env section.tp-banner>.tp-id{display:contents!important}
+  html body main.tp-env section.tp-banner .title-xl{grid-column:2!important;grid-row:2!important;padding:8px 14px 2px 0!important;margin:0!important;font-size:21px!important;line-height:1.15!important;min-width:0;align-self:center}
+  html body main.tp-env section.tp-banner .tp-id>*:not(.title-xl):not(.hs-pills){grid-column:1/-1!important;margin:8px 14px 0!important}
+  html body main.tp-env section.tp-banner .hs-pills{grid-column:1/-1!important;display:flex!important;flex-wrap:wrap!important;gap:8px!important;margin:12px 14px 0!important;padding:0!important;width:auto!important;overflow:visible!important}
+  /* "created 21m ago by 7eKN…" → a quiet info line, first */
+  html body main.tp-env section.tp-banner .hs-pills>.pill:not(.copy2):not(.cs-pill){order:-1;flex:1 1 100%;min-height:0!important;padding:0!important;border:0!important;background:none!important;font-size:12.5px!important;color:var(--muted)}
+  html body main.tp-env section.tp-banner .hs-pills>.pill:not(.copy2):not(.cs-pill) .maker{color:var(--text);font-size:12.5px}
+  html body main.tp-env section.tp-banner .hs-pills>.pill:not(.copy2):not(.cs-pill) .maker span:not(.av):not(.bdg){max-width:none}
+  /* the action row: CA takes the free space, the rest are equal-height buttons */
+  html body main.tp-env section.tp-banner .hs-pills>.copy2{flex:1 1 auto;justify-content:center;min-height:38px!important;font-size:12.5px!important}
+  html body main.tp-env section.tp-banner .hs-pills>.cs-pill{min-height:38px!important;font-size:12.5px!important}
+  html body main.tp-env section.tp-banner .hs-pills>.iconbtn{width:38px!important;height:38px!important;min-height:0!important;flex:none}
+  html body main.tp-env section.tp-banner .hs-pills>.soc,html body main.tp-env section.tp-banner .hs-pills>.socials{order:5;display:flex;gap:6px}
+  /* TAX | PAIRED WITH: two equal cards on the same edges */
+  html body main.tp-env section.tp-banner .tp-key{grid-column:1/-1!important;display:grid!important;grid-template-columns:1fr 1fr!important;gap:8px!important;margin:12px 14px 0!important;padding:0!important;width:auto!important}
+  html body main.tp-env section.tp-banner .tp-key>.tax,html body main.tp-env section.tp-banner .tp-key>.pairbig{min-height:58px!important;margin:0!important;padding:8px 12px!important;border-radius:14px!important}
+  html body main.tp-env section.tp-banner .tp-key>*:not(.tax):not(.pairbig){grid-column:1/-1}
+}
+@media (max-width:380px){
+  html body main.tp-env section.tp-banner .hs-pills>.cs-pill{padding:0 9px!important}
+  html body main.tp-env section.tp-banner .title-xl{font-size:19px!important}
+}
+@media (max-width:760px){
+  html body main.tp-env section.tp-banner .tp-id>*:not(.title-xl):not(.hs-pills){grid-row:3!important}
+  html body main.tp-env section.tp-banner .hs-pills{grid-row:4!important}
+  html body main.tp-env section.tp-banner .tp-key{grid-row:5!important}
+  html body main.tp-env section.tp-banner .hs-pills>.pill:not(.copy2):not(.cs-pill) .maker{max-width:none!important}
+}
+@media (max-width:380px){
+  html body main.tp-env section.tp-banner .hs-pills{gap:6px!important}
+  html body main.tp-env section.tp-banner .hs-pills>.copy2,html body main.tp-env section.tp-banner .hs-pills>.cs-pill{padding:0 8px!important;font-size:11px!important;min-height:34px!important}
+  html body main.tp-env section.tp-banner .hs-pills>.iconbtn{width:34px!important;height:34px!important}
+}
+@media (max-width:760px){
+  html body main.tp-env section.tp-banner .hs-pills{display:grid!important;grid-template-columns:minmax(0,1fr) auto auto auto;align-items:center}
+  html body main.tp-env section.tp-banner .hs-pills>.pill:not(.copy2):not(.cs-pill),html body main.tp-env section.tp-banner .hs-pills>.soc,html body main.tp-env section.tp-banner .hs-pills>.socials{grid-column:1/-1}
+  html body main.tp-env section.tp-banner .hs-pills>.copy2{min-width:0;overflow:hidden;white-space:nowrap}
+}
