@@ -181,6 +181,7 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, q
     log('rewards', kind, c.symbol, (amount / 10 ** (c.quote_dec ?? 9)).toFixed(4), c.quote_symbol || 'SOL', '→', dest.slice(0, 6)); return s;
   }
   async function buybackExact(c, amount, claimSig) {
+    if (q1('SELECT 1 FROM kv WHERE k IN (?,?)', 'bbpend:' + c.mint, 'toburn:' + c.mint)) throw new Error('an earlier buyback burn is still being settled — this one waits');   // one tracked buyback per coin at a time (the claim stays unsettled and is retried)
     const mint = new PublicKey(c.mint), ata = getAssociatedTokenAddressSync(mint, ops.publicKey, false, TOKEN_2022_PROGRAM_ID);
     const vpw = await dbc.state.getPool(new PublicKey(c.pool)), vp = vpw.poolState || vpw, cfg = await dbc.state.getPoolConfig(vp.config);
     const migrated = num(vp.isMigrated) > 0, done = migrated || BigInt(vp.quoteReserve.toString()) >= BigInt(cfg.migrationQuoteThreshold.toString());
@@ -188,23 +189,31 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, q
     if (!done) {   // still on the curve: swap on the DBC pool, 2% slippage over the coin's own tax
       const cp = await getCurrentPoint(conn, cfg.activationType), slip = 200 + Math.round((c.tax_bps || 0));
       const qt = dbc.pool.swapQuote2({ virtualPool: vpw.poolState ? vpw : { poolState: vp }, config: cfg, swapBaseForQuote: false, amountIn: new BN(amount), slippageBps: slip, hasReferral: false, currentPoint: cp, swapMode: SwapMode.ExactIn });
-      const sw = await dbc.pool.swap2({ owner: ops.publicKey, pool: new PublicKey(c.pool), swapBaseForQuote: false, referralTokenAccount: null, swapMode: SwapMode.ExactIn, amountIn: new BN(amount), minimumAmountOut: qt.minimumAmountOut || new BN(0) });
-      sig = await sendTx(conn, new Transaction().add(...sw.instructions, memo(`treid:buyback:${c.mint}:${amount}:${claimSig}`)), [ops]);
+      if (!qt.minimumAmountOut || !(qt.minimumAmountOut.gtn(0))) throw new Error('buyback quote has no minimum out — not swapping unprotected');
+      const sw = await dbc.pool.swap2({ owner: ops.publicKey, pool: new PublicKey(c.pool), swapBaseForQuote: false, referralTokenAccount: null, swapMode: SwapMode.ExactIn, amountIn: new BN(amount), minimumAmountOut: qt.minimumAmountOut });
+      sig = await bbSend(c, new Transaction().add(...sw.instructions, memo(`treid:buyback:${c.mint}:${amount}:${claimSig}`)));
     } else if (migrated) {   // graduated: swap on the coin's own DAMM v2 pool (where its liquidity lives), same slippage rule
       const d = await dammCtx(c), cp = await getCurrentPoint(conn, d.ps.activationType);
       const qt = amm.getQuote2({ inputTokenMint: d.ps.tokenBMint, slippage: 0, poolState: d.ps, currentPoint: cp, hasReferral: false, tokenADecimal: 6, tokenBDecimal: c.quote_dec ?? 9, swapMode: 0, amountIn: new BN(amount) });
       const minOut = BigInt(qt.outputAmount.toString()) * BigInt(10000 - 200 - (c.tax_bps || 0)) / 10000n;
       const sw = await amm.swap2({ payer: ops.publicKey, pool: d.pool, inputTokenMint: d.ps.tokenBMint, outputTokenMint: d.ps.tokenAMint, amountIn: new BN(amount), minimumAmountOut: new BN(minOut.toString()), tokenAVault: d.ps.tokenAVault, tokenBVault: d.ps.tokenBVault,
         tokenAMint: d.ps.tokenAMint, tokenBMint: d.ps.tokenBMint, tokenAProgram: TOKEN_2022_PROGRAM_ID, tokenBProgram: await qprogOf(c), referralTokenAccount: null, swapMode: 0 });
-      sig = await sendTx(conn, new Transaction().add(...sw.instructions, memo(`treid:buyback:${c.mint}:${amount}:${claimSig}`)), [ops]);
+      sig = await bbSend(c, new Transaction().add(...sw.instructions, memo(`treid:buyback:${c.mint}:${amount}:${claimSig}`)));
     } else throw new Error('curve finished — buyback waits for the migration');
+    try { run('INSERT OR REPLACE INTO kv(k,v) VALUES(?,?)', 'bbpend:' + c.mint, JSON.stringify({ sig, at: Date.now() })); } catch (e) { halt(e.message); throw e; }   // first: whatever fails next, the bought tokens stay tracked
     record(sig, [{ mint: c.mint, kind: 'buyback', lamports: amount, extra: claimSig }]);
     const t = await getTxRetry(conn, sig), tb = (arr) => (arr || []).filter((b) => b.mint === c.mint && b.owner === ops.publicKey.toBase58()).reduce((s, b) => s + BigInt(b.uiTokenAmount.amount), 0n);
-    const got = t ? tb(t.meta.postTokenBalances) - tb(t.meta.preTokenBalances) : 0n;   // burn exactly what this swap bought
-    if (got > 0n) await stamp(c.mint, 'burntok', Number(got), null, [createBurnCheckedInstruction(ata, mint, ops.publicKey, got, 6, [], TOKEN_2022_PROGRAM_ID)]);
+    const kvj = (k, o) => { try { if (o == null) run('DELETE FROM kv WHERE k=?', k); else run('INSERT OR REPLACE INTO kv(k,v) VALUES(?,?)', k, JSON.stringify(o)); } catch (e) { halt(e.message); throw e; } };
+    if (!t) { halt('buyback receipt unreadable: ' + String(sig).slice(0, 16)); throw new Error('buyback receipt unreadable — ops stopped; the tax cycle settles it before touching this coin'); }   // bbpend stays: the bought tokens are never paid out as tax
+    const got = tb(t.meta.postTokenBalances) - tb(t.meta.preTokenBalances);   // burn exactly what this swap bought
+    if (got > 0n) kvj('toburn:' + c.mint, { sig, amt: String(got) });   // owed to the burn until the burn lands (the tax cycle burns it first if this step dies)
+    kvj('bbpend:' + c.mint, null);
+    if (got > 0n) { await stamp(c.mint, 'burntok', Number(got), sig, [createBurnCheckedInstruction(ata, mint, ops.publicKey, got, 6, [], TOKEN_2022_PROGRAM_ID)]); kvj('toburn:' + c.mint, null); }
     const cl1 = await closeIfEmpty(c); if (cl1) await sendTx(conn, [cl1], [ops]).catch(() => {});   // empty again → close it, rent back to ops
     log('rewards buyback', c.symbol, (amount / 10 ** (c.quote_dec ?? 9)).toFixed(4), c.quote_symbol || 'SOL', '→ burned', (Number(got) / 1e6).toFixed(0), 'tokens');
   }
+  // a buyback whose outcome is unknown: remember its signature, so the tax cycle reads the receipt (once the RPC answers) and burns what it bought
+  async function bbSend(c, tx) { try { return await sendTx(conn, tx, [ops]); } catch (e) { if (e && e.unconfirmed && e.signature) { try { run('INSERT OR REPLACE INTO kv(k,v) VALUES(?,?)', 'bbpend:' + c.mint, JSON.stringify({ sig: e.signature, at: Date.now() })); } catch (e2) { halt(e2.message); } } throw e; } }
   // finish every claim whose step 2 hasn't happened (crash, timeout, missing receiver account, failed buyback…)
   const settledSet = () => new Set(q(`SELECT extra FROM rlog WHERE kind IN ('pay','platform','buyback','pay0') AND extra IS NOT NULL`).map((r) => String(r.extra).split('|').pop()));
   const isSettled = (sig, purpose, done) => (purpose === 'split' ? done.has(sig + '#p') && done.has(sig + '#b') : done.has(sig));
@@ -320,8 +329,8 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, q
     const lt = q1('SELECT MAX(ts) t FROM trades WHERE mint=?', c.mint)?.t || 0, ld = lastDone.get(c.mint) || 0;
     if (lt > ld) return true;                                   // new trades since we last looked
     if (!c.damm && (q1('SELECT progress p FROM trades WHERE mint=? ORDER BY ts DESC, slot DESC LIMIT 1', c.mint)?.p || 0) >= 100) return true;   // finished curve: watch until migrated
-    if (Date.now() - ld > 6 * 36e5) { const e = era(c); if (e.type !== 'out') return true;   // creator in charge: idle timers run → every 6h
-      return !!q1(`SELECT 1 FROM rlog WHERE mint=? AND kind='ctoapply' AND ts>=?`, c.mint, e.start); }   // out & no trades: fees can't grow; only a takeover vote needs a look
+    { const e = era(c); if (e.type === 'out' && q1(`SELECT 1 FROM rlog WHERE mint=? AND kind='ctoapply' AND ts>=?`, c.mint, e.start)) return true; }   // a takeover vote is open: check support every cycle (~10 min), so "held 24h" means held, not a few snapshots
+    if (Date.now() - ld > 6 * 36e5) { const e = era(c); if (e.type !== 'out') return true; }   // creator in charge: idle timers run → every 6h · out & no trades: fees can't grow
     const st = state(c); return st.era !== 'out' && (st.state !== (lastDone.get(c.mint + '|st') || 'active'));   // a state change by time (idle → paused/out)
   }
   async function cycleCoin(c) {
