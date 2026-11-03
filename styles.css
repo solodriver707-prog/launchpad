@@ -6434,3 +6434,9 @@ html body .fx-l.fx-r{-webkit-mask-image:linear-gradient(90deg,transparent,#000 3
 .co-tipx{min-height:0;width:22px;height:22px;padding:0;border:0;border-radius:6px;background:none;color:var(--muted);cursor:pointer;flex:none}.co-tipx:hover{color:#fff;background:rgba(255,255,255,.06)}
 .co-mf{justify-content:flex-end}
 .intro3.ar{padding-bottom:0!important}
+/* arena: a banner too small for this size is shown soft (blurred, darker) instead of pixelated */
+.ar-bg.low img{filter:blur(14px) saturate(1.3);transform:scale(1.12);opacity:.45}
+.ar-card:hover .ar-bg.low img{transform:scale(1.14)}
+/* arena banner is a soft ambient backdrop (any banner quality looks good at this size); the coin's logo + numbers stay sharp in front */
+.ar-bg img{filter:blur(4px) saturate(1.2);transform:scale(1.04);opacity:.5}
+.ar-card:hover .ar-bg img{transform:scale(1.07)}
