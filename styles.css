@@ -6120,3 +6120,5 @@ header{z-index:45}   /* above the callouts rail (40): the wallet / notification 
   .trow.h>*:nth-child(7){display:block;text-align:right}
   .trow .mk-cell{width:100%}
 }
+/* the coin ticker now sits under the header (header with search on the very top, like pump.fun) */
+header + .tape{position:relative;z-index:1}
