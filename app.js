@@ -1955,7 +1955,12 @@
     var slot = document.getElementById('ts-slot'); if (!slot) return;
     if (!TS.el) { TS.el = document.createElement('div'); TS.el.className = 'ts-track'; TS.el.addEventListener('mouseenter', function () { TS.hover = true; }); TS.el.addEventListener('mouseleave', function () { TS.hover = false; }); tsDrag(TS.el); requestAnimationFrame(tsTick); }
     var L = tsList(), key = L.map(function (t) { return t.tick; }).join(',');
-    if (key !== TS.key || Date.now() - TS.at > 45e3) { var h = L.map(tsCard).join(''); TS.few = L.length < 6; TS.el.innerHTML = TS.few ? h : h + h; TS.key = key; TS.at = Date.now(); if (TS.few) { TS.x = Math.min(0, TS.x); tsWrap(); } }
+    var vw = slot.clientWidth || window.innerWidth;
+    if (key !== TS.key || Date.now() - TS.at > 45e3 || vw !== TS.vw) { var h = L.map(tsCard).join(''); TS.el.innerHTML = h; TS.key = key; TS.at = Date.now(); TS.vw = vw;
+      if (TS.el.parentNode !== slot) slot.appendChild(TS.el);
+      TS.few = TS.el.scrollWidth <= vw + 40;   // the coins fit side by side → no sliding loop, so nothing shows up twice
+      if (!TS.few) TS.el.innerHTML = h + h;   // longer than the screen → seamless loop (the copy only ever comes into view at the wrap)
+      TS.x = TS.few ? Math.min(0, TS.x) : TS.x; tsWrap(); }
     slot.classList.toggle('ts-still', !!TS.few);   // not sliding → no edge fade (it dimmed the first card)
     var sec = slot.closest('.ts'); if (sec) sec.style.display = L.length ? '' : 'none'; var hint = sec && sec.querySelector('.ts-h .muted'); if (hint) hint.style.display = TS.few ? 'none' : '';
     if (TS.el.parentNode !== slot) slot.appendChild(TS.el);
@@ -4902,7 +4907,7 @@
   // header nav sliding indicator
   function navInd(btn) { var ind = document.getElementById('nav-ind'), nav = ind && ind.parentNode; if (!ind) return; btn = btn || nav.querySelector('button.on'); if (!btn) { ind.style.opacity = 0; return; } var r = btn.getBoundingClientRect(), n = nav.getBoundingClientRect(); ind.style.opacity = 1; ind.style.width = r.width + 'px'; ind.style.transform = 'translateX(' + (r.left - n.left) + 'px)'; }
   document.addEventListener('mouseover', function (e) { var b = e.target.closest && e.target.closest('.navlinks button'); if (b) navInd(b); else if (e.target.closest && !e.target.closest('.navlinks')) navInd(); });
-  window.addEventListener('resize', function () { navInd(); });
+  window.addEventListener('resize', function () { navInd(); clearTimeout(TS.rz); TS.rz = setTimeout(function () { try { tsMount(); } catch (e) {} }, 200); });
   // card spotlight follows the mouse
   document.addEventListener('mousemove', function (e) {
     var c = e.target.closest && e.target.closest('.tcard');
