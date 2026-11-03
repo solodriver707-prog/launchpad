@@ -6215,29 +6215,6 @@ header + .tape{position:relative;z-index:1}
 @media (min-width:761px) and (max-width:1250px){
   html body main.tp-env .tp-main section.tp-banner{aspect-ratio:auto;grid-template-rows:auto auto auto!important;grid-template-areas:"av id" "key key" "kpi kpi"!important}
 }
-/* "Just launched": 5 rows that fill the box, each with a mini chart + market cap */
-.intro3 .i2-live{display:flex;flex-direction:column}
-.intro3 #i2-fresh{flex:1;display:flex;flex-direction:column;justify-content:space-around;gap:2px}
-.intro3 .i2-row,.i2-row{grid-template-columns:34px minmax(0,1fr) auto auto auto auto}
-.i2-row.i2-act,.i2-row.i2-cta{grid-template-columns:34px minmax(0,1fr) auto}
-.i2-sp{display:flex;align-items:center;opacity:.9}.i2-sp svg{display:block}
-.i2-mc{display:flex;flex-direction:column;align-items:flex-end;font-size:12.5px;font-weight:700;line-height:1.15;min-width:56px}
-.i2-mc em{font-style:normal;font-size:10.5px;font-weight:600}.i2-mc em.up{color:var(--up)}.i2-mc em.down{color:var(--down)}
-@media (max-width:1100px){.i2-sp{display:none}}
-.intro3 .i2-row,.i2-row{grid-template-columns:34px minmax(0,1fr) 64px auto auto!important}
-.i2-row.i2-act,.i2-row.i2-cta{grid-template-columns:34px minmax(0,1fr) auto!important}
-.i2-n{min-width:0}.i2-n b,.i2-n small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.i2-n .i2-age{color:var(--up)}
-/* top meme card: a mini chart and the key numbers fill the card */
-#tc .tc-in{flex-wrap:wrap;align-content:center}
-.tc-more{flex:1 1 100%;display:flex;flex-direction:column;gap:8px;min-width:0}
-.tc-ch svg{width:100%!important;height:64px!important;display:block}
-.tc-kv{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;border-top:1px solid rgba(255,255,255,.07);padding-top:8px}
-.tc-kv span{display:flex;flex-direction:column;gap:1px;min-width:0}
-.tc-kv small{font-size:10.5px;color:var(--muted)}.tc-kv b{font-size:13px}
-/* wide screens: the three hero parts sized to their content, no stretched emptiness */
-
-@media (max-width:1300px){#tc .tc-pair b{display:none}#tc .tc-pair{padding:4px}#tc .tc-in{gap:12px}}
 /* banner block: the 3:1 banner shape only when the coin has a banner image — without one it stays compact (no big blurred empty area) */
 @media (min-width:761px){
   html body main.tp-env .tp-main section.tp-banner:not(:has(.tb-bg.ban)){aspect-ratio:auto!important;min-height:0!important;grid-template-rows:auto auto!important;grid-template-areas:"av id key" "kpi kpi kpi"!important}
@@ -6296,8 +6273,6 @@ html body .modal.tpm>.tpm-f{padding-top:6px}
   html body main.tp-env .tp-main section.tp-banner .hs-pills>.pill:not(.copy2):not(.cs-pill){flex:0 1 auto;min-width:0;overflow:hidden}
   html body main.tp-env .tp-main section.tp-banner .hs-pills>.pill:not(.copy2):not(.cs-pill) .maker{min-width:0}
 }
-/* wide screens: the text column stops growing; the top-meme card and Just launched share the rest (no empty middle) */
-@media (min-width:1700px){.intro3{grid-template-columns:minmax(380px,520px) minmax(0,1.1fr) minmax(0,1fr)!important}}
 
 @media (min-width:761px){html body main.tp-env .tp-main section.tp-banner .hs-pills>.pill{white-space:nowrap}}
 @media (min-width:761px){
@@ -6310,86 +6285,6 @@ html body .modal.tpm>.tpm-f{padding-top:6px}
 }
 @media (min-width:761px) and (max-width:1250px){
   html body main.tp-env .tp-main section.tp-banner:not(:has(.tb-bg.ban)){grid-template-areas:"av id" "key key" "kpi kpi"!important}
-}
-/* ================= HOME HERO (rebuilt): brand · spotlight coin · just launched ================= */
-.intro3.hx{display:grid!important;grid-template-columns:minmax(360px,1fr) minmax(0,1.15fr) minmax(0,1fr)!important;gap:18px!important;align-items:stretch!important;padding:20px!important;min-height:0;
-  background:radial-gradient(120% 140% at 0% 0%,rgba(216,195,160,.08),transparent 55%),linear-gradient(180deg,#0E0E10,#09090B)!important;border:1px solid rgba(255,255,255,.07)!important;border-radius:22px!important}
-.intro3.hx>.aurora{display:none}
-/* brand */
-.hx-brand{display:flex;flex-direction:column;justify-content:center;gap:14px;min-width:0;padding:6px 6px 6px 8px}
-.hx-live{align-self:flex-start;display:inline-flex;align-items:center;gap:8px;padding:5px 11px 5px 9px;border-radius:99px;border:1px solid rgba(61,220,151,.25);background:rgba(61,220,151,.07);color:#9FE9C6;font:700 11.5px Manrope,sans-serif;letter-spacing:.04em;text-transform:uppercase}
-.hx-brand .kin{margin:0!important}
-.hx-brand .i3-p{margin:0!important;max-width:480px}
-.hx-brand .i3-cta{margin:2px 0 0!important}
-.hx-stats{display:flex;gap:0;margin-top:6px;padding-top:14px;border-top:1px solid rgba(255,255,255,.07)}
-.hx-stats span{display:flex;flex-direction:column;gap:2px;padding:0 22px;border-left:1px solid rgba(255,255,255,.07)}
-.hx-stats span:first-child{padding-left:0;border-left:0}
-.hx-stats b{font-size:19px;font-weight:700;color:var(--text)}
-.hx-stats small{font-size:11.5px;color:var(--muted)}
-/* spotlight */
-.hx-spot{position:relative;border-radius:18px!important;overflow:hidden;border:1px solid rgba(255,255,255,.09)!important;background:#0D0D0F!important;padding:0!important;min-height:300px;display:flex}
-.hx-spot-in{position:relative;flex:1;display:flex;flex-direction:column;gap:12px;padding:16px 18px 14px;cursor:pointer;color:#fff;min-width:0}
-.hx-bg{position:absolute;inset:0;z-index:0;overflow:hidden}
-.hx-bg img{width:100%;height:100%;object-fit:cover;display:block;opacity:.55;transition:transform 6s ease}
-.hx-spot-in:hover .hx-bg img{transform:scale(1.04)}
-.hx-bg:not(.ban) .av{position:absolute;left:50%;top:50%;width:140%!important;height:auto!important;aspect-ratio:1;transform:translate(-50%,-50%);filter:blur(60px) saturate(1.4);opacity:.45}
-.hx-bg::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(9,9,11,.55) 0%,rgba(9,9,11,.35) 30%,rgba(9,9,11,.82) 62%,rgba(9,9,11,.96) 100%)}
-.hx-spot-in>*:not(.hx-bg){position:relative;z-index:1}
-.hx-top{display:flex;align-items:center;justify-content:space-between;gap:10px}
-.hx-k{display:inline-flex;align-items:center;gap:7px;font:800 11px Manrope,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.8)}
-.hx-chips{display:flex;gap:6px}
-.hx-chip{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px;border-radius:99px;background:rgba(10,10,12,.6);border:1px solid rgba(255,255,255,.12);font:700 12px Manrope,sans-serif;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
-.hx-chip.tax{color:#FFD98A;border-color:rgba(255,209,92,.35)}
-.hx-id{display:flex;align-items:center;gap:14px;margin-top:auto;min-width:0}
-.hx-av .av{width:60px!important;height:60px!important;box-shadow:0 0 0 3px rgba(10,10,12,.85),0 8px 24px rgba(0,0,0,.55)}
-.hx-nm{display:flex;flex-direction:column;min-width:0;flex:1}
-.hx-nm b{font-size:24px;font-weight:800;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-shadow:0 2px 10px rgba(0,0,0,.6)}
-.hx-nm small{font-size:13px;color:#E6D3AE;font-weight:700}
-.hx-mc{display:flex;flex-direction:column;align-items:flex-end;flex:none}
-.hx-mc small{font-size:11px;color:rgba(255,255,255,.6)}
-.hx-mc b{font-size:26px;font-weight:800;line-height:1.1}
-.hx-mc em{font-style:normal;font-size:12.5px;font-weight:700}.hx-mc em span{color:rgba(255,255,255,.45);font-weight:500}
-.hx-mc em.up{color:var(--up)}.hx-mc em.down{color:var(--down)}
-.hx-ch{height:74px;margin:0 -18px}
-.hx-chart{width:100%;height:74px;display:block}
-.hx-kv{display:grid;grid-template-columns:1fr 1fr 1fr 1.6fr;gap:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,.08)}
-.hx-kv span{display:flex;flex-direction:column;gap:2px;min-width:0}
-.hx-kv small{font-size:11px;color:rgba(255,255,255,.55)}
-.hx-kv b{font-size:14px;font-weight:700}
-.hx-cv small{display:flex;justify-content:space-between}.hx-cv small b{font-size:11px;color:#fff}
-.hx-cv i{display:block;height:6px;margin-top:6px;border-radius:99px;background:rgba(255,255,255,.1);overflow:hidden}
-.hx-cv u{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#D8C3A0,#3DDC97)}
-.hx-dots{position:absolute!important;right:18px;top:48px;display:flex;gap:5px}
-.hx-dots i{width:6px;height:6px;border-radius:99px;background:rgba(255,255,255,.25)}.hx-dots i.on{width:18px;background:#fff}
-.hx-spot.out .hx-spot-in{opacity:.0;transform:translateY(4px)}.hx-spot .hx-spot-in{transition:opacity .25s,transform .25s}
-/* just launched */
-.hx-fresh{display:flex!important;flex-direction:column;padding:14px 12px 10px!important;border-radius:18px!important;background:rgba(255,255,255,.02)!important;border:1px solid rgba(255,255,255,.08)!important;min-width:0}
-.hx-fh{display:flex;align-items:center;justify-content:space-between;padding:0 6px 10px;border-bottom:1px solid rgba(255,255,255,.06);margin-bottom:4px}
-.hx-fh>span{display:inline-flex;align-items:center;gap:8px;font:800 11px Manrope,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.8)}
-.hx-fh .link{min-height:0;font-size:12px}
-.hx-fresh #i2-fresh{flex:1;display:flex!important;flex-direction:column;justify-content:space-between;gap:2px}
-.intro3.hx .i2-row.hx-row{display:grid!important;grid-template-columns:36px minmax(0,1fr) auto 44px!important;gap:12px!important;align-items:center;padding:7px 8px!important;border-radius:12px;min-height:50px}
-.intro3.hx .i2-row.hx-row:hover{background:rgba(255,255,255,.045)}
-.intro3.hx .hx-row .av{width:36px!important;height:36px!important}
-.hx-row .i2-n b{font-size:14px;font-weight:700}
-.hx-row .i2-n small{display:flex!important;align-items:center;gap:8px;font-size:11.5px;color:var(--muted);margin-top:2px}
-.hx-pr{display:inline-flex;align-items:center;gap:4px}
-.hx-tx{padding:1px 6px;border-radius:6px;background:rgba(255,209,92,.12);color:#FFD98A;font-weight:700;font-size:10.5px}
-.hx-rm{display:flex;flex-direction:column;align-items:flex-end;gap:1px}
-.hx-rm b{font-size:13.5px;font-weight:700}.hx-rm small{font-size:11px}.hx-rm small.up{color:var(--up)}.hx-rm small.down{color:var(--down)}
-.hx-age{justify-self:end;font-size:11.5px;color:var(--muted);padding:3px 7px;border-radius:7px;background:rgba(255,255,255,.04)}
-.intro3.hx .i2-row.i2-cta,.intro3.hx .i2-row.i2-act{grid-template-columns:36px minmax(0,1fr) auto!important}
-/* sizes */
-@media (min-width:1800px){.intro3.hx{grid-template-columns:minmax(420px,1fr) minmax(0,1.2fr) minmax(0,1fr)!important}}
-@media (max-width:1300px){.intro3.hx{grid-template-columns:minmax(0,1.1fr) minmax(0,1fr)!important}.intro3.hx .hx-brand{grid-column:1/-1;flex-direction:row;flex-wrap:wrap;align-items:center;gap:12px 24px}.hx-brand .kin{flex:1 1 100%}}
-@media (max-width:760px){.intro3.hx{grid-template-columns:1fr!important;padding:14px!important}.intro3.hx .hx-fresh{display:none!important}.hx-spot{min-height:270px}.hx-stats b{font-size:16px}.hx-stats span{padding:0 14px}.hx-kv{grid-template-columns:1fr 1fr 1fr}.hx-cv{grid-column:1/-1}}
-@media (max-width:1300px){.intro3.hx .hx-brand{flex-direction:column!important;flex-wrap:nowrap!important;align-items:flex-start!important}.hx-brand .kin{flex:none}}
-@media (max-width:760px){
-  .hx-dots{display:none}
-  .hx-top{flex-wrap:wrap;gap:6px}
-  .hx-chip{height:24px;font-size:11px;padding:0 8px}
-  .hx-nm b{font-size:20px}.hx-mc b{font-size:21px}.hx-av .av{width:50px!important;height:50px!important}
-  .hx-spot-in{padding:14px 14px 12px}.hx-ch{margin:0 -14px}
 }
 /* ===== banners: slim 4:1, any landscape picture, drag to position ===== */
 .ident-ban{aspect-ratio:4/1!important;max-height:200px}
@@ -6411,28 +6306,13 @@ html body .modal.tpm>.tpm-f{padding-top:6px}
 @media (min-width:761px){html body main.tp-env .tp-main section.tp-banner:has(.tb-bg.ban){aspect-ratio:4/1!important;max-height:max(230px,32vh)!important}}
 @media (min-width:761px){html body main.tp-env .tp-main section.tp-banner .ban-edit-btn{grid-area:auto}}
 html body .modal.tpm.ban-m{width:min(720px,calc(100vw - 32px))!important;max-width:none!important}
-/* ===== phones: compact home — the coin list starts on the first screen ===== */
+/* phones: smaller trending cards */
 @media (max-width:760px){
-  .intro3.hx{gap:12px!important;padding:14px!important;margin:8px 0 12px!important}
-  .hx-brand{gap:9px!important;padding:0!important}
-  .hx-live{font-size:10px;padding:3px 9px 3px 7px}
-  .intro3.hx .kin{font-size:30px!important;line-height:1.05!important}
-  .intro3.hx .kin .kin-w .coin,.intro3.hx .kin .kin-w .av{width:30px!important;height:30px!important}
-  .hx-brand .i3-p{display:none}
-  .hx-brand .i3-cta{gap:8px}.hx-brand .i3-cta .btn{min-height:40px;padding:0 14px;font-size:13px}
-  .hx-stats{margin-top:2px;padding-top:10px}.hx-stats b{font-size:15px}.hx-stats small{font-size:10.5px}
-  /* spotlight: one tidy card — name, market cap, a slim chart; the extra numbers live on the coin page */
-  .hx-spot{min-height:0!important}
-  .hx-spot-in{gap:8px!important;padding:12px 12px 10px!important}
-  .hx-kv{display:none!important}
-  .hx-ch{height:44px!important;margin:0 -12px!important}.hx-chart{height:44px!important}
-  .hx-id{margin-top:6px!important;gap:10px!important}
-  .hx-av .av{width:42px!important;height:42px!important}
-  .hx-nm b{font-size:17px!important}.hx-nm small{font-size:11.5px}
-  .hx-mc b{font-size:18px!important}.hx-mc small{display:none}
-  .hx-k{font-size:9.5px}
   /* trending strip: smaller cards */
   .ts{margin:14px 0 4px!important}
   .ts-card{width:138px!important;height:172px!important}
   .ts-card .ts-n{font-size:13px}
 }
+
+/* the "Live on Solana" pill above the headline */
+.hx-live{align-self:flex-start;display:inline-flex;align-items:center;gap:8px;margin-bottom:10px;padding:5px 11px 5px 9px;border-radius:99px;border:1px solid rgba(61,220,151,.25);background:rgba(61,220,151,.07);color:#9FE9C6;font:700 11.5px Manrope,sans-serif;letter-spacing:.04em;text-transform:uppercase}
