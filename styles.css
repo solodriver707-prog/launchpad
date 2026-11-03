@@ -6316,3 +6316,21 @@ html body .modal.tpm.ban-m{width:min(720px,calc(100vw - 32px))!important;max-wid
 
 /* the "Live on Solana" pill above the headline */
 .hx-live{align-self:flex-start;display:inline-flex;align-items:center;gap:8px;margin-bottom:10px;padding:5px 11px 5px 9px;border-radius:99px;border:1px solid rgba(61,220,151,.25);background:rgba(61,220,151,.07);color:#9FE9C6;font:700 11.5px Manrope,sans-serif;letter-spacing:.04em;text-transform:uppercase}
+/* ===== top meme card: swipe on phones + dots ===== */
+#tc{touch-action:pan-y}
+.tc-dots{display:none}
+@media (max-width:760px){
+  .tc-dots{display:flex;justify-content:center;gap:5px;padding:0 0 10px;position:relative;z-index:2}
+  .tc-dots i{width:5px;height:5px;border-radius:99px;background:rgba(255,255,255,.22);transition:width .25s,background .25s}
+  .tc-dots i.on{width:16px;background:rgba(255,255,255,.85)}
+}
+/* ===== side fades only where there is more to scroll (no shadow over the first/last item) ===== */
+html body .tw-scroll,html body .pr-rail,html body .chips,html body .cats,html body .cpp-quick,html body .qpairs{-webkit-mask-image:none;mask-image:none}
+html body .fx-r{-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 32px),transparent)!important;mask-image:linear-gradient(90deg,#000 calc(100% - 32px),transparent)!important}
+html body .fx-l{-webkit-mask-image:linear-gradient(90deg,transparent,#000 32px)!important;mask-image:linear-gradient(90deg,transparent,#000 32px)!important}
+html body .fx-l.fx-r{-webkit-mask-image:linear-gradient(90deg,transparent,#000 32px,#000 calc(100% - 32px),transparent)!important;mask-image:linear-gradient(90deg,transparent,#000 32px,#000 calc(100% - 32px),transparent)!important}
+/* ===== phones: nothing shows above the header (Safari's see-through top bar) ===== */
+@media (max-width:1100px){
+  html body header::before{content:"";position:absolute;left:0;right:0;bottom:100%;height:240px;background:#08080a;pointer-events:none}
+  html{background-color:#08080a}
+}

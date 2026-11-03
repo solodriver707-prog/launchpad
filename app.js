@@ -1880,13 +1880,25 @@
         '<span class="tc-bar"><i style="width:' + Math.min(100, t.prog) + '%"></i></span></span>' +
       '<span class="tc-side"><span class="tc-pair">' + coinHTML(t.pair, 26) + '<b>' + esc(pairLabel(t.pair)) + '</b></span><span class="tax" style="background:' + taxBg(tm) + '"><small>TAX</small><b>' + tm + '%</b></span></span></div>' + socialsHTML(t, false, true);
   }
+  // top meme card: rotates by itself, and on phones you swipe it with a finger (left = next, right = back); dots show where you are
   var tcI = 0;
-  setInterval(function () {
-    var el = document.getElementById('tc'); if (!el || document.hidden) return;
-    if (!HERO.length) return; tcI = (tcI + 1) % HERO.length; var t = find(HERO[tcI]); if (!t) return;
-    el.classList.add('out');
-    setTimeout(function () { el.innerHTML = tcHTML(t, tcI) + '<span class="tc-timer"></span>'; el.classList.remove('out'); }, 260);
-  }, 5000);
+  function tcFill(t, i) { var n = HERO.length; return tcHTML(t, i) + '<span class="tc-timer"></span>' + (n > 1 ? '<span class="tc-dots">' + HERO.map(function (_, k) { return '<i class="' + (k === i ? 'on' : '') + '"></i>'; }).join('') + '</span>' : ''); }
+  function tcGo(i, dir) {
+    var el = document.getElementById('tc'); if (!el || !HERO.length) return; tcI = (i + HERO.length) % HERO.length; var t = find(HERO[tcI]); if (!t) return;
+    var inn = el.querySelector('.tc-in'); if (inn) { inn.style.transition = 'transform .2s ease, opacity .2s ease'; inn.style.transform = 'translateX(' + (dir < 0 ? 40 : -40) + 'px)'; inn.style.opacity = '0'; } else el.classList.add('out');
+    setTimeout(function () { el.innerHTML = tcFill(t, tcI); el.classList.remove('out'); var n2 = el.querySelector('.tc-in'); if (!n2) return; n2.style.transition = 'none'; n2.style.transform = 'translateX(' + (dir < 0 ? -40 : 40) + 'px)'; n2.style.opacity = '0'; void n2.offsetWidth; n2.style.transition = 'transform .25s ease, opacity .25s ease'; n2.style.transform = ''; n2.style.opacity = ''; }, 200);
+  }
+  setInterval(function () { if (document.hidden || (S._tcHold || 0) > Date.now() || !document.getElementById('tc')) return; tcGo(tcI + 1, 1); }, 5000);
+  (function () { var sw = null;
+    document.addEventListener('touchstart', function (e) { var el = e.target.closest && e.target.closest('#tc'); sw = el && e.touches.length === 1 && HERO.length > 1 ? { x: e.touches[0].clientX, y: e.touches[0].clientY, dx: 0, h: null, inn: el.querySelector('.tc-in') } : null; if (sw) S._tcHold = Date.now() + 12000; }, { passive: true });
+    document.addEventListener('touchmove', function (e) { if (!sw) return; var dx = e.touches[0].clientX - sw.x, dy = e.touches[0].clientY - sw.y;
+      if (sw.h === null && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) sw.h = Math.abs(dx) > Math.abs(dy);
+      if (!sw.h) return; if (e.cancelable) e.preventDefault(); sw.dx = dx; if (sw.inn) { sw.inn.style.transition = 'none'; sw.inn.style.transform = 'translateX(' + dx * .6 + 'px)'; sw.inn.style.opacity = String(Math.max(.35, 1 - Math.abs(dx) / 400)); } }, { passive: false });
+    document.addEventListener('touchend', function () { if (!sw) return; var d = sw; sw = null; if (!d.h) return;
+      suppressClick = true; setTimeout(function () { suppressClick = false; }, 350);
+      if (Math.abs(d.dx) > 45) tcGo(tcI + (d.dx < 0 ? 1 : -1), d.dx < 0 ? 1 : -1);
+      else if (d.inn) { d.inn.style.transition = 'transform .2s ease, opacity .2s ease'; d.inn.style.transform = ''; d.inn.style.opacity = ''; } }, { passive: true });
+  })();
   function introHTML() {
     var st = stats(), fresh = all().slice().sort(function (a, b) { return b.born - a.born; }).slice(0, 3);
     var t0 = find(HERO[tcI]) || all()[0];
@@ -1895,7 +1907,7 @@
         '<h1 class="kin"><span class="kin-a">pay holders in</span> <span class="kin-slot"><span class="kin-roll" id="kin-roll">' + KIN.concat([KIN[0]]).map(function (x) { return '<span class="kin-w">' + (x[0] ? (x[0].charAt(0) === '$' ? avatarHTML(find(x[0].slice(1)) || BASE[0], 64) : coinHTML(x[0], 64)) : '') + '<b>' + x[1] + '</b></span>'; }).join('') + '</span></span></h1>' +
         '<p class="i3-p"><b class="i3-slogan">Launch fair. Trade safer.</b> Your tax pays holders in anything — your own coin, SOL, gold, memes. Dev bag and risks always on the label.</p>' +
         '<div class="i3-cta"><button class="btn pri" data-act="create">Launch a coin <span aria-hidden="true">→</span></button><button class="btn sec" data-act="board">Trade anything ↓</button></div></div>' +
-      (t0 ? '<div class="tc" id="tc">' + tcHTML(t0, tcI) + '<span class="tc-timer"></span></div>' : '<div class="tc tc-empty"><b>No coins yet</b><small>Be the first — launch a coin in a minute.</small><button class="btn pri" data-act="create">Launch a coin →</button></div>') +
+      (t0 ? '<div class="tc" id="tc">' + tcFill(t0, tcI) + '</div>' : '<div class="tc tc-empty"><b>No coins yet</b><small>Be the first — launch a coin in a minute.</small><button class="btn pri" data-act="create">Launch a coin →</button></div>') +
       '<div class="i2-live"><div class="i2-lh"><span class="livedot"></span>JUST LAUNCHED</div><div id="i2-fresh">' + i2Fill(fresh) + '</div></div>' +
     '</section>';
   }
@@ -4266,6 +4278,12 @@
   window.addEventListener('popstate', function () { routeReady = false; applyRoute(); routeReady = true; });
   var OV_SEL = '#app .overlay, #app .hm-ov, #app .modal-bg';
   function ovKey(o) { var d = o.firstElementChild; return o.className.replace(/\bov-still\b/, '').trim() + '|' + (d ? d.className + '|' + (d.getAttribute('aria-label') || '') : ''); }
+  // side fades only where there IS more to scroll — a fade over the last item (or the first) just looks like a shadow on top of it
+  var FX_SEL = '.tw-scroll,.pr-rail,.chips,.cats,.cpp-quick,.qpairs';
+  function fxEdges(el) { var max = el.scrollWidth - el.clientWidth; el.classList.toggle('fx-l', max > 2 && el.scrollLeft > 2); el.classList.toggle('fx-r', max > 2 && el.scrollLeft < max - 2); }
+  function fxAll() { [].forEach.call(document.querySelectorAll(FX_SEL), fxEdges); }
+  document.addEventListener('scroll', function (e) { var el = e.target; if (el && el.matches && el.matches(FX_SEL)) fxEdges(el); }, true);
+  window.addEventListener('resize', fxAll);
   function render() {
     var ae = document.activeElement, fid = ae && ae.id, ss = null, se = null;
     try { if (fid && ae.selectionStart != null) { ss = ae.selectionStart; se = ae.selectionEnd; } } catch (e) {}
@@ -4286,6 +4304,7 @@
     if (S.share) drawShare();
     if (S.screen === 'token') { lwMount(); requestAnimationFrame(function () { lwTpsl(); lwAvgTags(); }); }
     if (S.screen === 'home') tsMount();
+    fxAll();
     if (S.screen === 'trench') trMount();
     pushWatchSig();
     setTimeout(function () { navInd(); labKick(); fwKick(); mbuyWatch(); bnKick(); }, 0);
