@@ -6455,3 +6455,9 @@ html body .fx-l.fx-r{-webkit-mask-image:linear-gradient(90deg,transparent,#000 3
 .ar-r{position:relative!important;left:auto;right:auto;bottom:auto;height:110px;margin:14px -28px 0;-webkit-mask-image:none;mask-image:none}
 .ar-spot .tc-dots{top:22px;bottom:auto;right:24px}
 @media (max-width:760px){.ar-card{padding:14px 14px 0!important}.ar-r{height:70px;margin:10px -14px 0}}
+/* burnery: four tubes (devs, holders, tax burns, buybacks) */
+.bh-stage{grid-template-columns:300px minmax(0,1fr) 250px}
+.bh-tubes{gap:6px!important}
+.bh-tube b{font-size:12.5px}
+@media (max-width:980px){.bh-stage{grid-template-columns:1fr 1fr}}
+@media (max-width:760px){.bh-stage{grid-template-columns:1fr}}

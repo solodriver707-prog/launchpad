@@ -1361,16 +1361,16 @@
     return '<section class="ltable"><div class="lt-scroll">' + head + body + '</div></section>';
   }
   // ===== THE BURNERY: leaderboard of coins that burned their own supply =====
-  var BSRC = { dev: [DEMO ? 'Dev burn' : 'Dev & holder burns', '#F5B14C'], tax: [DEMO ? 'Tax buyback' : 'Tax burn', '#3DDC97'], frozen: [DEMO ? 'Frozen dev rewards' : 'Buyback & burn', '#B48CFF'] };
+  var BSRC = { dev: ['Dev burns', '#F5B14C'], hold: ['Holder burns', '#7FB6FF'], tax: [DEMO ? 'Tax buyback' : 'Tax burn', '#3DDC97'], frozen: [DEMO ? 'Frozen dev rewards' : 'Buyback & burn', '#B48CFF'] };
   function burnsLoad() { if (!API) return; apiGet('/api/treid').then(function (d) { S.treidFw = d && d.mint ? d : null; if (S.screen === 'burn') render(); }).catch(function () {}); apiGet('/api/burns').then(function (d) { S.burnData = d; S._burns = null; S._bnAgg = null; if (S.screen === 'burn') render(); }).catch(function () {}); }
   function burnLog() {
     if (S._burns && S._burnsN === all().length) return S._burns;
     var out = [];
     if (!DEMO) {   // real: events from on-chain receipts + verified user burns; per-coin totals from the mint supply
       var D = S.burnData || { coins: [], events: [] }, seen = {};
-      D.events.forEach(function (e) { var t = S.live.filter(function (x) { return x.ca === e.mint; })[0]; if (!t) return; seen[e.mint] = seen[e.mint] || { tax: 0, frozen: 0, dev: 0 }; seen[e.mint][e.src] += e.tok;
-        out.push({ t: t, tok: e.tok, pct: e.tok / 1e9 * 100, usd: e.tok * price(t), at: e.ts, src: e.src, who: e.wallet ? short(e.wallet) : 'auto', sig: e.sig, mine: !!(S.account && e.wallet === S.account) }); });
-      D.coins.forEach(function (c) { var t = S.live.filter(function (x) { return x.ca === c.mint; })[0]; if (!t) return; var k = seen[c.mint] || { tax: 0, frozen: 0, dev: 0 }, rest = Math.max(0, c.burned - k.tax - k.frozen - k.dev);
+      D.events.forEach(function (e) { var t = S.live.filter(function (x) { return x.ca === e.mint; })[0]; if (!t) return; seen[e.mint] = seen[e.mint] || { tax: 0, frozen: 0, dev: 0, hold: 0 }; var sx = e.src === 'dev' && e.wallet && e.wallet !== t.creator ? 'hold' : e.src; seen[e.mint][sx] += e.tok;
+        out.push({ t: t, tok: e.tok, pct: e.tok / 1e9 * 100, usd: e.tok * price(t), at: e.ts, src: sx, who: e.wallet ? short(e.wallet) : 'auto', sig: e.sig, mine: !!(S.account && e.wallet === S.account) }); });
+      D.coins.forEach(function (c) { var t = S.live.filter(function (x) { return x.ca === c.mint; })[0]; if (!t) return; var k = seen[c.mint] || { tax: 0, frozen: 0, dev: 0, hold: 0 }, rest = Math.max(0, c.burned - k.tax - k.frozen - k.dev - k.hold);
         if (rest >= 1) out.push({ t: t, tok: rest, pct: rest / 1e9 * 100, usd: rest * price(t), at: 0, src: 'dev', who: 'auto', sig: null }); });   // burns we only see in the supply (older or made outside treid)
       out.sort(function (a, b) { return b.at - a.at; }); S._burns = out; S._burnsN = all().length; return out;
     }
@@ -1381,15 +1381,15 @@
         out.push({ t: t, tok: tok, pct: pct, usd: usd, at: at, src: src, who: src === 'tax' ? 'auto' : b58(4) + '…' + b58(4), sig: b58(64) }); } });
     all().forEach(function (t) { if (t.devPct != null) return; var d = devStatus(t); if (d.state !== 'out' && d.state !== 'cto' && d.state !== 'inactive') return; var r = rng(hash(t.tick + 'frz')), n = 1 + Math.floor(r() * 3), from = d.state === 'inactive' ? d.last + DR.inactive : d.outAt;
       for (var i = 0; i < n; i++) { var usd = Math.max(1, d.burned / n), mc = t.mcN, tok = usd / (mc * 1000 / 1e9), at = from + (Date.now() - from) * (.15 + r() * .8); if (at > Date.now() - 60000) continue; out.push({ t: t, tok: tok, pct: tok / 1e9 * 100, usd: usd, at: at, src: 'frozen', who: 'auto', sig: b58(64) }); } });
-    (S.myBurns || []).forEach(function (b) { var t = find(b.tick); if (t) out.push({ t: t, tok: b.tok, pct: b.tok / 1e9 * 100, usd: b.usd, at: b.at, src: 'dev', who: b.who, sig: b.sig, mine: true }); });
+    (S.myBurns || []).forEach(function (b) { var t = find(b.tick); if (t) out.push({ t: t, tok: b.tok, pct: b.tok / 1e9 * 100, usd: b.usd, at: b.at, src: devOf(t) === S.account ? 'dev' : 'hold', who: b.who, sig: b.sig, mine: true }); });
     out.sort(function (a, b) { return b.at - a.at; }); S._burns = out; S._burnsN = all().length; return out;
   }
   S.bsort = 'pct';
-  var BSI = { dev: '👤', tax: '🔄', frozen: '🧊' };
+  var BSI = { dev: '👤', hold: '🤲', tax: '🔄', frozen: '🧊' };
   function bhTubes(log) {
-    var st = { dev: 0, tax: 0, frozen: 0 }, cn = { dev: {}, tax: {}, frozen: {} }, tot = 0; log.forEach(function (b) { st[b.src] += b.tok; cn[b.src][b.t.tick] = 1; tot += b.tok; }); BN.src = st;
-    return '<div class="bh-side bh-src"><div class="bh-sh"><b>Who’s burning</b><small>share of all tokens burned</small></div><div class="bh-tubes">' + ['dev', 'tax', 'frozen'].map(function (k) { var sh = tot ? st[k] / tot * 100 : 0;
-      return '<div class="bh-tube" data-tube="' + k + '" style="--c:' + BSRC[k][1] + '"><span class="bh-pct mono" data-tpct="' + k + '">' + sh.toFixed(0) + '%</span><div class="bh-glass"><div class="bh-liq" data-tliq="' + k + '" style="height:' + Math.max(8, sh).toFixed(1) + '%"><i class="bh-wv"></i><u></u><u></u><u></u></div><span class="bh-shine"></span></div><em>' + BSI[k] + '</em><b>' + (DEMO ? { dev: 'Devs', tax: 'Buybacks', frozen: 'Frozen' } : { dev: 'Devs & holders', tax: 'Tax burns', frozen: 'Buybacks' })[k] + '</b><small class="mono" data-ttok="' + k + '">' + fmtBig(st[k]) + '</small><small class="bh-cn">' + Object.keys(cn[k]).length + (Object.keys(cn[k]).length === 1 ? ' coin' : ' coins') + '</small></div>'; }).join('') + '</div></div>';
+    var st = { dev: 0, hold: 0, tax: 0, frozen: 0 }, cn = { dev: {}, hold: {}, tax: {}, frozen: {} }, tot = 0; log.forEach(function (b) { st[b.src] += b.tok; cn[b.src][b.t.tick] = 1; tot += b.tok; }); BN.src = st;
+    return '<div class="bh-side bh-src"><div class="bh-sh"><b>Who’s burning</b><small>share of all tokens burned</small></div><div class="bh-tubes">' + ['dev', 'hold', 'tax', 'frozen'].map(function (k) { var sh = tot ? st[k] / tot * 100 : 0;
+      return '<div class="bh-tube" data-tube="' + k + '" style="--c:' + BSRC[k][1] + '"><span class="bh-pct mono" data-tpct="' + k + '">' + sh.toFixed(0) + '%</span><div class="bh-glass"><div class="bh-liq" data-tliq="' + k + '" style="height:' + Math.max(8, sh).toFixed(1) + '%"><i class="bh-wv"></i><u></u><u></u><u></u></div><span class="bh-shine"></span></div><em>' + BSI[k] + '</em><b>' + (DEMO ? { dev: 'Devs', hold: 'Holders', tax: 'Buybacks', frozen: 'Frozen' } : { dev: 'Devs', hold: 'Holders', tax: 'Tax burns', frozen: 'Buybacks' })[k] + '</b><small class="mono" data-ttok="' + k + '">' + fmtBig(st[k]) + '</small><small class="bh-cn">' + Object.keys(cn[k]).length + (Object.keys(cn[k]).length === 1 ? ' coin' : ' coins') + '</small></div>'; }).join('') + '</div></div>';
   }
   function bhGauge(log, usd, ncoins) {
     var per = S.bhPer || '1h', W0 = { '1h': 36e5, '24h': 864e5, '7d': 6048e5, '30d': 2592e6 }[per], PL = { '1h': ['hour', '1h'], '24h': ['24 hours', '24h'], '7d': ['7 days', '7d'], '30d': ['30 days', '30d'] }[per];
@@ -1405,8 +1405,8 @@
   }
   function bhKick(b, anim) {
     if (anim) { var tb0 = document.querySelector('[data-tube="' + b.src + '"]'); if (tb0) { tb0.classList.remove('kick'); void tb0.offsetWidth; tb0.classList.add('kick'); } var nd0 = document.getElementById('bh-needle'); if (nd0) { var cur = nd0.style.transform; nd0.style.transform = cur.replace(/rotate\(([-\d.]+)deg\)/, function (m0, d0) { return 'rotate(' + Math.min(90, +d0 + 12) + 'deg)'; }); setTimeout(function () { nd0.style.transform = cur; }, 380); } return; }
-    var k = b.src, st = BN.src || {}; st[k] = (st[k] || 0) + b.tok; var tot = (st.dev || 0) + (st.tax || 0) + (st.frozen || 0);
-    ['dev', 'tax', 'frozen'].forEach(function (q) { var sh = tot ? st[q] / tot * 100 : 0, l = document.querySelector('[data-tliq="' + q + '"]'), pc = document.querySelector('[data-tpct="' + q + '"]'); if (l) l.style.height = Math.max(8, sh).toFixed(1) + '%'; if (pc) pc.textContent = sh.toFixed(0) + '%'; });
+    var k = b.src, st = BN.src || {}; st[k] = (st[k] || 0) + b.tok; var tot = (st.dev || 0) + (st.hold || 0) + (st.tax || 0) + (st.frozen || 0);
+    ['dev', 'hold', 'tax', 'frozen'].forEach(function (q) { var sh = tot ? st[q] / tot * 100 : 0, l = document.querySelector('[data-tliq="' + q + '"]'), pc = document.querySelector('[data-tpct="' + q + '"]'); if (l) l.style.height = Math.max(8, sh).toFixed(1) + '%'; if (pc) pc.textContent = sh.toFixed(0) + '%'; });
     var tt = document.querySelector('[data-ttok="' + k + '"]'); if (tt) tt.textContent = fmtBig(st[k]);
     var tb = document.querySelector('[data-tube="' + k + '"]'); if (tb) { tb.classList.remove('kick'); void tb.offsetWidth; tb.classList.add('kick'); var pp = document.createElement('span'); pp.className = 'bh-tpop mono'; pp.textContent = '+' + fmtBig(b.tok); tb.appendChild(pp); setTimeout(function () { pp.remove(); }, 1400); }
     var H1 = BN.h1 || { tok: 0, usd: 0, n: 0, coins: {}, avg: 1 }; H1.tok += b.tok; H1.usd += b.usd; H1.n++; H1.coins[b.t.tick] = 1; BN.h1 = H1; BN.rate = H1.tok;
@@ -1424,7 +1424,7 @@
     var coins = Object.keys(by).map(function (k) { return by[k]; }).sort(function (a, b) { return key(b) - key(a); });
     var byPct = coins.slice().sort(function (a, b) { return b.pct - a.pct; });
     var mx = byPct.length ? byPct[0].pct : 1;
-    var srcBar = function (e) { return ['dev', 'tax', 'frozen'].filter(function (k) { return e.src[k]; }).map(function (k) { return '<i style="width:' + (e.src[k] / mx * 100).toFixed(2) + '%;background:' + BSRC[k][1] + '"></i>'; }).join(''); };
+    var srcBar = function (e) { return ['dev', 'hold', 'tax', 'frozen'].filter(function (k) { return e.src[k]; }).map(function (k) { return '<i style="width:' + (e.src[k] / mx * 100).toFixed(2) + '%;background:' + BSRC[k][1] + '"></i>'; }).join(''); };
     var podium = byPct.slice(0, 3), order = [1, 0, 2];
     var pod = '<div class="bn-pod">' + order.filter(function (i) { return podium[i]; }).map(function (i) { var e = podium[i]; return '<button class="bn-p bn-p' + (i + 1) + '" data-act="open" data-arg="' + esc(e.t.tick) + '"><span class="bn-pr">' + ['🥇', '🥈', '🥉'][i] + '</span>' + avatarHTML(e.t, i ? 48 : 62) + '<b>$' + esc(symOf(e.t)) + '</b><strong class="mono">' + e.pct.toFixed(2) + '%</strong><small>supply burned</small></button>'; }).join('') + '</div>';
     var stats = [['Supply destroyed', totTok >= 1e9 ? (totTok / 1e9).toFixed(2) + 'B' : fmtNum(Math.round(totTok)), 'tokens, all coins'], ['Value burned', '$' + fmtNum(Math.round(totUsd)), 'at time of burn'], ['Coins burning', coins.length, 'of ' + all().length + ' launched'], ['Last burn', log.length ? ago(log[0].at) + ' ago' : '—', log.length ? '$' + esc(symOf(log[0].t)) + ' · ' + BSRC[log[0].src][0] : '']];
@@ -4543,7 +4543,7 @@
             return fetch(API + '/api/burned', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sig: b.sigs[b.sigs.length - 1] }) }).then(function () { burnsLoad(); });
           }).catch(function (e) { if (e && e.message !== 'busy') toast('Burn failed: ' + chainErr(e)); });
           return; } S.pos[t.tick].tok -= tok; if (S.pos[t.tick].tok < 1) delete S.pos[t.tick];
-        var b = { t: t, tok: tok, pct: tok / 1e9 * 100, usd: tok * price(t), at: Date.now(), src: 'dev', who: S.account, sig: b58(64), mine: true, fresh: true }; S.myBurns = S.myBurns || []; S.myBurns.push({ tick: t.tick, tok: tok, usd: b.usd, at: b.at, who: S.account, sig: b.sig }); try { localStorage.setItem('dl.myburns', JSON.stringify(S.myBurns)); } catch (er) {} S._burns = null; S._bnAgg = null;
+        var b = { t: t, tok: tok, pct: tok / 1e9 * 100, usd: tok * price(t), at: Date.now(), src: devOf(t) === S.account ? 'dev' : 'hold', who: S.account, sig: b58(64), mine: true, fresh: true }; S.myBurns = S.myBurns || []; S.myBurns.push({ tick: t.tick, tok: tok, usd: b.usd, at: b.at, who: S.account, sig: b.sig }); try { localStorage.setItem('dl.myburns', JSON.stringify(S.myBurns)); } catch (er) {} S._burns = null; S._bnAgg = null;
         S.burnOpen = false; S._bnAgg = null; toast('🔥 Burned ' + fmtNum(Math.round(tok)) + ' $' + symOf(t) + ' — gone forever'); if (S.screen === 'burn') { render(); setTimeout(function () { var fl = document.getElementById('bn-fly'); if (fl) { var r = fl.getBoundingClientRect(); bnImpact(b, r.width / 2, r.height * .74); } }, 400); } else render(); })(); break;
       case 'hmapClose': if (el.classList.contains('hm-ov') && e.target.closest('[data-stop]')) break; set({ hmap: null }); break;
       case 'side': set({ side: arg }); setTimeout(lwRefit, 30); break;
