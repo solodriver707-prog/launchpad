@@ -6112,3 +6112,11 @@ header{z-index:45}   /* above the callouts rail (40): the wallet / notification 
   html body main.tp-env section.tp-banner .hs-pills>.iconbtn{width:38px!important;min-width:0!important}
   html body main.tp-env section.tp-banner .hs-pills>.soc:empty,html body main.tp-env section.tp-banner .hs-pills>.socials:empty{display:none!important}
 }
+.ts-card.ts-in{animation:tsIn .7s ease-out}
+@keyframes tsIn{from{opacity:0;transform:translateX(24px)}to{opacity:1;transform:none}}
+/* trades table (computer): maker sits at the right edge next to the txn link, like dexscreener */
+@media (min-width:761px){
+  .trow>*:nth-child(7){display:flex;justify-content:flex-end;text-align:right;min-width:0}
+  .trow.h>*:nth-child(7){display:block;text-align:right}
+  .trow .mk-cell{width:100%}
+}

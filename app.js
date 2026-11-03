@@ -1956,18 +1956,22 @@
     if (!TS.el) { TS.el = document.createElement('div'); TS.el.className = 'ts-track'; TS.el.addEventListener('mouseenter', function () { TS.hover = true; }); TS.el.addEventListener('mouseleave', function () { TS.hover = false; }); tsDrag(TS.el); requestAnimationFrame(tsTick); }
     var L = tsList(), key = L.map(function (t) { return t.tick; }).join(',');
     var vw = slot.clientWidth || window.innerWidth;
-    if (key !== TS.key || Date.now() - TS.at > 45e3 || vw !== TS.vw) { var h = L.map(tsCard).join(''); TS.el.innerHTML = h; TS.key = key; TS.at = Date.now(); TS.vw = vw;
-      if (TS.el.parentNode !== slot) slot.appendChild(TS.el);
-      TS.few = TS.el.scrollWidth <= vw + 40;   // the coins fit side by side → no sliding loop, so nothing shows up twice
-      if (!TS.few) TS.el.innerHTML = h + h;   // longer than the screen → seamless loop (the copy only ever comes into view at the wrap)
-      TS.x = TS.few ? Math.min(0, TS.x) : TS.x; tsWrap(); }
+    if (key !== TS.key) { TS.el.innerHTML = L.map(tsCard).join(''); TS.key = key; TS.at = Date.now(); TS.x = 0; TS.el.style.transform = ''; }
+    else if (Date.now() - TS.at > 45e3) {   // same coins, fresher numbers: redraw them in the order they're rotated to right now, so nothing jumps
+      var ord = [].map.call(TS.el.children, function (c) { return c.getAttribute('data-arg'); }), html = ord.map(function (tk) { var i = L.findIndex(function (t) { return t.tick === tk; }); return i < 0 ? '' : tsCard(L[i], i); }).join('');
+      TS.el.innerHTML = html; TS.at = Date.now(); }
+    TS.few = L.length < 3;   // every coin is shown once; the strip rotates them (the one leaving on the left comes back at the end) — no copies
     slot.classList.toggle('ts-still', !!TS.few);   // not sliding → no edge fade (it dimmed the first card)
     var sec = slot.closest('.ts'); if (sec) sec.style.display = L.length ? '' : 'none'; var hint = sec && sec.querySelector('.ts-h .muted'); if (hint) hint.style.display = TS.few ? 'none' : '';
     if (TS.el.parentNode !== slot) slot.appendChild(TS.el);
   }
   // finger / mouse drag with a fling: the strip follows the finger, then glides and slows down; a drag never opens a coin
-  function tsWrap() { if (TS.few) { var vw = TS.el.parentNode ? TS.el.parentNode.clientWidth : 0, min = Math.min(0, vw - TS.el.scrollWidth); if (TS.x > 0) { TS.x = 0; TS.v = 0; } if (TS.x < min) { TS.x = min; TS.v = 0; } }
-    else { var half = TS.el.scrollWidth / 2; if (half > 0) { while (-TS.x >= half) TS.x += half; while (TS.x > 0) TS.x -= half; } } TS.el.style.transform = 'translate3d(' + TS.x.toFixed(1) + 'px,0,0)'; }
+  function tsWrap() {   // rotate cards instead of wrapping a doubled list: each coin is on screen once
+    var el = TS.el, gap = 14, k = 0;
+    if (!TS.few) { while (k++ < 40 && el.firstElementChild && -TS.x >= el.firstElementChild.offsetWidth + gap) { var f = el.firstElementChild, w = f.offsetWidth + gap; el.appendChild(f); TS.x += w; if (el.scrollWidth < (el.parentNode ? el.parentNode.clientWidth : 0) + w) { f.classList.remove('ts-in'); void f.offsetWidth; f.classList.add('ts-in'); } }
+      while (k++ < 80 && el.lastElementChild && TS.x > 0) { var l = el.lastElementChild, w2 = l.offsetWidth + gap; el.insertBefore(l, el.firstElementChild); TS.x -= w2; } }
+    else { var vw = el.parentNode ? el.parentNode.clientWidth : 0, min = Math.min(0, vw - el.scrollWidth); if (TS.x > 0) { TS.x = 0; TS.v = 0; } if (TS.x < min) { TS.x = min; TS.v = 0; } }
+    el.style.transform = 'translate3d(' + TS.x.toFixed(1) + 'px,0,0)'; }
   function tsDrag(el) {
     var d = null;
     el.addEventListener('pointerdown', function (e) { if (e.button > 0) return; d = { id: e.pointerId, x: e.clientX, y: e.clientY, x0: TS.x, t: performance.now(), lx: e.clientX, lt: performance.now(), on: false }; TS.v = 0; });
