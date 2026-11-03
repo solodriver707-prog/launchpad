@@ -6104,3 +6104,11 @@ header{z-index:45}   /* above the callouts rail (40): the wallet / notification 
   .trow>*:nth-child(4){display:block!important}
   .trow>*:nth-child(5){display:none!important}
 }
+@media (max-width:760px){
+  /* the full-width rows must never widen the action-row columns (iOS fonts are wider than in tests) */
+  html body main.tp-env section.tp-banner .hs-pills{grid-template-columns:minmax(0,1fr) auto 38px 38px!important;width:auto!important;max-width:calc(100% - 28px)!important}
+  html body main.tp-env section.tp-banner .hs-pills>*{min-width:0!important;max-width:100%}
+  html body main.tp-env section.tp-banner .hs-pills>.pill:not(.copy2):not(.cs-pill){white-space:normal!important;flex-wrap:wrap;overflow:hidden;row-gap:2px}
+  html body main.tp-env section.tp-banner .hs-pills>.iconbtn{width:38px!important;min-width:0!important}
+  html body main.tp-env section.tp-banner .hs-pills>.soc:empty,html body main.tp-env section.tp-banner .hs-pills>.socials:empty{display:none!important}
+}
