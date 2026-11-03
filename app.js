@@ -3532,10 +3532,10 @@
     return '<div class="hm-ov" data-act="ctoClose"><div class="hm card-s bt" data-stop>' + head + body + '</div></div>';
   }
   function effTax(t, at) { return Math.max(Math.max(t.buy, t.sell), snipeNow(t, at)); }
-  function devQuote(amt) {   // amt is in the pair token (SOL, USDC, …)
-    var q = qOf(S.c); amt = Math.max(0, +amt || 0); var usd = amt * qUsd(q), solEq = usd / SOL_USD, px0 = 5 * 1000 / 1e9, impact = Math.min(25, solEq * 3 / Math.sqrt(5));
+  function devQuote(amt) {   // amt is in SOL — you always pay with SOL; on a coin paired with something else it's swapped to the pair token first
+    var q = qOf(S.c), solIn = Math.max(0, +amt || 0); amt = q.sol ? solIn : (qUsd(q) > 0 ? solIn * SOL_USD / qUsd(q) : 0); var usd = amt * qUsd(q), solEq = usd / SOL_USD, px0 = 5 * 1000 / 1e9, impact = Math.min(25, solEq * 3 / Math.sqrt(5));
     var tok = usd / (px0 * (1 + impact / 200)); tok = Math.min(tok, 8e8);
-    return { sol: amt, tok: tok, pct: tok / 1e9 * 100, sym: q.sym, key: q.key, isSol: !!q.sol, mint: q.mint };
+    return { sol: amt, solIn: solIn, tok: tok, pct: tok / 1e9 * 100, sym: q.sym, key: q.key, isSol: !!q.sol, mint: q.mint };
   }
   function niceQ(x) { if (!(x > 0)) return '0'; var p = Math.pow(10, Math.floor(Math.log10(x))); return String(+(Math.round(x / p) * p).toPrecision(2)); }
   function qPresets(q, list) { return q.sol ? list : list.map(function (v) { return v === '0' ? v : niceQ(+v * SOL_USD / q.usd); }); }
@@ -3558,10 +3558,10 @@
     var q = devQuote(String(c.devBuy || '').replace(',', '.')), lv = q.pct === 0 ? 'z' : q.pct < 3 ? 'g' : q.pct < 8 ? 'y' : 'r';
     var note = { z: 'No initial buy — you start with 0%. Fair launch.', g: 'Looks fair to buyers.', y: 'Buyers will notice your holding.', r: 'Big dev bag — buyers will see this as a risk.' }[lv];
     return '<div class="field devb"><div class="lbl"><b>Your initial buy <span class="muted" style="font-weight:500;font-size:12px">· optional, no tax for the creator</span></b></div>' +
-      '<div class="devb-row"><label class="devb-in" for="c-devbuy"><input id="c-devbuy" inputmode="decimal" data-bind="c.devBuy" value="' + esc(c.devBuy || '') + '" placeholder="0.0" autocomplete="off"><span class="devb-u">' + coinHTML(q.key || 'SOL', 20) + esc(q.sym) + '</span></label>' +
-      '<div class="devb-q">' + qPresets(qOf(c), ['0', '0.1', '0.5', '1', '2', '5']).map(function (v) { return '<button class="' + (String(c.devBuy || '0') === v ? 'on' : '') + '" data-act="devbuy" data-arg="' + v + '">' + (v === '0' ? 'None' : v) + '</button>'; }).join('') + '</div></div>' +
+      '<div class="devb-row"><label class="devb-in" for="c-devbuy"><input id="c-devbuy" inputmode="decimal" data-bind="c.devBuy" value="' + esc(c.devBuy || '') + '" placeholder="0.0" autocomplete="off"><span class="devb-u">' + coinHTML('SOL', 20) + 'SOL</span></label>' +
+      '<div class="devb-q">' + ['0', '0.1', '0.5', '1', '2', '5'].map(function (v) { return '<button class="' + (String(c.devBuy || '0') === v ? 'on' : '') + '" data-act="devbuy" data-arg="' + v + '">' + (v === '0' ? 'None' : v) + '</button>'; }).join('') + '</div></div>' +
       '<div class="devb-res ' + lv + '"><div class="devb-n"><span><small>You get</small><b class="mono">' + fmtNum(Math.round(q.tok)) + '</b><em>$' + esc(c.tick || 'TICKER') + '</em></span><span class="devb-p"><small>Share of supply</small><b class="mono">' + q.pct.toFixed(2) + '%</b></span></div>' +
-      '<div class="devb-bar"><i style="width:' + Math.min(100, q.pct / 20 * 100).toFixed(2) + '%"></i><u style="left:15%"><em>3%</em></u><u style="left:40%"><em>8%</em></u><u style="left:100%"><em>20%+</em></u></div><div class="devb-note">' + note + '</div></div></div>';
+      '<div class="devb-bar"><i style="width:' + Math.min(100, q.pct / 20 * 100).toFixed(2) + '%"></i><u style="left:15%"><em>3%</em></u><u style="left:40%"><em>8%</em></u><u style="left:100%"><em>20%+</em></u></div><div class="devb-note">' + note + (!q.isSol && q.solIn > 0 ? ' · your ' + q.solIn + ' SOL is swapped to ≈' + niceQ(q.sol) + ' ' + esc(q.sym) + ' first (Jupiter)' : '') + '</div></div></div>';
   }
   // ---- preview demo coins with your own images (stored only in this browser) ----
   var DIMG = {}; try { DIMG = JSON.parse(localStorage.getItem('dl.demoimgs') || '{}'); } catch (e) {}
@@ -4643,22 +4643,21 @@
         if (dq2.isSol && dq2.sol > 0 && typeof S.balance === 'number' && dq2.sol > S.balance) { toast('Not enough ' + NET + 'SOL for a ' + dq2.sol + ' SOL buy — balance ' + S.balance.toFixed(3)); break; }
         if (!S.demoLaunch) {
           var tax0 = Math.max(c.buy, c.sell), sn0 = c.snipe || {}, cc0 = JSON.parse(JSON.stringify({ name: c.name.trim(), tick: c.tick, spec: c.spec, split: c.split, rw: rwOf(c) ? { mint: rwOf(c).mint } : 'coin', buy: c.buy, sell: c.sell, x: c.x, tg: c.tg, web: c.web, desc: c.desc, img: c.img, banner: c.banner, snipe: sn0, pair: c.pair, q: c.q || null }));
-          var solB = dq2.isSol ? dq2.sol : 0, qq1 = qOf(c);
+          var solB = dq2.isSol ? dq2.sol : dq2.solIn, qq1 = qOf(c);
           if (typeof S.balance === 'number' && S.balance < solB + 0.03) { toast('You need about ' + (solB + 0.03).toFixed(2) + ' ' + NET + 'SOL (coin creation ≈ 0.03 SOL' + (solB ? ' + your ' + solB + ' SOL buy' : '') + ')'); break; }
           var vc1 = c.van && c.van.mode === 'custom' && (c.van.suf || '').length >= 3, suf1 = vc1 ? c.van.suf : 'trd', vf1 = vc1 ? vanFee(suf1.length) : 0, grindT = null;
           if (typeof S.balance === 'number' && S.balance < solB + 0.03 + vf1) { toast('You need about ' + (solB + 0.03 + vf1).toFixed(2) + ' ' + NET + 'SOL incl. the ' + vf1 + ' SOL address fee'); break; }
           S.busy = 'Finding address …' + suf1; render();
           var gBox = document.getElementById('toasts'), gEl = document.createElement('div'); gEl.className = 'toast grind-t'; gEl.innerHTML = '<span class="gr-sp"></span><span>Finding your address <b class="mono">…' + esc(suf1) + '</b> <small class="mono" id="gr-n"></small></span>'; if (gBox) gBox.appendChild(gEl);
           var gStart = Date.now();
-          chainLib().then(function (T) { return dq2.isSol || !dq2.sol ? T : T.tokenBalance({ rpc: RPC, owner: S.account, mint: qq1.mint }).then(function (hb) { if (hb >= dq2.sol) return T;
-            // not enough of the pair token for your initial buy: swap the rest from SOL first (Jupiter), like buyers do — nobody needs to hold the pair token
-            var need = dq2.sol - hb, solNeed = need * qq1.usd / SOL_USD * 1.04, who0 = S.account, pt = { live: true, qMint: qq1.mint, qSym: qq1.sym, pair: qq1.key, qUsd: qq1.usd, qDec: qq1.dec };
+          chainLib().then(function (T) { if (dq2.isSol || !(dq2.solIn > 0)) return T;
+            // you pay your initial buy in SOL: it's swapped to the pair token first (Jupiter), then the coin launches with what actually arrived
+            var who0 = S.account, pt = { live: true, qMint: qq1.mint, qSym: qq1.sym, pair: qq1.key, qUsd: qq1.usd, qDec: qq1.dec };
             if (!(qq1.usd > 0)) throw new Error('No price for ' + qq1.sym + ' right now — try again in a moment');
-            if (typeof S.balance === 'number' && S.balance < solNeed + 0.03 + vf1) throw new Error('You need about ' + (solNeed + 0.03 + vf1).toFixed(3) + ' SOL (≈' + solNeed.toFixed(3) + ' SOL becomes ' + niceQ(need) + ' ' + qq1.sym + ' for your initial buy + coin creation)');
-            gEl.querySelector('span:last-child').innerHTML = 'Step 1 of 2: swapping <b>' + solNeed.toFixed(3) + ' SOL → ' + esc(qq1.sym) + '</b> for your initial buy — confirm in your wallet';
-            return jupSolToPair0(pt, Math.ceil(solNeed * 1e9)).then(function (sig) { return swapDelivered(sig, who0, qq1.mint); }).then(function (got) {
+            gEl.querySelector('span:last-child').innerHTML = 'Step 1 of 2: swapping <b>' + dq2.solIn + ' SOL → ' + esc(qq1.sym) + '</b> for your initial buy — confirm in your wallet';
+            return jupSolToPair0(pt, Math.floor(dq2.solIn * 1e9)).then(function (sig) { return swapDelivered(sig, who0, qq1.mint); }).then(function (got) {
               if (!(got > 0)) throw new Error('The swap to ' + qq1.sym + ' didn’t arrive — nothing was launched');
-              var have = hb + got, dp = Math.pow(10, Math.min(6, qq1.dec || 6)); dq2.sol = Math.floor(Math.min(dq2.sol, have) * dp) / dp; gEl.querySelector('span:last-child').innerHTML = 'Step 2 of 2: finding your address <b class="mono">…' + esc(suf1) + '</b> <small class="mono" id="gr-n"></small>'; return T; }); }); })
+              var dp = Math.pow(10, Math.min(6, qq1.dec || 6)); dq2.sol = Math.floor(got * dp) / dp; gEl.querySelector('span:last-child').innerHTML = 'Step 2 of 2: finding your address <b class="mono">…' + esc(suf1) + '</b> <small class="mono" id="gr-n"></small>'; return T; }); })
           .then(function (T) { return T.grind(suf1, { onProgress: function (n, exp) { var el = document.getElementById('gr-n'); if (!el) return; var rate = n / Math.max(0.2, (Date.now() - gStart) / 1000), left = Math.max(0, (exp - n) / rate); el.textContent = fmtNum(n) + ' tried · ' + (n >= exp ? 'any moment now — it\'s luck' : left < 5 ? 'almost there' : '~' + (left < 90 ? Math.ceil(left) + 's' : Math.ceil(left / 60) + ' min') + ' left'); } }); })
           .then(function (g) { gEl.remove(); grindT = g; S.busy = 'Saving logo…'; render();
             var fsU = S.wallet && S.wallet.features['solana:signMessage'], tsU = Date.now(), whoU = S.account;   // the upload is signed by your wallet (protects the IPFS account from spam)
