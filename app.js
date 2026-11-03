@@ -1912,6 +1912,7 @@
     if (!TS.el) { TS.el = document.createElement('div'); TS.el.className = 'ts-track'; TS.el.addEventListener('mouseenter', function () { TS.hover = true; }); TS.el.addEventListener('mouseleave', function () { TS.hover = false; }); requestAnimationFrame(tsTick); }
     var L = tsList(), key = L.map(function (t) { return t.tick; }).join(',');
     if (key !== TS.key || Date.now() - TS.at > 45e3) { var h = L.map(tsCard).join(''); TS.few = L.length < 6; TS.el.innerHTML = TS.few ? h : h + h; TS.key = key; TS.at = Date.now(); if (TS.few) { TS.x = 0; TS.el.style.transform = ''; } }
+    slot.classList.toggle('ts-still', !!TS.few);   // not sliding → no edge fade (it dimmed the first card)
     var sec = slot.closest('.ts'); if (sec) sec.style.display = L.length ? '' : 'none'; var hint = sec && sec.querySelector('.ts-h .muted'); if (hint) hint.style.display = TS.few ? 'none' : '';
     if (TS.el.parentNode !== slot) slot.appendChild(TS.el);
   }

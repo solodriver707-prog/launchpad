@@ -5908,3 +5908,5 @@ html body .hdr-right .wbal .wb-acts .btn.pri{display:inline-flex!important}   /*
 .i2-cta{border:1px dashed rgba(255,255,255,.14)!important;background:transparent}
 .i2-plus{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;border:1px dashed rgba(255,255,255,.25);color:var(--soft);font-size:18px;flex:none}
 .i2-go{font-size:12px;color:var(--ivory,#efe7d6);white-space:nowrap;margin-left:auto}
+
+.ts-view.ts-still{-webkit-mask-image:none;mask-image:none}
