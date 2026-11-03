@@ -2161,11 +2161,12 @@
     var up = last ? last.c >= (bars[0] || last).o : true, lc = up ? '#3DDC97' : '#F2708A';
     LW.cs.applyOptions({ visible: S.ctype !== 'line' }); LW.ls.applyOptions({ visible: S.ctype === 'line', lineColor: lc, topColor: up ? 'rgba(61,220,151,.22)' : 'rgba(242,112,138,.22)', bottomColor: 'rgba(0,0,0,0)' });
     var cd = bars.map(function (x) { return { time: lwTime(x.t), open: lwConv(x.o), high: lwConv(x.h), low: lwConv(x.l), close: lwConv(x.c) }; });
+    var cdc = bars.map(function (x, i) { return x.fill ? { time: cd[i].time } : cd[i]; });   // candles: minutes without trades stay empty (real time gaps, no fake flat candles); the line view keeps a continuous line
     LW.cs.setMarkers([]); LW.ls.setMarkers([]); LW.lines.forEach(function (l) { try { l.s.removePriceLine(l.l); } catch (e) {} }); LW.lines = [];
-    LW.cs.setData(cd); LW.ls.setData(cd.map(function (x) { return { time: x.time, value: x.close }; }));
+    LW.cs.setData(cdc); LW.ls.setData(cd.map(function (x) { return { time: x.time, value: x.close }; }));
     var vm = S.cden === 'sol' ? 1 : SOL_USD;
-    LW.vs.applyOptions({ visible: !!S.cvol }); LW.vs.setData(bars.map(function (x) { return { time: lwTime(x.t), value: x.v * vm, color: x.c >= x.o ? 'rgba(61,220,151,.35)' : 'rgba(242,112,138,.35)' }; }));
-    var ma = []; if (cd.length > 5) { var per = Math.min(20, Math.max(3, Math.floor(cd.length / 2))), sum = 0; for (var i = 0; i < cd.length; i++) { sum += cd[i].close; if (i >= per) sum -= cd[i - per].close; if (i >= per - 1) ma.push({ time: cd[i].time, value: sum / per }); } }
+    LW.vs.applyOptions({ visible: !!S.cvol }); LW.vs.setData(bars.map(function (x) { return x.fill ? { time: lwTime(x.t) } : { time: lwTime(x.t), value: x.v * vm, color: x.c >= x.o ? 'rgba(61,220,151,.35)' : 'rgba(242,112,138,.35)' }; }));
+    var ma = [], rc = cdc.filter(function (x) { return x.close != null; }); if (rc.length > 5) { var per = Math.min(20, Math.max(3, Math.floor(rc.length / 2))), sum = 0; for (var i = 0; i < rc.length; i++) { sum += rc[i].close; if (i >= per) sum -= rc[i - per].close; if (i >= per - 1) ma.push({ time: rc[i].time, value: sum / per }); } }   // average of real candles only
     LW.ma.setData(ma); LW.ma.applyOptions({ visible: !!S.cma });
     LW.M = lwMarks(t, bars); LW.byT = {}; bars.forEach(function (x) { LW.byT[lwTime(x.t)] = x; }); requestAnimationFrame(lwPlace);
     if (av) { var mcv = function (u) { var v = S.chartMode === 'price' ? u / 1e9 : u; return S.cden === 'sol' ? v / SOL_USD : v; };
@@ -2173,7 +2174,11 @@
       if (av.ex) LW.lines.push({ s: main, l: main.createPriceLine({ price: mcv(av.ex), color: '#FF9A3C', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, axisLabelTextColor: '#fff', title: '' }) }); }
     LW.avgV = av ? { en: av.en ? mcv(av.en) : null, ex: av.ex ? mcv(av.ex) : null } : null;
     LW.chart.priceScale('right').applyOptions({ mode: S.cscale });
-    if (fresh) { var tsc = LW.chart.timeScale(); tsc.applyOptions({ barSpacing: 9 }); tsc.scrollToRealTime(); requestAnimationFrame(function () { if (LW.chart) LW.chart.timeScale().scrollToRealTime(); }); LW.chart.priceScale('right').applyOptions({ autoScale: true }); }
+    var nReal = bars.filter(function (x) { return !x.fill; }).length, hw = (LW.host && LW.host.clientWidth) || 0;
+    if (!fresh && LW.fit && LW.fit.view === view && (LW.fit.w === 0 && hw > 0 || LW.fit.n <= 2 && nReal > 2)) fresh = true;   // first fit happened before the trades loaded / before the chart had a size → fit again once
+    if (fresh) LW.fit = { view: view, w: hw, n: nReal };
+    if (fresh) { var tsc = LW.chart.timeScale(), fw = hw || 800, fb = Math.max(1, bars.length + 8);
+      if (fw / fb >= 2.5 && fw / fb < 9) { tsc.applyOptions({ barSpacing: fw / fb }); tsc.fitContent(); } else { tsc.applyOptions({ barSpacing: Math.max(2.5, Math.min(9, fw / fb)) }); tsc.scrollToRealTime(); }   /* a young coin's whole life fits on screen (up to the thinnest readable candle) */ LW.chart.priceScale('right').applyOptions({ autoScale: true }); }
     lwLegend(null);
   }
   function lwLegend(bar) {
