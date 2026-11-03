@@ -6411,3 +6411,28 @@ html body .modal.tpm>.tpm-f{padding-top:6px}
 @media (min-width:761px){html body main.tp-env .tp-main section.tp-banner:has(.tb-bg.ban){aspect-ratio:4/1!important;max-height:max(230px,32vh)!important}}
 @media (min-width:761px){html body main.tp-env .tp-main section.tp-banner .ban-edit-btn{grid-area:auto}}
 html body .modal.tpm.ban-m{width:min(720px,calc(100vw - 32px))!important;max-width:none!important}
+/* ===== phones: compact home — the coin list starts on the first screen ===== */
+@media (max-width:760px){
+  .intro3.hx{gap:12px!important;padding:14px!important;margin:8px 0 12px!important}
+  .hx-brand{gap:9px!important;padding:0!important}
+  .hx-live{font-size:10px;padding:3px 9px 3px 7px}
+  .intro3.hx .kin{font-size:30px!important;line-height:1.05!important}
+  .intro3.hx .kin .kin-w .coin,.intro3.hx .kin .kin-w .av{width:30px!important;height:30px!important}
+  .hx-brand .i3-p{display:none}
+  .hx-brand .i3-cta{gap:8px}.hx-brand .i3-cta .btn{min-height:40px;padding:0 14px;font-size:13px}
+  .hx-stats{margin-top:2px;padding-top:10px}.hx-stats b{font-size:15px}.hx-stats small{font-size:10.5px}
+  /* spotlight: one tidy card — name, market cap, a slim chart; the extra numbers live on the coin page */
+  .hx-spot{min-height:0!important}
+  .hx-spot-in{gap:8px!important;padding:12px 12px 10px!important}
+  .hx-kv{display:none!important}
+  .hx-ch{height:44px!important;margin:0 -12px!important}.hx-chart{height:44px!important}
+  .hx-id{margin-top:6px!important;gap:10px!important}
+  .hx-av .av{width:42px!important;height:42px!important}
+  .hx-nm b{font-size:17px!important}.hx-nm small{font-size:11.5px}
+  .hx-mc b{font-size:18px!important}.hx-mc small{display:none}
+  .hx-k{font-size:9.5px}
+  /* trending strip: smaller cards */
+  .ts{margin:14px 0 4px!important}
+  .ts-card{width:138px!important;height:172px!important}
+  .ts-card .ts-n{font-size:13px}
+}
