@@ -488,13 +488,13 @@
       (isCA(q) ? '<button class="cpp-it ca" data-act="' + act + '" data-arg="' + esc(q) + '"><span class="coin" style="width:26px;height:26px;background:#3A3A3D;font-size:12px">?</span><span><b>Use this contract</b><small class="mono">' + esc(short(q)) + '</small></span></button>' : '<div class="muted cpp-none">No verified token found — try the ticker or paste the contract address.</div>');
   }
   // holder-reward picker: grey out tokens treid can't pay holders in (checked on-chain), with the reason, before anyone picks one
-  function rwMark(d, list) { chainLib().then(function (T) { (list || []).slice(0, 10).forEach(function (t) { T.quoteInfo({ rpc: RPC, mint: t.mint, reward: true }).then(function (qi) {
+  function rwMark(d, list, reward) { chainLib().then(function (T) { (list || []).slice(0, 10).forEach(function (t) { T.quoteInfo({ rpc: RPC, mint: t.mint, reward: reward }).then(function (qi) {
     if (qi.ok) return; var b = d.querySelector('[data-arg="' + t.mint + '"]'); if (!b) return; b.classList.add('no'); b.disabled = true; b.title = qi.reason || '';
-    var sm = b.querySelector('small'); if (sm) sm.textContent = /transfer hook/.test(qi.reason) ? 'Can’t pay holders in this · transfer hook' : /transfer tax/.test(qi.reason) ? 'Can’t pay holders in this · has its own transfer tax' : 'Can’t pay holders in this'; }).catch(function () {}); }); }); }
+    var sm = b.querySelector('small'); var what = reward ? 'Can’t pay holders in this' : 'Can’t be a pair'; if (sm) sm.textContent = /transfer hook/.test(qi.reason) ? what + ' · transfer hook' : /transfer tax/.test(qi.reason) ? what + ' · has its own transfer tax' : /approval from Meteora/.test(qi.reason) ? what + ' · not approved by Meteora yet' : what; }).catch(function () {}); }); }); }
   function tokSearch(q, dropId, act) {   // name / ticker search through the server (verified tokens only), results drawn without re-rendering the page
     clearTimeout(S.tsT); var el = function () { return document.getElementById(dropId); };
     if (q.length < 2) { if (el()) el().style.display = 'none'; return; }
-    S.tsT = setTimeout(function () { (API ? apiGet('/api/tsearch?q=' + encodeURIComponent(q)) : Promise.resolve([])).catch(function () { return []; }).then(function (list) { var d = el(); if (!d) return; d.innerHTML = tokDrop(list, act, q); d.style.display = 'flex'; if (act === 'rwPick') rwMark(d, list); }); }, 250);
+    S.tsT = setTimeout(function () { (API ? apiGet('/api/tsearch?q=' + encodeURIComponent(q)) : Promise.resolve([])).catch(function () { return []; }).then(function (list) { var d = el(); if (!d) return; d.innerHTML = tokDrop(list, act, q); d.style.display = 'flex'; if (act === 'rwPick') rwMark(d, list, true); else if (act === 'qpick') rwMark(d, list, false); }); }, 250);
   }
   function rwSelect(mint, pre) {
     if (mint === 'coin') { setC({ rw: 'coin' }); S.rwErr = ''; return; }
@@ -510,8 +510,10 @@
       var k = qReg(pr.symbol, mint, tokImg(mint) || pr.icon, pr.name); if (pre && pre.img) PAIR_INFO[k].img = pre.img; S.c.rw = { mint: mint, sym: pr.symbol || k, key: k, warn: qi.warn || null }; S.rwq = ''; render();
     }).catch(function (e) { S.rwBusy = null; S.rwErr = 'Couldn’t check this token: ' + chainErr(e); render(); });
   }
+  function warnTag(w) { return /^Its issuer can freeze accounts/.test(w) && w.indexOf(' · ') < 0 ? '<small class="rpp-st">ⓘ ' + esc(w) + '</small>' : '<small class="rpp-st warn">⚠ ' + esc(w) + '</small>'; }   // a plain freeze authority (USDC, cbBTC…) is a note, not an alarm
   function rewardPick(c) {
-    if (!(c.split && c.split.h > 0)) return '';
+    if (!(c.buy > 0 || c.sell > 0) || !c.split) return '';
+    if (!(c.split.h > 0)) return '<div class="field cpp rwp"><div class="spk-h"><b>Holders get paid in</b></div><small class="spk-note">Holders get <b>0%</b> of the tax in your split, so there is nothing to pay them. Give holders a share above to choose what they’re paid in — <b>$' + esc(c.tick || 'TICKER') + '</b> (your own coin) is the best choice.</small></div>';
     var tk = '$' + (c.tick || 'TICKER'), r = rwOf(c), q = qOf(c), chips = [[WSOL, 'SOL'], [USDC_MINT, 'USDC']];
     if (q.mint !== WSOL && q.mint !== USDC_MINT) chips.push([q.mint, q.key]);
     if (r && !chips.some(function (x) { return x[0] === r.mint; })) chips.push([r.mint, r.key]);
@@ -526,7 +528,7 @@
       '<div class="cpp-s">' + I.search + '<input id="rw-q" data-rwq value="' + esc(S.rwq) + '" placeholder="Search name, ticker or paste contract address" autocomplete="off" spellcheck="false"><div class="cpp-drop" id="rw-drop" style="display:none"></div></div></div>' +
       '<div class="cpp-quick drag-scroll rwp-first">' + own + (q.mint !== WSOL && q.mint !== USDC_MINT ? '<button class="cpp-q' + (r && r.mint === q.mint ? ' on' : '') + '" data-act="rwPick" data-arg="' + esc(q.mint) + '">' + coinHTML(q.key, 20) + esc(q.sym) + ' <small class="muted">pair</small></button>' : '') + '</div>' +
       tabs + '<div class="cpp-quick drag-scroll">' + preChips + '</div>' +
-      (S.rwBusy ? '<small class="rpp-st">Checking token…</small>' : S.rwErr ? '<small class="rpp-st bad">' + esc(S.rwErr) + '</small>' : r && r.warn ? '<small class="rpp-st warn">⚠ ' + esc(r.warn) + '</small>' : '') +
+      (S.rwBusy ? '<small class="rpp-st">Checking token…</small>' : S.rwErr ? '<small class="rpp-st bad">' + esc(S.rwErr) + '</small>' : r && r.warn ? warnTag(r.warn) : '') +
       '<small class="spk-note">' + (!r ? 'Paying holders in <b>' + esc(tk) + '</b> is the strongest choice: their bags grow and nothing is ever sold, so payouts never push your price down.'
         : 'Each payout first sells the tax for ' + esc(r.sym) + ' — that sale shows on your chart. Coins that pay in their own token keep steadier charts; most strong communities choose ' + esc(tk) + '.') + '</small></div>';
   }
@@ -3704,7 +3706,7 @@
       '<div class="cpp-tabs">' + RW_TABS.map(function (x) { return '<button class="' + ((S.qTab || 'crypto') === x[0] ? 'on' : '') + '" data-act="qTab" data-arg="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div>' +
       '<div class="cpp-quick drag-scroll">' + (RW_PRE[S.qTab || 'crypto'] || []).map(function (p) { var on = String(q.sym).toLowerCase() === p[1].toLowerCase() || (p[0] === 'SOL' && cur === WSOL) || (p[0] === 'USDC' && cur === USDC_MINT); return '<button class="cpp-q' + (on ? ' on' : '') + '" data-act="qPre" data-arg="' + esc(p[1]) + '">' + preIcon(p, 20) + '$' + esc(p[0]) + '</button>'; }).join('') + '</div>' +
       '<div class="rpp-s">' + I.search + '<input id="c-qmint" data-qmint value="' + esc(S.cpq) + '" placeholder="Search name, ticker or paste contract address" autocomplete="off" spellcheck="false"><div class="cpp-drop" id="q-drop" style="display:none"></div></div>' +
-      (S.qBusy ? '<small class="rpp-st">Checking token…</small>' : S.qErr ? '<small class="rpp-st bad">' + esc(S.qErr) + '</small>' : q.warn ? '<small class="rpp-st warn">⚠ ' + esc(q.warn) + '</small>' : '') +
+      (S.qBusy ? '<small class="rpp-st">Checking token…</small>' : S.qErr ? '<small class="rpp-st bad">' + esc(S.qErr) + '</small>' : q.warn ? warnTag(q.warn) : '') +
       '<small class="rpp-note">Buyers pay in <b>' + esc(q.sym) + '</b>. Price, trading fees and your creator rewards are all in ' + esc(q.sym) + (q.sol ? '' : ' · 1 ' + esc(q.sym) + ' ≈ $' + usdTxt(q.usd)) + '.</small></div>';
   }
   function pairPicker(c) {

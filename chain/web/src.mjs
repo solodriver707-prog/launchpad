@@ -43,7 +43,7 @@ export async function quoteInfo({ rpc, mint, reward = false }) {   // reward: on
   const ai = await C(rpc).getAccountInfo(m); if (!ai) return { mint: m.toBase58(), ok: false, reason: 'No token found at this address on this network' };
   const is22 = ai.owner.equals(TOKEN_2022_PROGRAM_ID); if (!is22 && !ai.owner.equals(TOKEN_PROGRAM_ID)) return { mint: m.toBase58(), ok: false, reason: 'This address is not a token mint' };
   const mi = await getMint(C(rpc), m, 'confirmed', is22 ? TOKEN_2022_PROGRAM_ID : TOKEN_PROGRAM_ID); const out = { mint: m.toBase58(), decimals: mi.decimals, program: is22 ? 'token2022' : 'spl', ok: true };
-  if (mi.freezeAuthority) out.warn = 'This token has a freeze authority — its issuer can freeze holders';
+  if (mi.freezeAuthority) out.warn = 'Its issuer can freeze accounts (normal for issuer-backed tokens like USDC, USDT and cbBTC)';
   if (is22) { const ext = getExtensionTypes(mi.tlvData); const tf = getTransferFeeConfig(mi);
     if (tf && (tf.newerTransferFee.transferFeeBasisPoints > 0 || tf.olderTransferFee.transferFeeBasisPoints > 0)) return { ...out, ok: false, reason: reward ? 'charges its own transfer tax on every transfer, so holders would lose part of each payout — pick another token' : 'Tokens with a transfer tax can’t be used as a pair' };
     const bad = ext.filter((e) => !ALLOWED_EXT.has(e) && e !== ExtensionType.TransferFeeConfig);
