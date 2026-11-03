@@ -1913,7 +1913,7 @@
   // more than 3 coins: the box pages through the 9 newest, 3 at a time
   var i2Pg = 0; setInterval(function () { var el = document.getElementById('i2-fresh'); if (!el || document.hidden || (el.matches && el.matches(':hover'))) return;
     var list = all().filter(function (t) { return !t.archived; }).sort(function (a, b) { return b.born - a.born; }).slice(0, 10); if (list.length <= 5) { var f = i2Fill(list); if (el._f !== f) { el._f = f; el.innerHTML = f; } return; }
-    i2Pg = (i2Pg + 5) % (Math.ceil(list.length / 5) * 5); el.classList.add('out'); setTimeout(function () { el.innerHTML = i2Fill(list.slice(i2Pg, i2Pg + 5)); el.classList.remove('out'); }, 260); }, 6000);
+    i2Pg = (i2Pg + 5) % list.length; el.classList.add('out'); setTimeout(function () { el.innerHTML = i2Fill(list.slice(i2Pg).concat(list).slice(0, 5)); /* always 5 coins (wraps around) — trades never fill a page */ el.classList.remove('out'); }, 260); }, 6000);
   function i2Row(t) {
     return '<button class="i2-row" data-act="open" data-arg="' + esc(t.tick) + '">' + avatarHTML(t, 34) + '<span class="i2-n"><b>' + esc(t.name) + '</b><small>$' + esc(symOf(t)) + ' · ' + coinHTML(t.pair, 13) + esc(pairLabel(t.pair)) + ' · <span class="i2-age" data-t="' + t.born + '">' + ago(t.born) + '</span></small></span><span class="i2-sp">' + lbSpark(t, 64, 24, 'i2' + t.tick) + '</span><span class="i2-mc mono">' + fmtK(t.mcN) + '<em class="' + (chgOver(t, 360) >= 0 ? 'up' : 'down') + '">' + chgTxt(chgOver(t, 360)) + '</em></span><span class="tax" style="background:' + taxBg(Math.max(t.buy, t.sell)) + ';min-width:38px;padding:3px 5px"><b style="font-size:12px">' + Math.max(t.buy, t.sell) + '%</b></span></button>';
   }

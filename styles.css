@@ -6238,3 +6238,27 @@ header + .tape{position:relative;z-index:1}
 /* wide screens: the three hero parts sized to their content, no stretched emptiness */
 @media (min-width:1500px){.intro3{grid-template-columns:minmax(0,1fr) minmax(420px,560px) minmax(380px,480px)}}
 @media (max-width:1300px){#tc .tc-pair b{display:none}#tc .tc-pair{padding:4px}#tc .tc-in{gap:12px}}
+/* banner block: the 3:1 banner shape only when the coin has a banner image — without one it stays compact (no big blurred empty area) */
+@media (min-width:761px){
+  html body main.tp-env .tp-main section.tp-banner:not(:has(.tb-bg.ban)){aspect-ratio:auto!important;min-height:0!important;grid-template-rows:auto auto!important;grid-template-areas:"av id key" "kpi kpi kpi"!important}
+  html body main.tp-env .tp-main section.tp-banner:not(:has(.tb-bg.ban))>.tb-bg{opacity:.55!important}
+  /* the numbers: five equal cells with thin dividers instead of five islands spread across the width */
+  html body main.tp-env .tp-main section.tp-banner>.tb-kpi{display:grid!important;grid-template-columns:1.4fr repeat(4,1fr);gap:0!important;padding:0!important}
+  html body main.tp-env .tp-main section.tp-banner>.tb-kpi>div{padding:10px 16px 11px;border-left:1px solid rgba(255,255,255,.07);align-items:flex-start!important;justify-content:flex-end}
+  html body main.tp-env .tp-main section.tp-banner>.tb-kpi>div:first-child{border-left:0}
+}
+@media (min-width:761px){
+  /* the 3:1 shape is a minimum: when the middle column is narrow and the info wraps, the block grows instead of cutting the numbers off */
+  html body main.tp-env .tp-main section.tp-banner{overflow:visible!important}
+  html body main.tp-env .tp-main section.tp-banner>.tb-bg{border-radius:inherit;overflow:hidden!important}
+  html body main.tp-env .tp-main section.tp-banner::after{border-radius:inherit}
+  html body main.tp-env .tp-main section.tp-banner>.tb-kpi{border-radius:0 0 inherit inherit;border-bottom-left-radius:18px;border-bottom-right-radius:18px}
+}
+/* filter windows: everything sits 18px in from the edges */
+html body .modal.tpm{padding:0 18px 18px!important;gap:14px!important}
+html body .modal.tpm>*{margin-left:0!important;margin-right:0!important}
+html body .modal.tpm>.tpm-h{margin:0 -18px!important;padding:14px 18px!important}
+html body .modal.tpm>.inp{width:100%;min-height:46px}
+html body .modal.tpm>.tpm-f{padding-top:6px}
+@media (min-width:761px){html body main.tp-env .tp-main section.tp-banner{min-height:auto!important;max-height:none!important}}
+@media (min-width:1600px){html body main.tp-env .tp-main section.tp-banner:has(.tb-bg.ban){max-height:420px!important}}
