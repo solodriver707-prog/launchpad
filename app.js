@@ -155,7 +155,7 @@
   function coinHTML(id, size) {
     var p = pairInfo(id);
     if (p.meme) return '<span class="coin meme" style="width:' + size + 'px;height:' + size + 'px">' + avatarHTML(p.meme, size) + '</span>';
-    if (p.img) return '<span class="coin img" style="width:' + size + 'px;height:' + size + 'px"><img src="' + esc(p.img) + '" alt="' + esc(p.name) + '"></span>';
+    if (p.img) return '<span class="coin img" style="width:' + size + 'px;height:' + size + 'px"><img src="' + esc(p.img) + '" alt="' + esc(p.name) + '"' + (p.alt && p.alt !== p.img ? ' data-alt="' + esc(p.alt) + '"' : '') + '></span>';
     var fs = Math.round(size * (p.g.length > 2 ? 0.3 : p.g.length > 1 ? 0.38 : 0.52));
     return '<span class="coin" style="width:' + size + 'px;height:' + size + 'px;background:' + p.c + ';font-size:' + fs + 'px">' + esc(p.g) + '</span>';
   }
@@ -488,7 +488,7 @@
   function rwOf(c) { return c && c.rw && c.rw.mint ? c.rw : null; }   // null = the coin itself
   function rwUri(c) { var r = rwOf(c); return r ? (r.mint === qOf(c).mint ? 'p' : r.mint) : ''; }
   function tokDrop(list, act, q) {
-    return (list || []).map(function (t) { var k = qReg(t.symbol, t.mint, tokImg(t.mint) || t.icon, t.name); return '<button class="cpp-it" data-act="' + act + '" data-arg="' + esc(t.mint) + '">' + coinHTML(k, 26) + '<span><b>' + esc(t.symbol || k) + ' <em class="rwp-v">✓</em></b><small>' + esc(t.name || '') + ' · ' + esc(short(t.mint)) + '</small></span></button>'; }).join('') ||
+    return (list || []).map(function (t) { var k = qReg(t.symbol, t.mint, tokImg(t.mint) || t.icon, t.name, t.icon); return '<button class="cpp-it" data-act="' + act + '" data-arg="' + esc(t.mint) + '">' + coinHTML(k, 26) + '<span><b>' + esc(t.symbol || k) + ' <em class="rwp-v">✓</em></b><small>' + esc(t.name || '') + ' · ' + esc(short(t.mint)) + '</small></span></button>'; }).join('') ||
       (isCA(q) ? '<button class="cpp-it ca" data-act="' + act + '" data-arg="' + esc(q) + '"><span class="coin" style="width:26px;height:26px;background:#3A3A3D;font-size:12px">?</span><span><b>Use this contract</b><small class="mono">' + esc(short(q)) + '</small></span></button>' : '<div class="muted cpp-none">No verified token found — try the ticker or paste the contract address.</div>');
   }
   // holder-reward picker: grey out tokens treid can't pay holders in (checked on-chain), with the reason, before anyone picks one
@@ -512,7 +512,7 @@
       if (!qi.ok) { var nm = pr.symbol ? '$' + pr.symbol : 'This token'; S.rwErr = /^[a-z]/.test(qi.reason || '') ? nm + ' ' + qi.reason : (qi.reason || nm + ' can’t be paid out'); render(); return; }
       if (pre && (!pr.verified || String(pr.symbol || '').toLowerCase() !== pre.sym.toLowerCase())) { if (pre.retry) return pre.retry(); S.rwErr = 'That shortcut didn’t check out — try the search'; render(); return; }
       if (!pr.verified) { S.rwErr = 'Only verified tokens can be holder rewards (so holders never get a fake).'; render(); return; }
-      var k = qReg(pr.symbol, mint, tokImg(mint) || pr.icon, pr.name); if (pre && pre.img) PAIR_INFO[k].img = pre.img; S.c.rw = { mint: mint, sym: pr.symbol || k, key: k, warn: qi.warn || null }; S.rwq = ''; render();
+      var k = qReg(pr.symbol, mint, tokImg(mint) || pr.icon, pr.name, pr.icon); if (pre && pre.img) PAIR_INFO[k].img = pre.img; S.c.rw = { mint: mint, sym: pr.symbol || k, key: k, warn: qi.warn || null }; S.rwq = ''; render();
     }).catch(function (e) { S.rwBusy = null; S.rwErr = 'Couldn’t check this token: ' + chainErr(e); render(); });
   }
   function warnTag(w) { return /^Its issuer can freeze accounts/.test(w) && w.indexOf(' · ') < 0 ? '<small class="rpp-st">ⓘ ' + esc(w) + '</small>' : '<small class="rpp-st warn">⚠ ' + esc(w) + '</small>'; }   // a plain freeze authority (USDC, cbBTC…) is a note, not an alarm
@@ -3683,6 +3683,7 @@
     if (PAIR_INFO[k] && PAIR_INFO[k].ca !== mint) k = k + '·' + mint.slice(0, 3);   // a token merely CALLED “USDC” never borrows the real one's name and icon
     if (!PAIR_INFO[k]) PAIR_INFO[k] = { name: (name || sym || 'Token') + ' · ' + mint.slice(0, 4) + '…' + mint.slice(-4), cat: 'crypto', g: k.slice(0, 2), c: '#4A4A4F', ca: mint, custom: true };
     if (safeImg(icon) && !PAIR_INFO[k].img) PAIR_INFO[k].img = safeImg(icon);
+    var alt = arguments[4]; if (safeImg(alt) && !PAIR_INFO[k].alt) PAIR_INFO[k].alt = safeImg(alt);
     return k;
   }
   function qSelect(mint, pre) {
@@ -3693,7 +3694,7 @@
       if (!qi.ok) { S.qErr = CHAIN_ID === 'solana:devnet' && /No token found/.test(qi.reason || '') ? 'This pair opens on mainnet — on the test network only SOL and USDC exist' : (qi.reason || 'This token can’t be used as a pair'); render(); return; }
       if (pre && String(pr.symbol || '').toLowerCase() !== pre.sym.toLowerCase()) { if (pre.retry) return pre.retry(); S.qErr = 'That shortcut didn’t check out — try the search'; render(); return; }
       if (!(pr.usd > 0)) { S.qErr = 'No market price found for this token, so a fair starting price can’t be set. Pick a token that trades on Jupiter.'; render(); return; }
-      var k = qReg(pr.symbol, mint, tokImg(mint) || pr.icon, pr.name); if (pre && pre.img) PAIR_INFO[k].img = pre.img;
+      var k = qReg(pr.symbol, mint, tokImg(mint) || pr.icon, pr.name, pr.icon); if (pre && pre.img) PAIR_INFO[k].img = pre.img;
       if (pr.verified && (!S.rwUser || (S.c.rw && S.c.rw !== 'coin'))) { S.c.rw = { mint: mint, sym: pr.symbol || k, key: k, warn: qi.warn || null }; S.rwAuto = !S.rwUser; } else if (!pr.verified && S.c.rw && S.c.rw !== 'coin') S.c.rw = 'coin';   // paired with an asset: holders get that asset (or your coin) — a third token isn't allowed   // paired with X → holders are paid in X too (change it any time below)
       S.c.q = { mint: mint, sym: pr.symbol || k, dec: qi.decimals, usd: pr.usd, warn: qi.warn || null, key: k }; S.c.pair = k; S.cpq = ''; S.c.devBuy = ''; render();   // the holder-reward choice stays as picked
     }).catch(function (e) { S.qBusy = null; S.qErr = 'Couldn’t check this token: ' + chainErr(e); render(); });
@@ -4656,6 +4657,7 @@
   document.addEventListener('scroll', function (e) { if (e.target && e.target.id === 'cmts' && e.target.scrollTop < 20) { var np = document.getElementById('tt-new'); if (np && np._n) { np._n = 0; np.style.display = 'none'; } } }, true);
   document.addEventListener('error', function (e) {   // a logo that can't load turns into initials
     var im = e.target; if (!im || im.tagName !== 'IMG') return;
+    var alt = im.getAttribute('data-alt'); if (alt) { im.removeAttribute('data-alt'); im.src = alt; for (var pk in PAIR_INFO) if (PAIR_INFO[pk].alt === alt) PAIR_INFO[pk].img = alt; return; }   // our logo proxy had none: try the token's own logo URL once
     if (im.parentNode && im.parentNode.classList && im.parentNode.classList.contains('img') && im.parentNode.classList.contains('coin')) { var w = im.parentNode; w.classList.remove('img'); w.style.background = '#3A3A40'; w.style.fontSize = Math.round(parseInt(w.style.width, 10) * .38) + 'px'; w.textContent = String(im.alt || '?').replace(/[^A-Za-z0-9]/g, '').slice(0, 2).toUpperCase() || '?'; return; }
     if (!im.classList.contains('rwp-ic')) return; var sp = document.createElement('span'); sp.className = 'coin rwp-ic'; sp.textContent = im.getAttribute('data-ini') || '?';
     sp.style.cssText = 'width:' + im.style.width + ';height:' + im.style.height + ';background:#2E2E33;font-size:9px'; im.replaceWith(sp); }, true);

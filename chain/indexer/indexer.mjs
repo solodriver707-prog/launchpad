@@ -553,11 +553,11 @@ async function handleReq(req, res) {
       const sym = String(u.searchParams.get('sym') || ''), mintQ = String(u.searchParams.get('mint') || '');
       if (!/^[A-Za-z0-9]{2,12}$/.test(sym) && !/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(mintQ)) { res.writeHead(404); return res.end(); }
       const ik = mintQ || sym.toLowerCase(); let h = iconC.get(ik);
-      if (!h || Date.now() - h.at > 864e5) { if (!rate('ti|' + ip(req), 60, 6e4)) { res.writeHead(429); return res.end(); } h = { at: Date.now(), buf: null, ct: null };
+      if (!h || Date.now() - h.at > (h.buf ? 864e5 : 10 * 60e3)) { if (!rate('ti|' + ip(req), 60, 6e4)) { res.writeHead(429); return res.end(); } h = { at: Date.now(), buf: null, ct: null };
         try { const j = await (await fetchT(JUP + '/tokens/v2/search?query=' + encodeURIComponent(mintQ || sym))).json(), t = (Array.isArray(j) ? j : []).find((x) => x && (mintQ ? x.id === mintQ : (x.isVerified || (x.tags || []).includes('verified')) && String(x.symbol).toLowerCase() === sym.toLowerCase()));
           const url = t && typeof t.icon === 'string' ? new URL(t.icon) : null;
           if (url && url.protocol === 'https:') { const r = await fetchSafe(url.href, 8000), ct = r ? String(r.headers.get('content-type') || '').split(';')[0] : '';   // every redirect hop re-checked (no SSRF via a redirect)
-            if (r && r.ok && /^image\/(png|jpeg|webp|gif)$/.test(ct)) { const buf = await readCapped(r, 200e3); if (buf) { h.buf = buf; h.ct = ct; } } } } catch {}   // never read more than 200 KB
+            if (r && r.ok && /^image\/(png|jpeg|webp|gif)$/.test(ct)) { const buf = await readCapped(r, 1.5e6); if (buf) { h.buf = buf; h.ct = ct; } } } } catch {}   // never read more than 1.5 MB (some logos are big PNGs)
         iconC.set(ik, h); iconB += h.buf ? h.buf.length : 0; while (iconC.size > 300 || iconB > 25e6) { const [k0, v0] = iconC.entries().next().value; iconC.delete(k0); iconB -= v0.buf ? v0.buf.length : 0; } }   // bounded memory (count + bytes)
       if (!h.buf) { res.writeHead(404, { 'access-control-allow-origin': '*' }); return res.end(); }
       res.writeHead(200, { 'content-type': h.ct, 'cache-control': 'public, max-age=86400', 'access-control-allow-origin': '*', 'x-content-type-options': 'nosniff', 'content-security-policy': "default-src 'none'" }); return res.end(h.buf); }
