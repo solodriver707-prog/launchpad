@@ -5894,3 +5894,17 @@ html body .hdr-right .wbal .wb-acts .btn.pri{display:inline-flex!important}   /*
 
 .cto-how{margin:2px 0 10px;padding-left:18px;display:flex;flex-direction:column;gap:5px;font-size:12px;line-height:1.4;color:var(--soft)}
 .cto-how b{color:var(--text,#fff);font-weight:600}
+/* very wide screens: the board + callouts rail sit together in the middle (before, the board was pushed to the right edge) */
+@media (min-width:1500px){
+  body.has-rail{--ro:max(0px,calc((100vw - 1840px) / 2))}
+  body.has-rail main.wrap,body.has-rail .wrap.board,body.has-rail main{margin-right:calc(360px + var(--ro))}
+  body.has-rail footer{margin-right:calc(340px + var(--ro))}
+  body.has-rail .co-rail{right:calc(14px + var(--ro))}
+}
+
+/* "Just launched" box fillers */
+#i2-fresh{transition:opacity .26s,transform .26s}#i2-fresh.out{opacity:0;transform:translateY(4px)}
+.i2-act em{font-style:normal;font-weight:700}.i2-act em.up{color:#3DDC97}.i2-act em.down{color:#F2708A}
+.i2-cta{border:1px dashed rgba(255,255,255,.14)!important;background:transparent}
+.i2-plus{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;border:1px dashed rgba(255,255,255,.25);color:var(--soft);font-size:18px;flex:none}
+.i2-go{font-size:12px;color:var(--ivory,#efe7d6);white-space:nowrap;margin-left:auto}

@@ -1846,9 +1846,23 @@
         '<p class="i3-p"><b class="i3-slogan">Launch fair. Trade safer.</b> Pair your coin with anything — tax, dev bag and risks always on the label.</p>' +
         '<div class="i3-cta"><button class="btn pri" data-act="create">Launch a coin <span aria-hidden="true">→</span></button><button class="btn sec" data-act="board">Trade anything ↓</button></div></div>' +
       (t0 ? '<div class="tc" id="tc">' + tcHTML(t0, tcI) + '<span class="tc-timer"></span></div>' : '<div class="tc tc-empty"><b>No coins yet</b><small>Be the first — launch a coin in a minute.</small><button class="btn pri" data-act="create">Launch a coin →</button></div>') +
-      '<div class="i2-live"><div class="i2-lh"><span class="livedot"></span>JUST LAUNCHED</div><div id="i2-fresh">' + fresh.map(i2Row).join('') + '</div></div>' +
+      '<div class="i2-live"><div class="i2-lh"><span class="livedot"></span>JUST LAUNCHED</div><div id="i2-fresh">' + i2Fill(fresh) + '</div></div>' +
     '</section>';
   }
+  // the "Just launched" box is never half empty: newest coins first, then the latest trades, then an invite to launch
+  function i2Fill(fresh) {
+    var h = fresh.map(i2Row), seen = {}, acts = S.trades.filter(function (x) { var t = find(x.tick); if (!t || t.archived || seen[x.sig]) return false; seen[x.sig] = 1; return true; });
+    for (var i = 0; h.length < 3 && i < acts.length; i++) h.push(i2Act(acts[i]));
+    if (h.length < 2) { var st = stats(); h.push('<button class="i2-row i2-act" data-act="board"><span class="i2-plus">📈</span><span class="i2-n"><b>' + fmtK(st.vol) + ' traded · 24h</b><small>' + st.tokens + ' coin' + (st.tokens === 1 ? '' : 's') + ' live on treid</small></span><span class="i2-go">Browse →</span></button>'); }
+    if (h.length < 3) h.push('<button class="i2-row i2-cta" data-act="create"><span class="i2-plus">+</span><span class="i2-n"><b>Your coin here</b><small>Launch in under a minute · any pair</small></span><span class="i2-go">Launch →</span></button>');
+    return h.slice(0, 3).join('');
+  }
+  function i2Act(x) { var t = find(x.tick), usd = x.usd != null ? x.usd : x.sol * SOL_USD, buy = x.side === 'buy';
+    return '<button class="i2-row i2-act" data-act="open" data-arg="' + esc(t.tick) + '">' + avatarHTML(t, 34) + '<span class="i2-n"><b><em class="' + (buy ? 'up' : 'down') + '">' + (buy ? 'Bought' : 'Sold') + '</em> $' + (usd >= 100 ? fmtNum(Math.round(usd)) : usd.toFixed(2)) + '</b><small>$' + esc(symOf(t)) + ' · ' + esc(short(x.wallet || '')) + '</small></span><span class="i2-age mono" data-t="' + x.t + '">' + ago(x.t) + '</span></button>'; }
+  // more than 3 coins: the box pages through the 9 newest, 3 at a time
+  var i2Pg = 0; setInterval(function () { var el = document.getElementById('i2-fresh'); if (!el || document.hidden || (el.matches && el.matches(':hover'))) return;
+    var list = all().filter(function (t) { return !t.archived; }).sort(function (a, b) { return b.born - a.born; }).slice(0, 9); if (list.length <= 3) { var f = i2Fill(list); if (el._f !== f) { el._f = f; el.innerHTML = f; } return; }
+    i2Pg = (i2Pg + 3) % (Math.ceil(list.length / 3) * 3); el.classList.add('out'); setTimeout(function () { el.innerHTML = i2Fill(list.slice(i2Pg, i2Pg + 3)); el.classList.remove('out'); }, 260); }, 6000);
   function i2Row(t) {
     return '<button class="i2-row" data-act="open" data-arg="' + esc(t.tick) + '">' + avatarHTML(t, 34) + '<span class="i2-n"><b>' + esc(t.name) + '</b><small>$' + esc(symOf(t)) + ' · ' + coinHTML(t.pair, 13) + esc(pairLabel(t.pair)) + '</small></span><span class="i2-age mono" data-t="' + t.born + '">' + ago(t.born) + '</span><span class="tax" style="background:' + taxBg(Math.max(t.buy, t.sell)) + ';min-width:38px;padding:3px 5px"><b style="font-size:12px">' + Math.max(t.buy, t.sell) + '%</b></span></button>';
   }
