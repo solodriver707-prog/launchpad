@@ -6512,21 +6512,30 @@ html body .fx-l.fx-r{-webkit-mask-image:linear-gradient(90deg,transparent,#000 3
 /* arena card: the coin's info is big and fills the left side, centred top-to-bottom (sizes follow the card's own width) */
 @media (min-width:761px){
   .ar-card{container-type:inline-size;justify-content:center!important;min-height:320px}
-  .ar-l{flex:1;justify-content:center!important;gap:clamp(14px,2cqi,20px)!important;padding:0}
+  .ar-l{flex:1;justify-content:center!important;gap:clamp(12px,1.6cqi,16px)!important;padding:0}
   .ar-k{font-size:clamp(11px,1.3cqi,15px)}
   .ar-id{gap:clamp(14px,2cqi,24px)}
-  .ar-id .av{width:clamp(72px,10cqi,104px)!important;height:clamp(72px,10cqi,104px)!important}
-  .ar-id b{font-size:clamp(28px,4.4cqi,48px)}
-  .ar-id small{font-size:clamp(13px,1.6cqi,20px)}
+  .ar-id .av{width:clamp(64px,7.5cqi,84px)!important;height:clamp(64px,7.5cqi,84px)!important}
+  .ar-id b{font-size:clamp(26px,3.4cqi,38px)}
+  .ar-id small{font-size:clamp(13px,1.3cqi,16px)}
   .ar-mc small{font-size:clamp(12px,1.4cqi,16px)}
-  .ar-mc b{font-size:clamp(40px,7cqi,72px);gap:16px}
-  .ar-mc em{font-size:clamp(15px,2cqi,24px)}
-  .ar-kv{gap:clamp(24px,4cqi,52px)}
+  .ar-mc b{font-size:clamp(36px,5.2cqi,56px);gap:14px}
+  .ar-mc em{font-size:clamp(14px,1.6cqi,19px)}
+  .ar-kv{gap:clamp(22px,3cqi,40px)}
   .ar-kv small{font-size:clamp(11.5px,1.3cqi,15px)}
-  .ar-kv b{font-size:clamp(15px,2.2cqi,25px);gap:8px}
+  .ar-kv b{font-size:clamp(15px,1.7cqi,20px);gap:8px}
   .ar-kv b .coin{width:clamp(16px,2.2cqi,26px)!important;height:clamp(16px,2.2cqi,26px)!important}
 }
 @media (min-width:761px){   /* the chart sits on the right, behind — the info on the left keeps the full height */
   .ar-r{position:absolute!important;left:36%;right:0;bottom:0;height:64%;margin:0!important;z-index:1;pointer-events:none;-webkit-mask-image:linear-gradient(90deg,transparent 0%,#000 28%);mask-image:linear-gradient(90deg,transparent 0%,#000 28%)}
   .ar-card{padding:22px 28px!important}
 }
+/* arena card: info column + the usual TAX block next to it */
+.ar-l{flex-direction:row!important;align-items:center!important;justify-content:flex-start!important;gap:clamp(24px,4cqi,56px)!important}
+.ar-info{display:flex;flex-direction:column;gap:clamp(12px,1.6cqi,16px);min-width:0}
+.ar-taxb{flex:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:12px 18px;border-radius:16px;min-width:clamp(110px,12cqi,150px);color:#0A0A0B;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+.ar-taxb small{font:800 10px var(--mono);letter-spacing:.14em}
+.ar-taxb b{font-size:clamp(26px,3.2cqi,38px);font-weight:800;line-height:1.05}
+.ar-taxb .ar-bs{font-size:9px;letter-spacing:.06em}
+.ar-taxb .split-bar,.ar-taxb [class*=spl]{margin-top:6px;width:100%}
+@media (max-width:760px){.ar-l{gap:14px!important}.ar-taxb{padding:8px 10px;min-width:84px;border-radius:12px}.ar-taxb b{font-size:22px}.ar-info{gap:10px}}

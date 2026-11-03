@@ -1888,10 +1888,11 @@
     var c = chgOver(t, 360), tm = Math.max(t.buy, t.sell), id = esc(t.tick), sid = esc(symOf(t));
     return '<div class="tc-in ar-card" role="button" tabindex="0" data-act="open" data-arg="' + id + '">' +
       '<div class="ar-bg' + (t.banner ? ' ban' : '') + (t._banLow ? ' low' : '') + '" aria-hidden="true">' + (t.banner ? '<img src="' + esc(t.banner) + '" alt="" onload="if(this.naturalWidth<this.clientWidth*Math.min(2,window.devicePixelRatio||1)*.9)this.parentNode.classList.add(\'low\')">' : avatarHTML(t, 300)) + '</div>' +
-      '<div class="ar-l"><span class="ar-k"><i class="livedot"></i>Top meme #' + (k + 1) + '</span>' +
+      '<div class="ar-l"><div class="ar-info"><span class="ar-k"><i class="livedot"></i>Top meme #' + (k + 1) + '</span>' +
         '<span class="ar-id">' + avatarHTML(t, 64) + '<span><b>' + esc(t.name) + '</b><small class="mono">$' + sid + '</small></span></span>' +
         '<span class="ar-mc"><small>Market cap</small><b class="mono">' + fmtK(t.mcN) + '<em class="' + (c >= 0 ? 'up' : 'down') + '">' + chgTxt(c) + '</em></b></span>' +
-        '<span class="ar-kv"><span><small>24h vol</small><b class="mono">' + fmtK(t.vol) + '</b></span><span><small>Holders</small><b class="mono">' + fmtNum(t.holders) + '</b></span><span><small>Paired with</small><b>' + coinHTML(t.pair, 16) + esc(pairLabel(t.pair)) + '</b></span><span><small>Tax</small><b class="mono ar-tax">' + tm + '%</b></span></span></div>' +
+        '<span class="ar-kv"><span><small>24h vol</small><b class="mono">' + fmtK(t.vol) + '</b></span><span><small>Holders</small><b class="mono">' + fmtNum(t.holders) + '</b></span><span><small>Paired with</small><b>' + coinHTML(t.pair, 16) + esc(pairLabel(t.pair)) + '</b></span></span></div>' +
+        '<div class="tax ar-taxb" style="background:' + taxBg(tm) + '"><small>TAX</small><b>' + tm + '%</b><small class="ar-bs">BUY & SELL</small>' + (splitOf(t) ? splitBar(splitOf(t), 'mini') : '') + '</div></div>' +
       '<div class="ar-r"><span class="ar-ch">' + arChart(t, 1000, 160) + '</span></div></div>';
   }
   // the trades that flow under the arena: real ones from the server (≥ $5), plus every new one as it happens
