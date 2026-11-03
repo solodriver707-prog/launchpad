@@ -5992,3 +5992,15 @@ header{z-index:45}   /* above the callouts rail (40): the wallet / notification 
 .wb-dc2:hover{background:rgba(242,112,138,.18)}
 .wb-bl{padding:12px 18px 0}.wb-bl small{font-size:12px}
 @media (pointer:coarse){.wb-dc2{min-height:42px}}
+/* phones: the trades table keeps the wallet (who bought / sold) — the pair-token amount, price and link column make room */
+@media (max-width:760px){
+  .trow{grid-template-columns:36px 46px minmax(0,.85fr) minmax(0,.8fr) minmax(0,1.5fr)!important;gap:6px!important}
+  .trow>*:nth-child(7){display:flex!important;flex-wrap:nowrap;align-items:center;justify-content:flex-end;min-width:0;width:100%}
+  .trow>*:nth-child(4){display:none!important}
+  .trow.h>*:first-child{white-space:nowrap;font-size:11px}
+  .trow .maker{min-width:0;padding:2px;font-size:11.5px}
+  .trow .maker .bdg{font-size:9px;padding:1px 4px}
+  .trow .mk-f{display:none!important}   /* the whole row opens the wallet on a phone */
+  .trow.h>*:nth-child(7){text-align:right}
+}
+@media (max-width:380px){.trow{font-size:11px!important;gap:4px!important;padding:10px 6px!important;grid-template-columns:30px 40px minmax(0,.9fr) minmax(0,.85fr) minmax(0,1.3fr)!important}.trow .maker .av{display:none}}
