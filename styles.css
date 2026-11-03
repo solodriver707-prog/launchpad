@@ -6567,3 +6567,6 @@ html body .fx-l.fx-r{-webkit-mask-image:linear-gradient(90deg,transparent,#000 3
 .wopt2 .wl-ic.sm{width:34px;height:34px;border-radius:10px}
 .ar-kv>.ar-tx,.ar-kv>.ar-pr{height:54px!important;min-height:0!important;box-sizing:border-box;align-self:center}
 .ar-kv>.ar-tx{padding:4px 12px!important;justify-content:center}
+/* board card: activity tiles (risk checks live on the coin page) */
+.rk-t.lv-n{background:rgba(255,255,255,.035);border-color:rgba(255,255,255,.09);cursor:default}
+.rk-t.lv-n .rk-l{color:var(--muted);letter-spacing:.06em}

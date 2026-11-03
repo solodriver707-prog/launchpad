@@ -684,6 +684,11 @@
       { k: 'bu', lab: 'BUNDLES', val: bu + '%', lv: lv(bu, 4, 9), tip: 'Supply bought by linked wallets in the same block' }
     ];
   }
+  // board cards show the coin's activity; the risk checks (dev, top 10, snipers, bundles) are on the coin page ("What we can see")
+  function statTiles(t) {
+    var tx = t.live ? (t.nTx || 0) : lstats(t).tx, R = [['HOLDERS', fmtNum(t.holders || 0), 'Wallets holding this coin'], ['VOL 24H', fmtK(t.vol), 'Traded in the last 24 hours'], ['TXNS', fmtNum(tx), 'Buys and sells so far'], ['ATH', fmtK(athOf(t)), 'Highest market cap so far']];
+    return '<div class="risk st-tiles">' + R.map(function (m) { return '<span class="rk-t lv-n" data-tip="' + esc(m[2]) + '"><span class="rk-l">' + m[0] + '</span><b class="mono">' + m[1] + '</b></span>'; }).join('') + '</div>';
+  }
   function riskTiles(t) {
     var r = riskMetrics(t);
     return '<div class="risk">' + r.map(function (m) {
@@ -718,9 +723,9 @@
         '<div class="tch-side">' + (trapLeft(t) > 0 ? trapBox(t, 'card') : '<div class="tax" style="background:' + taxBg(tmax) + '" data-tip="' + esc(splitTip(t)) + '"><small>TAX</small><b>' + tmax + '%</b>' + (splitOf(t) ? splitBar(splitOf(t), 'mini') : '') + '</div>') +
         (tmax > 0 || (t.live && t.qMint) ? '<div class="pairmini" data-tip="Paired with ' + esc(pairInfo(t.pair).name) + '">' + coinHTML(t.pair, 28) + '<small>PAIR</small><b>' + esc(pairLabel(t.pair)) + '</b></div>' : '<div class="pairmini plain" data-tip="0% tax — plain coin, no pair">' + coinHTML('SOL', 28) + '<small>PLAIN</small><b>SOL</b></div>') + '</div></div>' +
       '<div class="tc-name2"><b>' + esc(t.name) + crBadge(t) + '</b><span class="tc-tkr"><span class="mono">$' + esc(symOf(t)) + '</span>' + (opts.preview ? '' : '<button class="tc-ca mono" data-act="ca" data-arg="' + esc(t.tick) + '" data-tip="Copy contract address" aria-label="Copy contract address">' + esc(short(t.ca)) + I.copy + '</button>') + '</span></div>' +
-      riskTiles(t) + socialsHTML(t) +
+      statTiles(t) + socialsHTML(t) +
       '<div class="tc-mid"><div class="tc-mc"><div class="v"><span data-mc="' + esc(t.tick) + '" data-v="' + fmtK(t.mcN) + '">' + fmtK(t.mcN) + '</span>' +
-        '<span class="chgpill ' + (c >= 0 ? 'up' : 'down') + '" data-chg="' + esc(t.tick) + '">' + chgTxt(c) + '</span></div><div class="l">market cap · ' + fmtNum(t.holders) + (t.holders === 1 ? ' holder' : ' holders') + ' · vol ' + fmtK(t.vol) + '</div></div></div>' +
+        '<span class="chgpill ' + (c >= 0 ? 'up' : 'down') + '" data-chg="' + esc(t.tick) + '">' + chgTxt(c) + '</span></div><div class="l">market cap</div></div></div>' +
       '<div class="tc-chart ' + (c >= 0 ? 'up' : 'down') + '" data-cchart="' + esc(t.tick) + '">' + cardChart(t) + '</div>' +
       '<div class="prog"><div class="l"><span>' + (done ? 'On Meteora' : 'Bonding curve') + '</span><span class="mono" data-prog="' + esc(t.tick) + '">' + Math.min(100, t.prog).toFixed(0) + '%</span></div>' +
         '<div class="bar"><i class="' + (done ? 'done' : '') + '" data-bar="' + esc(t.tick) + '" style="width:' + Math.max(1, Math.min(100, t.prog)) + '%"></i></div></div>' +
@@ -5698,7 +5703,7 @@
   if (window.TREID_PARTNER) S.escrowWallet = window.TREID_PARTNER;
   S.api = API; S.apiOk = false;
   function apiGet(path) { return fetch(API + path, { cache: 'no-store' }).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); }); }
-  function liveStat(t, c) { if (c.tax_paid) t.taxPaid = c.tax_paid; t.devLock = c.dev_lock || (t.lkLocal && Date.now() - t.lkLocal.at < 10 * 60e3 ? t.lkLocal.v : null);   /* the server re-checks the chain every ~30 s — keep the just-made lock until it does */ t.lockIntent = !!c.lock_intent; if (c.uri) { try { t.lockDays = +new URL(c.uri).searchParams.get('lk') || 0; } catch (e) {} } t.lstat = { dev: c.dev_pct || 0, top: c.top10_pct || 0, sn: c.snipers_pct || 0, bu: c.bundles_pct || 0, devSold: !!c.dev_sold }; }
+  function liveStat(t, c) { if (c.tax_paid) t.taxPaid = c.tax_paid; if (c.trades != null) t.nTx = c.trades; t.devLock = c.dev_lock || (t.lkLocal && Date.now() - t.lkLocal.at < 10 * 60e3 ? t.lkLocal.v : null);   /* the server re-checks the chain every ~30 s — keep the just-made lock until it does */ t.lockIntent = !!c.lock_intent; if (c.uri) { try { t.lockDays = +new URL(c.uri).searchParams.get('lk') || 0; } catch (e) {} } t.lstat = { dev: c.dev_pct || 0, top: c.top10_pct || 0, sn: c.snipers_pct || 0, bu: c.bundles_pct || 0, devSold: !!c.dev_sold }; }
   function safeImg(u) { return typeof u === 'string' && (/^data:image\/(png|jpe?g|gif|webp);base64,[A-Za-z0-9+\/=]+$/.test(u) || /^https:\/\/[^\s"'<>\\]+$/.test(u)) ? u : null; }
   function trustedMeta(u) { try { var h = new URL(u).hostname; return /\/ipfs\//.test(u) && (h === 'gateway.pinata.cloud' || /\.mypinata\.cloud$/.test(h) || h === 'ipfs.io'); } catch (e) { return false; } }
   function liveTok(c) {
