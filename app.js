@@ -1891,8 +1891,9 @@
       '<div class="ar-l"><div class="ar-info"><span class="ar-k"><i class="livedot"></i>Top meme #' + (k + 1) + '</span>' +
         '<span class="ar-id">' + avatarHTML(t, 64) + '<span><b>' + esc(t.name) + '</b><small class="mono">$' + sid + '</small></span></span>' +
         '<span class="ar-mc"><small>Market cap</small><b class="mono">' + fmtK(t.mcN) + '<em class="' + (c >= 0 ? 'up' : 'down') + '">' + chgTxt(c) + '</em></b></span>' +
-        '<span class="ar-kv"><span><small>24h vol</small><b class="mono">' + fmtK(t.vol) + '</b></span><span><small>Holders</small><b class="mono">' + fmtNum(t.holders) + '</b></span><span><small>Paired with</small><b>' + coinHTML(t.pair, 16) + esc(pairLabel(t.pair)) + '</b></span></span></div>' +
-        '<div class="tax ar-taxb" style="background:' + taxBg(tm) + '"><small>TAX</small><b>' + tm + '%</b><small class="ar-bs">BUY & SELL</small>' + (splitOf(t) ? splitBar(splitOf(t), 'mini') : '') + '</div></div>' +
+        '<span class="ar-kv"><span><small>24h vol</small><b class="mono">' + fmtK(t.vol) + '</b></span><span><small>Holders</small><b class="mono">' + fmtNum(t.holders) + '</b></span>' +
+          '<span class="ar-tx" style="background:' + taxBg(tm) + '"><small>TAX</small><b>' + tm + '%</b>' + (splitOf(t) ? splitBar(splitOf(t), 'mini') : '') + '</span>' +
+          '<span class="ar-pr">' + coinHTML(t.pair, 26) + '<span><small>' + (tm > 0 || t.qMint ? 'PAIRED WITH' : 'PLAIN') + '</small><b>' + esc(pairLabel(t.pair)) + '</b></span></span></span></div></div>' +
       '<div class="ar-r"><span class="ar-ch">' + arChart(t, 1000, 160) + '</span></div></div>';
   }
   // the trades that flow under the arena: real ones from the server (≥ $5), plus every new one as it happens

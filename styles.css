@@ -6539,3 +6539,15 @@ html body .fx-l.fx-r{-webkit-mask-image:linear-gradient(90deg,transparent,#000 3
 .ar-taxb .ar-bs{font-size:9px;letter-spacing:.06em}
 .ar-taxb .split-bar,.ar-taxb [class*=spl]{margin-top:6px;width:100%}
 @media (max-width:760px){.ar-l{gap:14px!important}.ar-taxb{padding:8px 10px;min-width:84px;border-radius:12px}.ar-taxb b{font-size:22px}.ar-info{gap:10px}}
+/* arena card: TAX and PAIRED WITH as two small blocks in the same row as 24h vol / holders */
+.ar-kv{align-items:center}
+.ar-kv>.ar-tx{flex-direction:column;align-items:center;justify-content:center;gap:1px;padding:5px 12px 6px;border-radius:11px;color:#0A0A0B;min-width:76px}
+.ar-tx small{font:800 8.5px var(--mono)!important;letter-spacing:.14em;color:rgba(10,10,11,.7)!important}
+.ar-tx b{font-size:19px!important;font-weight:800;line-height:1.05;color:#0A0A0B}
+.ar-tx .spbar{width:100%;margin-top:3px}
+.ar-kv>.ar-pr{flex-direction:row;align-items:center;gap:8px;padding:6px 12px 6px 8px;border-radius:11px;background:rgba(20,20,24,.82);border:1px solid rgba(255,255,255,.1)}
+.ar-pr>span{display:flex;flex-direction:column;gap:1px}
+.ar-pr small{font:800 8.5px var(--mono)!important;letter-spacing:.12em;color:rgba(255,255,255,.55)!important}
+.ar-pr b{font-size:15px!important;line-height:1.1}
+@media (max-width:760px){.ar-kv{gap:10px 14px!important}.ar-tx b{font-size:16px!important}.ar-pr b{font-size:13px!important}}
+.ar-kv>.ar-tx,.ar-kv>.ar-pr{height:46px;box-sizing:border-box}
