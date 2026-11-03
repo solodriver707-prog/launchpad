@@ -2739,13 +2739,13 @@
       '<div class="dh2-foot"><span>Avg time until dev sold: <b class="mono">' + (avg != null ? durH(avg) : '—') + '</b></span><span>Best ATH <b class="mono">' + (h.best ? fmtK(h.best) : '—') + '</b></span></div></div>';
   }
   // ===== BURN TOOL: devs / projects burn their own supply =====
-  function burnCoins() { return S.account ? all().filter(function (t) { return t.creator === S.account && position(t); }) : []; }
+  function burnCoins() { return S.account ? all().filter(function (t) { var p0 = position(t); return p0 && p0.tok > 0; }).sort(function (a, b) { return (b.creator === S.account) - (a.creator === S.account); }) : []; }   // any coin you hold (devs and holders) — your own launches first
   function burnModal() {
     if (!S.burnOpen) return '';
-    var head = '<div class="hm-h"><div><b>🔥 Burn tokens</b><small>Permanently destroy supply of a coin you launched · shows up in the Burnery</small></div><button class="iconbtn" data-act="burnClose" aria-label="Close">✕</button></div>';
+    var head = '<div class="hm-h"><div><b>🔥 Burn tokens</b><small>Permanently destroy tokens you hold — any coin, dev or holder · shows up in the Burnery</small></div><button class="iconbtn" data-act="burnClose" aria-label="Close">✕</button></div>';
     var wrap = function (inner) { return '<div class="hm-ov" data-act="burnClose"><div class="hm card-s bt" data-stop>' + head + inner + '</div></div>'; };
-    if (!S.account) return wrap('<div class="bt-empty"><p>Connect the wallet that launched your coin to burn its tokens.</p><button class="btn pri" data-act="openWallet">Connect wallet</button></div>');
-    var cs = burnCoins(); if (!cs.length) return wrap('<div class="bt-empty"><p>You don’t hold tokens of a coin you launched yet. Launch a coin (with an initial buy), then come back to burn part of your bag.</p><button class="btn pri" data-act="create">+ Launch a coin</button></div>');
+    if (!S.account) return wrap('<div class="bt-empty"><p>Connect your wallet to burn tokens you hold.</p><button class="btn pri" data-act="openWallet">Connect wallet</button></div>');
+    var cs = burnCoins(); if (!cs.length) return wrap('<div class="bt-empty"><p>You don’t hold any treid coins yet. Buy a coin, then come back to burn part of your bag.</p><button class="btn pri" data-act="home">Browse coins</button></div>');
     var t = find(S.burnTick) && cs.indexOf(find(S.burnTick)) >= 0 ? find(S.burnTick) : cs[0]; S.burnTick = t.tick;
     var pos = position(t), pct = S.burnPct || 25, tok = pos.tok * pct / 100, sup = tok / 1e9 * 100, usd = tok * price(t);
     return wrap('<div class="bt-coins">' + cs.map(function (c) { return '<button class="bt-c' + (c === t ? ' on' : '') + '" data-act="burnPick" data-arg="' + esc(c.tick) + '">' + avatarHTML(c, 28) + '<span><b>$' + esc(symOf(c)) + '</b><small class="mono">' + fmtNum(Math.round(position(c).tok)) + ' held</small></span></button>'; }).join('') + '</div>' +
