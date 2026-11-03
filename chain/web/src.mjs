@@ -45,7 +45,11 @@ export async function quoteInfo({ rpc, mint, reward = false }) {   // reward: on
   const mi = await getMint(C(rpc), m, 'confirmed', is22 ? TOKEN_2022_PROGRAM_ID : TOKEN_PROGRAM_ID); const out = { mint: m.toBase58(), decimals: mi.decimals, program: is22 ? 'token2022' : 'spl', ok: true };
   if (mi.freezeAuthority) out.warn = 'Its issuer can freeze accounts (normal for issuer-backed tokens like USDC, USDT and cbBTC)';
   if (is22) { const ext = getExtensionTypes(mi.tlvData); const tf = getTransferFeeConfig(mi);
-    if (tf && (tf.newerTransferFee.transferFeeBasisPoints > 0 || tf.olderTransferFee.transferFeeBasisPoints > 0)) return { ...out, ok: false, reason: reward ? 'charges its own transfer tax on every transfer, so holders would lose part of each payout — pick another token' : 'Tokens with a transfer tax can’t be used as a pair' };
+    let feeBps = 0; if (tf && (tf.newerTransferFee.transferFeeBasisPoints > 0 || tf.olderTransferFee.transferFeeBasisPoints > 0)) { let ep = null; try { ep = (await C(rpc).getEpochInfo()).epoch; } catch {} feeBps = ep != null && BigInt(ep) >= BigInt(tf.newerTransferFee.epoch) ? tf.newerTransferFee.transferFeeBasisPoints : ep == null ? Math.max(tf.newerTransferFee.transferFeeBasisPoints, tf.olderTransferFee.transferFeeBasisPoints) : tf.olderTransferFee.transferFeeBasisPoints; }   // the fee in force this epoch
+    if (tf && (tf.newerTransferFee.transferFeeBasisPoints > 0 || tf.olderTransferFee.transferFeeBasisPoints > 0)) {   // a token with its own transfer fee: only when Meteora has approved it (e.g. PreStocks: OpenAI, Anthropic) — then it works, with the fee shown
+      const [b0] = PublicKey.findProgramAddressSync([Buffer.from('token_badge'), m.toBuffer()], DBC_PROGRAM), b0i = await C(rpc).getAccountInfo(b0);
+      if (!b0i || !b0i.owner.equals(DBC_PROGRAM)) return { ...out, ok: false, reason: reward ? 'charges its own transfer tax on every transfer, so holders would lose part of each payout — pick another token' : 'Tokens with their own transfer tax need approval from Meteora first — not supported yet' };
+      out.feeWarn = 'its issuer takes a ' + (feeBps / 100) + '% fee on every transfer of it (part of each ' + (reward ? 'payout' : 'trade') + ')'; }
     // a TransferHook extension with no program set (xStocks, PAXG…) runs nothing: it only lets the issuer switch one on later → a warning, not a block
     const th = ext.includes(ExtensionType.TransferHook) ? getTransferHook(mi) : null, hookOff = !!th && (th.programId.equals(PublicKey.default) || th.programId.equals(SystemProgram.programId));
     const das = ext.includes(ExtensionType.DefaultAccountState) ? getDefaultAccountState(mi) : null; if (das && das.state === AccountState.Frozen) return { ...out, ok: false, reason: reward ? 'starts every new account frozen, so holders couldn’t receive it' : 'New accounts of this token start frozen — it can’t be used as a pair' };
@@ -53,14 +57,15 @@ export async function quoteInfo({ rpc, mint, reward = false }) {   // reward: on
     const hookW = hookOff ? 'its issuer could switch on a transfer hook later' : null;
     if (reward) { if (bad.includes(ExtensionType.NonTransferable)) return { ...out, ok: false, reason: 'can’t be transferred at all, so holders can’t be paid in it' };
       if (bad.includes(ExtensionType.TransferHook)) return { ...out, ok: false, reason: 'has a transfer hook (its issuer’s program must approve every transfer), so treid can’t pay holders in it — pick another token' };
-      const w = []; if (bad.includes(ExtensionType.PermanentDelegate)) w.push('its issuer can move tokens from any account'); if (bad.includes(ExtensionType.PausableConfig)) w.push('its issuer can pause transfers (payouts would wait)'); if (hookW) w.push(hookW);
+      const w = []; if (out.feeWarn) w.push(out.feeWarn); if (bad.includes(ExtensionType.PermanentDelegate)) w.push('its issuer can move tokens from any account'); if (bad.includes(ExtensionType.PausableConfig)) w.push('its issuer can pause transfers (payouts would wait)'); if (hookW) w.push(hookW);
       if (w.length) out.warn = [out.warn, w.join('; ')].filter(Boolean).join(' · '); return (qCache[k] = out); }
     if (bad.includes(ExtensionType.TransferHook)) return { ...out, ok: false, reason: 'Tokens with a transfer hook can’t be used as a pair' };
     if (bad.length) { const [b] = PublicKey.findProgramAddressSync([Buffer.from('token_badge'), m.toBuffer()], DBC_PROGRAM), bi = await C(rpc).getAccountInfo(b);   // Meteora's approval (e.g. tokenized stocks)
       if (!bi || !bi.owner.equals(DBC_PROGRAM)) return { ...out, ok: false, reason: 'This token type needs approval from Meteora first — not supported yet' };
-      const w = []; if (bad.includes(ExtensionType.PermanentDelegate)) w.push('its issuer can move tokens from any account'); if (bad.includes(ExtensionType.PausableConfig)) w.push('its issuer can pause all transfers (trading would stop)');
+      const w = []; if (out.feeWarn) w.push(out.feeWarn); if (bad.includes(ExtensionType.PermanentDelegate)) w.push('its issuer can move tokens from any account'); if (bad.includes(ExtensionType.PausableConfig)) w.push('its issuer can pause all transfers (trading would stop)');
       if (bad.includes(ExtensionType.ScaledUiAmountConfig)) w.push('its displayed amount can change (splits/dividends)'); if (hookW) w.push(hookW);
       out.badge = true; out.warn = [out.warn, 'Meteora-approved pair' + (w.length ? ' — ' + w.join('; ') : '')].filter(Boolean).join(' · '); } }
+  if (out.feeWarn && !String(out.warn || '').includes(out.feeWarn)) out.warn = [out.warn, out.feeWarn].filter(Boolean).join(' · ');
   return (qCache[k] = out);
 }
 // every wallet transaction states its compute budget (measured by simulation, +20%) and a small priority fee: wallets can predict it

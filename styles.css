@@ -5931,3 +5931,7 @@ html,body{overflow-x:clip}
 
 .rpp-det{display:block}.rpp-det summary{cursor:pointer;list-style:none}.rpp-det summary::-webkit-details-marker{display:none}
 .rpp-det ul{margin:6px 0 0;padding-left:18px;display:flex;flex-direction:column;gap:3px;font-size:11.5px;color:var(--soft)}
+
+.rpp-hot{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:8px}
+.rpp-hl{font-size:12px;font-weight:700;color:var(--gold,#E8C77A);margin-right:4px;white-space:nowrap}
+.rpp-more{border-style:dashed!important;color:var(--soft)}
