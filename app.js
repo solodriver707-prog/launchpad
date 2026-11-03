@@ -1871,15 +1871,39 @@
     kinI++; r.style.transition = 'transform .7s cubic-bezier(.7,-0.3,.25,1.3)'; r.style.transform = 'translateY(' + (-kinI * 100 / (KIN.length + 1)) + '%)';
     if (kinI === KIN.length) setTimeout(function () { r.style.transition = 'none'; kinI = 0; r.style.transform = 'translateY(0)'; }, 760);
   }, 2000);
-  function tcHTML(t, k) {
-    var c = chg(t), tm = Math.max(t.buy, t.sell), id = esc(t.tick), sid = esc(symOf(t));
-    return '<div class="tc-in" role="button" tabindex="0" data-act="open" data-arg="' + id + '">' +
-      '<span class="tc-av">' + avatarHTML(t, 84) + '<i class="tc-crown">♛</i></span>' +
-      '<span class="tc-main"><span class="tc-k">TOP MEME <b>#' + (k + 1) + '</b></span><b class="tc-n">' + esc(t.name) + '</b><span class="tc-tk mono">$' + sid + '</span>' +
-        '<span class="tc-row"><span class="mono">' + fmtK(t.mcN) + '</span><span class="mono ' + (c >= 0 ? 'up' : 'down') + '">' + chgTxt(c) + '</span></span>' +
-        '<span class="tc-bar"><i style="width:' + Math.min(100, t.prog) + '%"></i></span></span>' +
-      '<span class="tc-side"><span class="tc-pair">' + coinHTML(t.pair, 26) + '<b>' + esc(pairLabel(t.pair)) + '</b></span><span class="tax" style="background:' + taxBg(tm) + '"><small>TAX</small><b>' + tm + '%</b></span></span></div>' + socialsHTML(t, false, true);
+  // ===== home "live arena": the top coin on its own banner with its real chart, rotating; the latest trades flow underneath =====
+  function arChart(t, w, h) {
+    if (t.live && API && !t._spk && !t._spkL) { t._spkL = 1; apiGet('/api/trades/' + t.ca).then(function (rows) { t._spk = rows.slice().reverse().map(function (x) { return x.mcap_usd / 1000; }).filter(function (v) { return v > 0; }); var el = document.querySelector('#tc .ar-ch'); if (el && find(HERO[tcI]) === t) el.innerHTML = arChart(t, w, h); }).catch(function () {}); }
+    var d = t._spk && t._spk.length > 1 ? t._spk.slice() : (t.live ? [] : ensureTicks(t).map(function (x) { return x[1]; })); d.push(t.mcN); d = d.filter(function (v) { return v > 0; });
+    if (d.length > 90) { var st = d.length / 90, o = []; for (var i = 0; i < 90; i++) o.push(d[Math.floor(i * st)]); o.push(d[d.length - 1]); d = o; }
+    if (d.length < 2) return '';
+    var mx = Math.max.apply(null, d), mn = Math.min.apply(null, d), sp = (mx - mn) || mx * .02 || 1, up = d[d.length - 1] >= d[0], col = up ? '#3DDC97' : '#F2708A', gid = 'arg' + (up ? 'u' : 'd');
+    var pts = d.map(function (v, i) { return [i * w / (d.length - 1), h - 8 - (v - mn) / sp * (h - 20)]; }), line = 'M' + pts.map(function (q) { return q[0].toFixed(1) + ' ' + q[1].toFixed(1); }).join(' L'), L = pts[pts.length - 1];
+    return '<svg viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="' + gid + '" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="' + col + '" stop-opacity=".3"/><stop offset="1" stop-color="' + col + '" stop-opacity="0"/></linearGradient></defs>' +
+      '<path d="' + line + ' L' + w + ' ' + h + ' L0 ' + h + ' Z" fill="url(#' + gid + ')"/><path d="' + line + '" fill="none" stroke="' + col + '" stroke-width="2.5" stroke-linejoin="round" vector-effect="non-scaling-stroke"/><circle cx="' + L[0].toFixed(1) + '" cy="' + L[1].toFixed(1) + '" r="4" fill="' + col + '"/></svg>';
   }
+  function tcHTML(t, k) {
+    var c = chgOver(t, 360), tm = Math.max(t.buy, t.sell), id = esc(t.tick), sid = esc(symOf(t));
+    return '<div class="tc-in ar-card" role="button" tabindex="0" data-act="open" data-arg="' + id + '">' +
+      '<div class="ar-bg' + (t.banner ? ' ban' : '') + '" aria-hidden="true">' + (t.banner ? '<img src="' + esc(t.banner) + '" alt="">' : avatarHTML(t, 300)) + '</div>' +
+      '<div class="ar-l"><span class="ar-k"><i class="livedot"></i>Top meme #' + (k + 1) + '</span>' +
+        '<span class="ar-id">' + avatarHTML(t, 64) + '<span><b>' + esc(t.name) + '</b><small class="mono">$' + sid + '</small></span></span>' +
+        '<span class="ar-mc"><small>Market cap</small><b class="mono">' + fmtK(t.mcN) + '<em class="' + (c >= 0 ? 'up' : 'down') + '">' + chgTxt(c) + '</em></b></span>' +
+        '<span class="ar-kv"><span><small>24h vol</small><b class="mono">' + fmtK(t.vol) + '</b></span><span><small>Holders</small><b class="mono">' + fmtNum(t.holders) + '</b></span><span><small>Paired with</small><b>' + coinHTML(t.pair, 16) + esc(pairLabel(t.pair)) + '</b></span><span><small>Tax</small><b class="mono ar-tax">' + tm + '%</b></span></span></div>' +
+      '<div class="ar-r"><span class="ar-ch">' + arChart(t, 600, 200) + '</span></div></div>';
+  }
+  // the trades that flow under the arena: real ones from the server (≥ $5), plus every new one as it happens
+  S.arTape = [];
+  function arTapeLoad() { if (!API || DEMO) return; apiGet('/api/recent').then(function (rows) { if (!Array.isArray(rows)) return; S.arTape = rows; arTapeDraw(); }).catch(function () {}); }
+  setInterval(function () { if (document.getElementById('ar-tape') && !document.hidden) arTapeLoad(); }, 30000);
+  function arTapeItems() { var seen = {}, out = [];
+    S.trades.concat((S.arTape || []).map(function (r) { var t = all().filter(function (x) { return x.ca === r.mint; })[0]; return t ? { tick: t.tick, wallet: r.wallet, side: r.side, usd: r.usd, t: r.ts, sig: r.sig } : null; }).filter(Boolean))
+      .forEach(function (x) { var usd = x.usd != null ? x.usd : x.sol * SOL_USD, t = find(x.tick); if (!t || t.archived || !(usd >= 5) || (x.sig && seen[x.sig])) return; if (x.sig) seen[x.sig] = 1; out.push({ t: t, x: x, usd: usd }); });
+    return out.sort(function (a, b) { return b.x.t - a.x.t; }).slice(0, 16); }
+  function arTapeHTML() { var it = arTapeItems(); if (!it.length) return '';
+    var row = it.map(function (o) { var buy = o.x.side === 'buy'; return '<button class="ar-ti" data-act="open" data-arg="' + esc(o.t.tick) + '">' + avatarHTML(o.t, 20) + '<b class="' + (buy ? 'up' : 'down') + '">' + (buy ? 'Bought' : 'Sold') + '</b><span class="mono">$' + (o.usd >= 1000 ? fmtNum(Math.round(o.usd)) : o.usd.toFixed(2)) + '</span><span>$' + esc(symOf(o.t)) + '</span><small>' + esc(short(o.x.wallet || '')) + ' · <span data-t="' + o.x.t + '">' + ago(o.x.t) + '</span></small></button>'; }).join('');
+    return '<div class="ar-tr' + (it.length < 5 ? ' still' : '') + '">' + row + (it.length < 5 ? '' : row) + '</div>'; }
+  function arTapeDraw() { var el = document.getElementById('ar-tape'); if (!el) return; var h = arTapeHTML(), k = arTapeItems().map(function (o) { return o.x.sig || o.x.t; }).join(','); if (el._k === k) return; el._k = k; el.innerHTML = h; el.style.display = h ? '' : 'none'; }
   // top meme card: rotates by itself, and on phones you swipe it with a finger (left = next, right = back); dots show where you are
   var tcI = 0;
   function tcFill(t, i) { var n = HERO.length; return tcHTML(t, i) + '<span class="tc-timer"></span>' + (n > 1 ? '<span class="tc-dots">' + HERO.map(function (_, k) { return '<i class="' + (k === i ? 'on' : '') + '"></i>'; }).join('') + '</span>' : ''); }
@@ -1900,15 +1924,16 @@
       else if (d.inn) { d.inn.style.transition = 'transform .2s ease, opacity .2s ease'; d.inn.style.transform = ''; d.inn.style.opacity = ''; } }, { passive: true });
   })();
   function introHTML() {
-    var st = stats(), fresh = all().slice().sort(function (a, b) { return b.born - a.born; }).slice(0, 3);
-    var t0 = find(HERO[tcI]) || all()[0];
-    return '<section class="intro3" id="intro"><div class="aurora"><span class="a1"></span><span class="a2"></span><span class="a3"></span></div>' +
-      '<div class="i3-l">' +
+    var st = stats(), t0 = find(HERO[tcI]) || all()[0], hold = all().reduce(function (a, t) { return a + (t.holders || 0); }, 0);
+    if (!S._arT) { S._arT = 1; setTimeout(arTapeLoad, 300); } else setTimeout(arTapeDraw, 0);
+    return '<section class="intro3 ar" id="intro">' +
+      '<div class="i3-l ar-txt">' +
         '<h1 class="kin"><span class="kin-a">pay holders in</span> <span class="kin-slot"><span class="kin-roll" id="kin-roll">' + KIN.concat([KIN[0]]).map(function (x) { return '<span class="kin-w">' + (x[0] ? (x[0].charAt(0) === '$' ? avatarHTML(find(x[0].slice(1)) || BASE[0], 64) : coinHTML(x[0], 64)) : '') + '<b>' + x[1] + '</b></span>'; }).join('') + '</span></span></h1>' +
         '<p class="i3-p"><b class="i3-slogan">Launch fair. Trade safer.</b> Your tax pays holders in anything — your own coin, SOL, gold, memes. Dev bag and risks always on the label.</p>' +
-        '<div class="i3-cta"><button class="btn pri" data-act="create">Launch a coin <span aria-hidden="true">→</span></button><button class="btn sec" data-act="board">Trade anything ↓</button></div></div>' +
-      (t0 ? '<div class="tc" id="tc">' + tcFill(t0, tcI) + '</div>' : '<div class="tc tc-empty"><b>No coins yet</b><small>Be the first — launch a coin in a minute.</small><button class="btn pri" data-act="create">Launch a coin →</button></div>') +
-      '<div class="i2-live"><div class="i2-lh"><span class="livedot"></span>JUST LAUNCHED</div><div id="i2-fresh">' + i2Fill(fresh) + '</div></div>' +
+        '<div class="i3-cta"><button class="btn pri" data-act="create">Launch a coin <span aria-hidden="true">→</span></button><button class="btn sec" data-act="board">Trade anything ↓</button></div>' +
+        '<div class="ar-st"><span><b class="mono">' + fmtK(st.vol) + '</b><small>24h volume</small></span><span><b class="mono">' + fmtNum(st.tokens) + '</b><small>coins live</small></span><span><b class="mono">' + fmtNum(hold) + '</b><small>holders</small></span></div></div>' +
+      (t0 ? '<div class="tc ar-spot" id="tc">' + tcFill(t0, tcI) + '</div>' : '<div class="tc tc-empty ar-spot"><b>No coins yet</b><small>Be the first — launch a coin in a minute.</small><button class="btn pri" data-act="create">Launch a coin →</button></div>') +
+      '<div class="ar-tape" id="ar-tape">' + arTapeHTML() + '</div>' +
     '</section>';
   }
   // the "Just launched" box is never half empty: newest coins first, then the latest trades, then an invite to launch
@@ -4353,7 +4378,7 @@
     if (t.tk) { t.tk.push([real ? real.ts : Date.now(), t.mcN, sol, real && real.usd > 0 && sol > 0 ? real.usd / sol : 0]); if (t.tk.length > 5000) t.tk.splice(0, 500); }
     var tr = { tick: t.tick, side: side, sol: sol, wallet: wallet || pickWallet(), t: Date.now(), tax: sol * effTax(t) / 100, mine: !!mine, price: price(t), sig: b58(64) }; tr.tokens = sol * SOL_USD / tr.price;
     if (real) { tr.t = real.ts; tr.slot = real.slot || 0; tr.tokens = real.tokens; tr.tax = real.fee; tr.sig = real.sig; tr.sniper = real.sniper; tr.bundle = real.bundle; tr.real = true; if (real.usd != null) tr.usd = real.usd; tr.mine = !!(S.account && wallet === S.account); }
-    S.trades.unshift(tr); if (S.trades.length > 400) { for (var ti = S.trades.length - 1; ti >= 0 && S.trades.length > 400; ti--) { var ox = S.trades[ti], ot = find(ox.tick); if (ox.mine || (ot && ot.creator && ox.wallet === ot.creator) || (ot && ot.devPct != null)) continue; S.trades.splice(ti, 1); } if (S.trades.length > 900) S.trades.pop(); }
+    S.trades.unshift(tr); setTimeout(arTapeDraw, 0); if (S.trades.length > 400) { for (var ti = S.trades.length - 1; ti >= 0 && S.trades.length > 400; ti--) { var ox = S.trades[ti], ot = find(ox.tick); if (ox.mine || (ot && ot.creator && ox.wallet === ot.creator) || (ot && ot.devPct != null)) continue; S.trades.splice(ti, 1); } if (S.trades.length > 900) S.trades.pop(); }
     S.tradeCount++;
     paint(t, dir, tr);
     t._lt = Date.now();
