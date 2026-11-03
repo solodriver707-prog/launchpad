@@ -13,7 +13,7 @@
 // Memo format: "treid:<kind>:<mint>:<amount>[:<extra>]" — only memos in transactions PAID BY OPS count.
 import { PublicKey, Transaction, TransactionInstruction, SystemProgram } from '@solana/web3.js';
 import { TOKEN_2022_PROGRAM_ID, NATIVE_MINT, unpackAccount, getTransferFeeAmount, getAssociatedTokenAddressSync, createBurnCheckedInstruction, createTransferCheckedInstruction, createCloseAccountInstruction, createAssociatedTokenAccountIdempotentInstruction } from '@solana/spl-token';
-import { SwapMode, getCurrentPoint, deriveDammV2PoolAddress, DAMM_V2_MIGRATION_FEE_ADDRESS } from '@meteora-ag/dynamic-bonding-curve-sdk';
+import { SwapMode, getCurrentPoint, deriveDammV2PoolAddress, DAMM_V2_MIGRATION_FEE_ADDRESS, getSwapQuoteTransferFees } from '@meteora-ag/dynamic-bonding-curve-sdk';
 import { CpAmm, getUnClaimLpFee } from '@meteora-ag/cp-amm-sdk';
 import { ed25519 } from '@noble/curves/ed25519';
 import bs58 from 'bs58';
@@ -188,7 +188,8 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, q
     let sig;
     if (!done) {   // still on the curve: swap on the DBC pool, 2% slippage over the coin's own tax
       const cp = await getCurrentPoint(conn, cfg.activationType), slip = 200 + Math.round((c.tax_bps || 0));
-      const qt = dbc.pool.swapQuote2({ virtualPool: vpw.poolState ? vpw : { poolState: vp }, config: cfg, swapBaseForQuote: false, amountIn: new BN(amount), slippageBps: slip, hasReferral: false, currentPoint: cp, swapMode: SwapMode.ExactIn });
+      const tfx = Number(cfg.quoteTokenFlag?.toString?.() ?? cfg.quoteTokenFlag) === 1 ? await getSwapQuoteTransferFees(conn, cfg) : {};
+      const qt = dbc.pool.swapQuote2({ ...tfx, virtualPool: vpw.poolState ? vpw : { poolState: vp }, config: cfg, swapBaseForQuote: false, amountIn: new BN(amount), slippageBps: slip, hasReferral: false, currentPoint: cp, swapMode: SwapMode.ExactIn });
       if (!qt.minimumAmountOut || !(qt.minimumAmountOut.gtn(0))) throw new Error('buyback quote has no minimum out — not swapping unprotected');
       const sw = await dbc.pool.swap2({ owner: ops.publicKey, pool: new PublicKey(c.pool), swapBaseForQuote: false, referralTokenAccount: null, swapMode: SwapMode.ExactIn, amountIn: new BN(amount), minimumAmountOut: qt.minimumAmountOut });
       sig = await bbSend(c, new Transaction().add(...sw.instructions, memo(`treid:buyback:${c.mint}:${amount}:${claimSig}`)));

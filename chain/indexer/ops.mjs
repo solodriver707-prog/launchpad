@@ -10,7 +10,7 @@ import bs58 from 'bs58';
 import BN from 'bn.js';
 import { createHash } from 'node:crypto';
 import { HALT, halt, canWrite, withLock } from './lock.mjs';
-import { SwapMode, getCurrentPoint, deriveDammV2PoolAddress, DAMM_V2_MIGRATION_FEE_ADDRESS } from '@meteora-ag/dynamic-bonding-curve-sdk';
+import { SwapMode, getCurrentPoint, deriveDammV2PoolAddress, DAMM_V2_MIGRATION_FEE_ADDRESS, getSwapQuoteTransferFees } from '@meteora-ag/dynamic-bonding-curve-sdk';
 import { CpAmm } from '@meteora-ag/cp-amm-sdk';
 import { sendTx, getTxRetry, fetchT, landOrExpire, JUP } from './txutil.mjs';
 
@@ -158,7 +158,8 @@ export function startOps({ conn, dbc, ops, treasury, q, q1, run, mainnet = false
       ixs = (await amm.swap2({ payer: ops.publicKey, pool, inputTokenMint: ps.tokenAMint, outputTokenMint: ps.tokenBMint, amountIn: new BN(amt.toString()), minimumAmountOut: new BN(minOut.toString()), tokenAVault: ps.tokenAVault, tokenBVault: ps.tokenBVault, tokenAMint: ps.tokenAMint, tokenBMint: ps.tokenBMint, tokenAProgram: TOKEN_2022_PROGRAM_ID, tokenBProgram: qprog, referralTokenAccount: null, swapMode: 0 })).instructions; vault = ps.tokenBVault;
     } else {
       const cfg = await dbc.state.getPoolConfig(vp.config); if (BigInt(vp.quoteReserve.toString()) >= BigInt(cfg.migrationQuoteThreshold.toString())) throw new Error('curve finished — waiting for migration');
-      const qt = dbc.pool.swapQuote2({ virtualPool: vpw.poolState ? vpw : { poolState: vp }, config: cfg, swapBaseForQuote: true, amountIn: new BN(amt.toString()), slippageBps: slipDbc, hasReferral: false, currentPoint: await getCurrentPoint(conn, cfg.activationType), swapMode: SwapMode.ExactIn });
+      const tfx = Number(cfg.quoteTokenFlag?.toString?.() ?? cfg.quoteTokenFlag) === 1 ? await getSwapQuoteTransferFees(conn, cfg) : {};
+      const qt = dbc.pool.swapQuote2({ ...tfx, virtualPool: vpw.poolState ? vpw : { poolState: vp }, config: cfg, swapBaseForQuote: true, amountIn: new BN(amt.toString()), slippageBps: slipDbc, hasReferral: false, currentPoint: await getCurrentPoint(conn, cfg.activationType), swapMode: SwapMode.ExactIn });
       ixs = (await dbc.pool.swap2({ owner: ops.publicKey, pool: new PublicKey(c.pool), swapBaseForQuote: true, referralTokenAccount: null, swapMode: SwapMode.ExactIn, amountIn: new BN(amt.toString()), minimumAmountOut: (() => { if (!qt.minimumAmountOut || !qt.minimumAmountOut.gtn(0)) throw new Error('sale quote has no minimum out — not selling unprotected'); return qt.minimumAmountOut; })() })).instructions; vault = vp.quoteVault;
     }
     const sg = await send([...ixs, memoIx(`treid:taxswap:${c.mint}:0:${vault.toBase58()}`), ...(tag ? [memoIx(`treid:txr:${c.mint}:${amt}:${tag}`)] : [])]);

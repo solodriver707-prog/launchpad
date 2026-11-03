@@ -7,7 +7,7 @@ import bs58lib from 'bs58';
 const bs58enc = (b) => (bs58lib.default || bs58lib).encode(b instanceof Uint8Array ? b : Uint8Array.from(b));
 import { NATIVE_MINT, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, getAssociatedTokenAddressSync, createBurnCheckedInstruction, getMint, getExtensionTypes, ExtensionType, getTransferFeeConfig, getTransferHook, getDefaultAccountState, AccountState } from '@solana/spl-token';
 import BN from 'bn.js';
-import { DynamicBondingCurveClient, buildCurveWithMarketCap, TokenType, TokenDecimal, TokenAuthorityOption, BaseFeeMode, CollectFeeMode,
+import { getSwapQuoteTransferFees, DynamicBondingCurveClient, buildCurveWithMarketCap, TokenType, TokenDecimal, TokenAuthorityOption, BaseFeeMode, CollectFeeMode,
   MigrationOption, MigrationFeeOption, MigratedCollectFeeMode, DammV2DynamicFeeMode, ActivationType, deriveDbcPoolAddress, deriveDammV1MigrationMetadataAddress, SwapMode, getCurrentPoint, deriveDammV2PoolAddress, DAMM_V2_MIGRATION_FEE_ADDRESS, getPriceFromSqrtPrice } from '@meteora-ag/dynamic-bonding-curve-sdk';
 import { CpAmm, calculateTransferFeeExcludedAmount } from '@meteora-ag/cp-amm-sdk';
 
@@ -162,7 +162,8 @@ export async function quote({ rpc, pool, side, amount, slippageBps = 500, expect
     return { out: Number(outRaw.toString()) / div, minOut: Number(minRaw.toString()) / div, feeSol: fee / 10 ** qd, quoteDecimals: qd, quoteMint: cfg.quoteMint.toBase58(), amountIn: amountIn.toString(), minRaw: minRaw.toString(), graduated: true, net: true, impact };
   }
   const mode = sell ? SwapMode.ExactIn : SwapMode.PartialFill;   // a buy that would overfill the curve fills it exactly and refunds the rest
-  const q = cl.pool.swapQuote2({ virtualPool: vpw, config: cfg, swapBaseForQuote: sell, amountIn, slippageBps, hasReferral: false, currentPoint: cp, swapMode: mode });
+  const tfx = Number(cfg.quoteTokenFlag?.toString?.() ?? cfg.quoteTokenFlag) === 1 ? await getSwapQuoteTransferFees(C(rpc), cfg) : {};   // a Token-2022 pair token (xStocks, PreStocks…): the quote needs its mint + epoch
+  const q = cl.pool.swapQuote2({ virtualPool: vpw, config: cfg, swapBaseForQuote: sell, amountIn, slippageBps, hasReferral: false, currentPoint: cp, swapMode: mode, ...tfx });
   const outRaw = q.excludedTransferFeeAmountOut || q.outputAmount || q.amountOut || new BN(0), minRaw = q.minimumAmountOut || new BN(0);   // what actually lands in the wallet (after the coin's transfer tax)
   const fee = ['tradingFee', 'protocolFee', 'referralFee'].reduce((a, k) => a + Number(q[k]?.toString?.() || 0), 0) || Number((q.fee || 0).toString());   // the whole pool fee, not just the part after Meteora's cut
   let impact = 0; try { const s0 = Number((vpw.poolState || vpw).sqrtPrice.toString()), s1 = Number((q.nextSqrtPrice || 0).toString()); if (s0 > 0 && s1 > 0) impact = Math.abs(1 - (s1 / s0) ** 2) * 100; } catch {}
