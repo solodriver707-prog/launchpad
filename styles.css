@@ -5958,3 +5958,28 @@ header{z-index:45}   /* above the callouts rail (40): the wallet / notification 
 .hl-form small{font-size:11px;line-height:1.4}
 .cr-hlre{display:block;margin-top:8px;font-size:12px}
 @media (max-width:420px){.feeto-q button{flex:1 1 40%}}
+/* trending strip: swipe with a finger, drag with a mouse */
+.ts-track{touch-action:pan-y;cursor:grab;user-select:none;-webkit-user-select:none}
+.ts-track.ts-drag{cursor:grabbing}.ts-track.ts-drag .ts-card{pointer-events:none}
+.ts-track img{-webkit-user-drag:none;user-drag:none}
+/* ===== touch screens: every tap target ≥ ~40px (bigger where there's room, a larger invisible hit area where rows are tight) ===== */
+@media (pointer:coarse){
+  /* real size bumps */
+  .pill.copy2,.pill.cs-pill,.slipbtn,.dev-rep{min-height:40px}
+  .iconbtn{min-width:40px;min-height:40px}
+  .maker{min-height:36px;display:inline-flex;align-items:center}
+  [data-act="lbtab"],[data-act="qpick"],.cpp-q,[data-act="paySol"]{min-height:40px}
+  [data-act="star"].btn{min-height:40px}
+  [data-act="stf"]{min-height:34px;min-width:40px}
+  a.cr-log{min-height:40px;align-items:center}
+  .cr-rules>summary{min-height:40px;display:flex;align-items:center;cursor:pointer}
+  .feeto-q button{min-height:46px}
+  /* invisible hit areas (layout unchanged): taller vertically, never into the neighbour */
+  .tape-item,[data-act="tf"],[data-act="ctype"],[data-act="cmode"],[data-act="cden"],[data-act="cscale"],[data-act="cauto"],[data-act="lsort"],[data-act="abs"],[data-act="trendList"],[data-act="social"]{position:relative}
+  .tape-item::after,[data-act="tf"]::after,[data-act="ctype"]::after,[data-act="cmode"]::after,[data-act="cden"]::after,[data-act="cscale"]::after,[data-act="cauto"]::after,[data-act="lsort"]::after,[data-act="abs"]::after,[data-act="trendList"]::after{content:'';position:absolute;left:0;right:0;top:-8px;bottom:-8px}
+  [data-act="lsort"]::after,[data-act="abs"]::after{top:-14px;bottom:-14px}
+  [data-act="trendList"]::after{left:-8px;right:-8px;top:-14px;bottom:-14px}
+  [data-act="social"]{padding:12px 10px;margin:-12px -10px}
+  .fxp-dots button{min-width:28px;min-height:40px;padding:12px 6px}
+  [data-act="czoom"],[data-act="cfull"]{min-width:38px;min-height:38px}
+}

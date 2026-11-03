@@ -1934,15 +1934,31 @@
       '<span class="ts-r"><b class="mono ts-mc">' + fmtK(t.mcN) + '</b>' + lbSpark(t, 70, 22, 'ts' + i) + '</span><span class="ts-cv"><i style="width:' + Math.min(100, t.prog).toFixed(0) + '%"></i></span></span></button>'; }
   function tsMount() {
     var slot = document.getElementById('ts-slot'); if (!slot) return;
-    if (!TS.el) { TS.el = document.createElement('div'); TS.el.className = 'ts-track'; TS.el.addEventListener('mouseenter', function () { TS.hover = true; }); TS.el.addEventListener('mouseleave', function () { TS.hover = false; }); requestAnimationFrame(tsTick); }
+    if (!TS.el) { TS.el = document.createElement('div'); TS.el.className = 'ts-track'; TS.el.addEventListener('mouseenter', function () { TS.hover = true; }); TS.el.addEventListener('mouseleave', function () { TS.hover = false; }); tsDrag(TS.el); requestAnimationFrame(tsTick); }
     var L = tsList(), key = L.map(function (t) { return t.tick; }).join(',');
-    if (key !== TS.key || Date.now() - TS.at > 45e3) { var h = L.map(tsCard).join(''); TS.few = L.length < 6; TS.el.innerHTML = TS.few ? h : h + h; TS.key = key; TS.at = Date.now(); if (TS.few) { TS.x = 0; TS.el.style.transform = ''; } }
+    if (key !== TS.key || Date.now() - TS.at > 45e3) { var h = L.map(tsCard).join(''); TS.few = L.length < 6; TS.el.innerHTML = TS.few ? h : h + h; TS.key = key; TS.at = Date.now(); if (TS.few) { TS.x = Math.min(0, TS.x); tsWrap(); } }
     slot.classList.toggle('ts-still', !!TS.few);   // not sliding → no edge fade (it dimmed the first card)
     var sec = slot.closest('.ts'); if (sec) sec.style.display = L.length ? '' : 'none'; var hint = sec && sec.querySelector('.ts-h .muted'); if (hint) hint.style.display = TS.few ? 'none' : '';
     if (TS.el.parentNode !== slot) slot.appendChild(TS.el);
   }
-  function tsTick(now) { if (TS.el && TS.el.isConnected) { var dt = Math.min(64, now - (TS.last || now)); if (!TS.hover && !document.hidden && !TS.few) { TS.x -= dt * .045; var half = TS.el.scrollWidth / 2; if (half > 0 && -TS.x >= half) TS.x += half; TS.el.style.transform = 'translate3d(' + TS.x.toFixed(1) + 'px,0,0)'; } } TS.last = now; requestAnimationFrame(tsTick); }
-  function trendStrip() { return '<section class="ts"><div class="ts-h"><b>🔥 trending now</b><span class="muted">point at it to stop it</span><button class="link" data-act="trendList">See all →</button></div><div class="ts-view" id="ts-slot"></div></section>'; }
+  // finger / mouse drag with a fling: the strip follows the finger, then glides and slows down; a drag never opens a coin
+  function tsWrap() { if (TS.few) { var vw = TS.el.parentNode ? TS.el.parentNode.clientWidth : 0, min = Math.min(0, vw - TS.el.scrollWidth); if (TS.x > 0) { TS.x = 0; TS.v = 0; } if (TS.x < min) { TS.x = min; TS.v = 0; } }
+    else { var half = TS.el.scrollWidth / 2; if (half > 0) { while (-TS.x >= half) TS.x += half; while (TS.x > 0) TS.x -= half; } } TS.el.style.transform = 'translate3d(' + TS.x.toFixed(1) + 'px,0,0)'; }
+  function tsDrag(el) {
+    var d = null;
+    el.addEventListener('pointerdown', function (e) { if (e.button > 0) return; d = { id: e.pointerId, x: e.clientX, y: e.clientY, x0: TS.x, t: performance.now(), lx: e.clientX, lt: performance.now(), on: false }; TS.v = 0; });
+    el.addEventListener('pointermove', function (e) { if (!d || e.pointerId !== d.id) return; var dx = e.clientX - d.x;
+      if (!d.on) { if (Math.abs(dx) < 6) return; if (Math.abs(e.clientY - d.y) > Math.abs(dx)) { d = null; return; } d.on = true; TS.drag = true; el.classList.add('ts-drag'); try { el.setPointerCapture(e.pointerId); } catch (er) {} }
+      var now = performance.now(); if (now > d.lt) TS.v = (e.clientX - d.lx) / (now - d.lt) * .8 + (TS.v || 0) * .2; d.lx = e.clientX; d.lt = now; TS.x = d.x0 + dx; tsWrap(); });
+    var end = function (e) { if (!d || (e && e.pointerId !== d.id)) return; if (d.on) { TS.moved = Date.now(); TS.hold = Date.now() + 2500; if (performance.now() - d.lt > 80) TS.v = 0; } TS.drag = false; el.classList.remove('ts-drag'); d = null; };
+    el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end); el.addEventListener('lostpointercapture', function (e) { if (e.target === el) end(e); });   // a card losing its own (implicit touch) capture isn't the end of the drag
+    el.addEventListener('click', function (e) { if (TS.moved && Date.now() - TS.moved < 350) { e.stopPropagation(); e.preventDefault(); } }, true);   // the tap that ends a drag isn't a click
+  }
+  function tsTick(now) { if (TS.el && TS.el.isConnected) { var dt = Math.min(64, now - (TS.last || now));
+      if (!TS.drag && Math.abs(TS.v || 0) > .02) { TS.x += TS.v * dt; TS.v *= Math.pow(.94, dt / 16); tsWrap(); }   // glide after a fling
+      else if (!TS.drag && !TS.hover && !document.hidden && !TS.few && !(TS.hold > Date.now())) { TS.v = 0; TS.x -= dt * .045; tsWrap(); } }
+    TS.last = now; requestAnimationFrame(tsTick); }
+  function trendStrip() { return '<section class="ts"><div class="ts-h"><b>🔥 trending now</b><span class="muted">drag or point at it to stop it</span><button class="link" data-act="trendList">See all →</button></div><div class="ts-view" id="ts-slot"></div></section>'; }
   // ================= PRO TOKEN PAGE (pump.fun / dexscreener style) =================
   // ===== time-based chart engine (1m … 1d candles, zoom, pan, line/candles, MA, trade markers) =====
   var TFS = [['1M', '1m', 6e4], ['5M', '5m', 3e5], ['15M', '15m', 9e5], ['1H', '1h', 36e5], ['4H', '4h', 144e5], ['1D', '1d', 864e5]];
