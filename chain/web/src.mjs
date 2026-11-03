@@ -283,6 +283,8 @@ export function cosign(signed, cosigners = []) {
 }
 
 // ---- creator rewards: read + claim the creator's share of trading fees (SOL) ----
+// the coin's market cap at launch, in its pair token (from the config's start price) — the chart's first candle opens here
+export async function launchMc({ rpc, pool }) { const { cfg, qd } = await poolCtx(rpc, pool, null); return Number(getPriceFromSqrtPrice(cfg.sqrtStartPrice, RULES.decimals, qd)) * RULES.supply; }
 export async function creatorFees({ rpc, pool }) {
   const vpw = await client(rpc).state.getPool(pk(pool)); const vp = vpw.poolState || vpw, cfg = await client(rpc).state.getPoolConfig(vp.config), qi = await quoteInfo({ rpc, mint: cfg.quoteMint.toBase58() }), D = 10 ** qi.decimals;
   return { quoteMint: qi.mint, unclaimed: Number(vp.creatorQuoteFee.toString()) / D, creator: vp.creator.toBase58(), partnerUnclaimed: Number(vp.partnerQuoteFee.toString()) / D };

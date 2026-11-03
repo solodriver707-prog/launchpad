@@ -262,7 +262,9 @@ async function addCoin0(mint, slot, ts, creator, poolAddr, softErr) {
   const md = await getTokenMetadata(conn, new PublicKey(mint), 'confirmed', TOKEN_2022_PROGRAM_ID).catch(softErr);
   const qm = cf ? cf.quoteMint.toBase58() : WSOL; let qd = 9, qs = KNOWN_Q[qm] || null; if (!cf || !(await quoteAllowed(qm))) { console.log('skip  pair token not allowed', mint); return false; }
   if (qm !== WSOL) { const qa = await conn.getAccountInfo(new PublicKey(qm)).catch(softErr); const qprog = qa?.owner?.equals(TOKEN_2022_PROGRAM_ID) ? TOKEN_2022_PROGRAM_ID : undefined; const qmi = await getMint(conn, new PublicKey(qm), 'confirmed', qprog).catch(softErr); if (!qmi) return false; qd = qmi.decimals;   // never guess decimals
-    if (!qs) { const qmd = qprog ? await getTokenMetadata(conn, new PublicKey(qm), 'confirmed', TOKEN_2022_PROGRAM_ID).catch(softErr) : null; qs = qmd?.symbol || qm.slice(0, 4); } }
+    if (!qs) { const qmd = qprog ? await getTokenMetadata(conn, new PublicKey(qm), 'confirmed', TOKEN_2022_PROGRAM_ID).catch(() => null) : null; qs = qmd?.symbol || null;
+      if (!qs) { try { const j = await (await fetchT(JUP + '/tokens/v2/search?query=' + qm)).json(), t0 = Array.isArray(j) ? j.find((x) => x.id === qm) : null; if (t0 && typeof t0.symbol === 'string') qs = t0.symbol.slice(0, 16); } catch {} }   // plain SPL pair tokens (ZEC…) keep their name in Metaplex: Jupiter's list has it
+      if (!qs) qs = qm.slice(0, 4); } }
   const m = await getMint(conn, new PublicKey(mint), 'confirmed', TOKEN_2022_PROGRAM_ID).catch(softErr); const tf = m && getTransferFeeConfig(m);
   // the coin itself: 6 decimals, nobody can mint or freeze, and only the extensions treid uses (no hooks, delegates or other surprises)
   const OKX = new Set([ExtensionType.TransferFeeConfig, ExtensionType.MetadataPointer, ExtensionType.TokenMetadata]);
@@ -700,6 +702,9 @@ async function start() {
   setInterval(() => syncAll().catch(() => {}), 5 * 60e3);
   setInterval(() => { for (const w of PARTNERS) syncAddress(w, 50).catch(() => {}); }, 60e3);   // a new coin shows up within a minute even if its stream message was missed
   // orphan pools: a pool on a treid config whose coin isn't indexed (e.g. skipped by an older rule) — add it and replay its history once
+  const fixQs = async () => { for (const c of q('SELECT DISTINCT quote_mint m, quote_symbol s FROM coins WHERE quote_mint IS NOT NULL AND quote_mint != ?', WSOL)) { if (!c.s || c.s !== c.m.slice(0, 4)) continue;
+    try { const j = await (await fetchT(JUP + '/tokens/v2/search?query=' + c.m)).json(), t0 = Array.isArray(j) ? j.find((x) => x.id === c.m) : null; if (t0 && typeof t0.symbol === 'string') run('UPDATE coins SET quote_symbol=? WHERE quote_mint=?', t0.symbol.slice(0, 16), c.m); } catch {} } };
+  setTimeout(() => fixQs().catch(() => {}), 30e3);
   const orphans = async () => { for (const k of [...configs]) { let ps = []; try { ps = await dbc.state.getPoolsByConfig(k); } catch { continue; }
     for (const p of ps) { const st = p.account?.poolState || p.account, mint = st?.baseMint?.toBase58?.(); if (!mint || q1('SELECT 1 FROM coins WHERE mint=?', mint)) continue;
       const r = await addCoin(mint, 0, 0, null, p.publicKey.toBase58()).catch(() => 'retry'); if (r !== true) continue; console.log('orphan pool indexed', mint); await quotePrices().catch(() => {});   // its pair price first, so the replayed trades get USD values
