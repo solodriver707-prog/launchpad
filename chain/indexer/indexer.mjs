@@ -699,6 +699,13 @@ async function start() {
   for (const w of PARTNERS) conn.onLogs(new PublicKey(w), (l) => { if (!l.err) enqueue(l.signature); }, 'confirmed');
   setInterval(() => syncAll().catch(() => {}), 5 * 60e3);
   setInterval(() => { for (const w of PARTNERS) syncAddress(w, 50).catch(() => {}); }, 60e3);   // a new coin shows up within a minute even if its stream message was missed
+  // orphan pools: a pool on a treid config whose coin isn't indexed (e.g. skipped by an older rule) — add it and replay its history once
+  const orphans = async () => { for (const k of [...configs]) { let ps = []; try { ps = await dbc.state.getPoolsByConfig(k); } catch { continue; }
+    for (const p of ps) { const st = p.account, mint = st.baseMint?.toBase58?.(); if (!mint || q1('SELECT 1 FROM coins WHERE mint=?', mint)) continue;
+      const r = await addCoin(mint, 0, 0, null, p.publicKey.toBase58()).catch(() => 'retry'); if (r !== true) continue; console.log('orphan pool indexed', mint);
+      let before; for (let i = 0; i < 10; i++) { const pg = await conn.getSignaturesForAddress(p.publicKey, { before, limit: 1000 }, 'confirmed').catch(() => []); if (!pg.length) break;
+        for (const x of pg) if (!x.err) { run('DELETE FROM seen WHERE sig=?', x.signature); enqueue(x.signature); } if (pg.length < 1000) break; before = pg[pg.length - 1].signature; } } } };
+  setTimeout(() => orphans().catch((e) => console.log('orphan scan err', String(e?.message || e).slice(0, 80))), 20e3); setInterval(() => orphans().catch(() => {}), 6 * 36e5);
   retier(); setInterval(() => loadConfigs().catch(() => {}), 24 * 36e5);   // full config rescan only daily (new configs are picked up from their own create tx)
   console.log('watching', configs.size, 'treid configs (partners', PARTNERS.join(', '), ')');
   if (!OPS) return;
