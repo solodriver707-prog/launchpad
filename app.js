@@ -2448,7 +2448,7 @@
   function solSwapRun(t, side, amt) {
     var who = S.account, sym = symOf(t), taxBps = Math.round(Math.max(t.buy || 0, t.sell || 0) * 100);
     S.busy = side === 'buy' ? 'Buying $' + sym + ' with SOL' : 'Selling $' + sym + ' for SOL'; render(); toast(S.busy + ' — one approval in your wallet');
-    chainLib().then(function (T) { return T.buildSolSwap({ rpc: RPC, owner: who, pool: t.pool, side: side, amount: amt, slippageBps: Math.round(S.slip * 100), expect: { mint: t.ca, partners: [PARTNER, TREASURY] }, jup: JUP }); }).then(function (b) {
+    chainLib().then(function (T) { var cr = side === 'buy' ? coRef(t) : null; return T.buildSolSwap({ rpc: RPC, owner: who, pool: t.pool, side: side, amount: amt, slippageBps: Math.round(S.slip * 100), expect: { mint: t.ca, partners: [PARTNER, TREASURY] }, jup: JUP, memo: cr ? 'treid:co:' + cr.id : null }); }).then(function (b) {
       var b64 = bytesB64(b.bytes), sp = {}, o;
       if (side === 'buy') o = { spend: sp, solMax: BigInt(b.lamports) + 30000000n, gain: { mint: t.ca, min: BigInt(b.coinMinRaw) * BigInt(10000 - taxBps - 50) / 10000n } };   // what lands after the coin's own tax
       else { sp[t.ca] = String(b.tokensRaw); o = { spend: sp, solMax: 30000000n, solGainMin: BigInt(b.solMinRaw) > 20000000n ? BigInt(b.solMinRaw) - 20000000n : 0n }; }

@@ -188,8 +188,22 @@ export async function buildSwap({ rpc, owner, pool, side, amount, slippageBps = 
 // sell: the curve sell, then Jupiter pair token → SOL with 99.85% of what the curve quotes (same all-or-nothing)
 const jIx = (x) => new TransactionInstruction({ programId: pk(x.programId), keys: x.accounts.map((a) => ({ pubkey: pk(a.pubkey), isSigner: a.isSigner, isWritable: a.isWritable })), data: Buffer.from(x.data, 'base64') });
 const isCB = (ix) => ix.programId.equals(ComputeBudgetProgram.programId);
-export async function buildSolSwap({ rpc, owner, pool, side, amount, slippageBps = 500, expect = null, jup, referral = null }) {
+export async function buildSolSwap({ rpc, owner, pool, side, amount, slippageBps = 500, expect = null, jup, referral = null, memo = null }) {
   owner = pk(owner); const sell = side === 'sell', { cfg, qd } = await poolCtx(rpc, pool, expect), qm = cfg.quoteMint.toBase58(), SOLM = NATIVE_MINT.toBase58(), cl = client(rpc);
+  // best: Jupiter's own route SOL ⇄ coin that goes through THIS treid pool (multi-hop, nothing left over — the wallet shows only SOL and the coin)
+  const coin = expect && expect.mint; if (coin) { try {
+    const inM = sell ? coin : SOLM, outM = sell ? SOLM : coin, amt = sell ? Math.floor(amount * 10 ** RULES.decimals) : Math.floor(amount * 1e9);
+    const r = await (await fetch(jup + '/quote?inputMint=' + inM + '&outputMint=' + outM + '&amount=' + amt + '&slippageBps=' + slippageBps)).json();
+    const viaPool = r && r.outAmount && r.inputMint === inM && r.outputMint === outM && (r.routePlan || []).some((x) => x.swapInfo && x.swapInfo.ammKey === pk(pool).toBase58());
+    if (viaPool) { const ji = await (await fetch(jup + '/swap-instructions', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ quoteResponse: r, userPublicKey: owner.toBase58(), wrapAndUnwrapSol: true }) })).json();
+      if (ji && ji.swapInstruction) { const ixs = [ComputeBudgetProgram.setComputeUnitLimit({ units: 900000 }), ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 50000 }), ...(ji.setupInstructions || []).map(jIx), jIx(ji.swapInstruction), ...(ji.cleanupInstruction ? [jIx(ji.cleanupInstruction)] : [])];
+        if (memo && !sell && /^treid:co:\d{1,12}$/.test(memo)) ixs.push(new TransactionInstruction({ keys: [], programId: pk('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr'), data: Buffer.from(memo) }));   // bought from a callout: credits the caller
+        const alts = (await Promise.all((ji.addressLookupTableAddresses || []).map((a) => C(rpc).getAddressLookupTable(pk(a))))).map((x) => x.value).filter(Boolean);
+        const bh = await C(rpc).getLatestBlockhash('confirmed'), vtx = new VersionedTransaction(new TransactionMessage({ payerKey: owner, recentBlockhash: bh.blockhash, instructions: ixs }).compileToV0Message(alts)), bytes = vtx.serialize();
+        if (bytes.length <= 1232) { const sim = await C(rpc).simulateTransaction(vtx, { sigVerify: false, replaceRecentBlockhash: true });
+          if (!sim.value.err) { const dec = sell ? 9 : RULES.decimals; return { bytes, lastValidBlockHeight: bh.lastValidBlockHeight, direct: true, quote: { out: Number(r.outAmount) / 10 ** dec, minOut: Number(r.otherAmountThreshold) / 10 ** dec, outSym: sell ? 'SOL' : null }, solMinRaw: sell ? r.otherAmountThreshold : null, coinMinRaw: sell ? null : r.otherAmountThreshold, lamports: sell ? null : amt, tokensRaw: sell ? String(amt) : null }; } } } }
+  } catch {} }   // no route through our pool right now → build it ourselves below
+
   const jq = async (inM, outM, amt) => { const r = await (await fetch(jup + '/quote?inputMint=' + inM + '&outputMint=' + outM + '&amount=' + amt + '&slippageBps=' + slippageBps + '&maxAccounts=38')).json();
     if (!r || !r.outAmount || r.inputMint !== inM || r.outputMint !== outM) throw new Error('No Jupiter route between SOL and this pair right now — try again in a moment'); return r; };
   let jQuote, q, dbcTx;
