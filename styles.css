@@ -6509,3 +6509,24 @@ html body .fx-l.fx-r{-webkit-mask-image:linear-gradient(90deg,transparent,#000 3
 .lk-a:hover{text-decoration:underline}
 .lkfix{margin:10px 0;width:100%;padding:9px 14px;border-radius:11px;border:1px solid rgba(255,209,92,.45);background:rgba(255,209,92,.12);color:#FFD15C;font-weight:700;font-size:12.5px;cursor:pointer}
 @media (max-width:640px){.lkbar{display:grid;grid-template-columns:auto 1fr auto;row-gap:10px}.lk-tr{grid-column:1/-1;max-width:none;order:3}.lk-t span{white-space:normal}.dlk-q button{font-size:11.5px}}
+/* arena card: the coin's info is big and fills the left side, centred top-to-bottom (sizes follow the card's own width) */
+@media (min-width:761px){
+  .ar-card{container-type:inline-size;justify-content:center!important;min-height:320px}
+  .ar-l{flex:1;justify-content:center!important;gap:clamp(14px,2cqi,20px)!important;padding:0}
+  .ar-k{font-size:clamp(11px,1.3cqi,15px)}
+  .ar-id{gap:clamp(14px,2cqi,24px)}
+  .ar-id .av{width:clamp(72px,10cqi,104px)!important;height:clamp(72px,10cqi,104px)!important}
+  .ar-id b{font-size:clamp(28px,4.4cqi,48px)}
+  .ar-id small{font-size:clamp(13px,1.6cqi,20px)}
+  .ar-mc small{font-size:clamp(12px,1.4cqi,16px)}
+  .ar-mc b{font-size:clamp(40px,7cqi,72px);gap:16px}
+  .ar-mc em{font-size:clamp(15px,2cqi,24px)}
+  .ar-kv{gap:clamp(24px,4cqi,52px)}
+  .ar-kv small{font-size:clamp(11.5px,1.3cqi,15px)}
+  .ar-kv b{font-size:clamp(15px,2.2cqi,25px);gap:8px}
+  .ar-kv b .coin{width:clamp(16px,2.2cqi,26px)!important;height:clamp(16px,2.2cqi,26px)!important}
+}
+@media (min-width:761px){   /* the chart sits on the right, behind — the info on the left keeps the full height */
+  .ar-r{position:absolute!important;left:36%;right:0;bottom:0;height:64%;margin:0!important;z-index:1;pointer-events:none;-webkit-mask-image:linear-gradient(90deg,transparent 0%,#000 28%);mask-image:linear-gradient(90deg,transparent 0%,#000 28%)}
+  .ar-card{padding:22px 28px!important}
+}
