@@ -1886,18 +1886,43 @@
     var el = document.getElementById('tc'); if (!el || document.hidden) return;
     if (!HERO.length) return; tcI = (tcI + 1) % HERO.length; var t = find(HERO[tcI]); if (!t) return;
     el.classList.add('out');
-    setTimeout(function () { el.innerHTML = tcHTML(t, tcI) + '<span class="tc-timer"></span>'; el.classList.remove('out'); }, 260);
-  }, 5000);
+    setTimeout(function () { el.innerHTML = spotHTML(t, tcI); el.classList.remove('out'); }, 260);
+  }, 6500);
+  // hero chart: the coin's real market-cap path (every trade), as a soft area — evenly spaced so quiet hours don't flatten it
+  function heroChart(t, w, h) {
+    if (t.live && !t.tk && !t._spk && API && !t._spkL) { t._spkL = 1; apiGet('/api/trades/' + t.ca).then(function (rows) { t._spk = rows.slice().reverse().map(function (x) { return x.mcap_usd / 1000; }).filter(function (v) { return v > 0; }); var el = document.querySelector('#tc .hx-ch'); if (el && find(HERO[tcI]) === t) el.innerHTML = heroChart(t, 600, 74); }).catch(function () {}); }   /* the real trades, fetched once for the spotlight */
+    var tk = t._spk && t._spk.length > 1 && !t.tk ? t._spk.map(function (v) { return [0, v]; }) : ensureTicks(t), d = tk.map(function (x) { return x[1]; }).filter(function (v) { return v > 0; }); if (d.length > 80) { var st = d.length / 80, o = []; for (var i = 0; i < 80; i++) o.push(d[Math.floor(i * st)]); o.push(d[d.length - 1]); d = o; }
+    if (d.length < 2) d = [t.mcN, t.mcN]; var mx = Math.max.apply(null, d), mn = Math.min.apply(null, d), sp = (mx - mn) || mx * 0.02 || 1, up = d[d.length - 1] >= d[0], col = up ? '#3DDC97' : '#F2708A', gid = 'hxg' + (up ? 'u' : 'd');
+    var pts = d.map(function (v, i) { return [i * w / (d.length - 1), h - 6 - (v - mn) / sp * (h - 14)]; }), line = 'M' + pts.map(function (q) { return q[0].toFixed(1) + ' ' + q[1].toFixed(1); }).join(' L'), last = pts[pts.length - 1];
+    return '<svg class="hx-chart" viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="' + gid + '" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="' + col + '" stop-opacity=".28"/><stop offset="1" stop-color="' + col + '" stop-opacity="0"/></linearGradient></defs>' +
+      '<path d="' + line + ' L' + w + ' ' + h + ' L0 ' + h + ' Z" fill="url(#' + gid + ')"/><path d="' + line + '" fill="none" stroke="' + col + '" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>' +
+      '<circle cx="' + last[0].toFixed(1) + '" cy="' + last[1].toFixed(1) + '" r="3.5" fill="' + col + '"/></svg>';
+  }
+  // spotlight card: the coin's own banner as the backdrop, name + market cap, its real chart, the numbers that matter
+  function spotHTML(t, k) {
+    var c = chgOver(t, 360), tm = Math.max(t.buy, t.sell), id = esc(t.tick), sid = esc(symOf(t)), n = Math.max(1, HERO.length);
+    return '<div class="hx-spot-in" role="button" tabindex="0" data-act="open" data-arg="' + id + '">' +
+      '<div class="hx-bg' + (t.banner ? ' ban' : '') + '" aria-hidden="true">' + (t.banner ? '<img src="' + esc(t.banner) + '" alt="">' : avatarHTML(t, 300)) + '</div>' +
+      '<div class="hx-top"><span class="hx-k"><i class="livedot"></i>Spotlight · #' + (k + 1) + '</span><span class="hx-chips"><span class="hx-chip">' + coinHTML(t.pair, 16) + esc(pairLabel(t.pair)) + '</span><span class="hx-chip tax">Tax ' + tm + '%</span></span></div>' +
+      '<div class="hx-id"><span class="hx-av">' + avatarHTML(t, 60) + '</span><span class="hx-nm"><b>' + esc(t.name) + '</b><small class="mono">$' + sid + '</small></span>' +
+        '<span class="hx-mc"><small>Market cap</small><b class="mono">' + fmtK(t.mcN) + '</b><em class="mono ' + (c >= 0 ? 'up' : 'down') + '">' + chgTxt(c) + ' <span>6h</span></em></span></div>' +
+      '<div class="hx-ch">' + heroChart(t, 600, 74) + '</div>' +
+      '<div class="hx-kv"><span><small>24h vol</small><b class="mono">' + fmtK(t.vol) + '</b></span><span><small>Holders</small><b class="mono">' + fmtNum(t.holders) + '</b></span><span><small>Age</small><b class="mono">' + ago(t.born) + '</b></span>' +
+        '<span class="hx-cv"><small>Bonding curve <b class="mono">' + Math.min(100, t.prog).toFixed(t.prog < 10 ? 1 : 0) + '%</b></small><i><u style="width:' + Math.max(2, Math.min(100, t.prog)).toFixed(1) + '%"></u></i></span></div>' +
+      '<div class="hx-dots">' + Array.apply(null, Array(n)).map(function (_, i) { return '<i class="' + (i === k ? 'on' : '') + '"></i>'; }).join('') + '</div></div>';
+  }
   function introHTML() {
-    var st = stats(), fresh = all().slice().sort(function (a, b) { return b.born - a.born; }).slice(0, 5);
+    var st = stats(), fresh = all().filter(function (t) { return !t.archived; }).sort(function (a, b) { return b.born - a.born; }).slice(0, 5);
     var t0 = find(HERO[tcI]) || all()[0];
-    return '<section class="intro3" id="intro"><div class="aurora"><span class="a1"></span><span class="a2"></span><span class="a3"></span></div>' +
-      '<div class="i3-l">' +
+    return '<section class="intro3 hx" id="intro">' +
+      '<div class="i3-l hx-brand">' +
+        '<span class="hx-live"><i class="livedot"></i>Live on Solana</span>' +
         '<h1 class="kin"><span class="kin-a">pay holders in</span> <span class="kin-slot"><span class="kin-roll" id="kin-roll">' + KIN.concat([KIN[0]]).map(function (x) { return '<span class="kin-w">' + (x[0] ? (x[0].charAt(0) === '$' ? avatarHTML(find(x[0].slice(1)) || BASE[0], 64) : coinHTML(x[0], 64)) : '') + '<b>' + x[1] + '</b></span>'; }).join('') + '</span></span></h1>' +
         '<p class="i3-p"><b class="i3-slogan">Launch fair. Trade safer.</b> Your tax pays holders in anything — your own coin, SOL, gold, memes. Dev bag and risks always on the label.</p>' +
-        '<div class="i3-cta"><button class="btn pri" data-act="create">Launch a coin <span aria-hidden="true">→</span></button><button class="btn sec" data-act="board">Trade anything ↓</button></div></div>' +
-      (t0 ? '<div class="tc" id="tc">' + tcHTML(t0, tcI) + '<span class="tc-timer"></span></div>' : '<div class="tc tc-empty"><b>No coins yet</b><small>Be the first — launch a coin in a minute.</small><button class="btn pri" data-act="create">Launch a coin →</button></div>') +
-      '<div class="i2-live"><div class="i2-lh"><span class="livedot"></span>JUST LAUNCHED</div><div id="i2-fresh">' + i2Fill(fresh) + '</div></div>' +
+        '<div class="i3-cta"><button class="btn pri" data-act="create">Launch a coin <span aria-hidden="true">→</span></button><button class="btn sec" data-act="board">Explore coins ↓</button></div>' +
+        '<div class="hx-stats"><span><b class="mono">' + fmtK(st.vol) + '</b><small>24h volume</small></span><span><b class="mono">' + fmtNum(st.tokens) + '</b><small>coins live</small></span><span><b class="mono">' + fmtNum(all().reduce(function (a, t) { return a + (t.holders || 0); }, 0)) + '</b><small>holders</small></span></div></div>' +
+      (t0 ? '<div class="tc hx-spot" id="tc">' + spotHTML(t0, tcI) + '</div>' : '<div class="tc tc-empty hx-spot"><b>No coins yet</b><small>Be the first — launch a coin in a minute.</small><button class="btn pri" data-act="create">Launch a coin →</button></div>') +
+      '<div class="i2-live hx-fresh"><div class="hx-fh"><span><i class="livedot"></i>Just launched</span><button class="link" data-act="lsortNew">See all →</button></div><div id="i2-fresh">' + i2Fill(fresh) + '</div></div>' +
     '</section>';
   }
   // the "Just launched" box is never half empty: newest coins first, then the latest trades, then an invite to launch
@@ -1915,8 +1940,13 @@
     var list = all().filter(function (t) { return !t.archived; }).sort(function (a, b) { return b.born - a.born; }).slice(0, 10); if (list.length <= 5) { var f = i2Fill(list); if (el._f !== f) { el._f = f; el.innerHTML = f; } return; }
     i2Pg = (i2Pg + 5) % list.length; el.classList.add('out'); setTimeout(function () { el.innerHTML = i2Fill(list.slice(i2Pg).concat(list).slice(0, 5)); /* always 5 coins (wraps around) — trades never fill a page */ el.classList.remove('out'); }, 260); }, 6000);
   function i2Row(t) {
-    return '<button class="i2-row" data-act="open" data-arg="' + esc(t.tick) + '">' + avatarHTML(t, 34) + '<span class="i2-n"><b>' + esc(t.name) + '</b><small>$' + esc(symOf(t)) + ' · ' + coinHTML(t.pair, 13) + esc(pairLabel(t.pair)) + ' · <span class="i2-age" data-t="' + t.born + '">' + ago(t.born) + '</span></small></span><span class="i2-sp">' + lbSpark(t, 64, 24, 'i2' + t.tick) + '</span><span class="i2-mc mono">' + fmtK(t.mcN) + '<em class="' + (chgOver(t, 360) >= 0 ? 'up' : 'down') + '">' + chgTxt(chgOver(t, 360)) + '</em></span><span class="tax" style="background:' + taxBg(Math.max(t.buy, t.sell)) + ';min-width:38px;padding:3px 5px"><b style="font-size:12px">' + Math.max(t.buy, t.sell) + '%</b></span></button>';
+    var c = chgOver(t, 360), tm = Math.max(t.buy, t.sell);
+    return '<button class="i2-row hx-row" data-act="open" data-arg="' + esc(t.tick) + '">' + avatarHTML(t, 36) +
+      '<span class="i2-n"><b>' + esc(t.name) + '</b><small><span class="mono">$' + esc(symOf(t)) + '</span><span class="hx-pr">' + coinHTML(t.pair, 13) + esc(pairLabel(t.pair)) + '</span>' + (tm ? '<span class="hx-tx">' + tm + '%</span>' : '') + '</small></span>' +
+      '<span class="hx-rm"><b class="mono">' + fmtK(t.mcN) + '</b><small class="mono ' + (c >= 0 ? 'up' : 'down') + '">' + chgTxt(c) + '</small></span>' +
+      '<span class="hx-age mono" data-t="' + t.born + '">' + ago(t.born) + '</span></button>';
   }
+
   document.addEventListener('mousemove', function (e) {
     var it = e.target.closest && e.target.closest('#intro'); if (!it) return;
     var r = it.getBoundingClientRect(), px = (e.clientX - r.left) / r.width - 0.5, py = (e.clientY - r.top) / r.height - 0.5;
@@ -4604,6 +4634,7 @@
       case 'soc': var sp0 = arg.split('|'), st0 = find(sp0[0]), so0 = st0 && socialsOf(st0), u0 = so0 && so0[sp0[1]];
         if (so0 && !so0.demo && u0) window.open(u0, '_blank', 'noopener'); else toast('Demo coin — its ' + ({ web: 'website', x: 'X account', tg: 'Telegram' })[sp0[1]] + ' opens here once real coins go live', st0); break;
       case 'quick': var qq0 = QUICK.filter(function (x) { return x[0] === arg; })[0]; if (qq0 && qq0[2]) set({ cat: pairInfo(qq0[2]).cat, pair: qq0[2], view: 'grid' }); else set({ cat: arg, pair: 'All', view: 'grid' }); setTimeout(function () { var bd = document.getElementById('board'); if (bd) bd.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 30); break;
+      case 'lsortNew': S.sort = 'newest'; render(); setTimeout(function () { var b1 = document.getElementById('board'); if (b1) b1.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 30); break;
       case 'board': var bd0 = document.getElementById('board'); if (bd0) bd0.scrollIntoView({ behavior: 'smooth', block: 'start' }); break;
       case 'feedf': S.feedF = arg; render(); break;
       case 'leaders': lbLoad(); set({ screen: 'leaders', palOpen: false }); window.scrollTo(0, 0); break;
