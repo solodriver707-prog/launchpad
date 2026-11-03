@@ -1934,7 +1934,7 @@
         '<h1 class="kin"><span class="kin-a">pay holders in</span> <span class="kin-slot"><span class="kin-roll" id="kin-roll">' + KIN.concat([KIN[0]]).map(function (x) { return '<span class="kin-w">' + (x[0] ? (x[0].charAt(0) === '$' ? avatarHTML(find(x[0].slice(1)) || BASE[0], 64) : coinHTML(x[0], 64)) : '') + '<b>' + x[1] + '</b></span>'; }).join('') + '</span></span></h1>' +
         '<p class="i3-p"><b class="i3-slogan">Launch fair. Trade safer.</b> Your tax pays holders in anything — your own coin, SOL, gold, memes. Dev bag and risks always on the label.</p>' +
         '<div class="i3-cta"><button class="btn pri" data-act="create">Launch a coin <span aria-hidden="true">→</span></button><button class="btn sec" data-act="board">Trade anything ↓</button></div>' +
-        '<div class="ar-st"><span><b class="mono">' + fmtK(st.vol) + '</b><small>24h volume</small></span><span><b class="mono">' + fmtNum(st.tokens) + '</b><small>coins live</small></span><span><b class="mono">' + fmtNum(hold) + '</b><small>holders</small></span></div></div>' +
+        '</div>' +
       (t0 ? '<div class="tc ar-spot" id="tc">' + tcFill(t0, tcI) + '</div>' : '<div class="tc tc-empty ar-spot"><b>No coins yet</b><small>Be the first — launch a coin in a minute.</small><button class="btn pri" data-act="create">Launch a coin →</button></div>') +
     '</section>';
   }
