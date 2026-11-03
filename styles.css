@@ -6334,3 +6334,17 @@ html body .fx-l.fx-r{-webkit-mask-image:linear-gradient(90deg,transparent,#000 3
   html body header::before{content:"";position:absolute;left:0;right:0;bottom:100%;height:240px;background:#08080a;pointer-events:none}
   html{background-color:#08080a}
 }
+/* coin banner (computer): TAX above PAIRED WITH, same width, a little bigger, tucked into the top-right corner */
+@media (min-width:761px){
+  html body main.tp-env .tp-main section.tp-banner>.tp-key{display:flex!important;flex-direction:column!important;align-items:stretch!important;gap:8px!important;width:200px!important;justify-self:end!important}
+  html body main.tp-env .tp-main section.tp-banner>.tp-key>.tax{display:flex!important;flex-direction:row!important;align-items:center!important;justify-content:space-between!important;gap:10px;padding:10px 14px!important;border-radius:14px!important;min-height:0!important;margin:0!important}
+  html body main.tp-env .tp-main section.tp-banner>.tp-key>.tax small:first-child{font-size:11px!important;letter-spacing:.14em}
+  html body main.tp-env .tp-main section.tp-banner>.tp-key>.tax b{font-size:28px!important;line-height:1}
+  html body main.tp-env .tp-main section.tp-banner>.tp-key>.tax small:nth-of-type(2){display:none}
+  html body main.tp-env .tp-main section.tp-banner>.tp-key>.tax .spbar,html body main.tp-env .tp-main section.tp-banner>.tp-key>.tax>div:last-child{display:none!important}
+  html body main.tp-env .tp-main section.tp-banner>.tp-key>.pairbig{display:flex!important;align-items:center;gap:12px;padding:10px 14px!important;border-radius:14px!important;margin:0!important;min-width:0;background:rgba(10,10,12,.72)!important;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+  html body main.tp-env .tp-main section.tp-banner>.tp-key>.pairbig .coin,html body main.tp-env .tp-main section.tp-banner>.tp-key>.pairbig .av{width:42px!important;height:42px!important;flex:none}
+  html body main.tp-env .tp-main section.tp-banner>.tp-key>.pairbig>div{min-width:0;text-align:left}
+  html body main.tp-env .tp-main section.tp-banner>.tp-key>.pairbig b{font-size:22px!important;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+  html body main.tp-env .tp-main section.tp-banner>.tp-key>.pairbig span{display:block;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+}
