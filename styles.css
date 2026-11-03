@@ -6004,3 +6004,54 @@ header{z-index:45}   /* above the callouts rail (40): the wallet / notification 
   .trow.h>*:nth-child(7){text-align:right}
 }
 @media (max-width:380px){.trow{font-size:11px!important;gap:4px!important;padding:10px 6px!important;grid-template-columns:30px 40px minmax(0,.9fr) minmax(0,.85fr) minmax(0,1.3fr)!important}.trow .maker .av{display:none}}
+/* ===== coin page on a computer: everything important fits the first screen (compact header, chart sized to the window) ===== */
+@media (min-width:1101px){
+  .tp-env>.link[data-act="home"]{min-height:0;padding:0;margin:0 0 8px;font-size:12.5px}
+  .tp-banner,.tp-banner:has(.tb-bg.ban){min-height:0!important;padding:12px 18px!important;align-items:center!important;gap:16px!important;margin-top:0!important}
+  .tp-banner .tb-av .av{width:68px!important;height:68px!important}
+  .tp-banner .title-xl{font-size:24px!important}
+  .tp-banner .hs-pills{margin-top:6px!important}
+  .tp-banner .tax{padding:6px 12px!important}.tp-banner .tax b{font-size:20px!important}
+  .tp-banner .pairbig{padding-top:6px;padding-bottom:6px}
+  .tp-grid3{margin-top:12px}
+  .tp-grid3 .tp-main,.tp-grid3 .tp-side{gap:12px}
+  .kst{padding-top:10px!important;padding-bottom:10px!important}
+  .tp-main .cpanel .chartbox{height:clamp(320px,calc(100vh - 440px),680px)}
+}
+/* callouts column: title + new button on one row, the two tabs full width below (nothing gets cut off) */
+.tp-thread .tt-h{flex-wrap:wrap;row-gap:10px}
+.tp-thread .tt-h>b{flex:1}
+.tp-thread .tt-tabs{order:3;width:100%}
+.tp-thread .tt-tabs button{flex:1;justify-content:center;min-width:0}
+.tp-thread .tt-tk{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:110px}
+/* ===== coin page on a phone: the info block fits the screen width, compact ===== */
+@media (max-width:760px){
+  html body .tp-env>.link[data-act="home"]{min-height:0!important;padding:0!important;margin:0 0 8px!important;font-size:13px!important}
+  html body .tp-env .tp-banner .hs-pills{display:flex!important;flex-wrap:wrap!important;overflow:visible!important;gap:6px!important;margin:8px 0 0!important;padding:0!important;width:auto!important;max-width:100%!important}
+  html body .tp-env .tp-banner .hs-pills>*{flex:none;max-width:100%}
+  html body .tp-env .tp-banner .hs-pills .pill{min-height:32px!important;font-size:12px!important;padding:0 9px!important;white-space:nowrap}
+  html body .tp-env .tp-banner .hs-pills .pill .maker{max-width:118px;padding:0 2px!important;font-size:12px}
+  html body .tp-env .tp-banner .tp-key{display:grid!important;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px!important;width:auto!important;margin:10px 14px 14px!important}
+  html body .tp-env .tp-banner .tp-key>.tax,html body .tp-env .tp-banner .tp-key>.pairbig{min-height:0!important;padding:8px 10px!important;border-radius:14px!important;min-width:0}
+  html body .tp-env .tp-banner .tp-key>.tax b{font-size:24px!important}
+  html body .tp-env .tp-banner .tp-key>.pairbig .coin,html body .tp-env .tp-banner .tp-key>.pairbig .av{width:32px!important;height:32px!important}
+  html body .tp-env .tp-banner .tp-key>.pairbig b{font-size:17px!important}
+  html body .tp-env .tp-banner .tp-key>.trapbox,html body .tp-env .tp-banner .tp-key>*:not(.tax):not(.pairbig){grid-column:1/-1}
+  html body .tp-env .kst>div{padding-top:9px!important;padding-bottom:9px!important}
+}
+/* ===== phones: no huge blurred / endlessly animated layers — pinch-zooming them made iOS run out of memory and reload the page ===== */
+@media (max-width:760px),(pointer:coarse){
+  .aurora{filter:none!important;opacity:.6}
+  .aurora>*{animation:none!important;mix-blend-mode:normal!important}
+  .tp-glow{display:none!important}
+  .tp-env .tk,.tp-env .pill,.tp-env .hs-pills .pill{-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
+  .ts-track{will-change:auto}
+}
+@media (max-width:760px){
+  html body .tp-env .tp-banner .hs-pills .pill{max-width:100%;overflow:hidden;min-width:0}
+  html body .tp-env .tp-banner .hs-pills .pill .maker span:not(.av):not(.bdg){max-width:74px}
+}
+@media (max-width:380px){
+  html body .tp-env .tp-banner .hs-pills .pill{font-size:11px!important;padding:0 7px!important}
+  html body .tp-env .tp-banner .hs-pills .pill .maker .bdg{display:none}
+}

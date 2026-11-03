@@ -2306,7 +2306,7 @@
     S.comments[t.tick] = out; return out;
   }
   // ===== CALLOUTS (pump.fun-style, upgraded) =====
-  S.follow = {}; S.muted = {}; S.coMenu = null; S.coExp = {}; S.coPaused = false; S.coF = 'all'; S.coOpen = false; S.coQueue = 0; S.ttab = 'coin'; try { S.ttab = localStorage.getItem('dl.ttab') || 'coin'; } catch (e) {}
+  S.follow = {}; S.muted = {}; S.coMenu = null; S.coExp = {}; S.coPaused = false; S.coF = 'all'; S.coOpen = false; S.coQueue = 0; S.ttab = 'all'; try { S.ttab = localStorage.getItem('dl.ttab2') || 'all'; } catch (e) {}
   try { S.follow = JSON.parse(localStorage.getItem('dl.follow') || '{}'); } catch (e) {}
   var CO_LONG = ['Been watching this since launch — dev is active, chart keeps making higher lows and the tax is clearly shown. Holding a small bag and adding on dips, not financial advice.', 'Paired with gold is such a clean narrative. If this keeps holding the curve it is going to graduate today, then it is a different game on Meteora.', 'Not gonna lie I aped on the mascot alone. Then checked holders: no snipers, no bundles, dev under 3%. That is rare these days.'];
   function coMeta(c, t) { if (c.pos == null) { var r = rng(hash(t.tick + c.id + 'co')), me = S.account && c.w === S.account; c.pos = me ? Math.round((position(t) || { val: 0 }).val * SOL_USD) : Math.round(8 + r() * r() * 900); c.mc0 = t.mcN * (0.55 + r() * 0.8); c.views = Math.floor(20 + r() * 900); c.rt = Math.floor(r() * 6); if (r() < .18) c.text = CO_LONG[Math.floor(r() * CO_LONG.length)]; } }
@@ -2436,8 +2436,8 @@
   function coMerge(rows) { var ch = []; rows.forEach(function (r) { var t = S.live.filter(function (x) { return x.ca === r.mint; })[0]; if (!t) return; var list = S.comments[t.tick] || (S.comments[t.tick] = []); var old = list.filter(function (c) { return c.id === r.id; })[0]; if (old) { if (r.ps) old.ps = psClean(r.ps); if (r.likes != null) { old.likes = +r.likes || 0; old.rt = +r.rts || 0; if ('liked' in r) { old.liked = !!r.liked; old.rtd = !!r.rtd; } } return; } var c = coFromRow(r); if (!c.mc0) c.mc0 = t.mcN; list.push(c); ch.push({ c: c, t: t }); }); return ch; }
   function coArrive(c, t) {
     coMeta(c, t);
-    var tb2 = document.getElementById('cmts'); if (tb2 && S.screen === 'token' && c.reply == null && (S.ttab === 'all' || S.tick === t.tick)) {
-      var h0 = tb2.scrollHeight, away = tb2.scrollTop > 60; tb2.insertAdjacentHTML('afterbegin', commentHTML(c, t, !away, { coinTag: S.ttab === 'all' }));
+    var tb2 = document.getElementById('cmts'); if (tb2 && S.screen === 'token' && c.reply == null && (S.ttab !== 'coin' || S.tick === t.tick)) {
+      var h0 = tb2.scrollHeight, away = tb2.scrollTop > 60; tb2.insertAdjacentHTML('afterbegin', commentHTML(c, t, !away, { coinTag: S.ttab !== 'coin' }));
       if (away) { tb2.scrollTop += tb2.scrollHeight - h0; var np = document.getElementById('tt-new'); if (np) { np._n = (np._n || 0) + 1; np.textContent = '↑ ' + np._n + ' new'; np.style.display = ''; } }
       while (tb2.children.length > 60) tb2.removeChild(tb2.lastChild); }
     var dl = document.getElementById('cd-list');
@@ -2991,8 +2991,8 @@
     if (S.tpTab === 'thread') S.tpTab = 'trades';
     var tabs = [['trades', 'Trades'], ['holders', 'Holders'], ['top', 'Top traders']];
     var cmAll = seedComments(t);
-    var ttAll = S.ttab === 'all';
-    var thread = '<aside class="tp-thread card-s"><div class="tt-h"><b>Callouts</b><div class="tt-tabs"><button class="' + (ttAll ? '' : 'on') + '" data-act="ttab" data-arg="coin">$' + sid + ' <span class="mono">' + cmAll.length + '</span></button><button class="' + (ttAll ? 'on' : '') + '" data-act="ttab" data-arg="all"><i class="tt-dot"></i>All live</button></div>' + (coCanPost(t) && !coOpen() ? '<button class="co-newb" data-act="coNew" title="New callout">+</button>' : '') + '</div>' +
+    var ttAll = S.ttab !== 'coin';   // all live callouts first; this coin's on tap
+    var thread = '<aside class="tp-thread card-s"><div class="tt-h"><b>Callouts</b><div class="tt-tabs"><button class="' + (ttAll ? 'on' : '') + '" data-act="ttab" data-arg="all"><i class="tt-dot"></i>All live</button><button class="' + (ttAll ? '' : 'on') + '" data-act="ttab" data-arg="coin"><span class="tt-tk">$' + sid + '</span> <span class="mono">' + cmAll.length + '</span></button></div>' + (coCanPost(t) && !coOpen() ? '<button class="co-newb" data-act="coNew" title="New callout">+</button>' : '') + '</div>' +
       coComposer(t, id, 'Call it: what\'s your take on $' + sid + '?') +
       '<div class="tt-wrap"><button class="tt-new" id="tt-new" data-act="ttNew" style="display:none"></button><div id="cmts" class="tt-list' + (ttAll ? ' all' : '') + '">' + (ttAll ? allLiveHTML() : threadHTML(t, cmAll)) + '</div></div></aside>';
     var body = '';
@@ -4413,7 +4413,7 @@
       case 'ctog': S[arg] = !S[arg]; try { localStorage.setItem('dl.cmarks', JSON.stringify([S.cmarks, S.ccall, S.cma, S.cvol])); } catch (er) {} render(); break;
       case 'cclean': var allOff = !S.cmarks && !S.ccall; if (allOff) { S.cmarks = S._cm0 != null ? S._cm0 : true; S.ccall = S._cc0 != null ? S._cc0 : true; } else { S._cm0 = S.cmarks; S._cc0 = S.ccall; S.cmarks = false; S.ccall = false; } try { localStorage.setItem('dl.cmarks', JSON.stringify([S.cmarks, S.ccall, S.cma, S.cvol])); } catch (er) {} render(); break;
       case 'cfull': set({ cfull: !S.cfull }); break;
-      case 'ttab': S.ttab = arg; try { localStorage.setItem('dl.ttab', arg); } catch (e) {} render(); break;
+      case 'ttab': S.ttab = arg; try { localStorage.setItem('dl.ttab2', arg); } catch (e) {} render(); break;
       case 'ttNew': var tl = document.getElementById('cmts'); if (tl) tl.scrollTo({ top: 0, behavior: 'smooth' }); var npb = document.getElementById('tt-new'); if (npb) { npb._n = 0; npb.style.display = 'none'; } break;
       case 'bhPer': S.bhPer = arg; render(); break;
       case 'cauto': if (LW.chart) LW.chart.priceScale('right').applyOptions({ autoScale: true }); break;
