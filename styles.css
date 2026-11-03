@@ -6461,3 +6461,19 @@ html body .fx-l.fx-r{-webkit-mask-image:linear-gradient(90deg,transparent,#000 3
 .bh-tube b{font-size:12.5px}
 @media (max-width:980px){.bh-stage{grid-template-columns:1fr 1fr}}
 @media (max-width:760px){.bh-stage{grid-template-columns:1fr}}
+/* burnery: equal side columns, so the fire and the counter sit exactly under the title */
+.bh-stage{grid-template-columns:300px minmax(0,1fr) 300px!important}
+@media (max-width:980px){.bh-stage{grid-template-columns:1fr 1fr!important}}
+@media (max-width:760px){.bh-stage{grid-template-columns:1fr!important}}
+/* burn window: centred and symmetric */
+.hm.bt{width:min(520px,100%)!important;padding:26px 24px 24px!important;text-align:center}
+.bt-h{position:relative;display:flex!important;flex-direction:column;align-items:center;gap:6px;margin-bottom:18px!important}
+.bt-ic{display:grid;place-items:center;width:58px;height:58px;border-radius:18px;background:radial-gradient(circle at 50% 60%,rgba(255,120,40,.35),rgba(255,120,40,.06));border:1px solid rgba(255,140,60,.35);font-size:28px;margin-bottom:4px}
+.bt-h b{font-size:20px}
+.bt-h small{max-width:380px;color:var(--muted);font-size:13px;line-height:1.5}
+.bt-x{position:absolute!important;right:-8px;top:-10px}
+.hm.bt .bt-empty{align-items:center;text-align:center;padding:4px 0 0}
+.hm.bt .bt-empty p{max-width:360px}
+.hm.bt .bt-empty .btn{min-width:180px}
+.hm.bt .bt-coins{justify-content:center}
+.hm.bt .bt-row,.hm.bt .bt-sum{text-align:left}

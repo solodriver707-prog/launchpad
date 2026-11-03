@@ -2747,10 +2747,10 @@
   function burnCoins() { return S.account ? all().filter(function (t) { var p0 = position(t); return p0 && p0.tok > 0; }).sort(function (a, b) { return (b.creator === S.account) - (a.creator === S.account); }) : []; }   // any coin you hold (devs and holders) — your own launches first
   function burnModal() {
     if (!S.burnOpen) return '';
-    var head = '<div class="hm-h"><div><b>🔥 Burn tokens</b><small>Permanently destroy tokens you hold — any coin, dev or holder · shows up in the Burnery</small></div><button class="iconbtn" data-act="burnClose" aria-label="Close">✕</button></div>';
+    var head = '<div class="hm-h bt-h"><span class="bt-ic">🔥</span><b>Burn tokens</b><small>Permanently destroy tokens you hold — any coin, as dev or holder. Every burn shows up in the Burnery.</small><button class="iconbtn bt-x" data-act="burnClose" aria-label="Close">✕</button></div>';
     var wrap = function (inner) { return '<div class="hm-ov" data-act="burnClose"><div class="hm card-s bt" data-stop>' + head + inner + '</div></div>'; };
     if (!S.account) return wrap('<div class="bt-empty"><p>Connect your wallet to burn tokens you hold.</p><button class="btn pri" data-act="openWallet">Connect wallet</button></div>');
-    var cs = burnCoins(); if (!cs.length) return wrap('<div class="bt-empty"><p>You don’t hold any treid coins yet. Buy a coin, then come back to burn part of your bag.</p><button class="btn pri" data-act="home">Browse coins</button></div>');
+    var cs = burnCoins(); if (!cs.length && S.burnLoading) return wrap('<div class="bt-empty"><span class="gr-sp"></span><p>Loading your coins…</p></div>'); if (!cs.length) return wrap('<div class="bt-empty"><p>You don’t hold any treid coins yet. Buy a coin, then come back to burn part of your bag.</p><button class="btn pri" data-act="home">Browse coins</button></div>');
     var t = find(S.burnTick) && cs.indexOf(find(S.burnTick)) >= 0 ? find(S.burnTick) : cs[0]; S.burnTick = t.tick;
     var pos = position(t), pct = S.burnPct || 25, tok = pos.tok * pct / 100, sup = tok / 1e9 * 100, usd = tok * price(t);
     return wrap('<div class="bt-coins">' + cs.map(function (c) { return '<button class="bt-c' + (c === t ? ' on' : '') + '" data-act="burnPick" data-arg="' + esc(c.tick) + '">' + avatarHTML(c, 28) + '<span><b>$' + esc(symOf(c)) + '</b><small class="mono">' + fmtNum(Math.round(position(c).tok)) + ' held</small></span></button>'; }).join('') + '</div>' +
@@ -4532,7 +4532,10 @@
       case 'ctoApplyDemo': (function () { var t = find(S.ctoOpen); if (!t || !S.account) return; var g = function (i) { var x = document.getElementById(i); return x ? x.value.trim() : ''; };
         S.cto[t.tick] = { lead: S.account, x: g('cto-x'), tg: g('cto-tg'), plan: g('cto-plan') || 'Rebuilding the community', support: (position(t) ? position(t).tok / 1e9 * 100 : 0), at: Date.now(), approved: false, backed: true }; var cc = S.cto[t.tick]; if (cc.support >= DR.ctoNeed) cc.approved = true; drSave(); S.ctoOpen = null; toast(cc.approved ? '🎉 Takeover approved — your bag alone covers ' + DR.ctoNeed + '% support' : 'Takeover submitted — holders can now back it'); render(); })(); break;
       case 'ctoBack': (function () { var t = find(arg), c = S.cto[arg]; if (!c) return; if (!S.account) { set({ walletOpen: true }); return; } var add = position(t) ? position(t).tok / 1e9 * 100 : 0; if (!add) { toast('Hold some $' + arg + ' to back a takeover'); return; } c.support += add; c.backed = true; if (c.support >= DR.ctoNeed) { c.approved = true; c.at = Date.now(); toast('🎉 Takeover approved — $' + arg + ' is now community-run'); } else toast('Backed with ' + add.toFixed(2) + '% of supply'); drSave(); render(); })(); break;
-      case 'burnOpen': set({ burnOpen: true, burnTick: arg || S.burnTick, burnPct: S.burnPct || 25 }); break;
+      case 'burnOpen': set({ burnOpen: true, burnTick: arg || S.burnTick, burnPct: S.burnPct || 25 });
+        if (S.account && API) { var bw = S.account; S.burnLoading = true; render(); apiGet('/api/wallet/' + bw).then(function (d) { if (S.account !== bw) return; (d && d.coins || []).forEach(function (c) { var t = S.live.filter(function (x) { return x.ca === c.mint; })[0]; if (t && +c.held > 1 && !(S.pos[t.tick] && S.pos[t.tick].tok > 0)) S.pos[t.tick] = { tok: +c.held, cost: Math.max(0, (+c.spent || 0) - (+c.got || 0)) / qUsdT(t) }; }); })
+          .catch(function () {}).then(function () { S.burnLoading = false; if (S.burnOpen) render(); }); }   // every coin you hold, not only ones you opened this visit
+        break;
       case 'burnClose': if (el.classList.contains('hm-ov') && e.target.closest('[data-stop]')) break; set({ burnOpen: false }); break;
       case 'burnPick': set({ burnTick: arg }); break;
       case 'burnPreset': set({ burnPct: +arg }); break;
