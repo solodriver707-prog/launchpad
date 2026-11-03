@@ -4028,24 +4028,39 @@
       '<a class="wl-one dl-go" href="https://phantom.app/ul/browse/' + here + '?ref=' + ref + '"><span class="wl-nm"><b>Open in Phantom</b></span><span class="wl-go">→</span></a>' +
       '<a class="wl-one" href="https://solflare.com/ul/v1/browse/' + here + '?ref=' + ref + '"><span class="wl-nm"><b>Open in Solflare</b></span><span class="wl-go">→</span></a>' +
       '<button class="link" data-act="dlLostRetry">Try again here</button></div></div>'; }
+  // wallets people use on Solana: the ones installed show as "Detected" (Wallet Standard finds any of them), the rest link to their download page
+  var WLIST = [['Phantom', 'https://phantom.com/download', '#AB9FF2'], ['Solflare', 'https://solflare.com/download', '#FC7227'], ['Backpack', 'https://backpack.app/downloads', '#E33E3F'], ['Jupiter', 'https://jup.ag/mobile', '#1E2B33'],
+    ['Trust', 'https://trustwallet.com/download', '#0500FF'], ['Coinbase Wallet', 'https://www.coinbase.com/wallet/downloads', '#0052FF'], ['OKX Wallet', 'https://web3.okx.com/download', '#111'], ['Bitget Wallet', 'https://web3.bitget.com/en/wallet-download', '#00F0FF'], ['Magic Eden', 'https://wallet.magiceden.io/', '#E42575']];
+  function wIni(n) { var w = WLIST.filter(function (x) { return x[0] === n; })[0], ic = n === 'Phantom' ? WICON.phantom : n === 'Solflare' ? WICON.solflare : null;
+    return ic ? '<img class="wl-ic sm" src="' + ic + '" alt="">' : '<span class="wini" style="background:' + (w ? w[2] : '#333') + '">' + esc(n.replace(/ Wallet$/, '').slice(0, 1)) + '</span>'; }
+  function walletMore() {
+    var have = S.wallets.map(function (w) { return w.name.toLowerCase(); }), rest = WLIST.filter(function (x) { var k = x[0].toLowerCase().split(' ')[0]; return !have.some(function (h) { return h.indexOf(k) === 0; }); });
+    if (!rest.length) return '';
+    return (S.wallets.length ? '<div class="wsep"><span>' + (S.wallets.length ? 'more wallets' : '') + '</span></div>' : '<div class="wnone"><b>No Solana wallet in this browser yet</b><span>Install one below, then reload this page.</span></div>') +
+      '<div class="wrest">' + rest.map(function (x) { return '<a class="wopt wopt2" href="' + x[1] + '" target="_blank" rel="noopener">' + wIni(x[0]) + '<span style="flex:1">' + esc(x[0]) + '</span><span class="wget">Install ↗</span></a>'; }).join('') + '</div>';
+  }
   function walletModal() {
     if (S.dlTap) return dlTapHTML();
     if (S.dlLost) return dlLostHTML();
     if (!S.walletOpen) return '';
-    var opts = S.wallets.length ? S.wallets.map(function (w) {
+    var mob0 = !S.wallets.length && (isMob() || /iPhone|iPad|Android/i.test(navigator.userAgent));
+    var opts = !mob0 ? S.wallets.map(function (w) {
       var busy = S.connecting === w.name;
       return '<button class="wopt" data-act="pickWallet" data-arg="' + esc(w.name) + '"' + (S.connecting ? ' disabled' : '') + '>' + (w.icon ? '<img src="' + esc(w.icon) + '" alt="">' : '') +
-        '<span style="flex:1">' + esc(w.name) + '</span><span class="muted" style="font-size:12.5px;font-weight:600">' + (busy ? 'Approve in wallet…' : 'Detected') + '</span></button>';
-    }).join('') : (isMob() || /iPhone|iPad|Android/i.test(navigator.userAgent) ? (function () { var here = encodeURIComponent(location.href), ref = encodeURIComponent(location.origin);   // phones: wallets have no browser extension — open this page inside the wallet app
+        '<span style="flex:1">' + esc(w.name) + '</span><span class="wdet">' + (busy ? 'Approve in wallet…' : 'Detected') + '</span></button>';
+    }).join('') + walletMore() : (isMob() || /iPhone|iPad|Android/i.test(navigator.userAgent) ? (function () { var here = encodeURIComponent(location.href), ref = encodeURIComponent(location.origin);   // phones: wallets have no browser extension — open this page inside the wallet app
       dlPrep(); var row = function (prov, sub) { var P = S.dlPre[prov], inner = '<img class="wl-ic" src="' + DLP[prov].icon + '" alt=""><span class="wl-nm"><b>' + DLP[prov].name + '</b><small>' + sub + '</small></span><span class="wl-go">Connect</span>';
         return P ? '<a class="wl-one" href="' + esc(P.url) + '" data-act="dlArm" data-arg="' + prov + '">' + inner + '</a>' : '<button class="wl-one" data-act="dlConnect" data-arg="' + prov + '">' + inner + '</button>'; };
       return '<div class="wl-mob">' + row('phantom', 'Opens the app · approve · back here') + row('solflare', 'Opens the app · approve · back here') +
         '<details class="wl-more"><summary>More options</summary><small class="muted wl-or">Open treid inside the wallet’s own browser:</small>' +
         '<a class="wl-deep" href="https://phantom.app/ul/browse/' + here + '?ref=' + ref + '"><img class="wl-ic sm" src="' + WICON.phantom + '" alt=""><b>Phantom browser</b><span>→</span></a>' +
         '<a class="wl-deep" href="https://solflare.com/ul/v1/browse/' + here + '?ref=' + ref + '"><img class="wl-ic sm" src="' + WICON.solflare + '" alt=""><b>Solflare browser</b><span>→</span></a>' +
-        '<a class="wl-deep" href="https://backpack.app/ul/v1/browse/' + here + '?ref=' + ref + '"><span class="wl-di">🎒</span><b>Backpack browser</b><span>→</span></a></details>' +
+        '<a class="wl-deep" href="https://backpack.app/ul/v1/browse/' + here + '?ref=' + ref + '"><span class="wl-di">🎒</span><b>Backpack browser</b><span>→</span></a>' +
+        '<a class="wl-deep" href="https://link.trustwallet.com/open_url?coin_id=501&url=' + here + '">' + wIni('Trust') + '<b>Trust Wallet browser</b><span>→</span></a>' +
+        '<a class="wl-deep" href="https://go.cb-w.com/dapp?cb_url=' + here + '">' + wIni('Coinbase Wallet') + '<b>Coinbase Wallet browser</b><span>→</span></a>' +
+        '<a class="wl-deep" href="https://www.okx.com/download?deeplink=' + encodeURIComponent('okx://wallet/dapp/url?dappUrl=' + location.href) + '">' + wIni('OKX Wallet') + '<b>OKX Wallet browser</b><span>→</span></a></details>' +
         '<small class="muted">No wallet yet? <a href="https://phantom.com/download" target="_blank" rel="noopener">Get Phantom</a></small></div>'; })() :
-      '<div class="card-s" style="padding:16px;display:flex;flex-direction:column;gap:10px"><b>No Solana wallet found</b><span class="muted" style="font-size:13.5px;line-height:1.55">Install Phantom, Solflare or Backpack and reload.</span><a href="https://phantom.com/download" target="_blank" rel="noopener">Get Phantom →</a></div>');
+'');
     return '<div class="overlay center" data-act="bg"><div class="modal" role="dialog" aria-modal="true" aria-label="Connect a wallet">' +
       '<div style="display:flex;justify-content:space-between;align-items:center"><b style="font-family:var(--disp);font-size:18px">Connect wallet</b><button class="iconbtn" aria-label="Close" data-act="closeWallet">✕</button></div>' + opts +
       '<span class="note">Solana ' + CLUSTER + ' · Connecting only shares your public address.</span></div></div>';
