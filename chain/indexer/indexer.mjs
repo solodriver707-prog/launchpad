@@ -586,6 +586,7 @@ async function handleReq(req, res) {
       try { const r = await fetchT(JUP + '/tokens/v2/search?query=' + m); const j = await r.json(); const t = Array.isArray(j) ? j.find((x) => x.id === m) : null; if (t) { symbol = symbol || t.symbol; name = t.name; icon = t.icon || null; verified = verified || !!(t.isVerified || (t.tags || []).includes('verified')); if (!QUOTE_OVERRIDE[m] && t.usdPrice) { usd = +t.usdPrice * (await qMult(m)); qPrice.set(m, usd); } } } catch {}   // per on-chain unit (scaled-UI tokens: × multiplier)
       return J({ mint: m, usd, symbol, name, icon, verified }); }
     if (p[1] === 'coins') { if (!coinsSnap) buildCoinsSnap(); else if (Date.now() - coinsSnap.at > 10e3) setImmediate(buildCoinsSnap); return J(coinsSnap.out); }   // stale-while-refresh: nobody waits for the rebuild
+    if (p[1] === 'recent') return J(q('SELECT mint, wallet, side, usd, ts, sig FROM trades WHERE usd >= 5 ORDER BY ts DESC, slot DESC LIMIT 40').filter((r) => !HIDDEN.has(r.mint) && (!OPS || r.wallet !== OPS.publicKey.toBase58())).slice(0, 24));   // home page: the latest real trades across treid (no dust)
     if (p[1] === 'coin') return J(HIDDEN.has(p[2]) ? null : stats(p[2], false, rate('hscan|' + ip(req), 30, 60e3)));   // a burst of different coins from one visitor can't fan out into holder scans
     if (p[1] === 'trades') return J(q('SELECT * FROM trades WHERE mint=? ORDER BY ts DESC, slot DESC LIMIT 200', p[2]));
     if (p[1] === 'creator' && p[2]) {   // creator rewards escrow status for a coin
