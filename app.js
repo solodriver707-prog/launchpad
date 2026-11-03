@@ -381,11 +381,14 @@
   }
   function dlWallet(st) { return { name: DLP[st.prov].name, icon: '', dl: true, features: { 'solana:signTransaction': { signTransaction: function () { return Promise.reject(new Error('use walletSign')); } }, 'solana:signMessage': { signMessage: function (o) { return dlSignMsg(o.message); } } } }; }
   function dlUse(st) { S.wallet = dlWallet(st); S.walletAcc = { address: st.account, chains: [CHAIN_ID] }; S.account = st.account; S.balance = null; refreshBalance(); }
-  function dlConnect(prov) {
+  function dlConnect(prov) {   // tapped before the connect link was ready: build it, then one more tap on a real link (iOS opens the app — not a web page — only from a direct tap)
     var go = function (T) { var kp = T.dl.keyPair(), rid = dlRid(), st = { prov: prov, sk: kp.sk, pk: kp.pk, pend: { rid: rid, kind: 'connect', ret: location.hash } }; dlPut(st);
-      dlGo(st, 'connect', { app_url: location.origin + location.pathname, dapp_encryption_public_key: kp.pk, redirect_link: dlBack(rid), cluster: CLUSTER === 'mainnet' ? 'mainnet-beta' : CLUSTER }); };
+      try { var pre = JSON.parse(localStorage.getItem('treid.dlpre') || '{}'); pre[rid] = st; localStorage.setItem('treid.dlpre', JSON.stringify(pre)); } catch (e) {}
+      S.walletOpen = false; S.dlTap = { url: dlUrl(st, 'connect', { app_url: location.origin + location.pathname, dapp_encryption_public_key: kp.pk, redirect_link: dlBack(rid), cluster: CLUSTER === 'mainnet' ? 'mainnet-beta' : CLUSTER }), name: DLP[prov].name, prov: prov, label: 'Connect wallet' }; render(); };
     if (window.TreidChain) go(window.TreidChain); else chainLib().then(go);
   }
+  // phones without a wallet extension: load the signing library early, so the very first tap on "Phantom" already is a real app link
+  setTimeout(function () { try { if (!S.account && !S.wallets.length && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) && !window.TreidChain) chainLib().then(function () { if (S.walletOpen) { dlPrep(); render(); } }).catch(function () {}); } catch (e) {} }, 1500);
   function dlSignTx(bytes, b) {
     var st = dlGet(), T = window.TreidChain; if (!st || !st.session || !T) return Promise.reject(new Error('Reconnect your wallet'));
     var rid = dlRid(), sealed = T.dl.seal({ transactions: bytes.map(function (x) { return T.dl.enc(x instanceof Uint8Array ? x : Uint8Array.from(x)); }), session: st.session }, st.wpk, st.sk);
