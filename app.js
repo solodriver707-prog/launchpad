@@ -406,18 +406,28 @@
     return new Promise(function () {});
   }
   // runs before the first route: read the wallet's reply from the URL, put the page back where it was
-  var DLQ = (function () { var q; try { q = new URLSearchParams(location.search); } catch (e) { return null; } var rid = q.get('dlr'), st = dlGet();
-    if (!rid) return st && st.account && st.session ? { restore: st } : null;
-    var p = st && st.pend && st.pend.rid === rid ? st.pend : null;
-    if (!p) { try { var pre = JSON.parse(localStorage.getItem('treid.dlpre') || '{}'); if (pre[rid]) { st = pre[rid]; p = st.pend; } } catch (e) {} }   // the tap handler may not have run before iOS switched apps
-    if (p && p.kind === 'connect') try { localStorage.removeItem('treid.dlpre'); } catch (e) {}
-    try { history.replaceState(null, '', location.pathname + ((p && p.ret) || '')); } catch (e) {}
-    return { q: q, st: st, p: p }; })();
+  // the wallet appends its answer to our redirect link — some versions join it with "?" instead of "&", so read every key from the whole URL
+  var DLQ = (function () { var m = {}; try { (location.search + '&' + location.hash.replace(/^#/, '&')).split(/[?&#]/).forEach(function (kv) { var i = kv.indexOf('='); if (i > 0) { var k = decodeURIComponent(kv.slice(0, i)); if (!(k in m)) m[k] = decodeURIComponent(kv.slice(i + 1).replace(/\+/g, ' ')); } }); } catch (e) { return null; }
+    var q = { get: function (k) { return k in m ? m[k] : null; } }, rid = q.get('dlr'), st = dlGet(), answer = q.get('data') || q.get('errorCode');
+    if (!rid && !answer) return st && st.account && st.session ? { restore: st } : null;
+    var p = st && st.pend && rid && st.pend.rid === rid ? st.pend : null, pre = {};
+    try { pre = JSON.parse(localStorage.getItem('treid.dlpre') || '{}'); } catch (e) {}
+    if (!p && rid && pre[rid]) { st = pre[rid]; p = st.pend; }   // the tap handler may not have run before iOS switched apps
+    var cands = p ? [] : [st].concat(Object.keys(pre).map(function (k) { return pre[k]; })).filter(function (x) { return x && x.sk && x.pend; });   // id lost on the way back: the reply can still be opened with whichever key we sent
+    var ret = (p && p.ret) || (cands[0] && cands[0].pend && cands[0].pend.ret) || '';
+    try { history.replaceState(null, '', location.pathname + ret); } catch (e) {}
+    return { q: q, st: st, p: p, cands: cands }; })();
   function dlResume() {
     if (!DLQ) return; var R = DLQ; DLQ = null;
     if (R.restore) { dlUse(R.restore); return; }
     var st = R.st, p = R.p, q = R.q;
+    if ((!st || !p) && R.cands && R.cands.length && (q.get('data') || q.get('errorCode'))) {   // find which of our keys this reply was for
+      return chainLib().then(function (T) { var wk = q.get('phantom_encryption_public_key') || q.get('solflare_encryption_public_key'), hit = null;
+        R.cands.some(function (c) { if (q.get('errorCode')) { hit = c; return true; } try { T.dl.open(q.get('data'), q.get('nonce'), c.pend.kind === 'connect' ? wk : c.wpk, c.sk); hit = c; return true; } catch (e) { return false; } });
+        R.cands = null; if (hit) { R.st = hit; R.p = hit.pend; if (hit.pend.kind === 'connect') try { localStorage.removeItem('treid.dlpre'); } catch (e) {} }
+        DLQ = R; dlResume(); }).catch(function () { S.dlLost = true; render(); }); }
     if (!st || !p) { if (q.get('data') || q.get('errorCode')) S.dlLost = true; render(); return; }   // wallet answered, but this browser never asked (private tab / other browser)
+    if (p.kind === 'connect') try { localStorage.removeItem('treid.dlpre'); } catch (e) {}
     st.pend = null; dlPut(st);
     if (q.get('errorCode')) { if (st.account) dlUse(st); toast(/reject|cancel|4001/i.test(q.get('errorMessage') + q.get('errorCode')) ? 'Cancelled in wallet' : 'Wallet: ' + (q.get('errorMessage') || 'error')); render(); return; }
     chainLib().then(function (T) {
