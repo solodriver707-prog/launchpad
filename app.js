@@ -502,6 +502,7 @@
   }
   function rwSelect(mint, pre) {
     if (mint === 'coin') { setC({ rw: 'coin' }); S.rwErr = ''; return; }
+    if (!qOf(S.c).sol && mint !== qOf(S.c).mint) { S.rwErr = 'Your coin is paired with ' + qOf(S.c).sym + ' — holders can be paid in ' + qOf(S.c).sym + ' or in your own coin. Pair with SOL to pay in other tokens.'; render(); return; }
     if (mint === WSOL || mint === USDC_MINT) { var kk = mint === WSOL ? 'SOL' : 'USDC'; S.c.rw = { mint: mint, sym: kk, key: kk }; S.rwq = ''; S.rwErr = ''; render(); return; }
     if (mint === qOf(S.c).mint) { var q0 = qOf(S.c); S.c.rw = { mint: mint, sym: q0.sym, key: q0.key }; S.rwq = ''; S.rwErr = ''; render(); return; }
     S.rwBusy = mint; S.rwErr = ''; render();
@@ -519,6 +520,12 @@
     if (!(c.buy > 0 || c.sell > 0) || !c.split) return '';
     if (!(c.split.h > 0)) return '<div class="field cpp rwp"><div class="spk-h"><b>Holders get paid in</b></div><small class="spk-note">Holders get <b>0%</b> of the tax in your split, so there is nothing to pay them. Give holders a share above to choose what they’re paid in — <b>$' + esc(c.tick || 'TICKER') + '</b> (your own coin) is the best choice.</small></div>';
     var tk = '$' + (c.tick || 'TICKER'), r = rwOf(c), q = qOf(c), chips = [[WSOL, 'SOL'], [USDC_MINT, 'USDC']];
+    if (!q.sol) { var meP = { tick: c.tick || 'TICKER', name: c.name || 'Your token', spec: c.spec, img: c.img }, onPair = r && r.mint === q.mint;   // paired with an asset: holders get that asset or your coin — nothing else (no double swaps)
+      return '<div class="field cpp rwp"><div class="spk-h"><b>Holders get paid in</b> <span class="muted" style="font-weight:500;font-size:12px">· what your holders receive from the tax</span><span class="spk-lock">' + ICO.lock + 'Locked forever at launch</span></div>' +
+        '<div class="rpp-opts">' + '<button class="rpp-o' + (!r ? ' on' : '') + '" data-act="rwPick" data-arg="coin">' + avatarHTML(meP, 26) + '<span><b>' + esc(tk) + '</b><small>your own coin · nothing is sold</small></span></button>' +
+        '<button class="rpp-o' + (onPair ? ' on' : '') + '" data-act="rwPick" data-arg="' + esc(q.mint) + '">' + coinHTML(q.key, 26) + '<span><b>' + esc(q.sym) + '</b><small>your pair · holders get ' + esc(q.sym) + '</small></span></button></div>' +
+        (S.rwBusy ? '<small class="rpp-st">Checking token…</small>' : S.rwErr ? '<small class="rpp-st bad">' + esc(S.rwErr) + '</small>' : '') +
+        '<small class="spk-note">Your coin is paired with <b>' + esc(q.sym) + '</b>, so holders are paid in ' + esc(q.sym) + ' or in ' + esc(tk) + '. ' + (!r ? 'Paying in <b>' + esc(tk) + '</b> sells nothing — the strongest choice for your chart.' : 'Each payout sells the holders’ share of the tax for ' + esc(q.sym) + ' — that sale shows on your chart.') + ' Want to pay holders in any other token? Keep the pair on SOL.</small></div>'; }
     if (q.mint !== WSOL && q.mint !== USDC_MINT) chips.push([q.mint, q.key]);
     if (r && !chips.some(function (x) { return x[0] === r.mint; })) chips.push([r.mint, r.key]);
     var me = { tick: c.tick || 'TICKER', name: c.name || 'Your token', spec: c.spec, img: c.img };
@@ -3687,7 +3694,7 @@
       if (pre && String(pr.symbol || '').toLowerCase() !== pre.sym.toLowerCase()) { if (pre.retry) return pre.retry(); S.qErr = 'That shortcut didn’t check out — try the search'; render(); return; }
       if (!(pr.usd > 0)) { S.qErr = 'No market price found for this token, so a fair starting price can’t be set. Pick a token that trades on Jupiter.'; render(); return; }
       var k = qReg(pr.symbol, mint, tokImg(mint) || pr.icon, pr.name); if (pre && pre.img) PAIR_INFO[k].img = pre.img;
-      if (!S.rwUser && pr.verified) { S.c.rw = { mint: mint, sym: pr.symbol || k, key: k, warn: qi.warn || null }; S.rwAuto = true; }   // paired with X → holders are paid in X too (change it any time below)
+      if (pr.verified && (!S.rwUser || (S.c.rw && S.c.rw !== 'coin'))) { S.c.rw = { mint: mint, sym: pr.symbol || k, key: k, warn: qi.warn || null }; S.rwAuto = !S.rwUser; } else if (!pr.verified && S.c.rw && S.c.rw !== 'coin') S.c.rw = 'coin';   // paired with an asset: holders get that asset (or your coin) — a third token isn't allowed   // paired with X → holders are paid in X too (change it any time below)
       S.c.q = { mint: mint, sym: pr.symbol || k, dec: qi.decimals, usd: pr.usd, warn: qi.warn || null, key: k }; S.c.pair = k; S.cpq = ''; S.c.devBuy = ''; render();   // the holder-reward choice stays as picked
     }).catch(function (e) { S.qBusy = null; S.qErr = 'Couldn’t check this token: ' + chainErr(e); render(); });
   }
