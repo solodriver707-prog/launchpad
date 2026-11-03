@@ -711,7 +711,7 @@
     var flags = fl.length ? '<div class="tc-flags bad" data-tip="' + esc(fl.join(' · ')) + '"><span class="fl-ic">!</span><span>' + esc(fl.slice(0, 2).join(' · ')) + (fl.length > 2 ? ' +' + (fl.length - 2) : '') + '</span></div>' :
       '<div class="tc-flags ok"><span class="fl-ic">✓</span><span>No red flags</span></div>';
     return '<article class="tcard' + (S.newTick === t.tick ? ' is-new' : '') + (t.live ? ' is-live' : '') + ' ' + fr.cls + '" data-card="' + esc(t.tick) + '" data-act="open" data-arg="' + esc(t.tick) + '">' +
-      '<div class="tc-hero' + (t.banner ? ' has-ban' : '') + '"><div class="tch-bg' + (t.banner ? ' ban' : '') + '" aria-hidden="true">' + (t.banner ? '<img src="' + esc(t.banner) + '" alt="">' : avatarHTML(t, 240)) + '</div>' +
+      '<div class="tc-hero' + (t.banner ? ' has-ban' : '') + '"><div class="tch-bg' + (t.banner ? ' ban' : '') + '" aria-hidden="true">' + (t.banner ? '<img src="' + esc(t.banPv || t.banner) + '" alt=""' + (t.banPv ? ' data-banpv style="object-position:' + t.banX + '% ' + t.banY + '%"' : '') + '>' : avatarHTML(t, 240)) + '</div>' +
         '<div class="tc-age tch-age ' + fr.cls + '"><span class="ag-dot"></span><span class="ag-lab">' + fr.lab + '</span><b class="mono" data-t="' + t.born + '">' + ago(t.born) + '</b>' + (done ? '<span class="ag-grad">GRADUATED</span>' : '') + '</div>' +
         '<div class="tch-av">' + avatarHTML(t, 150) + '</div>' + '' + (opts.preview ? '' : '<button class="tch-star' + (on ? ' on' : '') + '" data-act="star" data-arg="' + esc(t.tick) + '" aria-label="Add to watchlist" aria-pressed="' + on + '">' + I.star(on) + '</button>') +
         '<div class="tch-side">' + (trapLeft(t) > 0 ? trapBox(t, 'card') : '<div class="tax" style="background:' + taxBg(tmax) + '" data-tip="' + esc(splitTip(t)) + '"><small>TAX</small><b>' + tmax + '%</b>' + (splitOf(t) ? splitBar(splitOf(t), 'mini') : '') + '</div>') +
@@ -3936,7 +3936,7 @@
   function createPage() {
     var c = S.c, sp = c.spec, tmax = Math.max(c.buy, c.sell);
     var dq = devQuote(String(c.devBuy || '').replace(',', '.'));
-    var preview = { devPct: +dq.pct.toFixed(2), name: c.name || 'Your token', tick: c.tick || 'TICKER', spec: sp, img: c.img, banner: c.banner, buy: c.buy, sell: c.sell, split: c.buy > 0 ? c.split : null, pair: c.pair, mcN: 5, mc0: 5, prog: 1, born: Date.now(), holders: 1, vol: 0, ca: 'preview', hist: [5, 5.1, 5, 5.2, 5.4], rewards: false, burn: false, rw: rwOf(c) ? (rwOf(c).mint === qOf(c).mint ? 'pair' : { mint: rwOf(c).mint }) : 'coin' };
+    var preview = { devPct: +dq.pct.toFixed(2), name: c.name || 'Your token', tick: c.tick || 'TICKER', spec: sp, img: c.img, banner: c.banner, banPv: c.banSrc || null, banX: c.banX, banY: c.banY, buy: c.buy, sell: c.sell, split: c.buy > 0 ? c.split : null, pair: c.pair, mcN: 5, mc0: 5, prog: 1, born: Date.now(), holders: 1, vol: 0, ca: 'preview', hist: [5, 5.1, 5, 5.2, 5.4], rewards: false, burn: false, rw: rwOf(c) ? (rwOf(c).mint === qOf(c).mint ? 'pair' : { mint: rwOf(c).mint }) : 'coin' };
     function opts(key, list) { return '<div class="optrow">' + list.map(function (v) { return '<button class="opt' + (sp[key] === v ? ' on' : '') + '" data-act="spec" data-k="' + key + '" data-arg="' + v + '">' + v + '</button>'; }).join('') + '</div>'; }
     function sws(key, list) { return '<div class="optrow">' + list.map(function (v) { return '<button class="sw' + (sp[key] === v ? ' on' : '') + '" style="background:' + v + '" data-act="spec" data-k="' + key + '" data-arg="' + v + '" aria-label="Colour ' + v + '"></button>'; }).join('') + '</div>'; }
     return '<main class="wrap" style="padding-top:22px;max-width:1240px">' +
@@ -4969,7 +4969,8 @@
       var nw = (f.id === 'ban-edit' ? S.banEdit.w : S.c.banW) || r.width, nh = (f.id === 'ban-edit' ? S.banEdit.h : S.c.banH) || r.height, sc = Math.max(r.width / nw, r.height / nh);
       d = { f: f, im: im, o: o, sx: e.clientX, sy: e.clientY, x0: o.x, y0: o.y, ox: nw * sc - r.width, oy: nh * sc - r.height }; f.classList.add('drag'); try { f.setPointerCapture(e.pointerId); } catch (er) {} e.preventDefault(); });
     document.addEventListener('pointermove', function (e) { if (!d) return; var nx = d.ox > 1 ? d.x0 - (e.clientX - d.sx) / d.ox * 100 : 50, ny = d.oy > 1 ? d.y0 - (e.clientY - d.sy) / d.oy * 100 : 50;
-      d.o.x = Math.max(0, Math.min(100, nx)); d.o.y = Math.max(0, Math.min(100, ny)); d.im.style.objectPosition = d.o.x.toFixed(1) + '% ' + d.o.y.toFixed(1) + '%'; });
+      d.o.x = Math.max(0, Math.min(100, nx)); d.o.y = Math.max(0, Math.min(100, ny)); var op = d.o.x.toFixed(1) + '% ' + d.o.y.toFixed(1) + '%'; d.im.style.objectPosition = op;
+      if (d.f.id !== 'ban-edit') { S.c.banX = d.o.x; S.c.banY = d.o.y; [].forEach.call(document.querySelectorAll('[data-banpv]'), function (x) { x.style.objectPosition = op; }); } });   // the live preview card follows the drag
     document.addEventListener('pointerup', function () { if (!d) return; var dd = d; d = null; dd.f.classList.remove('drag');
       if (dd.f.id === 'ban-edit') banCrop(S.banEdit, function (u) { S.banEdit.out = u; }); else { S.c.banX = dd.o.x; S.c.banY = dd.o.y; banCrop({ src: S.c.banSrc, x: dd.o.x, y: dd.o.y }, function (u) { S.c.banner = u; }); } }); })();
   function loadMedia(f, kind) {
