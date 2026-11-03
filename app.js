@@ -457,7 +457,9 @@
     var A0 = A, ix = function (arr, v) { return Math.max(0, arr.indexOf(v)).toString(36); }, sp = c.spec || {};
     var q = 'c=' + ix(A0.KINDS, sp.kind) + ix(A0.SKINS, sp.skin) + ix(A0.BGS, sp.bg) + ix(A0.EYES, sp.eyes) + ix(A0.MOUTHS, sp.mouth) + ix(A0.ACCS, sp.acc);
     if (c.buy > 0 && c.split) q += '&s=' + c.split.h + '.' + c.split.b + '.' + c.split.d + (c.split.d > 50 ? '&dc=1' : '') + (rwUri(c) && c.split.h > 0 ? '&r=' + rwUri(c) : '');
+    if (c.f) q += '&f=' + c.f;   // creator fees → X / GitHub / another wallet
     var base = (ipfsUri ? ipfsUri : (API || 'https://treid.fun') + '/api/meta/' + mint) + '?' + q, add = function (k, v) { v = String(v || '').replace(/^https?:\/\//, '').replace(/^@/, '').trim(); if (v && (base + '&' + k + '=' + encodeURIComponent(v)).length <= 200) base += '&' + k + '=' + encodeURIComponent(v); };
+    if (base.length > 200) throw new Error('Coin settings too long to store on-chain — pick a shorter fee receiver or reward token');
     add('x', c.x); add('t', c.tg); add('w', c.web); return base;
   }
   // ===== HOLDER REWARDS: paid in the coin itself (recommended) or any verified token =====
@@ -3487,23 +3489,42 @@
   function crPanel(t) {
     if (t.live && t.esc && t.esc.escrow) { var E = t.esc.state === 'out' && t.esc.era !== 'out' ? Object.assign({}, t.esc, { era: 'out' }) : t.esc, R0 = E.rules || {}, who = function (w) { return S.account && w === S.account ? 'You' : walletName ? walletName(w) : short(w); };
       var mineE = !!(S.account && E.creator && S.account === E.creator), solf = function (v) { return (v > 0 && v < 0.0001 ? '<0.0001' : (+v || 0).toFixed(4)) + '<i class="cr-u"> ' + esc(E.quote || 'SOL') + '</i>'; }, durE = function (ms) { return durH(Math.max(1, ms / 60000)); };
-      var isCto = E.era === 'cto', roleW = isCto ? 'lead' : 'creator', RoleW = isCto ? 'Lead' : 'Creator';
-      var stE = E.era === 'out' ? ['r', 'Creator is out', E.why === 'sold' ? 'Creator sold their bag' : 'The creator left — holders can elect a new lead']
+      var isCto = E.era === 'cto', roleW = isCto ? 'lead' : 'creator', RoleW = isCto ? 'Lead' : 'Creator', TO = !isCto && E.era !== 'out' ? E.to : null, wait = !!TO && E.state === 'waiting';
+      var toName = TO ? (TO.kind === 'x' ? '@' + TO.id : TO.kind === 'g' ? TO.id : short(TO.id)) : '', toUrl = TO ? (TO.kind === 'x' ? 'https://x.com/' + TO.id : TO.kind === 'g' ? 'https://github.com/' + TO.id : 'https://solscan.io/account/' + TO.id) : '';
+      var toIc = TO ? (TO.kind === 'x' ? '𝕏' : TO.kind === 'g' ? '<svg viewBox="0 0 16 16" width="13" height="13"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38v-1.33c-2.23.48-2.7-1.07-2.7-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.06-.49.06-.49.8.06 1.23.83 1.23.83.72 1.23 1.88.87 2.34.67.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48v2.2c0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>' : '◎') : '';
+      var toRow = TO ? '<div class="cr-to"><span class="cr-to-ic">' + toIc + '</span><span>Creator fees go to <a href="' + esc(toUrl) + '" target="_blank" rel="noopener"><b>' + esc(toName) + '</b></a></span>' + (TO.kind !== 'w' ? (TO.linked ? '<em class="ok">✓ claimed · ' + esc(who(E.creator)) + '</em>' : '<em>not claimed yet</em>') : '') + '</div>' : '';
+      var stE = wait ? ['b', 'Waiting for ' + toName, 'Fees build up in the pool until ' + esc(toName) + ' claims them · ' + durE(Math.max(0, (E.claimBy || 0) - Date.now())) + ' left']
+        : E.era === 'out' ? ['r', 'Creator is out', E.why === 'sold' ? 'Creator sold their bag' : E.why === 'unclaimed' ? 'The fee receiver never claimed — holders can elect a new lead' : 'The creator left — holders can elect a new lead']
         : E.state === 'frozen' ? ['y', 'Paused', 'No ' + roleW + ' activity for ' + durE(E.idleMs) + ' — rewards now buy back & burn $' + esc(symOf(t))]
         : isCto ? ['b', 'Community takeover', 'Led by ' + esc(who(E.creator)) + ' since ' + ago(E.cto.at) + ' ago · same rules apply'] : ['g', 'Active', 'Paid to the creator automatically, straight from the pool'];
       var tiles = E.era === 'out' ? [['Bought back & burned', solf(E.buybackSol)], ['Waiting in pool', solf(E.pendingSol)], ['Takeover', (E.apps || []).length ? (E.apps.length + ' applying') : 'open']]
         : isCto ? [['Paid to lead', solf(E.paidSol)], ['Waiting in pool', solf(E.pendingSol)], ['Bought back & burned', solf(E.buybackSol)]]
-        : [['Paid to creator', solf(E.paidSol)], ['Waiting in pool', solf(E.pendingSol)], ['Bought back & burned', solf(E.buybackSol)]];
+        : wait ? [['Waiting for ' + esc(toName), solf(E.pendingSol)], ['Claim within', durE(Math.max(0, (E.claimBy || 0) - Date.now()))], ['Paid out', solf(E.paidSol)]]
+        : [[TO ? 'Paid to ' + esc(toName) : 'Paid to creator', solf(E.paidSol)], ['Waiting in pool', solf(E.pendingSol)], ['Bought back & burned', solf(E.buybackSol)]];
       var dhm = function (ms) { var m = Math.max(1, Math.round(ms / 60000)), d = Math.floor(m / 1440), h = Math.floor(m % 1440 / 60), mm = m % 60; return d ? d + 'd' + (h ? ' ' + h + 'h' : '') : h ? h + 'h' + (mm && h < 10 ? ' ' + mm + 'm' : '') : mm + 'm'; };
       var whenE = function (ts) { var dt = new Date(ts); return dt.toLocaleDateString('en-US', { weekday: 'short' }) + ' ' + dt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }); };   // English like the rest of the site, 24h clock, the viewer's own time zone
       var PAUSE = (R0.idleFreezeH || 72) * 36e5, OUTMS = (R0.idleOutD || 7) * 864e5, toPause = PAUSE - E.idleMs, toOut = OUTMS - E.idleMs, seenAt = E.lastActive ? +new Date(E.lastActive) : Date.now() - E.idleMs;
       var cdE = E.state === 'frozen' ? ['y', 'Paused', toOut > 0 ? roleW + ' out in <b>' + dhm(toOut) + '</b> unless they return' : roleW + ' leaving now', 'since ' + whenE(seenAt + PAUSE)]
         : toPause <= 0 ? ['y', 'Pausing…', 'no activity for 72h — payouts stop now', '']
         : [toPause < 24 * 36e5 ? (toPause < 6 * 36e5 ? 'r' : 'y') : 'g', 'Pauses in', '<b>' + dhm(toPause) + '</b>', 'deadline ' + whenE(seenAt + PAUSE)];
-      var meterE = E.era !== 'out' ? '<div class="cr-meter cr-cd s-' + cdE[0] + '"><div class="cr-cdt"><small>' + cdE[1] + '</small><span>' + cdE[2] + '</span></div>' + (cdE[3] ? '<small class="muted cr-cdw">' + cdE[3] + '</small>' : '') +
+      var meterE = E.era !== 'out' && !wait ? '<div class="cr-meter cr-cd s-' + cdE[0] + '"><div class="cr-cdt"><small>' + cdE[1] + '</small><span>' + cdE[2] + '</span></div>' + (cdE[3] ? '<small class="muted cr-cdw">' + cdE[3] + '</small>' : '') +
         '<span class="cr-bar"><i style="width:' + Math.min(100, E.idleMs / OUTMS * 100).toFixed(1) + '%"></i><em style="left:' + (PAUSE / OUTMS * 100).toFixed(1) + '%" title="72h: paused"></em></span>' +
         '<div class="cr-ticks"><small style="left:0">seen ' + ago(seenAt) + ' ago</small><small style="left:' + (PAUSE / OUTMS * 100).toFixed(1) + '%;transform:translateX(-50%)">72h pause</small><small style="right:0">7d out</small></div></div>' +
         '<div class="cr-meter"><div class="cr-ml"><small>' + RoleW + ' sold of peak bag</small><small class="mono ' + (E.soldPct >= 70 ? 'down' : E.soldPct >= 40 ? 'warn' : '') + '">' + Math.round(E.soldPct) + '%</small></div><span class="cr-bar sold"><i style="width:' + Math.min(100, E.soldPct) + '%"></i><em style="left:70%" title="70%: out"></em></span></div>' : '';
+      // an X / GitHub account claims the fees sent to it: post the wallet from that account, paste the link, sign
+      var hlBox = '';
+      if (TO && TO.kind !== 'w' && E.era !== 'out' && (wait || S.hlForm === t.tick)) {
+        var isX = TO.kind === 'x', postTxt = 'Claiming my $' + symOf(t) + ' creator fees on treid.fun\n\nWallet: ' + (S.account || '');
+        hlBox = S.hlForm !== t.tick ? '<button class="btn pri cr-hlgo" data-act="hlForm" data-arg="' + esc(t.tick) + '">I’m ' + esc(toName) + ' — claim these fees</button>'
+          : '<div class="cto-form hl-form"><ol class="cto-how">' +
+            '<li><b>Connect the wallet</b> you want the fees in' + (S.account ? ': <span class="mono">' + esc(short(S.account)) + '</span> ✓' : ' — <button class="link" data-act="openWallet">connect wallet</button>') + '</li>' +
+            (isX ? '<li><b>Post from @' + esc(TO.id) + '</b> a public post that contains your wallet address. ' + (S.account ? '<a class="btn sec hl-post" target="_blank" rel="noopener" href="https://x.com/intent/post?text=' + encodeURIComponent(postTxt) + '">Post on 𝕏</a>' : '') + '</li>'
+              : '<li><b>Create a public gist</b> as <b>' + esc(TO.id) + '</b> that contains your wallet address' + (S.account ? ' (<button class="link" data-act="copyAddr">copy address</button>)' : '') + '. <a class="btn sec hl-post" target="_blank" rel="noopener" href="https://gist.github.com/">Open GitHub Gist</a></li>') +
+            '<li><b>Paste the link</b> to it and sign — the fees start paying to your wallet.</li></ol>' +
+            '<input class="inp" id="hl-url" data-bind="hlUrl" value="' + esc(S.hlUrl || '') + '" placeholder="' + (isX ? 'https://x.com/' + esc(TO.id) + '/status/…' : 'https://gist.github.com/' + esc(TO.id) + '/…') + '" autocomplete="off" spellcheck="false">' +
+            '<div class="cr-acts"><button class="btn sec" data-act="hlFormX">Cancel</button><button class="btn pri" data-act="hlLink" data-arg="' + esc(t.tick) + '"' + (S.account && !S.busy ? '' : ' disabled') + '>' + (S.busy === 'Checking' ? 'Checking…' : 'Verify & claim') + '</button></div>' +
+            '<small class="muted">You can delete the post afterwards. Lost access to the wallet? Post again with a new one — the latest verified wallet gets the fees.</small></div>';
+      } else if (TO && TO.kind !== 'w' && TO.linked && E.era !== 'out' && !mineE) hlBox = '<button class="link cr-hlre" data-act="hlForm" data-arg="' + esc(t.tick) + '">Are you ' + esc(toName) + '? Change the wallet</button>';
       // takeover voting (creator out)
       var ctoBox = '';
       if (E.era === 'out') { var apps = E.apps || [], myBal = S.account && t.lh ? ((t.lh.filter(function (h) { return h.wallet === S.account; })[0] || {}).pct || 0) : 0, canApply = S.account && S.account !== E.dev && myBal >= (R0.applyPct || 1) && !apps.some(function (a) { return a.wallet === S.account; });
@@ -3515,10 +3536,10 @@
             : canApply ? '<button class="btn pri cto-apply" data-act="ctoForm" data-arg="' + esc(t.tick) + '">Apply to lead $' + esc(symOf(t)) + '</button>' : S.account && S.account !== E.dev && !apps.some(function (a) { return a.wallet === S.account; }) ? '<small class="muted cto-need">Hold ' + (R0.applyPct || 1) + '% of supply to apply (you hold ' + myBal.toFixed(2) + '%).</small>' : '') + '</div>'; }
       var KN = { pay: 'Paid to creator', buyback: 'Buyback', burntok: 'Burned', fund: 'To takeover fund', grant: 'To treid platform', platform: 'To treid platform', ping: RoleW + ' checked in', out: 'Out', claim: 'Collected fees', cto: 'Takeover approved', ctopay: 'Fund → lead' };
       var logE = (E.log || []).filter(function (x) { return KN[x.kind] && x.kind !== 'claim'; }).slice(0, 5).map(function (x) { return '<a class="cr-log" target="_blank" rel="noopener" href="https://solscan.io/tx/' + esc(x.sig) + (CHAIN_ID === 'solana:devnet' ? '?cluster=devnet' : '') + '"><span>' + (x.kind === 'pay' && isCto && x.extra === E.creator ? 'Paid to lead' : KN[x.kind]) + '</span><b class="mono">' + (x.kind === 'burntok' ? fmtNum(x.lamports / 1e6) + ' $' + esc(symOf(t)) : x.lamports ? (x.lamports / Math.pow(10, t.qDec != null ? t.qDec : 9)).toFixed(4) + ' ' + esc(E.quote || 'SOL') : '') + '</b><small class="muted">' + ago(x.ts) + '</small></a>'; }).join('');
-      return '<section class="card-s panel cr-panel s-' + stE[0] + '"><div class="cr-h"><b>Creator rewards</b><span class="cr-st ' + stE[0] + '"><i></i>' + stE[1] + '</span></div><small class="muted cr-sub">' + stE[2] + '</small>' +
+      return '<section class="card-s panel cr-panel s-' + stE[0] + '"><div class="cr-h"><b>Creator rewards</b><span class="cr-st ' + stE[0] + '"><i></i>' + esc(stE[1]) + '</span></div><small class="muted cr-sub">' + stE[2] + '</small>' + toRow +
         '<div class="cr-money">' + tiles.map(function (m) { return '<div><small>' + m[0] + '</small><b class="mono">' + m[1] + '</b></div>'; }).join('') + '</div>' + meterE +
         (mineE && E.era !== 'out' ? '<div class="cr-acts"><button class="btn sec" data-act="devHere" data-arg="' + esc(t.tick) + '">' + (E.state === 'frozen' ? '▶ Resume my fees' : '✋ I’m still here') + '</button>' + (E.state === 'active' ? '<button class="btn pri" data-act="devClaimNow" data-arg="' + esc(t.tick) + '"' + (E.pendingSol < 0.0001 || S.busy ? ' disabled' : '') + '>Claim now · ' + solf(E.pendingSol) + '</button>' : '') + '</div>' : '') +
-        ctoBox + (logE ? '<div class="cr-logs">' + logE + '</div>' : '') +
+        hlBox + ctoBox + (logE ? '<div class="cr-logs">' + logE + '</div>' : '') +
         '<details class="cr-rules"><summary>How the rules work</summary><ul><li>Rewards stay in the Meteora pool until they’re paid. treid’s automated wallet holds the pool’s creator role and pays them out under these rules — never anywhere else. An active creator is <b>paid straight from the pool</b> automatically once rewards reach $1, or any time with “Claim now” (from $1).</li><li>The creator must show up at least once every <b>72h</b>: a trade in the coin, “I’m still here” (a free wallet signature), a callout or update about the coin, or “Claim now” all count. treid sends a push reminder 24h and 6h before the deadline.</li><li>Miss it → payouts pause and the rewards meanwhile <b>buy back & burn</b> the coin (they are not paid back later). “Resume my fees” restarts payouts from that moment.</li><li><b>7 days</b> inactive, or the creator sells <b>or moves to another wallet 70%+</b> of their peak bag <b>and keeps less than 0.5% of supply</b> (selling and sending are added together; the rule covers the creator’s launch wallet) → creator is out: from then on <b>50%</b> of their rewards buys back & burns the coin and <b>50%</b> goes to the treid platform, until the community takes over.</li><li><b>Community takeover:</b> a holder with ' + (R0.applyPct || 1) + '%+ applies with a plan; holders support with a free signature. At ' + (R0.supportPct || 10) + '% of supply, held for 24 hours in a row, the new lead takes over and earns all future rewards — under the same rules.</li><li>Every step is an on-chain transaction — tap any line above to verify.</li></ul></details></section>';
     }
     if (t.live) {   // real coin: rewards are SOL sitting in the pool, the creator claims them straight to their wallet
@@ -3575,6 +3596,22 @@
         '<div class="van-tiers">' + [[3, '3 chars', 0.1, 'seconds'], [4, '4 chars', 0.25, '~1–3 min']].map(function (x) { var on = n && n === x[0]; return '<span class="' + (on ? 'on' : '') + '"><b>' + x[1] + '</b><small class="mono">' + x[2] + ' SOL · ' + x[3] + '</small></span>'; }).join('') + '</div>' +
         '<small class="van-err" id="van-err"></small></div>' : '') +
       '<div class="van-prev"><small>Preview</small><div id="van-prev">' + vanPrev(c) + '</div>' + (cus && n >= 3 ? '<span class="van-fee mono" id="van-fee">+' + vanFee(n) + ' SOL · ' + vanEta(n) + '</span>' : cus ? '<span class="van-fee mono" id="van-fee">type at least 3 characters</span>' : '<span class="van-fee ok mono">free · instant</span>') + '</div></div>';
+  }
+  // who gets the creator fees: you, an X account, a GitHub user or another wallet (fixed at launch, stored in the coin's on-chain metadata)
+  function fParam(c) {
+    var k = c.feeK || 'me', v = String(c.feeV || '').trim(); if (k === 'me') return { v: '' };
+    if (k === 'x') { v = v.replace(/^https?:\/\/(www\.)?(x|twitter)\.com\//i, '').replace(/^@/, '').split(/[/?#]/)[0]; return /^[A-Za-z0-9_]{1,15}$/.test(v) ? { v: 'x.' + v, show: '@' + v } : { err: 'Enter the X handle that should get the creator fees (e.g. @name)' }; }
+    if (k === 'g') { v = v.replace(/^https?:\/\/(www\.)?github\.com\//i, '').replace(/^@/, '').split(/[/?#]/)[0]; return /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/.test(v) ? { v: 'g.' + v, show: v } : { err: 'Enter the GitHub username that should get the creator fees' }; }
+    return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(v) ? { v: 'w.' + v, show: short(v) } : { err: 'Enter the Solana wallet that should get the creator fees' };
+  }
+  function feeToPicker(c) {
+    var k = c.feeK || 'me', opts = [['me', 'Me'], ['x', 'X account'], ['g', 'GitHub'], ['w', 'Other wallet']], fp = fParam(c);
+    var ph = { x: '@handle or x.com/handle', g: 'GitHub username', w: 'Solana wallet address' }[k];
+    return '<div class="field feeto"><div class="lbl"><b>Creator fees go to <span class="muted" style="font-weight:500;font-size:12px">· set once, can’t be changed after launch</span></b></div>' +
+      '<div class="feeto-q">' + opts.map(function (o) { return '<button class="' + (k === o[0] ? 'on' : '') + '" data-act="feeK" data-arg="' + o[0] + '">' + o[1] + '</button>'; }).join('') + '</div>' +
+      (k === 'me' ? '' : '<input id="c-feev" class="inp' + (k === 'w' ? ' mono' : '') + '" data-bind="c.feeV" value="' + esc(c.feeV || '') + '" placeholder="' + ph + '" autocomplete="off" spellcheck="false">' +
+        '<small class="muted feeto-n">' + (k === 'w' ? 'That wallet earns the creator fees and must show up every 72h, like a creator.' :
+          'The fees wait safely in the pool. ' + (k === 'x' ? 'The X account' : 'The GitHub user') + ' claims them on the coin page by posting their wallet address from that account — no sign-up needed. They have <b>30 days</b> to claim; after that the creator rules treat the fees as unclaimed (half buys back & burns the coin). Your coin’s share of the tax for the creator is burned until they claim.') + '</small>') + '</div>';
   }
   function devBuyPicker(c) {
     var q = devQuote(String(c.devBuy || '').replace(',', '.')), lv = q.pct === 0 ? 'z' : q.pct < 3 ? 'g' : q.pct < 8 ? 'y' : 'r';
@@ -3799,10 +3836,10 @@
             '<div class="field" style="flex:1 1 140px"><label for="c-tick" style="font-weight:700">Ticker</label><span class="tick-in"><em>$</em><input id="c-tick" class="inp mono" data-bind="c.tick" value="' + esc(c.tick) + '" placeholder="DFROG"></span></div></div>' + 
           '<div class="field"><label for="c-desc" style="font-weight:700">Description</label><textarea id="c-desc" class="inp" data-bind="c.desc" placeholder="What is this token about?">' + esc(c.desc) + '</textarea></div>' +
           '<div class="fsec"><i>2</i>Market</div>' +
-          realPairPicker(c) + taxPicker(c) + splitPicker(c) + devBuyPicker(c) + vanityPicker(c) +
+          realPairPicker(c) + taxPicker(c) + splitPicker(c) + devBuyPicker(c) + feeToPicker(c) + vanityPicker(c) +
           '<div class="fsec"><i>3</i>Community</div>' +
           '<div class="socrow"><span class="soc-l">Socials <small>optional · shown as buttons on your coin</small></span><div class="socgrid">' + socField(c, 'x', 'X', '', 'Paste X link') + socField(c, 'tg', 'Telegram', '', 'Paste Telegram link') + socField(c, 'web', 'Website', '', 'Paste website link') + '</div></div>' +
-          '<div class="cr-know"><b>📋 Your creator rules — read before launching</b><ul>' +
+          '<div class="cr-know"><b>📋 Your creator rules — read before launching</b><ul>' + (fParam(c).show ? '<li><b>Creator fees go to ' + esc(fParam(c).show) + '</b> — the rules below apply to ' + ((c.feeK || 'me') === 'w' ? 'that wallet' : 'them once they claim') + ', not to you.</li>' : '') +
             '<li><b>You earn</b> ' + FEE.creatorPlain + '% of every trade on the curve (' + FEE.creatorTaxed + '% on taxed coins) and 0.4% after graduation, plus your share of the tax — paid automatically.</li>' +
             '<li><b>Show up at least once every 72h</b>: a trade in your coin, “I’m still here” (free signature), a callout or update about your coin, or “Claim now”. We push a reminder 24h and 6h before.</li>' +
             '<li><b>Miss it</b> → your fees pause and buy back & burn your coin until you tap “Resume my fees” (paused fees are not paid back).</li>' +
@@ -4444,6 +4481,7 @@
       case 'demoImgsClose': if (e.target === el || el.tagName === 'BUTTON') set({ demoImgOpen: false }); break;
       case 'demoImgsReset': BASE.forEach(function (t) { if (DIMG[t.tick]) delete t.img; }); DIMG = {}; try { localStorage.removeItem('dl.demoimgs'); } catch (er) {} render(); break;
       case 'devbuy': setC({ devBuy: arg === '0' ? '' : arg }); break;
+      case 'feeK': setC({ feeK: arg }); setTimeout(function () { var i = document.getElementById('c-feev'); if (i && arg !== 'me') i.focus(); }, 30); break;
       case 'ctax': setC(+arg > 0 ? { buy: +arg, sell: +arg } : { buy: 0, sell: 0 }); break;
       case 'qpick': qSelect(arg); break;
       case 'qTab': S.qTab = arg; render(); break;
@@ -4598,6 +4636,19 @@
           .then(function (j) { if (!j || !j.ok) throw new Error((j && j.error) || 'failed'); S.ctoForm = null; if (act === 'ctoApply') S.ctoPlan = ''; toast(act === 'ctoApply' ? 'Application sent ✓ — holders can now support you' : j.approved ? 'Takeover approved! 🎉' : 'Support counted ✓', tk); if (j.approved) confetti(); setTimeout(function () { liveLoad(tk); }, 2000); })
           .catch(function (e) { toast(chainErr(e)); });
       })(act); break;
+      case 'hlForm': set({ hlForm: arg }); break;
+      case 'hlFormX': set({ hlForm: null }); break;
+      case 'hlLink': (function () {
+        var tk = find(arg), E2 = tk && tk.esc, TO2 = E2 && E2.to; if (!tk || !TO2) return; if (!S.wallet) { set({ walletOpen: true }); return; }
+        var url = ((document.getElementById('hl-url') || {}).value || S.hlUrl || '').trim(); if (!url) { toast(TO2.kind === 'x' ? 'Paste the link to your post' : 'Paste the link to your gist'); return; }
+        var fsg = S.wallet.features['solana:signMessage']; if (!fsg) { toast('This wallet can’t sign messages — try Phantom or Solflare'); return; }
+        var ts0 = Date.now(), msg = 'treid: link ' + (TO2.kind === 'x' ? 'X @' + TO2.id : 'GitHub ' + TO2.id) + ' to ' + S.account + ' — ' + ts0;   // must match indexer/rewards.mjs linkMessage
+        S.busy = 'Checking'; render();
+        Promise.resolve(fsg.signMessage({ account: S.walletAcc, message: new TextEncoder().encode(siteMsg(msg)) })).then(function (r) { var sg = (Array.isArray(r) ? r[0] : r).signature; return chainLib().then(function (T) {
+          return fetch(API + '/api/hlink', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kind: TO2.kind, handle: TO2.id, wallet: S.account, url: url, ts: ts0, sig: T.b58(sg) }) }).then(function (x) { return x.json(); }); }); })
+          .then(function (j) { S.busy = null; if (!j || !j.ok) throw new Error((j && j.error) || 'failed'); S.hlForm = null; S.hlUrl = ''; toast('Claimed ✓ — fees now pay to your wallet' + (j.coins > 1 ? ' (' + j.coins + ' coins)' : ''), tk); confetti(); setTimeout(function () { liveLoad(tk); }, 1500); })
+          .catch(function (e) { S.busy = null; render(); toast(chainErr(e)); });
+      })(); break;
       case 'devClaimNow': var tq = find(arg); if (!tq || !S.wallet) break; var fsq = S.wallet.features['solana:signMessage'];
         if (!fsq) { toast('This wallet can’t sign messages — try Phantom or Solflare'); break; }
         var tsQ = Date.now(), msgQ = 'treid: claim — ' + tq.ca + ' — ' + tsQ;   // must match indexer/rewards.mjs claimMessage
@@ -4664,10 +4715,12 @@
         var c = S.c;
         if (!c.name.trim() || c.tick.length < 2) { toast('Add a name and a ticker (2+ characters)'); break; }
         if (!c.img) { toast('Upload a logo image for your coin'); break; }
+        var fp0 = fParam(c); if (fp0.err) { toast(fp0.err); var fi = document.getElementById('c-feev'); if (fi) fi.focus(); break; }
+        if (fp0.v && !S.escrowWallet && !S.demoLaunch) { toast('Sending creator fees to someone else isn’t available right now — pick “Me”'); break; }
         var dq2 = devQuote(String(c.devBuy || '').replace(',', '.'));
         if (dq2.isSol && dq2.sol > 0 && typeof S.balance === 'number' && dq2.sol > S.balance) { toast('Not enough ' + NET + 'SOL for a ' + dq2.sol + ' SOL buy — balance ' + S.balance.toFixed(3)); break; }
         if (!S.demoLaunch) {
-          var tax0 = Math.max(c.buy, c.sell), sn0 = c.snipe || {}, cc0 = JSON.parse(JSON.stringify({ name: c.name.trim(), tick: c.tick, spec: c.spec, split: c.split, rw: rwOf(c) ? { mint: rwOf(c).mint } : 'coin', buy: c.buy, sell: c.sell, x: c.x, tg: c.tg, web: c.web, desc: c.desc, img: c.img, banner: c.banner, snipe: sn0, pair: c.pair, q: c.q || null }));
+          var tax0 = Math.max(c.buy, c.sell), sn0 = c.snipe || {}, cc0 = JSON.parse(JSON.stringify({ name: c.name.trim(), tick: c.tick, spec: c.spec, split: c.split, rw: rwOf(c) ? { mint: rwOf(c).mint } : 'coin', buy: c.buy, sell: c.sell, x: c.x, tg: c.tg, web: c.web, f: fp0.v || null, desc: c.desc, img: c.img, banner: c.banner, snipe: sn0, pair: c.pair, q: c.q || null }));
           var solB = dq2.isSol ? dq2.sol : dq2.solIn, qq1 = qOf(c);
           if (typeof S.balance === 'number' && S.balance < solB + 0.03) { toast('You need about ' + (solB + 0.03).toFixed(2) + ' ' + NET + 'SOL (coin creation ≈ 0.03 SOL' + (solB ? ' + your ' + solB + ' SOL buy' : '') + ')'); break; }
           var vc1 = c.van && c.van.mode === 'custom' && (c.van.suf || '').length >= 3, suf1 = vc1 ? c.van.suf : 'trd', vf1 = vc1 ? vanFee(suf1.length) : 0, grindT = null;

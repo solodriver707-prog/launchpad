@@ -27,6 +27,15 @@ import { verifySig } from './sig.mjs';
 export const RULES = { idleFreezeMs: 72 * 3600e3, idleOutMs: 7 * 864e5, soldOut: 70, keepPct: 0.5, ctoApplyPct: 1, ctoSupportPct: 10, ctoHoldMs: 24 * 36e5 };
 const SUPPLY = 1e9, MEMO = new PublicKey('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr');
 const memo = (s) => new TransactionInstruction({ keys: [], programId: MEMO, data: Buffer.from(s) });
+// creator fees can go to someone other than the launch wallet: an X handle, a GitHub user or another wallet — set ONCE at launch in the coin's
+// on-chain metadata URI (f=x.<handle> | f=g.<user> | f=w.<wallet>), which can never be changed afterwards
+export const FEE_GRACE_MS = 30 * 864e5;   // a handle has 30 days to claim; until then its fees just wait in the Meteora pool (nobody touches them)
+export function feeTo(c) { try { const f = new URL(c.uri).searchParams.get('f') || ''; const m = /^(x|g|w)\.(.+)$/.exec(f); if (!m) return null;
+    if (m[1] === 'x' && /^[A-Za-z0-9_]{1,15}$/.test(m[2])) return { kind: 'x', id: m[2], key: 'x@' + m[2].toLowerCase() };
+    if (m[1] === 'g' && /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/.test(m[2])) return { kind: 'g', id: m[2], key: 'g@' + m[2].toLowerCase() };
+    if (m[1] === 'w') { const w = new PublicKey(m[2]); if (PublicKey.isOnCurve(w.toBytes())) return { kind: 'w', id: w.toBase58(), key: null }; }
+  } catch {} return null; }
+export const linkMessage = (kind, handle, wallet, ts) => `treid: link ${kind === 'x' ? 'X @' + handle : 'GitHub ' + handle} to ${wallet} — ${ts}`;
 export const pingMessage = (mint, ts) => `treid: I'm still here — ${mint} — ${ts}`;
 export const claimMessage = (mint, ts) => `treid: claim — ${mint} — ${ts}`;
 export const applyMessage = (mint, ts, plan) => `treid: lead takeover — ${mint} — ${ts}\n${plan}`;
@@ -94,7 +103,10 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, q
     const out = lastOf(c.mint, 'out'), cto = lastOf(c.mint, 'cto');
     if (cto && cto.ts > (out?.ts || 0)) return { type: 'cto', wallet: cto.extra, start: cto.ts, startBag: (cto.lamports || 0) / 1e6 };
     if (out) return { type: 'out', start: out.ts };
-    return { type: 'dev', wallet: c.creator, start: c.created_at || 0 };
+    const ft = feeTo(c), t0 = c.created_at || 0;
+    if (ft && ft.kind === 'w') return { type: 'dev', wallet: ft.id, start: t0, to: ft };
+    if (ft) { const ln = lastOf(ft.key, 'hlink'); return ln ? { type: 'dev', wallet: ln.extra, start: Math.max(t0, ln.ts), to: ft, linkedAt: ln.ts } : { type: 'dev', wallet: null, start: t0, to: ft }; }   // the handle's latest verified wallet
+    return { type: 'dev', wallet: c.creator, start: t0 };
   }
   // 70% rule on the creator's/lead's REAL wallet balance (all their token accounts added up), peak kept in the DB
   const balNow = new Map();
@@ -123,6 +135,9 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, q
     const e = era(c);
     const base = { era: e.type, creator: e.wallet || null, fund: 0, paid: sum(c.mint, 'pay'), buyback: sum(c.mint, 'buyback'), burnedTokens: sum(c.mint, 'burntok'), granted: sum(c.mint, 'platform'), lastPay: lastOf(c.mint, 'pay')?.ts || 0 };
     if (e.type === 'out') return { ...base, state: 'out', why: outWhy(c), outAt: e.start, idle: 0, sold: 0, last: e.start };
+    if (e.to) base.to = { kind: e.to.kind, id: e.to.id, linked: !!e.wallet, linkedAt: e.linkedAt || null };
+    if (!e.wallet) { const left = FEE_GRACE_MS - (Date.now() - e.start);   // fees for a handle that hasn't claimed yet: they wait in the pool, no timers run
+      return { ...base, state: left > 0 ? 'waiting' : 'out', why: left > 0 ? null : 'unclaimed', claimBy: e.start + FEE_GRACE_MS, bal: 0, peak: 0, sold: 0, last: e.start, idle: 0, outAt: null }; }
     const a = activity(c, e.wallet, e.start, e.type === 'cto' ? e.startBag : null); let st = 'active', why = null;
     // out: sold/moved 70%+ of the peak bag AND kept under 0.5% of supply (a dev trimming 10% → 2% keeps a real stake and stays in), or 7 days away · paused: 72h away
     if (a.sold >= RULES.soldOut && a.bal < RULES.keepPct / 100 * SUPPLY) { st = 'out'; why = 'sold'; } else if (a.idle >= RULES.idleOutMs) { st = 'out'; why = 'idle'; } else if (a.idle >= RULES.idleFreezeMs) st = 'frozen';
@@ -339,7 +354,7 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, q
     const cfg = cfgCache.get(c.mint) || await dbc.state.getPoolConfig(vp.config); cfgCache.set(c.mint, cfg); if (await maybeMigrate(c, vp, cfg).catch((er) => { log('rewards migrate err', c.symbol, er.message.slice(0, 100)); return false; })) return;   // fees are picked up next cycle
     const e = era(c); if (e.wallet) balNow.set(c.mint + '|' + e.wallet, await walletBal(c.mint, e.wallet));
     let st = state(c);
-    if (st.era !== 'out' && st.state === 'out') { try { run('INSERT OR REPLACE INTO kv(k,v) VALUES(?,?)', 'outwhy:' + c.mint, st.why || 'idle'); } catch {} await stamp(c.mint, 'out', 0, st.creator); log('rewards creator out', c.symbol, st.why); st = state(c); }
+    if (st.era !== 'out' && st.state === 'out') { try { run('INSERT OR REPLACE INTO kv(k,v) VALUES(?,?)', 'outwhy:' + c.mint, st.why || 'idle'); } catch {} await stamp(c.mint, 'out', 0, st.creator || undefined); log('rewards creator out', c.symbol, st.why); st = state(c); }
     if (st.era === 'out') { if (await tryApprove(c)) st = state(c); }
     const src = await creatorSources(c, vp);
     if (src.platform >= units(c, PAY_USD)) await payout(c, src.platform, treasury, 'platform', 'dammP');   // treid's LP share → treasury
@@ -373,6 +388,33 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, q
       const before = sum(c.mint, 'pay'); let s = null; for (const [from, amt] of src.list) if (amt >= units(c, 0.05)) s = await payout(c, amt, wallet, 'pay', from); const paid = sum(c.mint, 'pay') - before;
       return { ok: true, sol: paid / 10 ** (c.quote_dec ?? 9), quote: c.quote_symbol || 'SOL', sig: s }; });
   }
+  // ---- an X / GitHub account claims its fees: a public post (tweet or gist) that contains the wallet + a signature from that wallet ----
+  const linkHits = [];
+  async function proofOk(kind, handle, wallet, url) {
+    const ctl = (ms) => { const a = new AbortController(); setTimeout(() => a.abort(), ms); return a.signal; }, H = String(handle).toLowerCase();
+    if (kind === 'x') { const id = /(?:twitter|x)\.com\/[^/]+\/status(?:es)?\/(\d{5,25})/.exec(String(url))?.[1]; if (!id) throw new Error('paste the link to your post (x.com/…/status/…)');
+      try { const tok = ((Number(id) / 1e15) * Math.PI).toString(36).replace(/(0+|\.)/g, ''), r = await fetch(`https://cdn.syndication.twimg.com/tweet-result?id=${id}&lang=en&token=${tok}`, { signal: ctl(10e3) });
+        if (r.ok) { const j = await r.json(); const who = String(j?.user?.screen_name || '').toLowerCase(), txt = String(j?.text || ''); if (who) return who === H && txt.includes(wallet); } } catch {}
+      const r2 = await fetch(`https://publish.twitter.com/oembed?omit_script=1&url=${encodeURIComponent('https://twitter.com/i/status/' + id)}`, { signal: ctl(10e3) });
+      if (!r2.ok) throw new Error('could not read that post — is it public? try again in a minute');
+      const j2 = await r2.json(), who2 = String(j2.author_url || '').split('/').pop().toLowerCase(); return who2 === H && String(j2.html || '').includes(wallet); }
+    const gid = /gist\.github\.com\/(?:[^/]+\/)?([0-9a-f]{20,40})/i.exec(String(url))?.[1]; if (!gid) throw new Error('paste the link to your public gist (gist.github.com/…)');
+    const hd = { 'user-agent': 'treid-indexer', accept: 'application/vnd.github+json', ...(process.env.GITHUB_TOKEN ? { authorization: 'Bearer ' + process.env.GITHUB_TOKEN } : {}) };
+    const r = await fetch('https://api.github.com/gists/' + gid, { headers: hd, signal: ctl(10e3) }); if (!r.ok) throw new Error('could not read that gist — is it public? try again in a minute');
+    const j = await r.json(); return String(j?.owner?.login || '').toLowerCase() === H && Object.values(j.files || {}).some((f) => String(f.content || '').includes(wallet));
+  }
+  async function link({ kind, handle, wallet, url, ts, sig }) {
+    needReady(); fresh(ts); handle = String(handle || '').replace(/^@/, ''); kind = kind === 'x' ? 'x' : kind === 'g' ? 'g' : null; if (!kind) throw new Error('unknown account type');
+    try { new PublicKey(wallet); } catch { throw new Error('connect a wallet first'); }
+    if (!verify(linkMessage(kind, handle, wallet, ts), sig, wallet, ts)) throw new Error('bad signature'); guard('link', wallet, sig);
+    const key = kind + '@' + handle.toLowerCase(), coins = q('SELECT * FROM coins').filter((c) => feeTo(c)?.key === key);
+    if (!coins.length) throw new Error('no treid coin sends its fees to this account');
+    if (lastOf(key, 'hlink')?.extra === wallet) return { ok: true, already: true, coins: coins.length };
+    const now = Date.now(); while (linkHits.length && now - linkHits[0] > 36e5) linkHits.shift(); if (linkHits.length >= 30) throw new Error('too many claims right now — try again in a few minutes');   // each link costs ops one tiny on-chain memo
+    if (!(await proofOk(kind, handle, wallet, url))) throw new Error(kind === 'x' ? `that post isn’t from @${handle} or doesn’t contain your wallet address` : `that gist isn’t owned by ${handle} or doesn’t contain your wallet address`);
+    linkHits.push(now); await withLock(() => stamp(key, 'hlink', 0, wallet));   // on-chain, so it survives any database loss (the ledger rebuild reads it back)
+    coins.forEach((c) => lastDone.delete(c.mint)); log('rewards linked', key, '→', wallet.slice(0, 6), coins.length, 'coin(s)'); return { ok: true, coins: coins.length };
+  }
   async function ctoApply({ mint, wallet, ts, sig, plan }) {
     needReady(); const c = coin(mint), p = cleanPlan(plan); fresh(ts); if (p.length < 10) throw new Error('write a short plan (10+ characters)');
     if (!verify(applyMessage(mint, ts, String(plan || '').slice(0, 240)), sig, wallet, ts) && !verify(applyMessage(mint, ts, p), sig, wallet, ts)) throw new Error('bad signature'); guard('apply', wallet, sig);
@@ -390,6 +432,6 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, q
     run('INSERT OR REPLACE INTO ctovotes VALUES(?,?,?,?,?,?)', mint, e.start, wallet, applicant, Date.now(), sig);   // signed, stored; balances are re-checked every cycle for 24h
     return { ok: true, approved: false };
   }
-  return { rebuild, cycle, state, era, applications, ping, claimNow, ctoApply, ctoVote, liabilities, ready: () => READY,
+  return { rebuild, cycle, state, era, applications, ping, claimNow, ctoApply, ctoVote, link, liabilities, ready: () => READY,
     logFor: (mint) => q(`SELECT sig, kind, lamports, ts, extra FROM rlog WHERE mint=? AND kind NOT IN ('ctoapply','claimx','pay0') ORDER BY ts DESC LIMIT 30`, mint) };
 }
