@@ -5936,3 +5936,10 @@ html,body{overflow-x:clip}
 .rpp-hl{font-size:12px;font-weight:700;color:var(--gold,#E8C77A);margin-right:4px;white-space:nowrap}
 .rpp-more{border-style:dashed!important;color:var(--soft)}
 header{z-index:45}   /* above the callouts rail (40): the wallet / notification menus open over it */
+/* burn-rate card: fixed size whatever period is picked */
+.bh-gauge{min-width:0}
+.bh-gauge .bh-shr small{display:block;min-height:2.7em;line-height:1.35}
+.bh-gauge .bh-dv{width:100%;min-width:0}
+.bh-gauge .bh-dv b,.bh-gauge .bh-mini b,.bh-gauge .bh-mini small{white-space:nowrap;font-variant-numeric:tabular-nums}
+.bh-gauge .bh-avg{display:block;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center}
+.bh-gauge .bh-per button{min-width:34px}
