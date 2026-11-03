@@ -362,7 +362,12 @@
   var DLP = { phantom: { base: 'https://phantom.app/ul/v1/', pk: 'phantom_encryption_public_key', name: 'Phantom', icon: WICON.phantom }, solflare: { base: 'https://solflare.com/ul/v1/', pk: 'solflare_encryption_public_key', name: 'Solflare', icon: WICON.solflare } };
   function dlGet() { try { return JSON.parse(localStorage.getItem('treid.dl') || 'null'); } catch (e) { return null; } }
   function dlPut(o) { try { if (o) localStorage.setItem('treid.dl', JSON.stringify(o)); else localStorage.removeItem('treid.dl'); } catch (e) {} }
-  function dlBack(rid) { return location.origin + location.pathname + '?dlr=' + rid; }
+  // the redirect link also carries what's needed to read the reply (dls), so it works even when the wallet comes back to a fresh tab that can't see this tab's storage (Safari private tabs are isolated)
+  function dlPack(st) { try { var T = window.TreidChain, p = st.pend || {}, o = { v: st.prov, k: st.sk, P: st.pk, w: st.wpk, a: st.account, s: st.session, p: { rid: p.rid, kind: p.kind, ret: p.ret, label: p.label, lvbh: p.lvbh, mint: p.mint, tick: p.tick, side: p.side, after: p.after, cos: (p.cos || []).map(function (x) { return typeof x === 'string' || !T ? x : T.dl.enc(Uint8Array.from(x)); }) } };
+    return btoa(unescape(encodeURIComponent(JSON.stringify(o)))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); } catch (e) { return ''; } }
+  function dlUnpack(z) { try { var o = JSON.parse(decodeURIComponent(escape(atob(z.replace(/-/g, '+').replace(/_/g, '/'))))); if (!o || !o.k || !o.p || !DLP[o.v]) return null;
+    var st = { prov: o.v, sk: o.k, pk: o.P, pend: o.p }; if (o.w) st.wpk = o.w; if (o.a) st.account = o.a; if (o.s) st.session = o.s; return st; } catch (e) { return null; } }
+  function dlBack(rid, st) { var z = st ? dlPack(st) : ''; return location.origin + location.pathname + '?dlr=' + rid + (z ? '&dls=' + z : ''); }
   function dlRid() { return Math.random().toString(36).slice(2, 10); }
   function dlUrl(st, method, params) { return DLP[st.prov].base + method + '?' + Object.keys(params).map(function (k) { return k + '=' + encodeURIComponent(params[k]); }).join('&'); }
   function dlGo(st, method, params) { location.href = dlUrl(st, method, params); }
@@ -376,7 +381,7 @@
   function dlPrep() {
     var T = window.TreidChain; if (!T) { if (!S._dlLoading) { S._dlLoading = true; chainLib().then(function () { S._dlLoading = false; if (S.walletOpen) render(); }).catch(function () { S._dlLoading = false; }); } return; }
     ['phantom', 'solflare'].forEach(function (prov) { if (S.dlPre[prov]) return; var kp = T.dl.keyPair(), rid = dlRid(), st = { prov: prov, sk: kp.sk, pk: kp.pk, pend: { rid: rid, kind: 'connect', ret: location.hash } };
-      S.dlPre[prov] = { st: st, url: dlUrl(st, 'connect', { app_url: location.origin + location.pathname, dapp_encryption_public_key: kp.pk, redirect_link: dlBack(rid), cluster: CLUSTER === 'mainnet' ? 'mainnet-beta' : CLUSTER }) };
+      S.dlPre[prov] = { st: st, url: dlUrl(st, 'connect', { app_url: location.origin + location.pathname, dapp_encryption_public_key: kp.pk, redirect_link: dlBack(rid, st), cluster: CLUSTER === 'mainnet' ? 'mainnet-beta' : CLUSTER }) };
       try { var pre = JSON.parse(localStorage.getItem('treid.dlpre') || '{}'), ks = Object.keys(pre); pre[rid] = st; if (ks.length > 6) delete pre[ks[0]]; localStorage.setItem('treid.dlpre', JSON.stringify(pre)); } catch (e) {} });
   }
   function dlWallet(st) { return { name: DLP[st.prov].name, icon: '', dl: true, features: { 'solana:signTransaction': { signTransaction: function () { return Promise.reject(new Error('use walletSign')); } }, 'solana:signMessage': { signMessage: function (o) { return dlSignMsg(o.message); } } } }; }
@@ -384,7 +389,7 @@
   function dlConnect(prov) {   // tapped before the connect link was ready: build it, then one more tap on a real link (iOS opens the app — not a web page — only from a direct tap)
     var go = function (T) { var kp = T.dl.keyPair(), rid = dlRid(), st = { prov: prov, sk: kp.sk, pk: kp.pk, pend: { rid: rid, kind: 'connect', ret: location.hash } }; dlPut(st);
       try { var pre = JSON.parse(localStorage.getItem('treid.dlpre') || '{}'); pre[rid] = st; localStorage.setItem('treid.dlpre', JSON.stringify(pre)); } catch (e) {}
-      S.walletOpen = false; S.dlTap = { url: dlUrl(st, 'connect', { app_url: location.origin + location.pathname, dapp_encryption_public_key: kp.pk, redirect_link: dlBack(rid), cluster: CLUSTER === 'mainnet' ? 'mainnet-beta' : CLUSTER }), name: DLP[prov].name, prov: prov, label: 'Connect wallet' }; render(); };
+      S.walletOpen = false; S.dlTap = { url: dlUrl(st, 'connect', { app_url: location.origin + location.pathname, dapp_encryption_public_key: kp.pk, redirect_link: dlBack(rid, st), cluster: CLUSTER === 'mainnet' ? 'mainnet-beta' : CLUSTER }), name: DLP[prov].name, prov: prov, label: 'Connect wallet' }; render(); };
     if (window.TreidChain) go(window.TreidChain); else chainLib().then(go);
   }
   // phones without a wallet extension: load the signing library early, so the very first tap on "Phantom" already is a real app link
@@ -393,7 +398,7 @@
     var st = dlGet(), T = window.TreidChain; if (!st || !st.session || !T) return Promise.reject(new Error('Reconnect your wallet'));
     var rid = dlRid(), sealed = T.dl.seal({ transactions: bytes.map(function (x) { return T.dl.enc(x instanceof Uint8Array ? x : Uint8Array.from(x)); }), session: st.session }, st.wpk, st.sk);
     st.pend = { rid: rid, kind: 'tx', label: S.busy || 'Transaction', ret: location.hash, cos: (b && b.cosigners) || [], lvbh: b && b.lastValidBlockHeight, mint: (b && b.mint) || null, tick: S.tick, side: S.side }; dlPut(st);
-    dlTap(st, 'signAllTransactions', { dapp_encryption_public_key: st.pk, nonce: sealed.nonce, redirect_link: dlBack(rid), payload: sealed.payload });
+    dlTap(st, 'signAllTransactions', { dapp_encryption_public_key: st.pk, nonce: sealed.nonce, redirect_link: dlBack(rid, st), payload: sealed.payload });
     return new Promise(function () {});   // the page continues when the wallet sends us back
   }
   function dlSignMsg(message) {
@@ -402,7 +407,7 @@
     if (!st || !st.session || !T) return Promise.reject(new Error('Reconnect your wallet'));
     var rid = dlRid(), sealed = T.dl.seal({ message: T.dl.enc(message), session: st.session, display: 'utf8' }, st.wpk, st.sk);
     st.pend = { rid: rid, kind: 'msg', ret: location.hash, after: after }; dlPut(st);
-    dlTap(st, 'signMessage', { dapp_encryption_public_key: st.pk, nonce: sealed.nonce, redirect_link: dlBack(rid), payload: sealed.payload });
+    dlTap(st, 'signMessage', { dapp_encryption_public_key: st.pk, nonce: sealed.nonce, redirect_link: dlBack(rid, st), payload: sealed.payload });
     return new Promise(function () {});
   }
   // runs before the first route: read the wallet's reply from the URL, put the page back where it was
@@ -413,6 +418,7 @@
     var p = st && st.pend && rid && st.pend.rid === rid ? st.pend : null, pre = {};
     try { pre = JSON.parse(localStorage.getItem('treid.dlpre') || '{}'); } catch (e) {}
     if (!p && rid && pre[rid]) { st = pre[rid]; p = st.pend; }   // the tap handler may not have run before iOS switched apps
+    if (!p && rid && q.get('dls')) { var ds = dlUnpack(q.get('dls')); if (ds && ds.pend.rid === rid) { st = ds; p = ds.pend; } }   // came back to a tab that can't see the one we left (private tab): the link brought the keys
     var cands = p ? [] : [st].concat(Object.keys(pre).map(function (k) { return pre[k]; })).filter(function (x) { return x && x.sk && x.pend; });   // id lost on the way back: the reply can still be opened with whichever key we sent
     var ret = (p && p.ret) || (cands[0] && cands[0].pend && cands[0].pend.ret) || '';
     try { history.replaceState(null, '', location.pathname + ret); } catch (e) {}
@@ -432,7 +438,7 @@
     if (q.get('errorCode')) { if (st.account) dlUse(st); toast(/reject|cancel|4001/i.test(q.get('errorMessage') + q.get('errorCode')) ? 'Cancelled in wallet' : 'Wallet: ' + (q.get('errorMessage') || 'error')); render(); return; }
     chainLib().then(function (T) {
       if (p.kind === 'connect') { var wpk = q.get(DLP[st.prov].pk), d = T.dl.open(q.get('data'), q.get('nonce'), wpk, st.sk); st.wpk = wpk; st.session = d.session; st.account = d.public_key; dlPut(st); dlUse(st); set({ walletOpen: false }); toast(DLP[st.prov].name + ' connected · ' + short(st.account)); return; }
-      var r = T.dl.open(q.get('data'), q.get('nonce'), st.wpk, st.sk); dlUse(st);
+      var r = T.dl.open(q.get('data'), q.get('nonce'), st.wpk, st.sk); dlUse(st); if (p.cos) p.cos = p.cos.map(function (x) { return typeof x === 'string' ? Array.from(T.dl.dec(x)) : x; });
       if (p.kind === 'tx') { S.busy = 'Confirming on-chain…'; render();
         return T.sendAll({ rpc: RPC, signed: T.cosign(r.transactions.map(T.dl.dec), p.cos || []), lastValidBlockHeight: p.lvbh }).then(function () { S.busy = null; toast('✓ ' + String(p.label).replace(/…$/, '') + ' — done'); render(); setTimeout(refreshBalance, 1500);
           [2500, 8000].forEach(function (ms) { setTimeout(function () { var tt = S.screen === 'token' && find(S.tick); if (tt && tt.live) livePos(tt); }, ms); }); })
