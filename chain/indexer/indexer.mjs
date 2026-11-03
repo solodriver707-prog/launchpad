@@ -541,6 +541,15 @@ async function handleReq(req, res) {
   if (p[1] === 'meta' && p[2]) { const m = q1('SELECT * FROM meta WHERE mint=?', p[2]), c = q1('SELECT name, symbol FROM coins WHERE mint=?', p[2]); if (!m && !c) { res.writeHead(404, { 'access-control-allow-origin': '*' }); return res.end('{}'); }
     const base = PUBLIC_URL;
     return J({ name: m?.name || c?.name, symbol: m?.symbol || c?.symbol, description: m?.description || '', image: m?.image ? base + '/api/img/' + p[2] : null, banner: m?.banner ? base + '/api/img/' + p[2] + '?b=1' : null }); }
+  if (p[1] === 'coimg' && p[2]) {   // callout pictures through our server (public IPFS gateways are often slow or blocked) — only pictures that are in a callout
+    const cid = String(p[2]); if (!/^[A-Za-z0-9]{40,70}$/.test(cid)) { res.writeHead(404); return res.end(); }
+    let row = null; try { row = q1('SELECT ct, data FROM cimg WHERE mint=? AND b=0', 'co:' + cid); } catch {}
+    let im = row && row.data ? { ct: row.ct, data: Buffer.from(row.data) } : null;
+    if (!im) { if (!q1("SELECT 1 FROM callouts WHERE img LIKE ? LIMIT 1", '%/ipfs/' + cid + '%')) { res.writeHead(404, { 'access-control-allow-origin': '*' }); return res.end(); }
+      const r = await fetchAny(ipfsUrls('ipfs://' + cid), 20e3), ct = r && String(r.headers.get('content-type') || '').split(';')[0]; const buf = r && /^image\/(png|jpe?g|gif|webp)$/.test(ct) ? await readCapped(r, IMG_MAX) : null;
+      if (!buf) { res.writeHead(404, { 'access-control-allow-origin': '*', 'cache-control': 'public, max-age=60' }); return res.end(); }
+      im = { ct, data: buf }; try { if (imgTotal() + buf.length < IMG_QUOTA) { run('INSERT OR REPLACE INTO cimg(mint,b,ct,data,at) VALUES(?,?,?,?,?)', 'co:' + cid, 0, ct, buf, Date.now()); imgTot.v += buf.length; } } catch {} }
+    res.writeHead(200, { 'content-type': im.ct, 'x-content-type-options': 'nosniff', 'access-control-allow-origin': '*', 'cache-control': 'public, max-age=604800, immutable' }); return res.end(im.data); }
   if (p[1] === 'img' && p[2]) { const ban = u.searchParams.get('b') ? 1 : 0, m = q1('SELECT image, banner FROM meta WHERE mint=?', p[2]), d = ban ? m?.banner : m?.image;
     if (!d || !String(d).startsWith('data:')) { const im = await coinImage(p[2], ban); if (!im) { res.writeHead(404, { 'access-control-allow-origin': '*', 'cache-control': 'public, max-age=300' }); return res.end(); }
       res.writeHead(200, { 'content-type': im.ct, 'x-content-type-options': 'nosniff', 'access-control-allow-origin': '*', 'cache-control': 'public, max-age=604800, immutable' }); return res.end(im.data); }
