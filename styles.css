@@ -6391,3 +6391,23 @@ html body .modal.tpm>.tpm-f{padding-top:6px}
   .hx-nm b{font-size:20px}.hx-mc b{font-size:21px}.hx-av .av{width:50px!important;height:50px!important}
   .hx-spot-in{padding:14px 14px 12px}.hx-ch{margin:0 -14px}
 }
+/* ===== banners: slim 4:1, any landscape picture, drag to position ===== */
+.ident-ban{aspect-ratio:4/1!important;max-height:200px}
+.ident-ban.has-crop{display:block;cursor:default;padding:0}
+.ban-crop{position:relative;width:100%;aspect-ratio:4/1;border-radius:inherit;overflow:hidden;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;background:#0d0d10}
+.ban-crop.drag{cursor:grabbing}
+.ban-crop img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none}
+.ban-hint{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);padding:6px 12px;border-radius:99px;background:rgba(8,8,10,.62);color:#fff;font:700 12px Manrope,sans-serif;pointer-events:none;opacity:.9;transition:opacity .2s;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+.ban-crop.drag .ban-hint,.ban-crop:hover .ban-hint{opacity:0}
+.ban-chg{position:absolute;right:10px;top:10px;z-index:2;padding:5px 11px;border-radius:99px;background:rgba(8,8,10,.7);color:#fff;font:700 11.5px Manrope,sans-serif;cursor:pointer}
+.ident-ban.has-crop{position:relative}
+.ban-edit-btn{position:absolute;left:14px;top:12px;z-index:3;min-height:0;height:28px;padding:0 11px;border-radius:99px;border:1px solid rgba(255,255,255,.18);background:rgba(8,8,10,.6);color:#fff;font:700 12px Manrope,sans-serif;cursor:pointer;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.ban-edit-btn:hover{background:rgba(8,8,10,.8)}
+.modal.ban-m{width:min(720px,calc(100vw - 32px))}
+.ban-m .ban-crop{border-radius:14px}
+.ban-pick{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;aspect-ratio:4/1;border-radius:14px;border:1.5px dashed rgba(255,255,255,.18);background:rgba(255,255,255,.02);cursor:pointer;color:var(--soft)}
+.ban-pick:hover{border-color:rgba(216,195,160,.6)}
+.ban-pick small{font-size:11.5px;color:var(--muted)}
+@media (min-width:761px){html body main.tp-env .tp-main section.tp-banner:has(.tb-bg.ban){aspect-ratio:4/1!important;max-height:max(230px,32vh)!important}}
+@media (min-width:761px){html body main.tp-env .tp-main section.tp-banner .ban-edit-btn{grid-area:auto}}
+html body .modal.tpm.ban-m{width:min(720px,calc(100vw - 32px))!important;max-width:none!important}

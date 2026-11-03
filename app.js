@@ -2297,6 +2297,10 @@
     return '<div class="overlay center" data-act="tpFltX"><div class="modal tpm" data-stop role="dialog" aria-label="' + esc(title) + '"><div class="tpm-h"><b>' + title + '</b><button class="iconbtn" data-act="tpFltX" aria-label="Close">✕</button></div>' + body +
       (k === 'type' ? '' : '<div class="tpm-f"><button class="btn pri" data-act="tpApply">✓ Apply</button><button class="btn sec" data-act="tpClear">Clear</button></div>') + '</div></div>';
   }
+  function banEditModal(t) { var B = S.banEdit; if (!B) return '';
+    return '<div class="overlay center" data-act="tpFltX"><div class="modal tpm ban-m" data-stop role="dialog" aria-label="Change banner"><div class="tpm-h"><b>' + (t.banner ? 'Change' : 'Add') + ' banner · $' + esc(symOf(t)) + '</b><button class="iconbtn" data-act="banEditX" aria-label="Close">✕</button></div>' +
+      (B.src ? banFrame(B, 'ban-edit') + '<small class="muted">Drag the picture to choose what shows. Saved as a slim 4:1 banner (1600×400).</small>' : '<label class="ban-pick" for="c-banedit">' + I.up + '<b>Choose a picture</b><small>any landscape image · PNG, JPG or WEBP · up to 4 MB</small></label>') +
+      '<div class="tpm-f">' + (B.src ? '<label class="btn sec" for="c-banedit">Choose another</label><button class="btn pri" data-act="banEditSave"' + (B.out && !B.busy ? '' : ' disabled') + '>' + (B.busy ? 'Saving…' : 'Sign & save') + '</button>' : '<button class="btn sec" data-act="banEditX">Cancel</button>') + '</div></div></div>'; }
   function tpChips() { var c = [], sid = function () { var t = find(S.tick); return t ? '$' + symOf(t) : 'tokens'; };
     if (S.tpFilter !== 'all') c.push(['type', { buy: 'Buys', sell: 'Sells', whale: 'Whales', mine: 'Mine' }[S.tpFilter]]);
     if (S.tpMaker) c.push(['maker', 'Trader ' + short(S.tpMaker)]);
@@ -3035,7 +3039,7 @@
     tt.forEach(function (x) { if (x.side === 'buy') { nb++; vb += x.sol; } else { ns++; vs += x.sol; } });
     var q = quoteFor(t), pos = position(t), tmax = Math.max(t.buy, t.sell);
     var curveSol = t.live ? (liqK(t) * 1000 / qUsdT(t)).toFixed(2) : (t.prog / 100 * 85).toFixed(2);
-    var head = '<section class="card-s tp-head2 tp-banner"><div class="tb-bg' + (t.banner ? ' ban' : '') + '" aria-hidden="true">' + (t.banner ? '<img src="' + esc(t.banner) + '" alt="">' : avatarHTML(t, 420)) + '</div><div class="tb-av">' + avatarHTML(t, 104) + '</div>' +
+    var head = '<section class="card-s tp-head2 tp-banner"><div class="tb-bg' + (t.banner ? ' ban' : '') + '" aria-hidden="true">' + (t.banner ? '<img src="' + esc(t.banner) + '" alt="">' : avatarHTML(t, 420)) + '</div>' + (t.live && S.account && S.account === t.creator ? '<button class="ban-edit-btn" data-act="banEditOpen">✎ ' + (t.banner ? 'Change banner' : 'Add banner') + '</button>' : '') + '<div class="tb-av">' + avatarHTML(t, 104) + '</div>' +
       '<div class="tp-id"><div class="title-xl" style="margin:0;font-size:30px">' + esc(t.name) + ' <span class="tk">$' + sid + '</span>' + crBadge(t) + '</div>' + msBadges(t, 'lg') + (t.archived ? '<div class="arch-note ' + t.archived + '">' + (t.archived === 'rug' ? '⚠ Past coin · dev sold after ' + durH(t.devSoldAfter) : t.archived === 'dead' ? '💤 Past coin · inactive, faded on the curve' : '🎓 Past coin · graduated') + '</div>' : '') +
         '<div class="hs-pills" style="margin-top:8px"><button class="pill copy2" data-act="ca" data-arg="' + id + '">CA ' + esc(short(t.ca)) + ' ' + I.copy + '</button><span class="pill" style="padding-left:11px">created <span data-t="' + t.born + '">&nbsp;' + ago(t.born) + '</span>&nbsp;ago by&nbsp;' + makerHTML(devOf(t), t) + '</span>' +
         socialsHTML(t, true, true) +
@@ -3169,7 +3173,7 @@
       '<span class="muted" style="font-size:12.5px;line-height:1.55">' + (t.prog >= 100 ? 'Liquidity is live on Meteora.' : curveSol + ' ' + esc(qSymT(t)) + ' in the curve. Graduates to Meteora at 100%.') + '</span></section>';
     var mbuy = '<div class="m-bar"><button class="m-b" data-act="mSide" data-arg="buy">Buy</button><button class="m-s" data-act="mSide" data-arg="sell">Sell</button><span class="m-tx mono">' + (trapLeft(t) > 0 ? '🪤 ' + snipeNow(t) + '%' : 'tax ' + tmax + '%') + '</span></div>';
     return mbuy + '<main class="wrap tp-env" style="padding-top:14px;--coin:' + ((t.spec && t.spec.bg) || '#2A2418') + '"><div class="tp-glow" aria-hidden="true">' + avatarHTML(t, 300) + '</div><button class="link" data-act="home">' + I.back + 'Back to board</button>' +
-      '<div class="tp-grid3">' + thread + '<div class="tp-main">' + head + vampWarn + kstats + chart + tabsHTML + '</div><aside class="tp-side">' + panel + posCard + activity + (t.desc ? '<section class="card-s panel about-b"><div class="ab-h">' + avatarHTML(t, 26) + '<b>About $' + sid + '</b></div><p class="ab-t' + (t.desc.length > 220 && !S.descOpen ? ' clamp' : '') + '">' + esc(t.desc) + '</p>' + (t.desc.length > 220 ? '<button class="ab-more" data-act="descToggle">' + (S.descOpen ? 'Show less' : 'Show more') + '</button>' : '') + '</section>' : '') + taxSplitPanel(t) + crPanel(t) + safety + curve + '</aside></div></main>';
+      '<div class="tp-grid3">' + thread + '<div class="tp-main">' + head + banEditModal(t) + vampWarn + kstats + chart + tabsHTML + '</div><aside class="tp-side">' + panel + posCard + activity + (t.desc ? '<section class="card-s panel about-b"><div class="ab-h">' + avatarHTML(t, 26) + '<b>About $' + sid + '</b></div><p class="ab-t' + (t.desc.length > 220 && !S.descOpen ? ' clamp' : '') + '">' + esc(t.desc) + '</p>' + (t.desc.length > 220 ? '<button class="ab-more" data-act="descToggle">' + (S.descOpen ? 'Show less' : 'Show more') + '</button>' : '') + '</section>' : '') + taxSplitPanel(t) + crPanel(t) + safety + curve + '</aside></div></main>';
   }
   // give seeded trades real makers / prices
   S.trades.forEach(function (tr) { var t = find(tr.tick); tr.wallet = pickWallet(); tr.price = t ? price(t) * (1 + (Math.random() - 0.5) * 0.12) : 0; tr.tokens = tr.sol * SOL_USD / (tr.price || 1); tr.sig = b58(64); });
@@ -3941,7 +3945,7 @@
       '<div class="create-grid">' +
         '<section class="card-s panel" style="flex:999 1 520px;min-width:0;display:flex;flex-direction:column;gap:20px;padding:24px">' +
           '<div class="fsec"><i>1</i>Identity</div>' +
-          '<div class="ident"><label class="ident-ban' + (c.banner ? ' has' : '') + '" for="c-banner" data-drop="banner">' + (c.banner ? '<img src="' + esc(c.banner) + '" alt="">' : '<span class="ib-ph">' + I.up + '<b>Add a banner</b><small>3:1 · e.g. 1500×500 · recommended</small></span>') + '</label>' +
+          '<div class="ident">' + (c.banner && c.banSrc ? '<div class="ident-ban has-crop">' + banFrame({ src: c.banSrc, x: c.banX, y: c.banY }, 'ban-c') + '<label class="ban-chg" for="c-banner">Change</label></div>' : '<label class="ident-ban' + (c.banner ? ' has' : '') + '" for="c-banner" data-drop="banner">' + (c.banner ? '<img src="' + esc(c.banner) + '" alt="">' : '<span class="ib-ph">' + I.up + '<b>Add a banner</b><small>any landscape picture · you can drag it into place</small></span>') + '</label>') +
             '<label class="ident-logo' + (c.img ? ' has' : '') + '" for="c-img" data-drop="img">' + (c.img ? '<img src="' + esc(c.img) + '" alt="">' : '<span class="il-ph">' + I.up + '<b>Logo</b></span>') + '</label>' +
             '<div class="ident-meta"><b>' + esc(c.name || 'Your coin') + '</b><span class="mono">$' + esc(c.tick || 'TICKER') + '</span></div>' +
             '<div class="ident-acts">' + (c.img ? '<button class="link" data-act="clearImg">Remove logo</button>' : '<span class="req">logo required</span>') + (c.banner ? '<button class="link" data-act="clearBanner">Remove banner</button>' : '') + '</div></div>' +
@@ -4568,7 +4572,15 @@
       case 'spec': var k = el.getAttribute('data-k'), spc = {}; for (var x in S.c.spec) spc[x] = S.c.spec[x]; spc[k] = arg; setC({ spec: spc }); break;
       case 'randomLogo': setC({ img: null, spec: { kind: pick(A.KINDS), skin: pick(A.SKINS), bg: pick(A.BGS), eyes: pick(A.EYES), mouth: pick(A.MOUTHS), acc: pick(A.ACCS) } }); break;
       case 'clearImg': setC({ img: null }); break;
-      case 'clearBanner': setC({ banner: null }); break;
+      case 'clearBanner': setC({ banner: null, banSrc: null }); break;
+      case 'banEditOpen': set({ banEdit: { open: true } }); break;
+      case 'banEditX': set({ banEdit: null }); break;
+      case 'banEditSave': (function () { var tk = find(S.tick), B = S.banEdit; if (!tk || !B || !B.out || !S.wallet) { if (!S.wallet) set({ walletOpen: true }); return; } var fsg = S.wallet.features['solana:signMessage']; if (!fsg) { toast('This wallet can’t sign messages — try Phantom or Solflare'); return; }
+        var ts0 = Date.now(), msg = 'treid: set banner — ' + tk.ca + ' — ' + ts0; B.busy = true; render();   // must match the server's message
+        Promise.resolve(fsg.signMessage({ account: S.walletAcc, message: new TextEncoder().encode(siteMsg(msg)) })).then(function (r) { var sg = (Array.isArray(r) ? r[0] : r).signature; return chainLib().then(function (T) {
+          return fetch(API + '/api/banner', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mint: tk.ca, wallet: S.account, ts: ts0, sig: T.b58(sg), image: B.out }) }).then(function (x) { return x.json(); }); }); })
+          .then(function (j) { if (!j || !j.ok) throw new Error((j && j.error) || 'failed'); tk.banner = B.out; tk._banV = j.v; S.banEdit = null; toast('Banner updated ✓', tk); render(); })
+          .catch(function (e) { if (S.banEdit) S.banEdit.busy = false; render(); toast(chainErr(e)); }); })(); break;
       case 'cpair': setC({ pair: arg }); break;
       case 'burnPage': burnsLoad(); set({ screen: 'burn', palOpen: false, coOpen: false }); window.scrollTo(0, 0); break;
       case 'lsort': if (S.lsort === arg) S.ldir = -S.ldir; else { S.lsort = arg; S.ldir = -1; } render(); break;
@@ -4667,7 +4679,7 @@
       case 'txOpen': break;   // a plain link to Solscan (opens in a new tab)
       case 'tpSort': { var cur = S.tpSort; set({ tpSort: cur && cur.k === arg ? (cur.d < 0 ? { k: arg, d: 1 } : null) : { k: arg, d: -1 } }); break; }   // biggest first → smallest first → off
       case 'tpFlt': set({ tpFlt: arg }); setTimeout(function () { var i = document.getElementById(arg === 'maker' ? 'tpm-w' : 'tpm-min'); if (i) i.focus(); }, 40); break;
-      case 'tpFltX': if (e.target === el || el.tagName === 'BUTTON') set({ tpFlt: null }); break;
+      case 'tpFltX': if (e.target === el || el.tagName === 'BUTTON') set({ tpFlt: null, banEdit: S.banEdit && S.banEdit.busy ? S.banEdit : null }); break;
       case 'tpType': set({ tpFilter: arg, tpFlt: null, tpQueue: 0 }); break;
       case 'tpMe': set({ tpMaker: S.account, tpFlt: null }); break;
       case 'tpPre': S.tpF[S.tpFlt] = { min: +arg }; set({ tpFlt: null }); break;
@@ -4946,6 +4958,20 @@
     var o = {}; o[key] = v; if (key === 'palQ') o.palIdx = 0; set(o);
   });
 
+  // banners are slim (4:1): any landscape picture works — the creator drags it into place, and exactly that frame is saved
+  var BAN_W = 1600, BAN_H = 400;
+  function banCrop(o, cb) { var im = new Image(); im.onload = function () { var cv = document.createElement('canvas'), x = cv.getContext('2d'); cv.width = BAN_W; cv.height = BAN_H; var sc = Math.max(BAN_W / im.width, BAN_H / im.height), dw = im.width * sc, dh = im.height * sc;
+    x.drawImage(im, (BAN_W - dw) * (o.x / 100), (BAN_H - dh) * (o.y / 100), dw, dh); var d = cv.toDataURL('image/webp', .86); if (d.length > 1000000) d = cv.toDataURL('image/jpeg', .8); cb(d); }; im.src = o.src; }
+  function banFrame(o, id) { return '<div class="ban-crop" id="' + id + '" data-ban="' + id + '"><img src="' + esc(o.src) + '" alt="" draggable="false" style="object-position:' + o.x + '% ' + o.y + '%"><span class="ban-hint">✥ Drag to position</span></div>'; }
+  // drag inside the frame moves the picture (object-position), the saved crop is made when you let go
+  (function () { var d = null;
+    document.addEventListener('pointerdown', function (e) { var f = e.target.closest && e.target.closest('.ban-crop'); if (!f) return; var o = f.id === 'ban-edit' ? S.banEdit : { x: S.c.banX, y: S.c.banY, src: S.c.banSrc }; if (!o) return; var im = f.querySelector('img'), r = f.getBoundingClientRect();
+      var nw = (f.id === 'ban-edit' ? S.banEdit.w : S.c.banW) || r.width, nh = (f.id === 'ban-edit' ? S.banEdit.h : S.c.banH) || r.height, sc = Math.max(r.width / nw, r.height / nh);
+      d = { f: f, im: im, o: o, sx: e.clientX, sy: e.clientY, x0: o.x, y0: o.y, ox: nw * sc - r.width, oy: nh * sc - r.height }; f.classList.add('drag'); try { f.setPointerCapture(e.pointerId); } catch (er) {} e.preventDefault(); });
+    document.addEventListener('pointermove', function (e) { if (!d) return; var nx = d.ox > 1 ? d.x0 - (e.clientX - d.sx) / d.ox * 100 : 50, ny = d.oy > 1 ? d.y0 - (e.clientY - d.sy) / d.oy * 100 : 50;
+      d.o.x = Math.max(0, Math.min(100, nx)); d.o.y = Math.max(0, Math.min(100, ny)); d.im.style.objectPosition = d.o.x.toFixed(1) + '% ' + d.o.y.toFixed(1) + '%'; });
+    document.addEventListener('pointerup', function () { if (!d) return; var dd = d; d = null; dd.f.classList.remove('drag');
+      if (dd.f.id === 'ban-edit') banCrop(S.banEdit, function (u) { S.banEdit.out = u; }); else { S.c.banX = dd.o.x; S.c.banY = dd.o.y; banCrop({ src: S.c.banSrc, x: dd.o.x, y: dd.o.y }, function (u) { S.c.banner = u; }); } }); })();
   function loadMedia(f, kind) {
     if (!f) return;
     if (!/^image\/(png|jpeg|gif|webp)$/.test(f.type) && !(!f.type && /\.(png|jpe?g|jfif|gif|webp)$/i.test(f.name || ''))) { toast('Use PNG, JPG, GIF or WEBP'); return; }
@@ -4954,7 +4980,10 @@
     r.onload = function () {
       var im = new Image();
       im.onload = function () {
-        var W = kind === 'img' ? 400 : 1500, H = kind === 'img' ? 400 : 500, cv = document.createElement('canvas'), x = cv.getContext('2d');
+        if (kind === 'banner' || kind === 'banEdit') { var mx = 2400, sc0 = Math.min(1, mx / im.width), cv0 = document.createElement('canvas'); cv0.width = Math.round(im.width * sc0); cv0.height = Math.round(im.height * sc0); cv0.getContext('2d').drawImage(im, 0, 0, cv0.width, cv0.height);
+          var src = cv0.toDataURL('image/webp', .9); if (kind === 'banEdit') { S.banEdit = { src: src, x: 50, y: 50, w: cv0.width, h: cv0.height }; banCrop(S.banEdit, function (d) { S.banEdit.out = d; render(); }); return; }
+          S.c.banSrc = src; S.c.banX = 50; S.c.banY = 50; S.c.banW = cv0.width; S.c.banH = cv0.height; banCrop({ src: src, x: 50, y: 50 }, function (d) { setC({ banner: d }); }); return; }
+        var W = 400, H = 400, cv = document.createElement('canvas'), x = cv.getContext('2d');
         cv.width = W; cv.height = H;
         var sc = Math.max(W / im.width, H / im.height), dw = im.width * sc, dh = im.height * sc;
         x.drawImage(im, (W - dw) / 2, (H - dh) / 2, dw, dh);
@@ -4967,10 +4996,11 @@
     r.readAsDataURL(f);
   }
   // the logo / banner file inputs live OUTSIDE the re-rendered page: a live update while the file picker is open used to replace them, and the pick was lost
-  ['c-img', 'c-banner'].forEach(function (id) { if (document.getElementById(id)) return; var i = document.createElement('input'); i.type = 'file'; i.id = id; i.accept = 'image/png,image/jpeg,image/gif,image/webp'; i.className = 'sr'; i.style.cssText = 'position:fixed;left:-9999px;width:1px;height:1px;opacity:0'; document.body.appendChild(i); });
+  ['c-img', 'c-banner', 'c-banedit'].forEach(function (id) { if (document.getElementById(id)) return; var i = document.createElement('input'); i.type = 'file'; i.id = id; i.accept = 'image/png,image/jpeg,image/gif,image/webp'; i.className = 'sr'; i.style.cssText = 'position:fixed;left:-9999px;width:1px;height:1px;opacity:0'; document.body.appendChild(i); });
   document.addEventListener('change', function (e) {
     if (e.target.id === 'c-img') { loadMedia(e.target.files && e.target.files[0], 'img'); e.target.value = ''; }   // cleared: picking the same file again works too
     if (e.target.id === 'c-banner') { loadMedia(e.target.files && e.target.files[0], 'banner'); e.target.value = ''; }
+    if (e.target.id === 'c-banedit') { loadMedia(e.target.files && e.target.files[0], 'banEdit'); e.target.value = ''; }
     if (e.target.id === 'dimg-in') demoImgsAdd(e.target.files);
   });
   document.addEventListener('dragover', function (e) { var d = e.target.closest && e.target.closest('[data-drop]'); if (!d) return; e.preventDefault(); d.classList.add('over'); });
@@ -5614,7 +5644,8 @@
     if (c.uri && !t._uri) { t._uri = 1; var pu = parseUri(c.uri); if (pu.spec) t.spec = pu.spec; if (pu.split && !t._splitSrv) t.split = pu.split; if (pu.rw) t.rw = pu.rw;
       if (pu.x || pu.t || pu.w) { t.soc = true; t.links = { demo: false, x: pu.x ? xLink(pu.x) : null, tg: pu.t ? tgLink(pu.t) : null, web: pu.w ? linkOf(pu.w) : null }; }
       if (!t.img && API) t.img = API + '/api/img/' + c.mint;   // served + cached by our server (IPFS gateways are slow)
-      if (!t.banner && API && !t._banProbe) { t._banProbe = 1; var bi = new Image(); bi.onload = function () { if (bi.naturalWidth > 0 && !t.banner) { t.banner = bi.src; if (S.screen === 'token' && S.tick === t.tick) render(); } }; bi.src = API + '/api/img/' + c.mint + '?b=1'; }   /* the banner through our server too: no banner shown only when there really is none */
+      if (API && (c.banner_v || 0) !== (t._banV || 0)) { t._banV = c.banner_v || 0; t._banProbe = 0; if (c.banner_v) t.banner = null; }   // the creator changed the banner: load the new one
+      if (!t.banner && API && !t._banProbe) { t._banProbe = 1; var bi = new Image(); bi.onload = function () { if (bi.naturalWidth > 0 && !t.banner) { t.banner = bi.src; if (S.screen === 'token' && S.tick === t.tick) render(); } }; bi.src = API + '/api/img/' + c.mint + '?b=1' + (c.banner_v ? '&v=' + c.banner_v : ''); }   /* the banner through our server too: no banner shown only when there really is none */
       if (!t.img) { try { var cimg = safeImg(localStorage.getItem('dl.img.' + c.mint)); if (cimg) t.img = cimg; } catch (e) {} }
       var viaApi = function () { return API ? apiGet('/api/meta/' + c.mint) : Promise.reject(); };
       (trustedMeta(c.uri) ? fetch(c.uri.split('?')[0]).then(function (r) { if (!r.ok) throw new Error('meta ' + r.status); return r.json(); }).catch(viaApi) : viaApi()).then(function (m) { var ch = false; if (m && safeImg(m.image)) { try { localStorage.setItem('dl.img.' + c.mint, safeImg(m.image)); } catch (e) {} } if (m && safeImg(m.image) && !t.img) { t.img = safeImg(m.image); ch = true; } if (m && m.description && !t.desc) { t.desc = m.description; ch = true; } if (m && safeImg(m.banner) && !t.banner) { t.banner = API ? API + '/api/img/' + c.mint + '?b=1' : safeImg(m.banner); ch = true; } if (ch) render(); }).catch(function () { setTimeout(function () { t._uri = 0; }, 15000); }); }
