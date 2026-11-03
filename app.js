@@ -520,7 +520,7 @@
   function warnTag(w) {   // issuer powers in one short line; the full list opens on click (regulated tokens — USDC, xStocks — all have some)
     if (/^Its issuer can freeze accounts/.test(w) && w.indexOf(' · ') < 0) return '<small class="rpp-st">ⓘ ' + esc(w) + '</small>';
     var items = w.split(/ · |; | — /).map(function (x) { return x.trim(); }).filter(function (x) { return x && !/^Meteora-approved pair$/.test(x); }), mApp = /Meteora-approved/.test(w);
-    var serious = items.some(function (x) { return /move tokens from any account|transfer hook/.test(x); });
+    var serious = !mApp && items.some(function (x) { return /move tokens from any account|transfer hook/.test(x); });   // Meteora-approved regulated tokens (xStocks, PreStocks) all work this way: a note, not an alarm
     return '<details class="rpp-st rpp-det' + (serious ? ' warn' : '') + '"><summary>' + (serious ? '⚠ ' : 'ⓘ ') + 'Issuer-controlled token' + (mApp ? ' · Meteora-approved' : '') + ' <span class="muted">— what that means</span></summary><ul>' + items.map(function (x) { return '<li>' + esc(x.charAt(0).toUpperCase() + x.slice(1)) + '</li>'; }).join('') + '</ul></details>'; }   // a plain freeze authority (USDC, cbBTC…) is a note, not an alarm
   function rewardPick(c) {
     if (!(c.buy > 0 || c.sell > 0) || !c.split) return '';
