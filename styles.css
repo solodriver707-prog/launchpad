@@ -6551,3 +6551,6 @@ html body .fx-l.fx-r{-webkit-mask-image:linear-gradient(90deg,transparent,#000 3
 .ar-pr b{font-size:15px!important;line-height:1.1}
 @media (max-width:760px){.ar-kv{gap:10px 14px!important}.ar-tx b{font-size:16px!important}.ar-pr b{font-size:13px!important}}
 .ar-kv>.ar-tx,.ar-kv>.ar-pr{height:46px;box-sizing:border-box}
+.ar-kv>.ar-tx{height:auto;min-height:46px}
+.ar-tx .spbar.mini{flex:none!important;height:6px!important;min-width:56px;margin-top:4px;background:rgba(0,0,0,.25);padding:1px;border-radius:99px}
+.ar-tx .spbar.mini i{display:block;height:100%}
