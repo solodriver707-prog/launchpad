@@ -184,8 +184,8 @@ export async function buildSwap({ rpc, owner, pool, side, amount, slippageBps = 
   return { ...out, quote: q };
 }
 // ONE transaction for a coin paired with something other than SOL: pay with SOL / receive SOL, like stonk.fun.
-// buy:  Jupiter SOL → pair token, then the curve buy with 99.7% of what Jupiter quotes (if Jupiter delivers less, the whole tx fails — nothing half-done)
-// sell: the curve sell, then Jupiter pair token → SOL with 99.7% of what the curve quotes (same all-or-nothing)
+// buy:  Jupiter SOL → pair token, then the curve buy with 99.85% of what Jupiter quotes (if Jupiter delivers less, the whole tx fails — nothing half-done)
+// sell: the curve sell, then Jupiter pair token → SOL with 99.85% of what the curve quotes (same all-or-nothing)
 const jIx = (x) => new TransactionInstruction({ programId: pk(x.programId), keys: x.accounts.map((a) => ({ pubkey: pk(a.pubkey), isSigner: a.isSigner, isWritable: a.isWritable })), data: Buffer.from(x.data, 'base64') });
 const isCB = (ix) => ix.programId.equals(ComputeBudgetProgram.programId);
 export async function buildSolSwap({ rpc, owner, pool, side, amount, slippageBps = 500, expect = null, jup, referral = null }) {
@@ -194,10 +194,10 @@ export async function buildSolSwap({ rpc, owner, pool, side, amount, slippageBps
     if (!r || !r.outAmount || r.inputMint !== inM || r.outputMint !== outM) throw new Error('No Jupiter route between SOL and this pair right now — try again in a moment'); return r; };
   let jQuote, q, dbcTx;
   if (!sell) { const lam = Math.floor(amount * 1e9); if (!(lam > 0)) throw new Error('Enter an amount first');
-    jQuote = await jq(SOLM, qm, lam); const pairIn = BigInt(jQuote.outAmount) * 997n / 1000n;
+    jQuote = await jq(SOLM, qm, lam); const pairIn = BigInt(jQuote.outAmount) * 9985n / 10000n;
     q = await quote({ rpc, pool, side: 'buy', amount: Number(pairIn) / 10 ** qd, slippageBps, expect });
     dbcTx = await cl.pool.swap2({ owner, pool: pk(pool), swapBaseForQuote: false, referralTokenAccount: null, swapMode: q.mode, amountIn: new BN(q.amountIn), minimumAmountOut: new BN(q.minRaw) }); }
-  else { q = await quote({ rpc, pool, side: 'sell', amount, slippageBps, expect }); const pairOut = BigInt(Math.floor(q.out * 10 ** qd)) * 997n / 1000n; if (pairOut <= 0n) throw new Error('Amount too small');
+  else { q = await quote({ rpc, pool, side: 'sell', amount, slippageBps, expect }); const pairOut = BigInt(Math.floor(q.out * 10 ** qd)) * 9985n / 10000n; if (pairOut <= 0n) throw new Error('Amount too small');
     dbcTx = await cl.pool.swap2({ owner, pool: pk(pool), swapBaseForQuote: true, referralTokenAccount: null, swapMode: q.mode, amountIn: new BN(q.amountIn), minimumAmountOut: new BN(q.minRaw) });
     jQuote = await jq(qm, SOLM, pairOut.toString()); }
   const ji = await (await fetch(jup + '/swap-instructions', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ quoteResponse: jQuote, userPublicKey: owner.toBase58(), wrapAndUnwrapSol: true }) })).json();
