@@ -2094,14 +2094,6 @@
       else { cur.h = Math.max(cur.h, x[1]); cur.l = Math.min(cur.l, x[1]); cur.c = x[1]; }
       cur.v += x[2] || 0; prevC = x[1]; if (x[3] > 0) prevR = x[3]; }
     if (cur) out.push(cur);
-    // empty minutes are real time too: fill them with flat candles (no trades = price unchanged) up to now, like pump.fun —
-    // otherwise every timeframe shows the same few candles side by side and changing 1m / 5m / 1h looks like it does nothing
-    if (out.length) { var CAP = 2500, end = Math.floor(Date.now() / b) * b, from = Math.max(out[0].t, end - CAP * b), full = [];
-      for (var j = 0; j < out.length; j++) { var bj = out[j], pv = full[full.length - 1];
-        if (pv && bj.t >= from) for (var ft = Math.max(pv.t + b, from); ft < bj.t; ft += b) full.push({ t: ft, o: pv.c, h: pv.c, l: pv.c, c: pv.c, v: 0, fill: 1 });
-        full.push(bj); }
-      var lb = full[full.length - 1]; for (var ft2 = lb.t + b; ft2 <= end; ft2 += b) full.push({ t: ft2, o: lb.c, h: lb.c, l: lb.c, c: lb.c, v: 0, fill: 1 });
-      out = full; }
     return out;
   }
   function lwEnsure() {
@@ -2177,8 +2169,7 @@
     var nReal = bars.filter(function (x) { return !x.fill; }).length, hw = (LW.host && LW.host.clientWidth) || 0;
     if (!fresh && LW.fit && LW.fit.view === view && (LW.fit.w === 0 && hw > 0 || LW.fit.n <= 2 && nReal > 2)) fresh = true;   // first fit happened before the trades loaded / before the chart had a size → fit again once
     if (fresh) LW.fit = { view: view, w: hw, n: nReal };
-    if (fresh) { var tsc = LW.chart.timeScale(), fw = hw || 800, fb = Math.max(1, bars.length + 8);
-      if (fw / fb >= 2.5 && fw / fb < 9) { tsc.applyOptions({ barSpacing: fw / fb }); tsc.fitContent(); } else { tsc.applyOptions({ barSpacing: Math.max(2.5, Math.min(9, fw / fb)) }); tsc.scrollToRealTime(); }   /* a young coin's whole life fits on screen (up to the thinnest readable candle) */ LW.chart.priceScale('right').applyOptions({ autoScale: true }); }
+    if (fresh) { var tsc = LW.chart.timeScale(); tsc.applyOptions({ barSpacing: 9 }); tsc.scrollToRealTime(); requestAnimationFrame(function () { if (LW.chart) LW.chart.timeScale().scrollToRealTime(); }); LW.chart.priceScale('right').applyOptions({ autoScale: true }); }
     lwLegend(null);
   }
   function lwLegend(bar) {
