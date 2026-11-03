@@ -5438,7 +5438,7 @@
     Promise.all([apiGet('/api/trades/' + t.ca), apiGet('/api/holders/' + t.ca).catch(function () { return null; }), apiGet('/api/coin/' + t.ca)]).then(function (res) {
       var rows = res[0].slice().reverse(); liveTok(res[2]);
       S.trades = S.trades.filter(function (x) { return x.tick !== t.tick; });
-      rows.forEach(function (x) { S.trades.push({ tick: t.tick, usd: Number(x.usd) || 0, side: x.side === 'sell' ? 'sell' : 'buy', sol: Number(x.sol) || 0, wallet: String(x.wallet), t: Number(x.ts) || 0, tax: x.fee_sol, mine: !!(S.account && x.wallet === S.account), price: x.price_usd, sig: x.sig, tokens: x.tokens, sniper: x.sniper, bundle: x.bundle, real: true }); });
+      rows.forEach(function (x) { S.trades.push({ tick: t.tick, slot: Number(x.slot) || 0, usd: Number(x.usd) || 0, side: x.side === 'sell' ? 'sell' : 'buy', sol: Number(x.sol) || 0, wallet: String(x.wallet), t: Number(x.ts) || 0, tax: x.fee_sol, mine: !!(S.account && x.wallet === S.account), price: x.price_usd, sig: x.sig, tokens: x.tokens, sniper: x.sniper, bundle: x.bundle, real: true }); });
       S.trades.sort(function (a, b) { return b.t - a.t || (b.slot || 0) - (a.slot || 0); });   // same second: the later block first (the order things really happened)
       t.tk = rows.length ? [[t.born, rows[0].mcap_usd / 1000, 0]].concat(rows.map(function (x) { return [x.ts, x.mcap_usd / 1000, x.sol, x.sol > 0 && x.usd > 0 ? x.usd / x.sol : 0]; })) : [[t.born, t.mcN, 0], [Date.now(), t.mcN, 0]];
       t.tk.push([Date.now(), t.mcN, 0]); t.hist = t.tk.slice(-160).map(function (x) { return x[1]; });
