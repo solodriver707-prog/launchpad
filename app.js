@@ -3799,7 +3799,7 @@
     lock: SVI('<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>')
   };
   var SPRE = { community: ['community', 'Community', 70, 20, 10], deflation: ['deflation', 'Deflation', 20, 70, 10], balanced: ['balanced', 'Balanced', 40, 30, 30] };
-  var SPC = { h: ['#5CC8FF', 'holders', 'Holders', 'linear-gradient(90deg,#3B82F6,#5CC8FF)'], b: ['#FF8A4C', 'burn', 'Burn', 'linear-gradient(90deg,#FF4D2E,#FFB547)'], d: ['#E6CB95', 'dev', 'Dev', 'linear-gradient(90deg,#B08D57,#F1DDB0)'] };
+  var SPC = { h: ['#7FB6FF', 'holders', 'Holders', 'linear-gradient(90deg,#5E9BFF,#A9CEFF)'], b: ['#3DDC97', 'burn', 'Burn', 'linear-gradient(90deg,#22B87A,#6FF0B8)'], d: ['#F5B14C', 'dev', 'Dev', 'linear-gradient(90deg,#E8962A,#FFD28A)'] };   // same colours as the Burnery (holders blue · burns green · devs orange)
   function splitOf(t) {
     if (!t || Math.max(t.buy || 0, t.sell || 0) <= 0) return null;
     if (t.split) return t.split;
