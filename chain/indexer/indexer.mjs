@@ -702,9 +702,14 @@ async function start() {
   // orphan pools: a pool on a treid config whose coin isn't indexed (e.g. skipped by an older rule) — add it and replay its history once
   const orphans = async () => { for (const k of [...configs]) { let ps = []; try { ps = await dbc.state.getPoolsByConfig(k); } catch { continue; }
     for (const p of ps) { const st = p.account?.poolState || p.account, mint = st?.baseMint?.toBase58?.(); if (!mint || q1('SELECT 1 FROM coins WHERE mint=?', mint)) continue;
-      const r = await addCoin(mint, 0, 0, null, p.publicKey.toBase58()).catch(() => 'retry'); if (r !== true) continue; console.log('orphan pool indexed', mint);
+      const r = await addCoin(mint, 0, 0, null, p.publicKey.toBase58()).catch(() => 'retry'); if (r !== true) continue; console.log('orphan pool indexed', mint); await quotePrices().catch(() => {});   // its pair price first, so the replayed trades get USD values
       let before; for (let i = 0; i < 10; i++) { const pg = await conn.getSignaturesForAddress(p.publicKey, { before, limit: 1000 }, 'confirmed').catch(() => []); if (!pg.length) break;
         for (const x of pg) if (!x.err) { run('DELETE FROM seen WHERE sig=?', x.signature); enqueue(x.signature); } if (pg.length < 1000) break; before = pg[pg.length - 1].signature; } } } };
+  // trades recorded while their pair token had no USD price yet: replay them once the price is known (chart, volume, market cap)
+  const repriced = async () => { for (const c of q('SELECT mint, pool, quote_mint FROM coins WHERE quote_mint IS NOT NULL AND quote_mint != ?', WSOL)) { if (!(quoteUsd(c.quote_mint) > 0)) continue;
+    const bad = q('SELECT sig FROM trades WHERE mint=? AND (usd IS NULL OR usd=0) AND sol>0', c.mint); if (!bad.length) continue;
+    const txs = [...new Set(bad.map((b) => b.sig.split('#')[0]))]; for (const b of bad) run('DELETE FROM trades WHERE sig=?', b.sig); for (const t of txs) { run('DELETE FROM seen WHERE sig=?', t); enqueue(t); }   /* row keys can carry '#…' for a 2nd event in one tx */ console.log('repricing', bad.length, 'trades of', c.mint.slice(0, 6)); } };
+  setTimeout(() => quotePrices().then(repriced).catch(() => {}), 60e3); setInterval(() => repriced().catch(() => {}), 30 * 60e3);
   setTimeout(() => orphans().catch((e) => console.log('orphan scan err', String(e?.message || e).slice(0, 80))), 20e3); setInterval(() => orphans().catch(() => {}), 6 * 36e5);
   retier(); setInterval(() => loadConfigs().catch(() => {}), 24 * 36e5);   // full config rescan only daily (new configs are picked up from their own create tx)
   console.log('watching', configs.size, 'treid configs (partners', PARTNERS.join(', '), ')');
