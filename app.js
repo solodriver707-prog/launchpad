@@ -260,7 +260,11 @@
   }
   function connect(w, silent) {
     S.connecting = w.name; if (S.walletOpen) render();
-    Promise.resolve(w.features['standard:connect'].connect(silent ? { silent: true } : undefined)).then(function (res) {
+    var stdC = function () { return Promise.resolve(w.features['standard:connect'].connect(silent ? { silent: true } : undefined)); };
+    // Phantom sometimes answers the standard connect with "Internal JSON-RPC error" (stale session in the extension): ask its own provider once, then retry
+    var legacy = /phantom/i.test(w.name) && window.phantom && window.phantom.solana;
+    stdC().catch(function (err) { var em = String((err && err.message) || ''); if (silent || !legacy || /reject|cancel|denied|closed/i.test(em)) throw err;
+      return Promise.resolve(legacy.connect()).then(function () { return stdC(); }); }).then(function (res) {
       var accs = (res && res.accounts) || w.accounts || [];
       var acc = accs.filter(function (a) { return (a.chains || []).some(function (c) { return String(c).indexOf('solana:') === 0; }); })[0] || accs[0];
       if (!acc) { set({ connecting: null }); if (!silent) toast('Wallet did not share an account'); return; }
