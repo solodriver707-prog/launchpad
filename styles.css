@@ -5894,12 +5894,10 @@ html body .hdr-right .wbal .wb-acts .btn.pri{display:inline-flex!important}   /*
 
 .cto-how{margin:2px 0 10px;padding-left:18px;display:flex;flex-direction:column;gap:5px;font-size:12px;line-height:1.4;color:var(--soft)}
 .cto-how b{color:var(--text,#fff);font-weight:600}
-/* very wide screens: the board + callouts rail sit together in the middle (before, the board was pushed to the right edge) */
+/* wide screens use the whole width (like pump.fun): content grows, the callouts rail stays on the right edge */
 @media (min-width:1500px){
-  body.has-rail{--ro:max(0px,calc((100vw - 1840px) / 2))}
-  body.has-rail main.wrap,body.has-rail .wrap.board,body.has-rail main{margin-right:calc(360px + var(--ro))}
-  body.has-rail footer{margin-right:calc(340px + var(--ro))}
-  body.has-rail .co-rail{right:calc(14px + var(--ro))}
+  .wrap{max-width:none;padding:0 28px}
+  .hdr,.wrap.hdr,header .wrap.hdr{max-width:none;padding:0 28px}
 }
 
 /* "Just launched" box fillers */
