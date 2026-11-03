@@ -195,7 +195,7 @@
         S.trades.push({ tick: t.tick, side: side, sol: sol, wallet: b58(44), t: Date.now() - rnd(20, 3600) * 1000, tax: sol * (side === 'buy' ? t.buy : t.sell) / 100, mine: false });
       }
     });
-    S.trades.sort(function (a, b) { return b.t - a.t; });
+    S.trades.sort(function (a, b) { return b.t - a.t || (b.slot || 0) - (a.slot || 0); });   // same second: the later block first (the order things really happened)
   })(); S.seedN = S.trades.length;
 
   function set(p) { for (var k in p) S[k] = p[k]; render(); syncRoute(); }
@@ -2533,7 +2533,7 @@
     var sellTok = sold ? tok : tok - nowPct / 100 * 1e9;
     if (sellTok > tok * .02) { var h = t.hist || [t.mcN], k = t.archived && sold ? Math.min(h.length - 1, Math.floor((h.length - 1) * t.devSoldAfter * 60000 / t.span)) : Math.floor(h.length * (sold ? .15 + r() * .4 : .4 + r() * .5)), pxS = h[Math.min(h.length - 1, k)] * 1000 / 1e9, at = t.archived && sold ? t.born + t.devSoldAfter * 60000 : t.born + (Date.now() - t.born) * (k / h.length);
       S.trades.push({ tick: t.tick, side: 'sell', sol: +(sellTok * pxS / SOL_USD).toFixed(3), wallet: dev, t: at, tax: 0, mine: false, price: pxS, tokens: sellTok, sig: b58(64) }); }
-    S.trades.sort(function (a, b) { return b.t - a.t; });
+    S.trades.sort(function (a, b) { return b.t - a.t || (b.slot || 0) - (a.slot || 0); });   // same second: the later block first (the order things really happened)
   }
   function walletStats(addr, t) {
     if (addr === devOf(t)) seedDevTrades(t);
@@ -4202,7 +4202,7 @@
     t.hist.push(t.mcN); if (t.hist.length > 160) t.hist.shift(); athOf(t);
     if (t.tk) { t.tk.push([real ? real.ts : Date.now(), t.mcN, sol, real && real.usd > 0 && sol > 0 ? real.usd / sol : 0]); if (t.tk.length > 5000) t.tk.splice(0, 500); }
     var tr = { tick: t.tick, side: side, sol: sol, wallet: wallet || pickWallet(), t: Date.now(), tax: sol * effTax(t) / 100, mine: !!mine, price: price(t), sig: b58(64) }; tr.tokens = sol * SOL_USD / tr.price;
-    if (real) { tr.t = real.ts; tr.tokens = real.tokens; tr.tax = real.fee; tr.sig = real.sig; tr.sniper = real.sniper; tr.bundle = real.bundle; tr.real = true; if (real.usd != null) tr.usd = real.usd; tr.mine = !!(S.account && wallet === S.account); }
+    if (real) { tr.t = real.ts; tr.slot = real.slot || 0; tr.tokens = real.tokens; tr.tax = real.fee; tr.sig = real.sig; tr.sniper = real.sniper; tr.bundle = real.bundle; tr.real = true; if (real.usd != null) tr.usd = real.usd; tr.mine = !!(S.account && wallet === S.account); }
     S.trades.unshift(tr); if (S.trades.length > 400) { for (var ti = S.trades.length - 1; ti >= 0 && S.trades.length > 400; ti--) { var ox = S.trades[ti], ot = find(ox.tick); if (ox.mine || (ot && ot.creator && ox.wallet === ot.creator) || (ot && ot.devPct != null)) continue; S.trades.splice(ti, 1); } if (S.trades.length > 900) S.trades.pop(); }
     S.tradeCount++;
     paint(t, dir, tr);
@@ -5435,7 +5435,7 @@
       var rows = res[0].slice().reverse(); liveTok(res[2]);
       S.trades = S.trades.filter(function (x) { return x.tick !== t.tick; });
       rows.forEach(function (x) { S.trades.push({ tick: t.tick, usd: Number(x.usd) || 0, side: x.side === 'sell' ? 'sell' : 'buy', sol: Number(x.sol) || 0, wallet: String(x.wallet), t: Number(x.ts) || 0, tax: x.fee_sol, mine: !!(S.account && x.wallet === S.account), price: x.price_usd, sig: x.sig, tokens: x.tokens, sniper: x.sniper, bundle: x.bundle, real: true }); });
-      S.trades.sort(function (a, b) { return b.t - a.t; });
+      S.trades.sort(function (a, b) { return b.t - a.t || (b.slot || 0) - (a.slot || 0); });   // same second: the later block first (the order things really happened)
       t.tk = rows.length ? [[t.born, rows[0].mcap_usd / 1000, 0]].concat(rows.map(function (x) { return [x.ts, x.mcap_usd / 1000, x.sol, x.sol > 0 && x.usd > 0 ? x.usd / x.sol : 0]; })) : [[t.born, t.mcN, 0], [Date.now(), t.mcN, 0]];
       t.tk.push([Date.now(), t.mcN, 0]); t.hist = t.tk.slice(-160).map(function (x) { return x[1]; });
       if (res[1]) t.lh = res[1];
