@@ -1845,7 +1845,7 @@
       var on = !!S[t[0]]; if (on) active++;
       return '<button class="ftog' + (on ? ' on' : '') + '" data-act="toggle" data-arg="' + t[0] + '" aria-pressed="' + on + '">' + t[2] + t[1] + '</button>';
     }).join('');
-    return '<div class="fbar2' + (S.mFilt ? ' mopen' : '') + '"><button class="fb-mtog" data-act="mFilt">⚙ Filters' + (active ? ' <em>' + active + '</em>' : '') + '<span>' + (S.mFilt ? '▴' : '▾') + '</span></button>' + pairRow() + '<div class="fb2-row">' + ['mc', 'age', 'prog', 'tax'].map(inlineRange).join('') + '</div>' +
+    return '<div class="fbar2' + (S.mFilt ? ' mopen' : '') + '"><button class="fb-mtog" data-act="mFilt">⚙ Filters' + (active ? ' <em>' + active + '</em>' : '') + '<span>' + (S.mFilt ? '▴' : '▾') + '</span></button>' + pairRow() + '<div class="fb2-row">' + ['tax', 'mc', 'age', 'prog'].map(inlineRange).join('') + '</div>' +
       '<div class="fb2-row sub">' + tg + '<span class="mono muted" style="margin-left:auto;font-size:12px" id="rpc-all">' + filtered().length + ' coins match</span>' + (active ? '<button class="freset" style="margin-left:10px" data-act="reset">Reset · ' + active + '</button>' : '') + '</div></div>';
   }
   function refreshGrid() {
