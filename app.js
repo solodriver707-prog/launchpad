@@ -2432,6 +2432,18 @@
       var sum = function (arr) { return (arr || []).filter(function (b) { return b.mint === mint && b.owner === who; }).reduce(function (a, b) { return a + Number(b.uiTokenAmount.amount) / Math.pow(10, b.uiTokenAmount.decimals); }, 0); };   // raw units (not the scaled UI amount)
       return sum(tx.meta.postTokenBalances) - sum(tx.meta.preTokenBalances); }); })();
   }
+  // sold a coin paired with something else: turn what you received (the pair token) into SOL — same safety checks as the buy route
+  function jupPairToSol(t, raw) {
+    return fetch(JUP + '/quote?inputMint=' + t.qMint + '&outputMint=' + WSOL + '&amount=' + raw + '&slippageBps=' + Math.round(S.slip * 100)).then(function (r) { return r.json(); }).then(function (qr) {
+      if (!qr || !qr.outAmount) throw new Error('No Jupiter route from ' + qSymT(t) + ' to SOL — you kept ' + qSymT(t)); if (qr.inputMint !== t.qMint || qr.outputMint !== WSOL) throw new Error('Jupiter returned a different route — refusing');
+      var outA = BigInt(String(qr.outAmount)), minA = BigInt(String(qr.otherAmountThreshold || 0)), bps = BigInt(Math.round(S.slip * 100) + 100); if (minA <= 0n || minA * 10000n < outA * (10000n - bps)) throw new Error('Jupiter’s guaranteed minimum is too low — you kept ' + qSymT(t));
+      if (t.qUsd > 0 && t.qDec != null) { var vin = Number(raw) / Math.pow(10, t.qDec) * t.qUsd, vout = Number(outA) / 1e9 * SOL_USD; if (vin > 1 && vout < vin * 0.7) throw new Error('The Jupiter route would give far less than the market price — you kept ' + qSymT(t)); }
+      return fetch(JUP + '/swap', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ quoteResponse: qr, userPublicKey: S.account, wrapAndUnwrapSol: true, dynamicComputeUnitLimit: true }) }).then(function (r) { return r.json(); }).then(function (sw) {
+        if (!sw || !sw.swapTransaction) throw new Error('Jupiter couldn’t build the swap — you kept ' + qSymT(t));
+        var raw2 = b64Bytes(sw.swapTransaction), sp = {}; sp[t.qMint] = String(raw);
+        return chainLib().then(function (T) { return T.checkSwapTx(raw2, S.account, RPC).then(function () { return walletGuard(sw.swapTransaction, { spend: sp, solMax: 30000000n, solGainMin: minA - 20000000n > 0n ? minA - 20000000n : 0n }); }).then(function () { return walletSign([raw2]); }); })
+          .then(function (signed) { return rpc('sendTransaction', [bytesB64(signed[0]), { encoding: 'base64', preflightCommitment: 'confirmed', maxRetries: 3 }]); }).then(function (sig) { return waitSig(sig, sw.lastValidBlockHeight).then(function () { return Number(outA) / 1e9; }); }); }); });
+  }
   function jupSolToPair0(t, lam) {
     return fetch(JUP + '/quote?inputMint=' + WSOL + '&outputMint=' + t.qMint + '&amount=' + lam + '&slippageBps=' + Math.round(S.slip * 100)).then(function (r) { return r.json(); }).then(function (qr) {
       if (!qr || !qr.outAmount) throw new Error('No Jupiter route from SOL to ' + qSymT(t)); if (qr.inputMint !== WSOL || qr.outputMint !== t.qMint) throw new Error('Jupiter returned a different route — refusing');
@@ -2468,6 +2480,7 @@
           spent[a.mint] = (spent[a.mint] || 0n) + (a.pre - post); if (o.gain && a.mint === o.gain.mint) got += post - a.pre; });
         extra.forEach(function (x, i) { var p = v.accounts[1 + watch.length + i], inf = p && p.data && p.data.parsed && p.data.parsed.info; if (inf && inf.owner === who && inf.mint === o.gain.mint) got += BigInt(inf.tokenAmount.amount); });
         for (var m in spent) if (spent[m] > 0n && spent[m] > BigInt((o.spend || {})[m] || 0)) throw new Error('It would move tokens you didn’t choose (or more than you chose) — not signing');
+        if (o.solGainMin != null && solPost - solPre < BigInt(o.solGainMin)) throw new Error('It wouldn’t deliver the minimum SOL to your wallet — not signing');
         if (o.gain && got < o.gain.min) throw new Error('It wouldn’t deliver the minimum to your wallet — not signing');
         return true; }); });
   }
@@ -2972,6 +2985,7 @@
     function f4(v) { return v > 0 && v < 0.0001 ? v.toPrecision(2) : v.toFixed(4); }
     var bsBar = '<div class="bs bs3"><button class="b' + (S.side === 'buy' ? ' on' : '') + '" data-act="side" data-arg="buy">Buy</button><button class="s' + (S.side === 'sell' ? ' on' : '') + '" data-act="side" data-arg="sell">Sell</button><button class="l' + (S.side === 'tpsl' ? ' on' : '') + '" data-act="side" data-arg="tpsl">TP / SL</button></div>';
     var panel = S.side === 'tpsl' ? tpslPanel(t, pos, bsBar) : '<section class="card-s panel tradebox">' + bsBar +
+      (jupOn(t) && !q.isBuy ? '<div class="paywith"><span class="muted">Receive</span><button class="' + (S.recvSol === false ? 'on' : '') + '" data-act="recvSol" data-arg="0">' + coinHTML(t.pair, 16) + esc(qSymT(t)) + '</button><button class="' + (S.recvSol !== false ? 'on' : '') + '" data-act="recvSol" data-arg="1">' + coinHTML('SOL', 16) + 'SOL</button>' + (S.recvSol !== false ? '<small class="muted">sold for ' + esc(qSymT(t)) + ', then swapped to SOL via Jupiter · 2 wallet approvals</small>' : '') + '</div>' : '') +
       (jupOn(t) && q.isBuy ? '<div class="paywith"><span class="muted">Pay with</span><button class="' + (PS ? '' : 'on') + '" data-act="paySol" data-arg="0">' + coinHTML(t.pair, 16) + esc(qSymT(t)) + '</button><button class="' + (PS ? 'on' : '') + '" data-act="paySol" data-arg="1">' + coinHTML('SOL', 16) + 'SOL</button>' + (PS ? '<small class="muted">swapped to ' + esc(qSymT(t)) + ' via Jupiter first · 2 wallet approvals</small>' : '') + '</div>' : '') +
       '<div class="tb-top"><span class="muted" style="font-size:12.5px">' + (q.isBuy ? (bal != null ? 'Balance ' + (bal >= 1000 ? fmtNum(bal) : bal.toFixed(3)) + ' ' + esc(QS) : 'Amount in ' + esc(QS)) : (pos ? 'You hold ' + fmtNum(pos.tok) + ' $' + sid : 'You hold 0 $' + sid)) + '</span>' +
         '<button class="slipbtn" data-act="slip">Slippage ' + S.slip + '% ⚙</button></div>' +
@@ -4364,6 +4378,7 @@
       case 'notifPref': S.pushP[arg] = !S.pushP[arg]; try { localStorage.setItem('dl.push', JSON.stringify(S.pushP)); } catch (er) {} pushSync(true); render(); break;
       case 'termsClose': if (e.target.closest('[data-stop]') && !e.target.closest('.iconbtn')) break; set({ termsOpen: false }); break;
       case 'paySol': S.amount = ''; set({ paySol: arg === '1' }); break;
+      case 'recvSol': set({ recvSol: arg === '1' }); break;
       case 'preset': if (arg === 'reset') { set({ amount: '' }); break; } set({ pctAmt: 0, amount: arg === 'max' ? Math.max(0, S.balance - 0.01).toFixed(3) : arg }); break;
       case 'dlConnect': dlConnect(arg); break;
       case 'dlTapGo': setTimeout(function () { S.dlTap = null; render(); }, 600); break;
@@ -4595,7 +4610,12 @@
               .catch(function (e) { S.busy = null; render(); if (e && e.message !== 'busy') toast(chainErr(e)); });
             break; }
           chainRun(side0 === 'buy' ? 'Buying $' + symOf(t) : 'Selling $' + symOf(t), function (T) { var cr = side0 === 'buy' ? coRef(t) : null; return T.buildSwap({ rpc: RPC, expect: { mint: t.ca, partners: [PARTNER, TREASURY] }, owner: S.account, pool: t.pool, side: side0, amount: amt, slippageBps: Math.round(S.slip * 100), memo: cr ? 'treid:co:' + cr.id : null, referral: TREASURY }); })
-            .then(function (b) { S.amount = ''; S.sellAll = false; if (side0 === 'buy') confettiSmall(); toast((side0 === 'buy' ? 'Bought ~' + fmtNum(b.quote.out) + ' $' + symOf(t) : 'Sold ' + fmtNum(amt) + ' $' + symOf(t) + ' for ~' + b.quote.out.toFixed(4) + ' ' + qSymT(t)) + ' · on-chain ✓', t); setTimeout(function () { liveLoad(t); }, 1200); })
+            .then(function (b) { S.amount = ''; S.sellAll = false; if (side0 === 'buy') confettiSmall(); toast((side0 === 'buy' ? 'Bought ~' + fmtNum(b.quote.out) + ' $' + symOf(t) : 'Sold ' + fmtNum(amt) + ' $' + symOf(t) + ' for ~' + b.quote.out.toFixed(4) + ' ' + qSymT(t)) + ' · on-chain ✓', t); setTimeout(function () { liveLoad(t); }, 1200);
+              if (side0 === 'sell' && jupOn(t) && S.recvSol !== false && b.sigs && b.sigs.length && !S.busy) { var who1 = S.account; S.busy = 'Swapping ' + qSymT(t) + ' → SOL'; render(); toast('Step 2 of 2: swap ' + qSymT(t) + ' → SOL — confirm in your wallet');
+                swapDelivered(b.sigs[b.sigs.length - 1], who1, t.qMint).then(function (got) { if (!(got > 0)) throw new Error('Couldn’t see the ' + qSymT(t) + ' you received — it stays in your wallet');
+                  var rawAmt = BigInt(Math.floor(got * Math.pow(10, t.qDec != null ? t.qDec : 9))); return jupPairToSol(t, String(rawAmt)); })
+                  .then(function (sol) { S.busy = null; render(); refreshBalance(); toast('Received ~' + sol.toFixed(4) + ' SOL ✓', t); })
+                  .catch(function (e) { S.busy = null; render(); toast(/reject|cancel/i.test(String(e && e.message)) ? 'Kept ' + qSymT(t) + ' (swap to SOL cancelled)' : chainErr(e)); }); } })
             .catch(function (e) { if (e && e.message !== 'busy') toast(chainErr(e)); });
           break;
         }
