@@ -263,8 +263,13 @@
     var stdC = function () { return Promise.resolve(w.features['standard:connect'].connect(silent ? { silent: true } : undefined)); };
     // Phantom sometimes answers the standard connect with "Internal JSON-RPC error" (stale session in the extension): ask its own provider once, then retry
     var legacy = /phantom/i.test(w.name) && window.phantom && window.phantom.solana;
-    stdC().catch(function (err) { var em = String((err && err.message) || ''); if (silent || !legacy || /reject|cancel|denied|closed/i.test(em)) throw err;
-      return Promise.resolve(legacy.connect()).then(function () { return stdC(); }); }).then(function (res) {
+    var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+    stdC().catch(function (err) { var em = String((err && err.message) || ''); S.connErr = em || String(err || ''); if (silent || !legacy || /reject|cancel|denied|closed/i.test(em)) throw err;
+      // the extension's own provider usually still works: connect there, then use the accounts the standard wallet picks up (no second popup)
+      return Promise.resolve(legacy.connect()).then(function () { return wait(250); }).then(function () { return (w.accounts && w.accounts.length) ? { accounts: w.accounts } : wait(700).then(function () { return (w.accounts && w.accounts.length) ? { accounts: w.accounts } : stdC(); }); }); })
+    .catch(function (err) { var em = String((err && err.message) || ''); if (silent || /reject|cancel|denied|closed/i.test(em)) throw err;
+      return wait(600).then(stdC); })   // one quiet retry: a wallet that was still waking up / unlocking usually answers the second time
+    .then(function (res) {
       var accs = (res && res.accounts) || w.accounts || [];
       var acc = accs.filter(function (a) { return (a.chains || []).some(function (c) { return String(c).indexOf('solana:') === 0; }); })[0] || accs[0];
       if (!acc) { set({ connecting: null }); if (!silent) toast('Wallet did not share an account'); return; }
@@ -274,7 +279,8 @@
       if (!silent) toast(w.name + ' connected · ' + short(acc.address));
     }).catch(function (err) {
       set({ connecting: null });
-      if (!silent) { var em = String((err && err.message) || ''); toast(/reject|cancel|denied|closed/i.test(em) ? 'Connection cancelled' : 'Couldn’t connect to ' + w.name + (em ? ' (' + em.slice(0, 60) + ')' : '') + ' — open the wallet, unlock it and try again. If it keeps failing, restart the browser or use another wallet.'); }
+      if (!silent) { var em = String((err && err.message) || ''); try { console.warn('[treid] connect failed', w.name, S.connErr, err); } catch (e) {}
+        toast(/reject|cancel|denied|closed/i.test(em) && !/JSON-RPC/i.test(S.connErr || '') ? 'Connection cancelled' : 'Couldn’t connect to ' + w.name + (em ? ' (' + em.slice(0, 60) + ')' : '') + ' — open the wallet, unlock it and try again. If it keeps failing, restart the browser or use another wallet.'); }
     });
   }
   var off = null;
