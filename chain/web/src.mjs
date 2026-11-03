@@ -5,7 +5,7 @@ import { Connection, Keypair, PublicKey, Transaction, SystemProgram, Transaction
 import { ed25519 } from '@noble/curves/ed25519';
 import bs58lib from 'bs58';
 const bs58enc = (b) => (bs58lib.default || bs58lib).encode(b instanceof Uint8Array ? b : Uint8Array.from(b));
-import { NATIVE_MINT, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, getAssociatedTokenAddressSync, createBurnCheckedInstruction, getMint, getExtensionTypes, ExtensionType, getTransferFeeConfig } from '@solana/spl-token';
+import { NATIVE_MINT, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, getAssociatedTokenAddressSync, createBurnCheckedInstruction, getMint, getExtensionTypes, ExtensionType, getTransferFeeConfig, getTransferHook, getDefaultAccountState, AccountState } from '@solana/spl-token';
 import BN from 'bn.js';
 import { DynamicBondingCurveClient, buildCurveWithMarketCap, TokenType, TokenDecimal, TokenAuthorityOption, BaseFeeMode, CollectFeeMode,
   MigrationOption, MigrationFeeOption, MigratedCollectFeeMode, DammV2DynamicFeeMode, ActivationType, deriveDbcPoolAddress, deriveDammV1MigrationMetadataAddress, SwapMode, getCurrentPoint, deriveDammV2PoolAddress, DAMM_V2_MIGRATION_FEE_ADDRESS, getPriceFromSqrtPrice } from '@meteora-ag/dynamic-bonding-curve-sdk';
@@ -46,16 +46,20 @@ export async function quoteInfo({ rpc, mint, reward = false }) {   // reward: on
   if (mi.freezeAuthority) out.warn = 'Its issuer can freeze accounts (normal for issuer-backed tokens like USDC, USDT and cbBTC)';
   if (is22) { const ext = getExtensionTypes(mi.tlvData); const tf = getTransferFeeConfig(mi);
     if (tf && (tf.newerTransferFee.transferFeeBasisPoints > 0 || tf.olderTransferFee.transferFeeBasisPoints > 0)) return { ...out, ok: false, reason: reward ? 'charges its own transfer tax on every transfer, so holders would lose part of each payout — pick another token' : 'Tokens with a transfer tax can’t be used as a pair' };
-    const bad = ext.filter((e) => !ALLOWED_EXT.has(e) && e !== ExtensionType.TransferFeeConfig);
+    // a TransferHook extension with no program set (xStocks, PAXG…) runs nothing: it only lets the issuer switch one on later → a warning, not a block
+    const th = ext.includes(ExtensionType.TransferHook) ? getTransferHook(mi) : null, hookOff = !!th && (th.programId.equals(PublicKey.default) || th.programId.equals(SystemProgram.programId));
+    const das = ext.includes(ExtensionType.DefaultAccountState) ? getDefaultAccountState(mi) : null; if (das && das.state === AccountState.Frozen) return { ...out, ok: false, reason: reward ? 'starts every new account frozen, so holders couldn’t receive it' : 'New accounts of this token start frozen — it can’t be used as a pair' };
+    const bad = ext.filter((e) => !ALLOWED_EXT.has(e) && e !== ExtensionType.TransferFeeConfig && !(hookOff && e === ExtensionType.TransferHook));
+    const hookW = hookOff ? 'its issuer could switch on a transfer hook later' : null;
     if (reward) { if (bad.includes(ExtensionType.NonTransferable)) return { ...out, ok: false, reason: 'can’t be transferred at all, so holders can’t be paid in it' };
       if (bad.includes(ExtensionType.TransferHook)) return { ...out, ok: false, reason: 'has a transfer hook (its issuer’s program must approve every transfer), so treid can’t pay holders in it — pick another token' };
-      const w = []; if (bad.includes(ExtensionType.PermanentDelegate)) w.push('its issuer can move tokens from any account'); if (bad.includes(ExtensionType.PausableConfig)) w.push('its issuer can pause transfers (payouts would wait)');
+      const w = []; if (bad.includes(ExtensionType.PermanentDelegate)) w.push('its issuer can move tokens from any account'); if (bad.includes(ExtensionType.PausableConfig)) w.push('its issuer can pause transfers (payouts would wait)'); if (hookW) w.push(hookW);
       if (w.length) out.warn = [out.warn, w.join('; ')].filter(Boolean).join(' · '); return (qCache[k] = out); }
     if (bad.includes(ExtensionType.TransferHook)) return { ...out, ok: false, reason: 'Tokens with a transfer hook can’t be used as a pair' };
     if (bad.length) { const [b] = PublicKey.findProgramAddressSync([Buffer.from('token_badge'), m.toBuffer()], DBC_PROGRAM), bi = await C(rpc).getAccountInfo(b);   // Meteora's approval (e.g. tokenized stocks)
       if (!bi || !bi.owner.equals(DBC_PROGRAM)) return { ...out, ok: false, reason: 'This token type needs approval from Meteora first — not supported yet' };
       const w = []; if (bad.includes(ExtensionType.PermanentDelegate)) w.push('its issuer can move tokens from any account'); if (bad.includes(ExtensionType.PausableConfig)) w.push('its issuer can pause all transfers (trading would stop)');
-      if (bad.includes(ExtensionType.ScaledUiAmountConfig)) w.push('its displayed amount can change (splits/dividends)');
+      if (bad.includes(ExtensionType.ScaledUiAmountConfig)) w.push('its displayed amount can change (splits/dividends)'); if (hookW) w.push(hookW);
       out.badge = true; out.warn = [out.warn, 'Meteora-approved pair' + (w.length ? ' — ' + w.join('; ') : '')].filter(Boolean).join(' · '); } }
   return (qCache[k] = out);
 }
