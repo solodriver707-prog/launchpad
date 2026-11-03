@@ -5935,3 +5935,4 @@ html,body{overflow-x:clip}
 .rpp-hot{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:8px}
 .rpp-hl{font-size:12px;font-weight:700;color:var(--gold,#E8C77A);margin-right:4px;white-space:nowrap}
 .rpp-more{border-style:dashed!important;color:var(--soft)}
+header{z-index:45}   /* above the callouts rail (40): the wallet / notification menus open over it */
