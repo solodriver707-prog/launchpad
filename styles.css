@@ -6215,3 +6215,26 @@ header + .tape{position:relative;z-index:1}
 @media (min-width:761px) and (max-width:1250px){
   html body main.tp-env .tp-main section.tp-banner{aspect-ratio:auto;grid-template-rows:auto auto auto!important;grid-template-areas:"av id" "key key" "kpi kpi"!important}
 }
+/* "Just launched": 5 rows that fill the box, each with a mini chart + market cap */
+.intro3 .i2-live{display:flex;flex-direction:column}
+.intro3 #i2-fresh{flex:1;display:flex;flex-direction:column;justify-content:space-around;gap:2px}
+.intro3 .i2-row,.i2-row{grid-template-columns:34px minmax(0,1fr) auto auto auto auto}
+.i2-row.i2-act,.i2-row.i2-cta{grid-template-columns:34px minmax(0,1fr) auto}
+.i2-sp{display:flex;align-items:center;opacity:.9}.i2-sp svg{display:block}
+.i2-mc{display:flex;flex-direction:column;align-items:flex-end;font-size:12.5px;font-weight:700;line-height:1.15;min-width:56px}
+.i2-mc em{font-style:normal;font-size:10.5px;font-weight:600}.i2-mc em.up{color:var(--up)}.i2-mc em.down{color:var(--down)}
+@media (max-width:1100px){.i2-sp{display:none}}
+.intro3 .i2-row,.i2-row{grid-template-columns:34px minmax(0,1fr) 64px auto auto!important}
+.i2-row.i2-act,.i2-row.i2-cta{grid-template-columns:34px minmax(0,1fr) auto!important}
+.i2-n{min-width:0}.i2-n b,.i2-n small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.i2-n .i2-age{color:var(--up)}
+/* top meme card: a mini chart and the key numbers fill the card */
+#tc .tc-in{flex-wrap:wrap;align-content:center}
+.tc-more{flex:1 1 100%;display:flex;flex-direction:column;gap:8px;min-width:0}
+.tc-ch svg{width:100%!important;height:64px!important;display:block}
+.tc-kv{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;border-top:1px solid rgba(255,255,255,.07);padding-top:8px}
+.tc-kv span{display:flex;flex-direction:column;gap:1px;min-width:0}
+.tc-kv small{font-size:10.5px;color:var(--muted)}.tc-kv b{font-size:13px}
+/* wide screens: the three hero parts sized to their content, no stretched emptiness */
+@media (min-width:1500px){.intro3{grid-template-columns:minmax(0,1fr) minmax(420px,560px) minmax(380px,480px)}}
+@media (max-width:1300px){#tc .tc-pair b{display:none}#tc .tc-pair{padding:4px}#tc .tc-in{gap:12px}}

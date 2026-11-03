@@ -1872,7 +1872,8 @@
       '<span class="tc-main"><span class="tc-k">TOP MEME <b>#' + (k + 1) + '</b></span><b class="tc-n">' + esc(t.name) + '</b><span class="tc-tk mono">$' + sid + '</span>' +
         '<span class="tc-row"><span class="mono">' + fmtK(t.mcN) + '</span><span class="mono ' + (c >= 0 ? 'up' : 'down') + '">' + chgTxt(c) + '</span></span>' +
         '<span class="tc-bar"><i style="width:' + Math.min(100, t.prog) + '%"></i></span></span>' +
-      '<span class="tc-side"><span class="tc-pair">' + coinHTML(t.pair, 26) + '<b>' + esc(pairLabel(t.pair)) + '</b></span><span class="tax" style="background:' + taxBg(tm) + '"><small>TAX</small><b>' + tm + '%</b></span></span></div>' + socialsHTML(t, false, true);
+      '<span class="tc-side"><span class="tc-pair">' + coinHTML(t.pair, 26) + '<b>' + esc(pairLabel(t.pair)) + '</b></span><span class="tax" style="background:' + taxBg(tm) + '"><small>TAX</small><b>' + tm + '%</b></span></span>' +
+      '<span class="tc-more"><span class="tc-ch">' + lbSpark(t, 360, 64, 'tc' + id) + '</span><span class="tc-kv"><span><small>24h vol</small><b class="mono">' + fmtK(t.vol) + '</b></span><span><small>Holders</small><b class="mono">' + fmtNum(t.holders) + '</b></span><span><small>Curve</small><b class="mono">' + Math.min(100, t.prog).toFixed(t.prog < 10 ? 1 : 0) + '%</b></span><span><small>Age</small><b class="mono">' + ago(t.born) + '</b></span></span></span></div>' + socialsHTML(t, false, true);
   }
   var tcI = 0;
   setInterval(function () {
@@ -1882,7 +1883,7 @@
     setTimeout(function () { el.innerHTML = tcHTML(t, tcI) + '<span class="tc-timer"></span>'; el.classList.remove('out'); }, 260);
   }, 5000);
   function introHTML() {
-    var st = stats(), fresh = all().slice().sort(function (a, b) { return b.born - a.born; }).slice(0, 3);
+    var st = stats(), fresh = all().slice().sort(function (a, b) { return b.born - a.born; }).slice(0, 5);
     var t0 = find(HERO[tcI]) || all()[0];
     return '<section class="intro3" id="intro"><div class="aurora"><span class="a1"></span><span class="a2"></span><span class="a3"></span></div>' +
       '<div class="i3-l">' +
@@ -1896,19 +1897,19 @@
   // the "Just launched" box is never half empty: newest coins first, then the latest trades, then an invite to launch
   function i2Fill(fresh) {
     var h = fresh.map(i2Row), seen = {}, acts = S.trades.filter(function (x) { var t = find(x.tick); if (!t || t.archived || seen[x.sig]) return false; seen[x.sig] = 1; return true; });
-    for (var i = 0; h.length < 3 && i < acts.length; i++) h.push(i2Act(acts[i]));
+    for (var i = 0; h.length < 5 && i < acts.length; i++) h.push(i2Act(acts[i]));
     if (h.length < 2) { var st = stats(); h.push('<button class="i2-row i2-act" data-act="board"><span class="i2-plus">📈</span><span class="i2-n"><b>' + fmtK(st.vol) + ' traded · 24h</b><small>' + st.tokens + ' coin' + (st.tokens === 1 ? '' : 's') + ' live on treid</small></span><span class="i2-go">Browse →</span></button>'); }
-    if (h.length < 3) h.push('<button class="i2-row i2-cta" data-act="create"><span class="i2-plus">+</span><span class="i2-n"><b>Your coin here</b><small>Launch in under a minute · any pair</small></span><span class="i2-go">Launch →</span></button>');
-    return h.slice(0, 3).join('');
+    if (h.length < 5) h.push('<button class="i2-row i2-cta" data-act="create"><span class="i2-plus">+</span><span class="i2-n"><b>Your coin here</b><small>Launch in under a minute · any pair</small></span><span class="i2-go">Launch →</span></button>');
+    return h.slice(0, 5).join('');
   }
   function i2Act(x) { var t = find(x.tick), usd = x.usd != null ? x.usd : x.sol * SOL_USD, buy = x.side === 'buy';
     return '<button class="i2-row i2-act" data-act="open" data-arg="' + esc(t.tick) + '">' + avatarHTML(t, 34) + '<span class="i2-n"><b><em class="' + (buy ? 'up' : 'down') + '">' + (buy ? 'Bought' : 'Sold') + '</em> $' + (usd >= 100 ? fmtNum(Math.round(usd)) : usd.toFixed(2)) + '</b><small>$' + esc(symOf(t)) + ' · ' + esc(short(x.wallet || '')) + '</small></span><span class="i2-age mono" data-t="' + x.t + '">' + ago(x.t) + '</span></button>'; }
   // more than 3 coins: the box pages through the 9 newest, 3 at a time
   var i2Pg = 0; setInterval(function () { var el = document.getElementById('i2-fresh'); if (!el || document.hidden || (el.matches && el.matches(':hover'))) return;
-    var list = all().filter(function (t) { return !t.archived; }).sort(function (a, b) { return b.born - a.born; }).slice(0, 9); if (list.length <= 3) { var f = i2Fill(list); if (el._f !== f) { el._f = f; el.innerHTML = f; } return; }
-    i2Pg = (i2Pg + 3) % (Math.ceil(list.length / 3) * 3); el.classList.add('out'); setTimeout(function () { el.innerHTML = i2Fill(list.slice(i2Pg, i2Pg + 3)); el.classList.remove('out'); }, 260); }, 6000);
+    var list = all().filter(function (t) { return !t.archived; }).sort(function (a, b) { return b.born - a.born; }).slice(0, 10); if (list.length <= 5) { var f = i2Fill(list); if (el._f !== f) { el._f = f; el.innerHTML = f; } return; }
+    i2Pg = (i2Pg + 5) % (Math.ceil(list.length / 5) * 5); el.classList.add('out'); setTimeout(function () { el.innerHTML = i2Fill(list.slice(i2Pg, i2Pg + 5)); el.classList.remove('out'); }, 260); }, 6000);
   function i2Row(t) {
-    return '<button class="i2-row" data-act="open" data-arg="' + esc(t.tick) + '">' + avatarHTML(t, 34) + '<span class="i2-n"><b>' + esc(t.name) + '</b><small>$' + esc(symOf(t)) + ' · ' + coinHTML(t.pair, 13) + esc(pairLabel(t.pair)) + '</small></span><span class="i2-age mono" data-t="' + t.born + '">' + ago(t.born) + '</span><span class="tax" style="background:' + taxBg(Math.max(t.buy, t.sell)) + ';min-width:38px;padding:3px 5px"><b style="font-size:12px">' + Math.max(t.buy, t.sell) + '%</b></span></button>';
+    return '<button class="i2-row" data-act="open" data-arg="' + esc(t.tick) + '">' + avatarHTML(t, 34) + '<span class="i2-n"><b>' + esc(t.name) + '</b><small>$' + esc(symOf(t)) + ' · ' + coinHTML(t.pair, 13) + esc(pairLabel(t.pair)) + ' · <span class="i2-age" data-t="' + t.born + '">' + ago(t.born) + '</span></small></span><span class="i2-sp">' + lbSpark(t, 64, 24, 'i2' + t.tick) + '</span><span class="i2-mc mono">' + fmtK(t.mcN) + '<em class="' + (chgOver(t, 360) >= 0 ? 'up' : 'down') + '">' + chgTxt(chgOver(t, 360)) + '</em></span><span class="tax" style="background:' + taxBg(Math.max(t.buy, t.sell)) + ';min-width:38px;padding:3px 5px"><b style="font-size:12px">' + Math.max(t.buy, t.sell) + '%</b></span></button>';
   }
   document.addEventListener('mousemove', function (e) {
     var it = e.target.closest && e.target.closest('#intro'); if (!it) return;
