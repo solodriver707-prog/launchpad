@@ -5928,3 +5928,6 @@ html,body{overflow-x:clip}
 
 /* hero: "pay holders in" on its own line, the rolling word below */
 .kin{flex-wrap:wrap;row-gap:.06em}.kin .kin-a{flex-basis:100%}
+
+.rpp-det{display:block}.rpp-det summary{cursor:pointer;list-style:none}.rpp-det summary::-webkit-details-marker{display:none}
+.rpp-det ul{margin:6px 0 0;padding-left:18px;display:flex;flex-direction:column;gap:3px;font-size:11.5px;color:var(--soft)}
