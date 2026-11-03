@@ -3789,7 +3789,7 @@
             '<label class="ident-logo' + (c.img ? ' has' : '') + '" for="c-img" data-drop="img">' + (c.img ? '<img src="' + esc(c.img) + '" alt="">' : '<span class="il-ph">' + I.up + '<b>Logo</b></span>') + '</label>' +
             '<div class="ident-meta"><b>' + esc(c.name || 'Your coin') + '</b><span class="mono">$' + esc(c.tick || 'TICKER') + '</span></div>' +
             '<div class="ident-acts">' + (c.img ? '<button class="link" data-act="clearImg">Remove logo</button>' : '<span class="req">logo required</span>') + (c.banner ? '<button class="link" data-act="clearBanner">Remove banner</button>' : '') + '</div></div>' +
-          '<input id="c-img" type="file" accept="image/png,image/jpeg,image/gif,image/webp" class="sr"><input id="c-banner" type="file" accept="image/png,image/jpeg,image/gif,image/webp" class="sr">' +
+          '' +
           '<div class="row"><div class="field" style="flex:2 1 220px"><label for="c-name" style="font-weight:700">Name</label><input id="c-name" class="inp" maxlength="32" data-bind="c.name" value="' + esc(c.name) + '" placeholder="e.g. Giga Pug"></div>' +
             '<div class="field" style="flex:1 1 140px"><label for="c-tick" style="font-weight:700">Ticker</label><span class="tick-in"><em>$</em><input id="c-tick" class="inp mono" data-bind="c.tick" value="' + esc(c.tick) + '" placeholder="DFROG"></span></div></div>' + 
           '<div class="field"><label for="c-desc" style="font-weight:700">Description</label><textarea id="c-desc" class="inp" data-bind="c.desc" placeholder="What is this token about?">' + esc(c.desc) + '</textarea></div>' +
@@ -4763,7 +4763,7 @@
 
   function loadMedia(f, kind) {
     if (!f) return;
-    if (!/^image\/(png|jpeg|gif|webp)$/.test(f.type)) { toast('Use PNG, JPG, GIF or WEBP'); return; }
+    if (!/^image\/(png|jpeg|gif|webp)$/.test(f.type) && !(!f.type && /\.(png|jpe?g|jfif|gif|webp)$/i.test(f.name || ''))) { toast('Use PNG, JPG, GIF or WEBP'); return; }
     if (f.size > 4 * 1024 * 1024) { toast('Image is over 4 MB'); return; }
     var r = new FileReader();
     r.onload = function () {
@@ -4775,13 +4775,17 @@
         x.drawImage(im, (W - dw) / 2, (H - dh) / 2, dw, dh);
         var o = {}; o[kind] = cv.toDataURL('image/webp', .85); setC(o);
       };
+      im.onerror = function () { toast('Couldn’t read this image — try another file'); };
       im.src = r.result;
     };
+    r.onerror = function () { toast('Couldn’t read this file — try again'); };
     r.readAsDataURL(f);
   }
+  // the logo / banner file inputs live OUTSIDE the re-rendered page: a live update while the file picker is open used to replace them, and the pick was lost
+  ['c-img', 'c-banner'].forEach(function (id) { if (document.getElementById(id)) return; var i = document.createElement('input'); i.type = 'file'; i.id = id; i.accept = 'image/png,image/jpeg,image/gif,image/webp'; i.className = 'sr'; i.style.cssText = 'position:fixed;left:-9999px;width:1px;height:1px;opacity:0'; document.body.appendChild(i); });
   document.addEventListener('change', function (e) {
-    if (e.target.id === 'c-img') loadMedia(e.target.files && e.target.files[0], 'img');
-    if (e.target.id === 'c-banner') loadMedia(e.target.files && e.target.files[0], 'banner');
+    if (e.target.id === 'c-img') { loadMedia(e.target.files && e.target.files[0], 'img'); e.target.value = ''; }   // cleared: picking the same file again works too
+    if (e.target.id === 'c-banner') { loadMedia(e.target.files && e.target.files[0], 'banner'); e.target.value = ''; }
     if (e.target.id === 'dimg-in') demoImgsAdd(e.target.files);
   });
   document.addEventListener('dragover', function (e) { var d = e.target.closest && e.target.closest('[data-drop]'); if (!d) return; e.preventDefault(); d.classList.add('over'); });
