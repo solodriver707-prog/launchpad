@@ -763,14 +763,14 @@
   }
 
   S.feedF = 'all';
-  function feedOk(tr) { if (S.feedF === 'whale') return tr.sol >= 2; if (S.feedF === 'follow') return S.trackWallets.indexOf(tr.wallet) !== -1 || S.watch.indexOf(tr.tick) !== -1 || tr.mine; return true; }
+  function feedOk(tr) { if (S.feedF === 'whale') return solOf(tr) >= 2; if (S.feedF === 'follow') return S.trackWallets.indexOf(tr.wallet) !== -1 || S.watch.indexOf(tr.tick) !== -1 || tr.mine; return true; }
   function feedList() { var l = S.trades.filter(feedOk).slice(0, 6); return l.length ? l.map(function (t) { return feedRow(t); }).join('') : '<div class="muted" style="padding:16px 8px;font-size:13px;line-height:1.5">' + (S.feedF === 'follow' ? 'Nothing yet. Star coins or track wallets to follow them here.' : S.feedF === 'whale' ? 'No whale trades yet.' : 'No trades yet.') + '</div>'; }
   function feedRow(tr, enter) {
     var t = find(tr.tick); if (!t) return '';
-    var w = Math.min(100, tr.sol / 5 * 100), buy = tr.side === 'buy', whale = tr.sol >= 3;
+    var w = Math.min(100, solOf(tr) / 5 * 100), buy = tr.side === 'buy', whale = solOf(tr) >= 3;
     return '<button class="feed-row' + (enter ? ' enter' : '') + (buy ? ' b' : ' s') + '" data-act="open" data-arg="' + esc(t.tick) + '" style="--w:' + w.toFixed(0) + '%">' + avatarHTML(t, 32) +
       '<span class="fr-main"><b>$' + esc(symOf(t)) + '</b>' + (whale ? '<span class="whale">WHALE</span>' : '') + '<span class="fr-sub">' + (tr.mine ? 'You' : esc(short(tr.wallet))) + ' · <span data-t="' + tr.t + '">' + ago(tr.t) + '</span></span></span>' +
-      '<span class="fr-amt"><span class="' + (buy ? 'up' : 'down') + '">' + (buy ? 'BUY' : 'SELL') + '</span><b class="mono">' + tr.sol.toFixed(2) + ' SOL</b></span></button>';
+      '<span class="fr-amt"><span class="' + (buy ? 'up' : 'down') + '">' + (buy ? 'BUY' : 'SELL') + '</span><b class="mono">' + solOf(tr).toFixed(2) + ' SOL</b></span></button>';
   }
 
   // ---------- hero carousel + visual stats ----------
@@ -2219,13 +2219,15 @@
       (dev ? '<span class="bdg dev">DEV</span>' : '') + (me ? '<span class="bdg you">YOU</span>' : '') + '</button>';
   }
   S.pos = {}; S.tpFilter = 'all'; S.tpMaker = null; S.minSol = ''; S.absTime = false; S.chartMode = 'mc'; S.slip = 5; S.slipOpen = false; S.tpQueue = 0; S.comments = {};
+  // trades are always shown and filtered in SOL — on a coin paired with another token, its value converted to SOL
+  function solOf(tr, t) { t = t || find(tr.tick); return t && t.live && t.qMint && tr.usd != null && SOL_USD > 0 ? tr.usd / SOL_USD : tr.sol; }
   function tradeMatches(tr) {
     if (S.tpMaker && tr.wallet !== S.tpMaker) return false;
     if (S.tpFilter === 'buy' && tr.side !== 'buy') return false;
     if (S.tpFilter === 'sell' && tr.side !== 'sell') return false;
-    if (S.tpFilter === 'whale' && tr.sol < 2) return false;
+    if (S.tpFilter === 'whale' && solOf(tr) < 2) return false;
     if (S.tpFilter === 'mine' && !tr.mine) return false;
-    var m = parseFloat(S.minSol); if (m > 0 && tr.sol < m) return false;
+    var m = parseFloat(S.minSol); if (m > 0 && solOf(tr) < m) return false;
     return true;
   }
   function timeTxt(ts) { if (!S.absTime) return ago(ts); var d = new Date(ts); return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2) + ':' + ('0' + d.getSeconds()).slice(-2); }
@@ -2235,7 +2237,7 @@
       '<span class="muted" data-t="' + tr.t + '">' + timeTxt(tr.t) + '</span>' +
       '<span class="ty">' + (buy ? 'Buy' : 'Sell') + (usd >= 2 * SOL_USD ? ' <span class="bdg whale2" title="Whale">' + I.gem + '</span>' : '') + '</span>' +
       '<span class="r">$' + (usd >= 1000 ? (usd / 1000).toFixed(2) + 'K' : usd.toFixed(2)) + '</span>' +
-      '<span class="r">' + (tr.sol >= 1000 ? fmtNum(tr.sol) : tr.sol.toFixed(3)) + '</span><span class="r">' + fmtNum(tok) + '</span><span class="r">' + fmtPrice(px) + '</span>' +
+      '<span class="r">' + (function (v) { return v >= 1000 ? fmtNum(v) : v.toFixed(v < 0.01 ? 4 : 3); })(solOf(tr, t)) + '</span><span class="r">' + fmtNum(tok) + '</span><span class="r">' + fmtPrice(px) + '</span>' +
       '<span class="mk-cell">' + makerHTML(tr.wallet, t) + '<button class="mk-f' + (S.tpMaker === tr.wallet ? ' on' : '') + '" data-act="maker" data-arg="' + (S.tpMaker === tr.wallet ? '' : esc(tr.wallet)) + '" title="' + (S.tpMaker === tr.wallet ? 'Show all wallets' : 'Only this wallet\'s trades') + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg></button></span>' +
       '<span class="r"><button class="txb" data-act="wallet" data-arg="' + esc(tr.wallet) + '" aria-label="Open wallet details"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></button></span></div>';
   }
@@ -2294,7 +2296,7 @@
   }
   function topTraders(t) {
     var m = {}, px = price(t);
-    S.trades.forEach(function (tr) { if (tr.tick !== t.tick) return; var e = m[tr.wallet] = m[tr.wallet] || { a: tr.wallet, b: 0, s: 0, tok: 0, n: 0 }; var tok = tr.tokens || tr.sol * SOL_USD / px; e.n++; if (tr.side === 'buy') { e.b += tr.sol; e.tok += tok; } else { e.s += tr.sol; e.tok -= tok; } });
+    S.trades.forEach(function (tr) { if (tr.tick !== t.tick) return; var e = m[tr.wallet] = m[tr.wallet] || { a: tr.wallet, b: 0, s: 0, tok: 0, n: 0 }; var tok = tr.tokens || solOf(tr, t) * SOL_USD / px; e.n++; if (tr.side === 'buy') { e.b += solOf(tr, t); e.tok += tok; } else { e.s += solOf(tr, t); e.tok -= tok; } });
     return Object.keys(m).map(function (k) { var e = m[k]; if (e.b === 0 && e.s > 0) { e.b = e.s * (0.55 + (hash(e.a) % 70) / 100); e.n++; } e.val = Math.max(0, e.tok) * px / SOL_USD; e.pnl = e.s + e.val - e.b; return e; }).sort(function (a, b) { return b.pnl - a.pnl; }).slice(0, 15);
   }
   var CMT = ['LFG', 'tax is fair, aping in', 'chart looks clean ngl', 'who is still holding?', '0% buy tax is the way', 'this mascot is elite', 'graduation soon?', 'dev is active in tg', 'bought the dip', 'diamond hands only', 'see you at Meteora', 'buy pressure is insane right now', 'just found this, looks fun', 'held since 5k mc', 'sell tax keeps the paper hands away', 'the pair choice is genius', 'curve almost full', 'lowkey the best meme on here'];
@@ -3002,7 +3004,7 @@
         '<label class="minsol"><span class="muted">Min SOL</span><input id="minsol" class="inp" inputmode="decimal" data-bind="minSol" value="' + esc(S.minSol) + '" placeholder="0"></label>' +
         (S.tpMaker ? '<button class="chip on" data-act="maker" data-arg="">Wallet ' + esc(short(S.tpMaker)) + ' ✕</button>' : '') +
         '<span class="paused" id="tp-paused" style="display:none" data-act="resume">Paused · <b id="tp-qn">0</b> new trades — click to resume</span></div>' +
-        '<div class="tbl" id="tp-tbl"><div class="trow h"><button class="link" data-act="abs" style="min-height:0;font-size:12px">' + (S.absTime ? 'Time ⇄' : 'Age ⇄') + '</button><span>Type</span><span class="r">USD</span><span class="r">' + esc(qSymT(t)) + '</span><span class="r">$' + sid + '</span><span class="r">Price</span><span>Maker</span><span class="r">Txn</span></div>' +
+        '<div class="tbl" id="tp-tbl"><div class="trow h"><button class="link" data-act="abs" style="min-height:0;font-size:12px">' + (S.absTime ? 'Time ⇄' : 'Age ⇄') + '</button><span>Type</span><span class="r">USD</span><span class="r">SOL</span><span class="r">$' + sid + '</span><span class="r">Price</span><span>Maker</span><span class="r">Txn</span></div>' +
         '<div id="tp-trades">' + (rows.length ? rows.map(function (x) { return tradeRow(x, t); }).join('') : '<div class="muted" style="padding:24px;text-align:center">No trades match these filters</div>') + '</div></div>';
     } else if (S.tpTab === 'thread') {
       var cm = seedComments(t);
@@ -4321,7 +4323,7 @@
       q(attr('data-presst', t.tick)).forEach(function (e) { e.textContent = pr.toFixed(0) + '%'; });
       q(attr('data-pressts', t.tick)).forEach(function (e) { e.textContent = (100 - pr).toFixed(0) + '%'; });
     }
-    VB[VB.length - 1] += tr.sol; TB[TB.length - 1] += 1; updTiles();
+    VB[VB.length - 1] += solOf(tr); TB[TB.length - 1] += 1; updTiles();
     if (S.screen === 'token' && S.tick === t.tick) {
       var box = document.getElementById('chart');
       if (box) lwUpdate(t);
@@ -5257,7 +5259,7 @@
       var c = document.createElement('span');
       c.className = 'fcoin ' + (tr.side === 'buy' ? 'b' : 's');
       c.style.left = (15 + Math.random() * 70) + '%';
-      c.style.setProperty('--sz', Math.max(14, Math.min(30, 12 + tr.sol * 5)) + 'px');
+      c.style.setProperty('--sz', Math.max(14, Math.min(30, 12 + solOf(tr) * 5)) + 'px');
       c.textContent = tr.side === 'buy' ? '+' : '−';
       rain.appendChild(c); setTimeout(function () { c.remove(); }, 1300);
     }

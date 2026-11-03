@@ -6100,3 +6100,7 @@ header{z-index:45}   /* above the callouts rail (40): the wallet / notification 
   html body main.tp-env section.tp-banner .hs-pills>.pill:not(.copy2):not(.cs-pill),html body main.tp-env section.tp-banner .hs-pills>.soc,html body main.tp-env section.tp-banner .hs-pills>.socials{grid-column:1/-1}
   html body main.tp-env section.tp-banner .hs-pills>.copy2{min-width:0;overflow:hidden;white-space:nowrap}
 }
+@media (max-width:760px){
+  .trow>*:nth-child(4){display:block!important}
+  .trow>*:nth-child(5){display:none!important}
+}
