@@ -270,7 +270,7 @@
       if (!silent) toast(w.name + ' connected · ' + short(acc.address));
     }).catch(function (err) {
       set({ connecting: null });
-      if (!silent) toast('Connection cancelled' + (err && err.message ? ': ' + err.message : ''));
+      if (!silent) { var em = String((err && err.message) || ''); toast(/reject|cancel|denied|closed/i.test(em) ? 'Connection cancelled' : 'Couldn’t connect to ' + w.name + (em ? ' (' + em.slice(0, 60) + ')' : '') + ' — open the wallet, unlock it and try again. If it keeps failing, restart the browser or use another wallet.'); }
     });
   }
   var off = null;
@@ -487,10 +487,14 @@
     return (list || []).map(function (t) { var k = qReg(t.symbol, t.mint, tokImg(t.mint) || t.icon, t.name); return '<button class="cpp-it" data-act="' + act + '" data-arg="' + esc(t.mint) + '">' + coinHTML(k, 26) + '<span><b>' + esc(t.symbol || k) + ' <em class="rwp-v">✓</em></b><small>' + esc(t.name || '') + ' · ' + esc(short(t.mint)) + '</small></span></button>'; }).join('') ||
       (isCA(q) ? '<button class="cpp-it ca" data-act="' + act + '" data-arg="' + esc(q) + '"><span class="coin" style="width:26px;height:26px;background:#3A3A3D;font-size:12px">?</span><span><b>Use this contract</b><small class="mono">' + esc(short(q)) + '</small></span></button>' : '<div class="muted cpp-none">No verified token found — try the ticker or paste the contract address.</div>');
   }
+  // holder-reward picker: grey out tokens treid can't pay holders in (checked on-chain), with the reason, before anyone picks one
+  function rwMark(d, list) { chainLib().then(function (T) { (list || []).slice(0, 10).forEach(function (t) { T.quoteInfo({ rpc: RPC, mint: t.mint, reward: true }).then(function (qi) {
+    if (qi.ok) return; var b = d.querySelector('[data-arg="' + t.mint + '"]'); if (!b) return; b.classList.add('no'); b.disabled = true; b.title = qi.reason || '';
+    var sm = b.querySelector('small'); if (sm) sm.textContent = /transfer hook/.test(qi.reason) ? 'Can’t pay holders in this · transfer hook' : /transfer tax/.test(qi.reason) ? 'Can’t pay holders in this · has its own transfer tax' : 'Can’t pay holders in this'; }).catch(function () {}); }); }); }
   function tokSearch(q, dropId, act) {   // name / ticker search through the server (verified tokens only), results drawn without re-rendering the page
     clearTimeout(S.tsT); var el = function () { return document.getElementById(dropId); };
     if (q.length < 2) { if (el()) el().style.display = 'none'; return; }
-    S.tsT = setTimeout(function () { (API ? apiGet('/api/tsearch?q=' + encodeURIComponent(q)) : Promise.resolve([])).catch(function () { return []; }).then(function (list) { var d = el(); if (!d) return; d.innerHTML = tokDrop(list, act, q); d.style.display = 'flex'; }); }, 250);
+    S.tsT = setTimeout(function () { (API ? apiGet('/api/tsearch?q=' + encodeURIComponent(q)) : Promise.resolve([])).catch(function () { return []; }).then(function (list) { var d = el(); if (!d) return; d.innerHTML = tokDrop(list, act, q); d.style.display = 'flex'; if (act === 'rwPick') rwMark(d, list); }); }, 250);
   }
   function rwSelect(mint, pre) {
     if (mint === 'coin') { setC({ rw: 'coin' }); S.rwErr = ''; return; }
@@ -500,7 +504,7 @@
     Promise.all([chainLib().then(function (T) { return T.quoteInfo({ rpc: RPC, mint: mint, reward: true }); }), API ? apiGet('/api/qprice?mint=' + mint).catch(function () { return {}; }) : Promise.resolve({})]).then(function (r) {
       var qi = r[0], pr = r[1] || {}; if (S.rwBusy !== mint) return; S.rwBusy = null;
       if (!qi.ok && CHAIN_ID === 'solana:devnet' && pr.verified && /No token found/.test(qi.reason || '')) qi = { ok: true, warn: 'Test network: holders get SOL here — ' + (pr.symbol || 'this token') + ' payouts start on mainnet' };
-      if (!qi.ok) { S.rwErr = qi.reason || 'This token can’t be paid out'; render(); return; }
+      if (!qi.ok) { var nm = pr.symbol ? '$' + pr.symbol : 'This token'; S.rwErr = /^[a-z]/.test(qi.reason || '') ? nm + ' ' + qi.reason : (qi.reason || nm + ' can’t be paid out'); render(); return; }
       if (pre && (!pr.verified || String(pr.symbol || '').toLowerCase() !== pre.sym.toLowerCase())) { if (pre.retry) return pre.retry(); S.rwErr = 'That shortcut didn’t check out — try the search'; render(); return; }
       if (!pr.verified) { S.rwErr = 'Only verified tokens can be holder rewards (so holders never get a fake).'; render(); return; }
       var k = qReg(pr.symbol, mint, tokImg(mint) || pr.icon, pr.name); if (pre && pre.img) PAIR_INFO[k].img = pre.img; S.c.rw = { mint: mint, sym: pr.symbol || k, key: k, warn: qi.warn || null }; S.rwq = ''; render();

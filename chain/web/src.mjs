@@ -45,9 +45,10 @@ export async function quoteInfo({ rpc, mint, reward = false }) {   // reward: on
   const mi = await getMint(C(rpc), m, 'confirmed', is22 ? TOKEN_2022_PROGRAM_ID : TOKEN_PROGRAM_ID); const out = { mint: m.toBase58(), decimals: mi.decimals, program: is22 ? 'token2022' : 'spl', ok: true };
   if (mi.freezeAuthority) out.warn = 'This token has a freeze authority — its issuer can freeze holders';
   if (is22) { const ext = getExtensionTypes(mi.tlvData); const tf = getTransferFeeConfig(mi);
-    if (tf && (tf.newerTransferFee.transferFeeBasisPoints > 0 || tf.olderTransferFee.transferFeeBasisPoints > 0)) return { ...out, ok: false, reason: 'Tokens with a transfer tax can’t be used as a pair' };
+    if (tf && (tf.newerTransferFee.transferFeeBasisPoints > 0 || tf.olderTransferFee.transferFeeBasisPoints > 0)) return { ...out, ok: false, reason: reward ? 'charges its own transfer tax on every transfer, so holders would lose part of each payout — pick another token' : 'Tokens with a transfer tax can’t be used as a pair' };
     const bad = ext.filter((e) => !ALLOWED_EXT.has(e) && e !== ExtensionType.TransferFeeConfig);
-    if (reward) { if (bad.includes(ExtensionType.TransferHook) || bad.includes(ExtensionType.NonTransferable)) return { ...out, ok: false, reason: 'This token can’t be sent to holders' };
+    if (reward) { if (bad.includes(ExtensionType.NonTransferable)) return { ...out, ok: false, reason: 'can’t be transferred at all, so holders can’t be paid in it' };
+      if (bad.includes(ExtensionType.TransferHook)) return { ...out, ok: false, reason: 'has a transfer hook (its issuer’s program must approve every transfer), so treid can’t pay holders in it — pick another token' };
       const w = []; if (bad.includes(ExtensionType.PermanentDelegate)) w.push('its issuer can move tokens from any account'); if (bad.includes(ExtensionType.PausableConfig)) w.push('its issuer can pause transfers (payouts would wait)');
       if (w.length) out.warn = [out.warn, w.join('; ')].filter(Boolean).join(' · '); return (qCache[k] = out); }
     if (bad.includes(ExtensionType.TransferHook)) return { ...out, ok: false, reason: 'Tokens with a transfer hook can’t be used as a pair' };

@@ -5908,3 +5908,14 @@ html body .hdr-right .wbal .wb-acts .btn.pri{display:inline-flex!important}   /*
 .i2-go{font-size:12px;color:var(--ivory,#efe7d6);white-space:nowrap;margin-left:auto}
 
 .ts-view.ts-still{-webkit-mask-image:none;mask-image:none}
+/* pair search dropdown on the launch page: right under the search box, compact, scrolls */
+.rpp-s{position:relative}
+.rpp-s .cpp-drop,.cpp-s .cpp-drop{max-height:300px;overflow-y:auto;overscroll-behavior:contain}
+
+.cpp-it.no{opacity:.45;cursor:not-allowed}.cpp-it.no small{color:#F2708A}.cpp-it.no .rwp-v{display:none}
+html,body{overflow-x:clip}
+/* tablets: the burn list keeps its 5 key columns inside the screen */
+@media (min-width:761px) and (max-width:1050px){.bn-row{grid-template-columns:30px minmax(0,1.2fr) minmax(0,1.4fr) 96px 90px;gap:10px}.bn-row>*:nth-child(6),.bn-row>*:nth-child(7){display:none}}
+/* very small phones: trench tabs fit */
+@media (max-width:360px){.tn-tabs{margin:0 8px 10px}.tn-tabs button{min-width:0;font-size:11.5px;padding:0 2px}.tn-tabs button b{font-size:10px}}
+@media (min-width:761px) and (max-width:1050px){.bn-lg{grid-template-columns:20px minmax(0,1fr) 130px 100px 70px 60px 30px;gap:8px}.bn-lg>*:nth-child(5){display:none}}
