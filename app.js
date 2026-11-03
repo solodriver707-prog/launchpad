@@ -2094,6 +2094,14 @@
       else { cur.h = Math.max(cur.h, x[1]); cur.l = Math.min(cur.l, x[1]); cur.c = x[1]; }
       cur.v += x[2] || 0; prevC = x[1]; if (x[3] > 0) prevR = x[3]; }
     if (cur) out.push(cur);
+    // empty minutes are real time too: fill them with flat candles (no trades = price unchanged) up to now, like pump.fun —
+    // otherwise every timeframe shows the same few candles side by side and changing 1m / 5m / 1h looks like it does nothing
+    if (out.length) { var CAP = 2500, end = Math.floor(Date.now() / b) * b, from = Math.max(out[0].t, end - CAP * b), full = [];
+      for (var j = 0; j < out.length; j++) { var bj = out[j], pv = full[full.length - 1];
+        if (pv && bj.t >= from) for (var ft = Math.max(pv.t + b, from); ft < bj.t; ft += b) full.push({ t: ft, o: pv.c, h: pv.c, l: pv.c, c: pv.c, v: 0, fill: 1 });
+        full.push(bj); }
+      var lb = full[full.length - 1]; for (var ft2 = lb.t + b; ft2 <= end; ft2 += b) full.push({ t: ft2, o: lb.c, h: lb.c, l: lb.c, c: lb.c, v: 0, fill: 1 });
+      out = full; }
     return out;
   }
   function lwEnsure() {
@@ -4182,6 +4190,8 @@
       { var tg = tpTargets(t), a = Infinity, z = -Infinity; ['tp', 'sl'].forEach(function (k) { if (S.tpF[k] && tg[k] > 0) { var v = mcToChart(tg[k]); a = Math.min(a, v); z = Math.max(z, v); } });
         if (z > -Infinity) { var pad = (Math.max(hi, z) - Math.min(lo, a)) * .08; if (z > hi - pad) hi = z + pad; if (a < lo + pad) lo = a - pad; } }
       r.priceRange = { minValue: lo, maxValue: hi }; }
+    { var lo2 = r.priceRange.minValue, hi2 = r.priceRange.maxValue, mid = (lo2 + hi2) / 2;   // a 1% wiggle must look like a 1% wiggle, not a crash: never zoom the price in tighter than ±6%
+      if (mid > 0 && !S.cscale && hi2 - lo2 < mid * .12) r.priceRange = { minValue: mid * .94, maxValue: mid * 1.06 }; }
     LW.span = [r.priceRange.minValue, r.priceRange.maxValue]; return r; }
   function lwRefitIfHidden() {   // only re-fit the price scale when a target line is off-screen — never move a view you just zoomed
     var t = find(S.tick), box = document.getElementById('c-tl'); if (!t || !LW.chart || !box || TLD) return; var tg = tpTargets(t), m = lwMain(), H = box.clientHeight, out = false;
