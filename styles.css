@@ -6122,3 +6122,7 @@ header{z-index:45}   /* above the callouts rail (40): the wallet / notification 
 }
 /* the coin ticker now sits under the header (header with search on the very top, like pump.fun) */
 header + .tape{position:relative;z-index:1}
+/* phones: the coin action row is a fixed grid now, so the old right-edge fade mask (from the scrolling version) must go — it hid the share button */
+@media (max-width:760px){
+  html body main.tp-env section.tp-banner .hs-pills{-webkit-mask:none!important;mask:none!important;overflow:visible!important}
+}
