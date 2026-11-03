@@ -527,7 +527,7 @@
     var pre = RW_PRE[S.rwTab] || [], isOn = function (p) { return r && (String(r.sym).toLowerCase() === p[1].toLowerCase() || (p[0] === 'SOL' && r.mint === WSOL) || (p[0] === 'USDC' && r.mint === USDC_MINT)); };
     var tabs = '<div class="cpp-tabs">' + RW_TABS.map(function (x) { return '<button class="' + (S.rwTab === x[0] ? 'on' : '') + '" data-act="rwTab" data-arg="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div>';
     var preChips = pre.map(function (p) { return '<button class="cpp-q' + (isOn(p) ? ' on' : '') + '" data-act="rwPre" data-arg="' + esc(p[1]) + '">' + preIcon(p, 20) + '$' + esc(p[0]) + '</button>'; }).join('');
-    return '<div class="field cpp rwp"><div class="spk-h"><b>Holders get paid in</b><span class="spk-lock">' + ICO.lock + 'Locked forever at launch</span></div>' +
+    return '<div class="field cpp rwp"><div class="spk-h"><b>Holders get paid in</b> <span class="muted" style="font-weight:500;font-size:12px">· what your holders receive from the tax</span><span class="spk-lock">' + ICO.lock + 'Locked forever at launch</span></div>' +
       '<div class="cpp-row"><div class="cpp-sel' + (!r ? ' rwp-sel-own' : '') + '">' + sel + '</div>' +
       '<div class="cpp-s">' + I.search + '<input id="rw-q" data-rwq value="' + esc(S.rwq) + '" placeholder="Search name, ticker or paste contract address" autocomplete="off" spellcheck="false"><div class="cpp-drop" id="rw-drop" style="display:none"></div></div></div>' +
       '<div class="cpp-quick drag-scroll rwp-first">' + own + (q.mint !== WSOL && q.mint !== USDC_MINT ? '<button class="cpp-q' + (r && r.mint === q.mint ? ' on' : '') + '" data-act="rwPick" data-arg="' + esc(q.mint) + '">' + coinHTML(q.key, 20) + esc(q.sym) + ' <small class="muted">pair</small></button>' : '') + '</div>' +
@@ -1824,7 +1824,7 @@
     if (g && S.view !== 'bubbles' && S.view !== 'list') g.innerHTML = list.length ? list.map(function (t) { return isMob() ? mrow(t) : card(t); }).join('') : '<div class="empty"><b style="font-size:19px">No coins in this range</b><span class="muted">Widen a slider or hit Reset.</span><button class="btn pri" data-act="reset">Reset filters</button></div>';
   }
   var SLOGANS = ['The market', 'is yours.'];
-  var KIN = DEMO ? [['GOLD', 'gold'], ['$NFROG', 'frogs'], ['TSLAx', 'tesla'], ['SOL', 'solana'], ['$CHAD', 'chads'], ['EUR', 'euros'], ['BTC', 'bitcoin'], ['', 'anything.']] : [['SOL', 'solana'], ['USDC', 'dollars'], ['BTC', 'bitcoin'], ['', 'anything.']];
+  var KIN = DEMO ? [['GOLD', 'gold'], ['$NFROG', 'frogs'], ['TSLAx', 'tesla'], ['SOL', 'solana'], ['$CHAD', 'chads'], ['EUR', 'euros'], ['BTC', 'bitcoin'], ['', 'anything.']] : [['SOL', 'solana'], ['USDC', 'dollars'], ['BTC', 'bitcoin'], ['GOLD', 'gold'], ['', 'your own coin'], ['', 'anything.']];
   var kinI = 0;
   setInterval(function () {
     var r = document.getElementById('kin-roll'); if (!r || document.hidden) return;
@@ -1852,8 +1852,8 @@
     var t0 = find(HERO[tcI]) || all()[0];
     return '<section class="intro3" id="intro"><div class="aurora"><span class="a1"></span><span class="a2"></span><span class="a3"></span></div>' +
       '<div class="i3-l">' +
-        '<h1 class="kin"><span class="kin-a">pair with</span> <span class="kin-slot"><span class="kin-roll" id="kin-roll">' + KIN.concat([KIN[0]]).map(function (x) { return '<span class="kin-w">' + (x[0] ? (x[0].charAt(0) === '$' ? avatarHTML(find(x[0].slice(1)) || BASE[0], 64) : coinHTML(x[0], 64)) : '') + '<b>' + x[1] + '</b></span>'; }).join('') + '</span></span></h1>' +
-        '<p class="i3-p"><b class="i3-slogan">Launch fair. Trade safer.</b> Pair your coin with anything — tax, dev bag and risks always on the label.</p>' +
+        '<h1 class="kin"><span class="kin-a">pay holders in</span> <span class="kin-slot"><span class="kin-roll" id="kin-roll">' + KIN.concat([KIN[0]]).map(function (x) { return '<span class="kin-w">' + (x[0] ? (x[0].charAt(0) === '$' ? avatarHTML(find(x[0].slice(1)) || BASE[0], 64) : coinHTML(x[0], 64)) : '') + '<b>' + x[1] + '</b></span>'; }).join('') + '</span></span></h1>' +
+        '<p class="i3-p"><b class="i3-slogan">Launch fair. Trade safer.</b> Your tax pays holders in anything — your own coin, SOL, gold, memes. Dev bag and risks always on the label.</p>' +
         '<div class="i3-cta"><button class="btn pri" data-act="create">Launch a coin <span aria-hidden="true">→</span></button><button class="btn sec" data-act="board">Trade anything ↓</button></div></div>' +
       (t0 ? '<div class="tc" id="tc">' + tcHTML(t0, tcI) + '<span class="tc-timer"></span></div>' : '<div class="tc tc-empty"><b>No coins yet</b><small>Be the first — launch a coin in a minute.</small><button class="btn pri" data-act="create">Launch a coin →</button></div>') +
       '<div class="i2-live"><div class="i2-lh"><span class="livedot"></span>JUST LAUNCHED</div><div id="i2-fresh">' + i2Fill(fresh) + '</div></div>' +
@@ -3679,7 +3679,7 @@
     return k;
   }
   function qSelect(mint, pre) {
-    if (mint === WSOL) { S.c.q = null; S.c.pair = 'SOL'; S.qErr = ''; S.cpq = ''; render(); return; }
+    if (mint === WSOL) { S.c.q = null; S.c.pair = 'SOL'; S.qErr = ''; S.cpq = ''; if (S.rwAuto) { S.c.rw = 'coin'; S.rwAuto = false; } render(); return; }   // back to SOL: an auto-matched reward goes back to your own coin
     S.qBusy = mint; S.qErr = ''; render();
     Promise.all([chainLib().then(function (T) { return T.quoteInfo({ rpc: RPC, mint: mint }); }), API ? apiGet('/api/qprice?mint=' + mint).catch(function () { return {}; }) : Promise.resolve({})]).then(function (r) {
       var qi = r[0], pr = r[1] || {}; if (S.qBusy !== mint) return; S.qBusy = null;
@@ -3687,6 +3687,7 @@
       if (pre && String(pr.symbol || '').toLowerCase() !== pre.sym.toLowerCase()) { if (pre.retry) return pre.retry(); S.qErr = 'That shortcut didn’t check out — try the search'; render(); return; }
       if (!(pr.usd > 0)) { S.qErr = 'No market price found for this token, so a fair starting price can’t be set. Pick a token that trades on Jupiter.'; render(); return; }
       var k = qReg(pr.symbol, mint, tokImg(mint) || pr.icon, pr.name); if (pre && pre.img) PAIR_INFO[k].img = pre.img;
+      if (!S.rwUser && pr.verified) { S.c.rw = { mint: mint, sym: pr.symbol || k, key: k, warn: qi.warn || null }; S.rwAuto = true; }   // paired with X → holders are paid in X too (change it any time below)
       S.c.q = { mint: mint, sym: pr.symbol || k, dec: qi.decimals, usd: pr.usd, warn: qi.warn || null, key: k }; S.c.pair = k; S.cpq = ''; S.c.devBuy = ''; render();   // the holder-reward choice stays as picked
     }).catch(function (e) { S.qBusy = null; S.qErr = 'Couldn’t check this token: ' + chainErr(e); render(); });
   }
@@ -3704,14 +3705,15 @@
   }
   function realPairPicker(c) {
     var q = qOf(c), cur = q.mint, custom = cur !== WSOL && cur !== USDC_MINT;
-    return '<div class="field rpp"><div class="lbl"><b>Buyers pay with</b> <span class="muted" style="font-weight:500;font-size:12px">· the token your coin trades against</span></div>' +
+    if (!S.pairOpen && !S.qBusy && !S.qErr) return '<div class="field rpp rpp-min"><div class="rpp-line">' + coinHTML(q.key, 24) + '<span class="rpp-t"><b>Buyers pay with ' + esc(q.sym) + '</b><small>' + (q.sol ? 'the standard: people buy your coin with SOL' : 'people buy your coin with ' + esc(q.sym) + (q.usd ? ' · 1 ' + esc(q.sym) + ' ≈ $' + usdTxt(q.usd) : '')) + '</small></span><button class="link rpp-chg" data-act="pairOpen">Advanced: change pair</button></div></div>';
+    return '<div class="field rpp"><div class="lbl"><b>Buyers pay with</b> <span class="muted" style="font-weight:500;font-size:12px">· what people pay to buy your coin (advanced)</span></div>' +
       '<div class="rpp-opts">' + [[WSOL, 'SOL', 'Solana'], [USDC_MINT, 'USDC', 'USD Coin']].map(function (o) { return '<button class="rpp-o' + (cur === o[0] ? ' on' : '') + '" data-act="qpick" data-arg="' + o[0] + '">' + coinHTML(o[1], 26) + '<span><b>' + o[1] + '</b><small>' + o[2] + '</small></span></button>'; }).join('') +
         (custom ? '<button class="rpp-o on" data-act="qpick" data-arg="' + esc(cur) + '">' + coinHTML(q.key, 26) + '<span><b>' + esc(q.sym) + '</b><small class="mono">' + esc(short(cur)) + '</small></span></button>' : '') + '</div>' +
       '<div class="cpp-tabs">' + RW_TABS.map(function (x) { return '<button class="' + ((S.qTab || 'crypto') === x[0] ? 'on' : '') + '" data-act="qTab" data-arg="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div>' +
       '<div class="cpp-quick drag-scroll">' + (RW_PRE[S.qTab || 'crypto'] || []).map(function (p) { var on = String(q.sym).toLowerCase() === p[1].toLowerCase() || (p[0] === 'SOL' && cur === WSOL) || (p[0] === 'USDC' && cur === USDC_MINT); return '<button class="cpp-q' + (on ? ' on' : '') + '" data-act="qPre" data-arg="' + esc(p[1]) + '">' + preIcon(p, 20) + '$' + esc(p[0]) + '</button>'; }).join('') + '</div>' +
       '<div class="rpp-s">' + I.search + '<input id="c-qmint" data-qmint value="' + esc(S.cpq) + '" placeholder="Search name, ticker or paste contract address" autocomplete="off" spellcheck="false"><div class="cpp-drop" id="q-drop" style="display:none"></div></div>' +
       (S.qBusy ? '<small class="rpp-st">Checking token…</small>' : S.qErr ? '<small class="rpp-st bad">' + esc(S.qErr) + '</small>' : q.warn ? warnTag(q.warn) : '') +
-      '<small class="rpp-note">Buyers pay in <b>' + esc(q.sym) + '</b>. Price, trading fees and your creator rewards are all in ' + esc(q.sym) + (q.sol ? '' : ' · 1 ' + esc(q.sym) + ' ≈ $' + usdTxt(q.usd)) + '.</small></div>';
+      '<small class="rpp-note">Buyers pay in <b>' + esc(q.sym) + '</b>. Price, trading fees and your creator rewards are all in ' + esc(q.sym) + (q.sol ? '' : ' · 1 ' + esc(q.sym) + ' ≈ $' + usdTxt(q.usd)) + '. Most coins keep SOL. <button class="link" data-act="pairClose">Done</button></small></div>';
   }
   function pairPicker(c) {
     var pi = pairInfo(c.pair), q = S.cpq.trim(), res = q ? pairSearch(q) : [];
@@ -4394,8 +4396,10 @@
       case 'qTab': S.qTab = arg; render(); break;
       case 'qPre': qPreset(arg); break;
       case 'vanMode': S.c.van = S.c.van || { mode: 'treid', suf: '' }; S.c.van.mode = arg; render(); setTimeout(function () { var vi = document.getElementById('van-suf'); if (vi) vi.focus(); }, 30); break;
-      case 'rwPick': S.rwq = ''; rwSelect(arg); break;
-      case 'rwPre': S.rwq = ''; rwPreset(arg); break;
+      case 'rwPick': S.rwq = ''; S.rwUser = true; S.rwAuto = false; rwSelect(arg); break;
+      case 'rwPre': S.rwq = ''; S.rwUser = true; S.rwAuto = false; rwPreset(arg); break;
+      case 'pairOpen': S.pairOpen = true; render(); break;
+      case 'pairClose': S.pairOpen = false; S.cpq = ''; render(); break;
       case 'rwTab': S.rwTab = arg; render(); break;
       case 'spPre': var sp1 = S.c.split || {}; if (arg === 'custom') setC({ split: { p: 'custom', h: sp1.h || 70, b: sp1.b || 20, d: sp1.d || 10 } }); else { var pp = SPRE[arg]; setC({ split: { p: arg, h: pp[2], b: pp[3], d: pp[4] } }); } break;
       case 'snipeStart': var sn1 = S.c.snipe; sn1.start = +arg; setC({ snipe: sn1 }); break;

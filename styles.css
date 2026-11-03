@@ -5919,3 +5919,12 @@ html,body{overflow-x:clip}
 /* very small phones: trench tabs fit */
 @media (max-width:360px){.tn-tabs{margin:0 8px 10px}.tn-tabs button{min-width:0;font-size:11.5px;padding:0 2px}.tn-tabs button b{font-size:10px}}
 @media (min-width:761px) and (max-width:1050px){.bn-lg{grid-template-columns:20px minmax(0,1fr) 130px 100px 70px 60px 30px;gap:8px}.bn-lg>*:nth-child(5){display:none}}
+
+/* create page: pair is an advanced one-liner */
+.rpp-min .rpp-line{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:rgba(255,255,255,.02)}
+.rpp-min .rpp-line>.coin{flex:none}.rpp-min .rpp-t{display:flex;flex-direction:column;min-width:0;flex:1}.rpp-min .rpp-line small{color:var(--muted);font-size:11.5px}
+.rpp-chg{font-size:12px;white-space:nowrap;color:var(--soft);text-decoration:underline;text-underline-offset:3px}
+@media (max-width:480px){.rpp-min .rpp-line{flex-wrap:wrap}.rpp-chg{margin-left:34px}.rpp-min .rpp-t{flex:1 1 200px}}
+
+/* hero: "pay holders in" on its own line, the rolling word below */
+.kin{flex-wrap:wrap;row-gap:.06em}.kin .kin-a{flex-basis:100%}
