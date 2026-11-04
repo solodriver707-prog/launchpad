@@ -1590,7 +1590,7 @@
   function trList(b) {
     var l = all().filter(function (t) { if (trBucket(t) !== b) return false; var tm = Math.max(t.buy, t.sell); if (S.trZero && tm !== 0) return false; if (S.trClean && redFlags(t).length) return false;
       if (S.trTrust && !(t.xOk || (t.devLock && lockLive(t)))) return false; if (S.trRw && !(splitOf(t) && splitOf(t).h > 0 && tm > 0)) return false;
-      if (S.trTax != null && S.trTax !== '' && tm > +S.trTax) return false; if (S.trMc && t.mcN < +S.trMc) return false; if (S.trCat && S.trCat !== 'all' && (DEMO ? pairInfo(t.pair).cat : liveCat(t)) !== S.trCat) return false; return true; });
+      if (S.trTax != null && S.trTax !== '' && S.trTax !== 'any' && tm > +S.trTax) return false; if (S.trMc && S.trMc !== 'any' && t.mcN < +S.trMc) return false; if (S.trCat && S.trCat !== 'all' && (DEMO ? pairInfo(t.pair).cat : liveCat(t)) !== S.trCat) return false; return true; });
     l.sort(b === 0 ? function (a, z) { return z.born - a.born; } : b === 1 ? function (a, z) { return z.prog - a.prog || z.mcN - a.mcN; } : function (a, z) { return (z._lt || 0) - (a._lt || 0) || z.mcN - a.mcN; });
     l.forEach(function (t) { t._tb = b; }); return l;
   }
@@ -1606,12 +1606,13 @@
       '<span class="trw-bar" title="Bonding curve"><u><i class="' + (done ? 'done' : '') + '" data-bar="' + id + '" style="width:' + Math.max(1, Math.min(100, t.prog)) + '%"></i></u><small class="mono" data-prog="' + id + '">' + Math.min(100, t.prog).toFixed(0) + '%</small></span>' +
     '</div>';
   }
-  function trFilters() {   // compact filters for the trenches (same ideas as the board, one slim row)
-    var sel = function (key, lab, opts) { var v = S[key] == null ? '' : String(S[key]); return '<label class="tf-sel' + (v && v !== 'all' ? ' on' : '') + '"><span>' + lab + '</span><select data-trsel="' + key + '">' + opts.map(function (o) { return '<option value="' + o[0] + '"' + (String(o[0]) === v ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></label>'; };
-    var chip = function (key, lab) { return '<button class="tf-chip' + (S[key] ? ' on' : '') + '" data-act="trT" data-arg="' + key + '">' + lab + '</button>'; };
-    var n = ['trZero', 'trClean', 'trTrust', 'trRw'].filter(function (k) { return S[k]; }).length + ['trTax', 'trMc'].filter(function (k) { return S[k] != null && S[k] !== ''; }).length + (S.trCat && S.trCat !== 'all' ? 1 : 0);
-    return '<div class="tn-filt">' + sel('trCat', 'Pair', [['all', 'All'], ['crypto', 'Crypto'], ['memes', 'Memes'], ['stocks', 'Stocks'], ['fx', 'Stablecoins']]) + sel('trTax', 'Tax', [['', 'Any'], ['0', '0%'], ['3', '≤ 3%'], ['5', '≤ 5%']]) + sel('trMc', 'MC', [['', 'Any'], ['5', '$5K+'], ['10', '$10K+'], ['25', '$25K+'], ['50', '$50K+']]) +
-      '<span class="tf-sep"></span>' + chip('trClean', 'No red flags') + chip('trTrust', '✓ Verified') + chip('trRw', 'Pays holders') + (n ? '<button class="tf-clr" data-act="trClr">Clear ' + n + '</button>' : '') + '</div>';
+  function trFilters() {   // compact filters for the trenches: segmented groups with icon badges + toggles, in the board's style
+    var grp = function (key, ic, lab, opts) { var v = S[key] == null || S[key] === '' ? opts[0][0] : String(S[key]);
+      return '<div class="tf-g' + (v !== opts[0][0] ? ' on' : '') + '"><span class="tf-gl"><i>' + ic + '</i>' + lab + '</span><div class="tf-seg">' + opts.map(function (o) { return '<button class="' + (String(o[0]) === v ? 'on' : '') + '" data-act="trS" data-arg="' + key + '|' + o[0] + '">' + o[1] + '</button>'; }).join('') + '</div></div>'; };
+    var tog = function (key, ic, lab, col) { return '<button class="tf-t' + (S[key] ? ' on' : '') + '" data-act="trT" data-arg="' + key + '" style="--tc:' + col + '"><i>' + ic + '</i>' + lab + '</button>'; };
+    var n = ['trZero', 'trClean', 'trTrust', 'trRw'].filter(function (k) { return S[k]; }).length + ['trTax', 'trMc'].filter(function (k) { return S[k] != null && S[k] !== '' && S[k] !== 'any'; }).length + (S.trCat && S.trCat !== 'all' ? 1 : 0);
+    return '<div class="tn-filt">' + grp('trCat', '◎', 'Pair', [['all', 'All'], ['crypto', 'Crypto'], ['memes', 'Memes'], ['stocks', 'Stocks'], ['fx', 'Stable']]) + grp('trTax', '%', 'Tax', [['any', 'Any'], ['0', '0%'], ['3', '≤3%'], ['5', '≤5%']]) + grp('trMc', '$', 'MC', [['any', 'Any'], ['5', '5K+'], ['10', '10K+'], ['25', '25K+'], ['50', '50K+']]) +
+      '<div class="tf-ts">' + tog('trClean', '<span class="fdot"></span>', 'No red flags', '#3DDC97') + tog('trTrust', '✓', 'Verified', '#7FB6FF') + tog('trRw', '◆', 'Pays holders', '#E6CB95') + (n ? '<button class="tf-clr" data-act="trClr">Clear ' + n + '</button>' : '') + '</div></div>';
   }
   function trenchPage() {
     var cols = [['✨ New', 'Fresh launches, newest first'], ['🔥 Graduating', 'Bonding curve ' + TR_GRAD + '%+ · close to Meteora'], ['🎓 Graduated', 'Trading on Meteora']], lists = [0, 1, 2].map(trList);
@@ -4764,6 +4765,7 @@
       case 'trTab': S.trTab = +arg || 0; trPaintTab(S.trTab); var tnc = document.getElementById('tn-cols'); if (tnc && isMob()) tnc.scrollTo({ left: S.trTab * tnc.clientWidth, behavior: 'smooth' }); break;
       case 'trF': if (arg === 'zero') S.trZero = !S.trZero; else S.trClean = !S.trClean; render(); break;
       case 'trT': S[arg] = !S[arg]; trSave(); render(); break;
+      case 'trS': var tsp = arg.split('|'); S[tsp[0]] = tsp[1]; trSave(); render(); break;
       case 'trClr': S.trZero = S.trClean = S.trTrust = S.trRw = false; S.trTax = ''; S.trMc = ''; S.trCat = 'all'; trSave(); render(); break;
       case 'trendList': S.lsort = 'rank'; S.ldir = -1; set({ screen: 'trend', palOpen: false, coOpen: false }); window.scrollTo(0, 0); break;
       case 'bsort': S.bsort = arg; render(); break;
