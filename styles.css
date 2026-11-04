@@ -6716,3 +6716,15 @@ html body .tch-side:has(.rwin){width:86px}
 .bh-tusd{color:#FFB15C!important;font-weight:700}
 .bx-kv em{display:block;font-style:normal;font-size:12px;color:#FFB15C;margin-top:1px}
 @media (max-width:900px){.bx-main{min-height:470px}.bx-main .bn-fire{top:215px!important}}
+/* burnery (classic layout): daily burns panel on the right, value under the counter, wider side panels */
+.bh-act .bx-card{padding:0;border:0;background:none;gap:12px}
+.bh-act .bx-days{height:110px}
+.bh-val{display:block;margin-top:4px;font-size:13px;color:rgba(255,255,255,.65);letter-spacing:0}
+.bh-val em{font-style:normal;font-size:20px;font-weight:800;color:#FFB15C;margin-right:4px}
+@media (min-width:1400px){.bh-stage{grid-template-columns:360px minmax(0,1fr) 360px!important}}
+.bh-top p{max-width:640px}
+.bn-scale{font-style:normal;font-weight:500;text-transform:none;letter-spacing:0;color:var(--faint);margin-left:6px;font-size:10.5px}
+.bh-side.bh-act{padding:16px 18px 14px;border-radius:20px;background:linear-gradient(180deg,rgba(255,140,60,.06),rgba(255,255,255,.012));border:1px solid #2E231C;box-shadow:inset 0 1px 0 rgba(255,255,255,.04);align-self:center}
+.bh .bh-sup{display:none!important}
+@media (max-width:980px){.bh-side.bh-act{flex-direction:column}}
+.bh .bh-left{display:none!important}
