@@ -2947,7 +2947,7 @@
   }
   function mcJourney(t) {
     var g0 = Math.min(9e4, CURVE_STD.mc1 * SOL_USD), s0 = Math.min(g0 / 3, CURVE_STD.mc0 * SOL_USD), M = [[s0, fmtK(s0 / 1000).replace('$', ''), '', 'start'], [g0, 'GRAD', '🎓', 'grad'],   /* graduation follows the SOL price (the curve is in SOL) */ [1e5, '100K', '🔥', 'm100K'], [1e6, '1M', '🚀', 'm1M'], [1e7, '10M', '🌕', 'm10M'], [1e8, '100M', '👑', 'm100M']];
-    var f = function (usd) { usd = Math.max(5e3, Math.min(1e8, usd)); for (var k = 0; k < M.length - 1; k++) { if (usd <= M[k + 1][0]) { var a = Math.log10(M[k][0]), b = Math.log10(M[k + 1][0]); return (k + (Math.log10(usd) - a) / (b - a)) / (M.length - 1) * 100; } } return 100; };
+    var f = function (usd) { usd = Math.max(M[0][0], Math.min(1e8, usd)); for (var k = 0; k < M.length - 1; k++) { if (usd <= M[k + 1][0]) { var a = Math.log10(M[k][0]), b = Math.log10(M[k + 1][0]); return (k + (Math.log10(usd) - a) / (b - a)) / (M.length - 1) * 100; } } return 100; };
     var mc = t.mcN * 1000, ath = athOf(t) * 1000, x = f(mc), ax = f(ath);
     return '<span class="jr jr2" title="' + fmtK(t.mcN) + ' now · ATH ' + fmtK(ath / 1000) + '"><span class="jr-track"><i class="jr-fill" style="width:' + x.toFixed(1) + '%"></i>' +
       (ax - x > 1.5 ? '<i class="jr-ath" style="left:' + x.toFixed(1) + '%;width:' + (ax - x).toFixed(1) + '%"></i>' : '') +
