@@ -6710,3 +6710,9 @@ html body .tch-side:has(.rwin){width:86px}
 .bx-side .bh-side{position:static!important;width:auto!important;max-width:none!important;margin:0!important;padding:16px 18px!important;border-radius:16px;border:1px solid var(--line);background:var(--card,#121214);transform:none!important}
 .bx-side .bh-tubes{justify-content:space-between}
 .bx-main{min-height:420px}
+.bx-tr{display:flex;align-items:flex-start;gap:34px;flex-wrap:wrap}
+.bx-tr>div{display:flex;flex-direction:column;gap:4px}
+.bx-usd b{font-size:clamp(30px,3.2vw,42px)!important;color:#FFB15C!important;text-shadow:0 0 24px rgba(255,140,40,.3)}
+.bh-tusd{color:#FFB15C!important;font-weight:700}
+.bx-kv em{display:block;font-style:normal;font-size:12px;color:#FFB15C;margin-top:1px}
+@media (max-width:900px){.bx-main{min-height:470px}.bx-main .bn-fire{top:215px!important}}
