@@ -6624,3 +6624,4 @@ html body .tch-side:has(.rwin){width:86px}
 .xcm-l{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:700}
 .xcm-l input{width:100%}
 .xcm-err{font-size:12.5px;color:#F7A2B3;background:rgba(242,112,138,.1);border:1px solid rgba(242,112,138,.3);padding:8px 10px;border-radius:10px}
+.tc-warn{margin-top:8px;font-size:12px;line-height:1.45;color:#FFDE85;background:rgba(255,209,92,.08);border:1px solid rgba(255,209,92,.25);padding:8px 10px;border-radius:10px}
