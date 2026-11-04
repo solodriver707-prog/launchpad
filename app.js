@@ -1588,9 +1588,7 @@
   S.trTab = 0; S.trScroll = null;
   function trBucket(t) { return t.prog >= 100 ? 2 : t.prog >= TR_GRAD ? 1 : 0; }
   function trList(b) {
-    var l = all().filter(function (t) { if (trBucket(t) !== b) return false; var tm = Math.max(t.buy, t.sell); if (S.trZero && tm !== 0) return false; if (S.trClean && redFlags(t).length) return false;
-      if (S.trTrust && !(t.xOk || (t.devLock && lockLive(t)))) return false; if (S.trRw && !(splitOf(t) && splitOf(t).h > 0 && tm > 0)) return false;
-      if (S.trTax != null && S.trTax !== '' && S.trTax !== 'any' && tm > +S.trTax) return false; if (S.trMc && S.trMc !== 'any' && t.mcN < +S.trMc) return false; if (S.trCat && S.trCat !== 'all' && (DEMO ? pairInfo(t.pair).cat : liveCat(t)) !== S.trCat) return false; return true; });
+    var l = all().filter(function (t) { if (trBucket(t) !== b) return false; var tm = Math.max(t.buy, t.sell);       if (S.trTax != null && S.trTax !== '' && S.trTax !== 'any' && tm > +S.trTax) return false; if (S.trMc && S.trMc !== 'any' && t.mcN < +S.trMc) return false; if (S.trCat && S.trCat !== 'all' && (DEMO ? pairInfo(t.pair).cat : liveCat(t)) !== S.trCat) return false; return true; });
     l.sort(b === 0 ? function (a, z) { return z.born - a.born; } : b === 1 ? function (a, z) { return z.prog - a.prog || z.mcN - a.mcN; } : function (a, z) { return (z._lt || 0) - (a._lt || 0) || z.mcN - a.mcN; });
     l.forEach(function (t) { t._tb = b; }); return l;
   }
@@ -1610,9 +1608,9 @@
     var grp = function (key, ic, lab, opts) { var v = S[key] == null || S[key] === '' ? opts[0][0] : String(S[key]);
       return '<div class="tf-g' + (v !== opts[0][0] ? ' on' : '') + '"><span class="tf-gl"><i>' + ic + '</i>' + lab + '</span><div class="tf-seg">' + opts.map(function (o) { return '<button class="' + (String(o[0]) === v ? 'on' : '') + '" data-act="trS" data-arg="' + key + '|' + o[0] + '">' + o[1] + '</button>'; }).join('') + '</div></div>'; };
     var tog = function (key, ic, lab, col) { return '<button class="tf-t' + (S[key] ? ' on' : '') + '" data-act="trT" data-arg="' + key + '" style="--tc:' + col + '"><i>' + ic + '</i>' + lab + '</button>'; };
-    var n = ['trZero', 'trClean', 'trTrust', 'trRw'].filter(function (k) { return S[k]; }).length + ['trTax', 'trMc'].filter(function (k) { return S[k] != null && S[k] !== '' && S[k] !== 'any'; }).length + (S.trCat && S.trCat !== 'all' ? 1 : 0);
+    var n = ['trTax', 'trMc'].filter(function (k) { return S[k] != null && S[k] !== '' && S[k] !== 'any'; }).length + (S.trCat && S.trCat !== 'all' ? 1 : 0);
     return '<div class="tn-filt">' + grp('trCat', '◎', 'Pair', [['all', 'All'], ['crypto', 'Crypto'], ['memes', 'Memes'], ['stocks', 'Stocks'], ['fx', 'Stable']]) + grp('trTax', '%', 'Tax', [['any', 'Any'], ['0', '0%'], ['3', '≤3%'], ['5', '≤5%']]) + grp('trMc', '$', 'MC', [['any', 'Any'], ['5', '5K+'], ['10', '10K+'], ['25', '25K+'], ['50', '50K+']]) +
-      '<div class="tf-ts">' + tog('trClean', '<span class="fdot"></span>', 'No red flags', '#3DDC97') + tog('trTrust', '✓', 'Verified', '#7FB6FF') + tog('trRw', '◆', 'Pays holders', '#E6CB95') + (n ? '<button class="tf-clr" data-act="trClr">Clear ' + n + '</button>' : '') + '</div></div>';
+      '<div class="tf-ts">' + (n ? '<button class="tf-clr" data-act="trClr">Clear ' + n + '</button>' : '') + '</div></div>';
   }
   function trenchPage() {
     var cols = [['✨ New', 'Fresh launches, newest first'], ['🔥 Graduating', 'Bonding curve ' + TR_GRAD + '%+ · close to Meteora'], ['🎓 Graduated', 'Trading on Meteora']], lists = [0, 1, 2].map(trList);
@@ -4766,7 +4764,7 @@
       case 'trF': if (arg === 'zero') S.trZero = !S.trZero; else S.trClean = !S.trClean; render(); break;
       case 'trT': S[arg] = !S[arg]; trSave(); render(); break;
       case 'trS': var tsp = arg.split('|'); S[tsp[0]] = tsp[1]; trSave(); render(); break;
-      case 'trClr': S.trZero = S.trClean = S.trTrust = S.trRw = false; S.trTax = ''; S.trMc = ''; S.trCat = 'all'; trSave(); render(); break;
+      case 'trClr': S.trTax = ''; S.trMc = ''; S.trCat = 'all'; trSave(); render(); break;
       case 'trendList': S.lsort = 'rank'; S.ldir = -1; set({ screen: 'trend', palOpen: false, coOpen: false }); window.scrollTo(0, 0); break;
       case 'bsort': S.bsort = arg; render(); break;
       case 'bdPer': S.bdPer = arg; render(); break;
