@@ -6706,3 +6706,7 @@ html body .tch-side:has(.rwin){width:86px}
   .bx-main .bn-now{display:none!important}
   .bx-src{grid-template-columns:1fr}
 }
+/* keep the "Who's burning" tubes in the new layout */
+.bx-side .bh-side{position:static!important;width:auto!important;max-width:none!important;margin:0!important;padding:16px 18px!important;border-radius:16px;border:1px solid var(--line);background:var(--card,#121214);transform:none!important}
+.bx-side .bh-tubes{justify-content:space-between}
+.bx-main{min-height:420px}
