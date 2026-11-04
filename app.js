@@ -3759,9 +3759,19 @@
     return '<div class="hm-ov" data-act="ctoClose"><div class="hm card-s bt" data-stop>' + head + body + '</div></div>';
   }
   function effTax(t, at) { return Math.max(Math.max(t.buy, t.sell), snipeNow(t, at)); }
+  // treid curves (SOL-equivalent): start / graduation market cap in SOL, and the virtual reserves that reproduce them
+  var CURVE_STD = { mc0: 28, mc1: 420, q0: 30.0, b0: 1.071e9, sold: 7.9e8 }, CURVE_PRO = { mc0: 94.4, mc1: 213, q0: 169.4, b0: 1.794e9, sold: 4e8 };
+  function startPicker(c) {
+    var o = function (pro, ttl, sub, pts) { var cv = pro ? CURVE_PRO : CURVE_STD, on = !!c.pro === pro;
+      return '<button class="stp' + (on ? ' on' : '') + '" data-act="cstart" data-arg="' + (pro ? 1 : 0) + '"><span class="stp-h"><b>' + ttl + '</b>' + (pro ? '<em>NEW</em>' : '') + '</span><span class="stp-mc mono">' + fmtK(cv.mc0 * SOL_USD / 1000) + ' <i>→</i> ' + fmtK(cv.mc1 * SOL_USD / 1000) + '</span><small>' + sub + '</small><ul>' + pts.map(function (x) { return '<li>' + x + '</li>'; }).join('') + '</ul></button>'; };
+    return '<div class="field stpf"><div class="lbl"><b>Starting market cap <span class="muted" style="font-weight:500;font-size:12px">· where your chart begins</span></b></div><div class="stp-row">' +
+      o(false, 'Standard', 'start → graduation', ['~' + Math.round(CURVE_STD.mc1 / CURVE_STD.mc0) + '× room on the curve', 'Like pump.fun — degens know it']) +
+      o(true, 'Pro start', 'start → graduation', ['Bots can’t buy the supply for pennies', 'Looks like a serious launch', '~' + (CURVE_PRO.mc1 / CURVE_PRO.mc0).toFixed(1) + '× room on the curve']) + '</div>' +
+      '<small class="muted stp-n">Both graduate to Meteora after about 85 SOL of buys. Pro start sells 40% of the supply on the curve (Standard ~80%); the rest goes into the locked pool at graduation.</small></div>';
+  }
   function devQuote(amt) {   // amt is in SOL — you always pay with SOL; on a coin paired with something else it's swapped to the pair token first
-    var q = qOf(S.c), solIn = Math.max(0, +amt || 0); amt = q.sol ? solIn : (qUsd(q) > 0 ? solIn * SOL_USD / qUsd(q) : 0); var usd = amt * qUsd(q), solEq = usd / SOL_USD, px0 = 5 * 1000 / 1e9, impact = Math.min(25, solEq * 3 / Math.sqrt(5));
-    var tok = usd / (px0 * (1 + impact / 200)); tok = Math.min(tok, 8e8);
+    var q = qOf(S.c), solIn = Math.max(0, +amt || 0); amt = q.sol ? solIn : (qUsd(q) > 0 ? solIn * SOL_USD / qUsd(q) : 0); var usd = amt * qUsd(q), solEq = usd / SOL_USD;
+    var cv = S.c.pro ? CURVE_PRO : CURVE_STD, tok = cv.b0 * solEq / (cv.q0 + solEq); tok = Math.min(tok, cv.sold);   // the curve as virtual reserves (SOL-equivalent): tokens out = B0·x / (Q0 + x)
     return { sol: amt, solIn: solIn, tok: tok, pct: tok / 1e9 * 100, sym: q.sym, key: q.key, isSol: !!q.sol, mint: q.mint };
   }
   function niceQ(x) { if (!(x > 0)) return '0'; var p = Math.pow(10, Math.floor(Math.log10(x))); return String(+(Math.round(x / p) * p).toPrecision(2)); }
@@ -4029,7 +4039,7 @@
   function createPage() {
     var c = S.c, sp = c.spec, tmax = Math.max(c.buy, c.sell);
     var dq = devQuote(String(c.devBuy || '').replace(',', '.'));
-    var preview = { devPct: +dq.pct.toFixed(2), name: c.name || 'Your token', tick: c.tick || 'TICKER', spec: sp, img: c.img, banner: c.banner, banPv: c.banSrc || null, banX: c.banX, banY: c.banY, buy: c.buy, sell: c.sell, split: c.buy > 0 ? c.split : null, pair: c.pair, mcN: 5, mc0: 5, prog: 1, born: Date.now(), holders: 1, vol: 0, ca: 'preview', hist: [5, 5.1, 5, 5.2, 5.4], rewards: false, burn: false, rw: rwOf(c) ? (rwOf(c).mint === qOf(c).mint ? 'pair' : { mint: rwOf(c).mint }) : 'coin' };
+    var preview = { devPct: +dq.pct.toFixed(2), name: c.name || 'Your token', tick: c.tick || 'TICKER', spec: sp, img: c.img, banner: c.banner, banPv: c.banSrc || null, banX: c.banX, banY: c.banY, buy: c.buy, sell: c.sell, split: c.buy > 0 ? c.split : null, pair: c.pair, mcN: (c.pro ? CURVE_PRO : CURVE_STD).mc0 * SOL_USD / 1000, mc0: (c.pro ? CURVE_PRO : CURVE_STD).mc0 * SOL_USD / 1000, prog: 1, born: Date.now(), holders: 1, vol: 0, ca: 'preview', hist: [5, 5.1, 5, 5.2, 5.4], rewards: false, burn: false, rw: rwOf(c) ? (rwOf(c).mint === qOf(c).mint ? 'pair' : { mint: rwOf(c).mint }) : 'coin' };
     function opts(key, list) { return '<div class="optrow">' + list.map(function (v) { return '<button class="opt' + (sp[key] === v ? ' on' : '') + '" data-act="spec" data-k="' + key + '" data-arg="' + v + '">' + v + '</button>'; }).join('') + '</div>'; }
     function sws(key, list) { return '<div class="optrow">' + list.map(function (v) { return '<button class="sw' + (sp[key] === v ? ' on' : '') + '" style="background:' + v + '" data-act="spec" data-k="' + key + '" data-arg="' + v + '" aria-label="Colour ' + v + '"></button>'; }).join('') + '</div>'; }
     return '<main class="wrap" style="padding-top:22px;max-width:1240px">' +
@@ -4047,7 +4057,7 @@
             '<div class="field" style="flex:1 1 140px"><label for="c-tick" style="font-weight:700">Ticker</label><span class="tick-in"><em>$</em><input id="c-tick" class="inp mono" data-bind="c.tick" value="' + esc(c.tick) + '" placeholder="DFROG"></span></div></div>' + 
           '<div class="field"><label for="c-desc" style="font-weight:700">Description</label><textarea id="c-desc" class="inp" data-bind="c.desc" placeholder="What is this token about?">' + esc(c.desc) + '</textarea></div>' +
           '<div class="fsec"><i>2</i>Market</div>' +
-          realPairPicker(c) + taxPicker(c) + splitPicker(c) + devBuyPicker(c) + feeToPicker(c) + vanityPicker(c) +
+          realPairPicker(c) + startPicker(c) + taxPicker(c) + splitPicker(c) + devBuyPicker(c) + feeToPicker(c) + vanityPicker(c) +
           '<div class="fsec"><i>3</i>Community</div>' +
           '<div class="socrow"><span class="soc-l">Socials <small>optional · shown as buttons on your coin</small></span><div class="socgrid">' + socField(c, 'x', 'X', '', 'Paste X link') + socField(c, 'tg', 'Telegram', '', 'Paste Telegram link') + socField(c, 'web', 'Website', '', 'Paste website link') + '</div></div>' +
           '<div class="cr-know"><b>📋 Your creator rules — read before launching</b><ul>' + (fParam(c).show ? '<li><b>Creator fees go to ' + esc(fParam(c).show) + '</b> — the rules below apply to ' + ((c.feeK || 'me') === 'w' ? 'that wallet' : 'them once they claim') + ', not to you.</li>' : '') +
@@ -4728,6 +4738,7 @@
       case 'demoImgsReset': BASE.forEach(function (t) { if (DIMG[t.tick]) delete t.img; }); DIMG = {}; try { localStorage.removeItem('dl.demoimgs'); } catch (er) {} render(); break;
       case 'devbuy': setC({ devBuy: arg === '0' ? '' : arg }); break;
       case 'devlock': setC({ lock: +arg || 0 }); break;
+      case 'cstart': setC({ pro: arg === '1' }); break;
       case 'xcOpen': S.xc = { tick: S.tick, url: '', err: '', busy: false }; render(); break;
       case 'xcClose': if (el.classList.contains('overlay') && e.target.closest('[data-stop]')) break; S.xc = null; render(); break;
       case 'xcGo': (function () { var X = S.xc, tx = X && find(X.tick), u = (document.getElementById('xc-url') || {}).value || ''; if (!tx) return; X.url = u.trim(); X.busy = true; X.err = ''; render();
@@ -4986,7 +4997,7 @@
         var dq2 = devQuote(String(c.devBuy || '').replace(',', '.'));
         if (dq2.isSol && dq2.sol > 0 && typeof S.balance === 'number' && dq2.sol > S.balance) { toast('Not enough ' + NET + 'SOL for a ' + dq2.sol + ' SOL buy — balance ' + S.balance.toFixed(3)); break; }
         if (!S.demoLaunch) {
-          var tax0 = Math.max(c.buy, c.sell), sn0 = c.snipe || {}, cc0 = JSON.parse(JSON.stringify({ name: c.name.trim(), tick: c.tick, spec: c.spec, split: c.split, rw: rwOf(c) ? { mint: rwOf(c).mint } : 'coin', buy: c.buy, sell: c.sell, x: c.x, tg: c.tg, web: c.web, f: fp0.v || null, lk: lockOf(c) || null, desc: c.desc, img: c.img, banner: c.banner, snipe: sn0, pair: c.pair, q: c.q || null }));
+          var tax0 = Math.max(c.buy, c.sell), sn0 = c.snipe || {}, cc0 = JSON.parse(JSON.stringify({ name: c.name.trim(), tick: c.tick, spec: c.spec, split: c.split, rw: rwOf(c) ? { mint: rwOf(c).mint } : 'coin', buy: c.buy, sell: c.sell, x: c.x, tg: c.tg, web: c.web, f: fp0.v || null, lk: lockOf(c) || null, pro: !!c.pro, desc: c.desc, img: c.img, banner: c.banner, snipe: sn0, pair: c.pair, q: c.q || null }));
           var solB = dq2.isSol ? dq2.sol : dq2.solIn, qq1 = qOf(c);
           if (typeof S.balance === 'number' && S.balance < solB + 0.03) { toast('You need about ' + (solB + 0.03).toFixed(2) + ' ' + NET + 'SOL (coin creation ≈ 0.03 SOL' + (solB ? ' + your ' + solB + ' SOL buy' : '') + ')'); break; }
           var vc1 = c.van && c.van.mode === 'custom' && (c.van.suf || '').length >= 3, suf1 = vc1 ? c.van.suf : 'trd', vf1 = vc1 ? vanFee(suf1.length) : 0, grindT = null;
@@ -5007,9 +5018,9 @@
             var fsU = S.wallet && S.wallet.features['solana:signMessage'], tsU = Date.now(), whoU = S.account;   // the upload is signed by your wallet (protects the IPFS account from spam)
             var up = API ? (fsU ? Promise.race([Promise.resolve(fsU.signMessage({ account: S.walletAcc, message: new TextEncoder().encode(siteMsg('treid: upload \u2014 ' + whoU + ' \u2014 ' + tsU)) })), new Promise(function (_, no) { setTimeout(function () { no(new Error('Your wallet didn’t answer — open it (unlock it if needed) and press Launch again. Nothing was sent.')); }, 90e3); })]).then(function (r) { S.busy = 'Saving logo'; render(); return r; }) : Promise.reject(new Error('This wallet can’t sign messages — try Phantom or Solflare'))).then(function (r) { var sg = (Array.isArray(r) ? r[0] : r).signature; return chainLib().then(function (T) { return T.b58(sg); }); }).then(function (sigU) { return Promise.race([fetch(API + '/api/upload', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ wallet: whoU, ts: tsU, sig: sigU, name: cc0.name, symbol: cc0.tick, description: (cc0.desc || '').trim(), image: cc0.img || null, banner: cc0.banner || null, x: cc0.x, tg: cc0.tg, web: cc0.web }) }).then(function (r) { return r.json(); }), new Promise(function (r) { setTimeout(function () { r({}); }, 25000); })]); }).catch(function (e) { return { error: e && e.message }; }) : Promise.resolve({});
             return up; }).then(function (up) { S.busy = null; if (API && !API_DEV && !(up && up.uri)) throw new Error((up && up.error) || 'Couldn’t save your logo to IPFS — please try again'); var g = grindT; return chainRun('Launching $' + symOf(c), function (T) {
-            return T.buildCreate({ rpc: RPC, payer: S.account, partner: PARTNER, treasury: TREASURY, mintSecret: g.secret, extraFeeSol: vf1, escrow: S.escrowWallet || null, name: cc0.name, symbol: cc0.tick, uri: coinUri('MINT'.repeat(11), cc0, up && up.uri), taxBps: tax0 * 100, trapBps: Math.max(50, sn0.start || 50) * 100, trapSecs: Math.max(30, sn0.dur || 30), devBuySol: dq2.sol, quoteMint: qq1.sol ? null : qq1.mint, mc0: qq1.sol ? null : 28 * SOL_USD / qq1.usd, mc1: qq1.sol ? null : 420 * SOL_USD / qq1.usd });
+            return T.buildCreate({ rpc: RPC, payer: S.account, partner: PARTNER, treasury: TREASURY, mintSecret: g.secret, extraFeeSol: vf1, escrow: S.escrowWallet || null, name: cc0.name, symbol: cc0.tick, uri: coinUri('MINT'.repeat(11), cc0, up && up.uri), taxBps: tax0 * 100, trapBps: Math.max(50, sn0.start || 50) * 100, trapSecs: Math.max(30, sn0.dur || 30), devBuySol: dq2.sol, quoteMint: qq1.sol ? null : qq1.mint, mc0: qq1.sol ? null : 28 * SOL_USD / qq1.usd, mc1: qq1.sol ? null : 420 * SOL_USD / qq1.usd, pro: !!cc0.pro, proThr: qq1.sol ? null : 85 * SOL_USD / qq1.usd });
           }); }).then(function (b) {
-            var coin = { mint: b.mint, pool: b.pool, config: b.config, creator: S.account, name: cc0.name, symbol: cc0.tick, uri: b.uri, tax_bps: tax0 * 100, trap_bps: Math.max(50, sn0.start || 50) * 100, trap_secs: Math.max(30, sn0.dur || 30), created_at: Date.now(), mcap_usd: 20 * SOL_USD, curve_pct: 0, holders: dq2.sol > 0 ? 1 : 0, quote_mint: qq1.mint, quote_symbol: qq1.sym, quote_usd: qUsd(qq1), quote_dec: qq1.dec };
+            var coin = { mint: b.mint, pool: b.pool, config: b.config, creator: S.account, name: cc0.name, symbol: cc0.tick, uri: b.uri, tax_bps: tax0 * 100, trap_bps: Math.max(50, sn0.start || 50) * 100, trap_secs: Math.max(30, sn0.dur || 30), created_at: Date.now(), mcap_usd: (cc0.pro ? CURVE_PRO : CURVE_STD).mc0 * SOL_USD, curve_pct: 0, holders: dq2.sol > 0 ? 1 : 0, quote_mint: qq1.mint, quote_symbol: qq1.sym, quote_usd: qUsd(qq1), quote_dec: qq1.dec };
             var nt2 = liveTok(coin); nt2.spec = cc0.spec; nt2.img = cc0.img; nt2.banner = cc0.banner || null; nt2.desc = (cc0.desc || '').trim(); nt2.split = tax0 > 0 && cc0.split ? { p: cc0.split.p, h: cc0.split.h, b: cc0.split.b, d: cc0.split.d } : null;
             if (cc0.x || cc0.tg || cc0.web) { nt2.soc = true; nt2.links = { demo: false, web: linkOf(cc0.web), x: cc0.x ? linkOf(/[\/.]/.test(cc0.x) ? cc0.x : 'x.com/' + cc0.x.replace(/^@/, '')) : null, tg: cc0.tg ? linkOf(/[\/.]/.test(cc0.tg) ? cc0.tg : 't.me/' + cc0.tg.replace(/^@/, '')) : null }; }
             S.c = { name: '', tick: '', desc: '', x: '', tg: '', web: '', pair: 'SOL', q: null, buy: 0, sell: 0, img: null, banner: null, devBuy: '', spec: { kind: pick(A.KINDS), skin: pick(A.SKINS), bg: pick(A.BGS), eyes: 'normal', mouth: 'smile', acc: 'none' } };
@@ -5022,7 +5033,7 @@
         var vc = c.van && c.van.mode === 'custom', vs = vc ? (c.van.suf || '') : 'trd', vf = vc ? vanFee(vs.length) : 0;
         if (vc && vs.length < 3) { toast('Custom address ending needs at least 3 characters'); break; }
         if (vf && typeof S.balance === 'number' && dq2.sol + vf > S.balance) { toast('Not enough ' + NET + 'SOL — need ' + (dq2.sol + vf).toFixed(2) + ' SOL incl. ' + vf + ' SOL address fee'); break; }
-        var nt = { name: c.name.trim(), tick: c.tick, spec: c.spec, img: c.img, banner: c.banner || null, snipe: { on: true, start: Math.max(50, (c.snipe && c.snipe.start) || 50), dur: Math.max(30, (c.snipe && c.snipe.dur) || 30) }, buy: c.buy, sell: c.sell, split: c.buy > 0 && c.split ? { p: c.split.p, h: c.split.h, b: c.split.b, d: c.split.d } : null, rw: rwOf(c) ? (rwOf(c).mint === qOf(c).mint ? 'pair' : { mint: rwOf(c).mint }) : 'coin', pair: c.pair, mcN: 5, mc0: 5, prog: 1, born: Date.now(), holders: 1,
+        var nt = { name: c.name.trim(), tick: c.tick, spec: c.spec, img: c.img, banner: c.banner || null, snipe: { on: true, start: Math.max(50, (c.snipe && c.snipe.start) || 50), dur: Math.max(30, (c.snipe && c.snipe.dur) || 30) }, buy: c.buy, sell: c.sell, split: c.buy > 0 && c.split ? { p: c.split.p, h: c.split.h, b: c.split.b, d: c.split.d } : null, rw: rwOf(c) ? (rwOf(c).mint === qOf(c).mint ? 'pair' : { mint: rwOf(c).mint }) : 'coin', pair: c.pair, mcN: (c.pro ? CURVE_PRO : CURVE_STD).mc0 * SOL_USD / 1000, mc0: (c.pro ? CURVE_PRO : CURVE_STD).mc0 * SOL_USD / 1000, prog: 1, born: Date.now(), holders: 1,
           soc: !!(c.x || c.tg || c.web), links: { web: linkOf(c.web), x: c.x ? linkOf(/[\/.]/.test(c.x) ? c.x : 'x.com/' + c.x.replace(/^@/, '')) : null, tg: c.tg ? linkOf(/[\/.]/.test(c.tg) ? c.tg : 't.me/' + c.tg.replace(/^@/, '')) : null, demo: false }, rewards: false, burn: false, ca: fakeCA(vs), vanity: vc ? vs : null, vol: 0, hist: [5, 5], desc: c.desc.trim(), creator: S.account };
         if (vf && typeof S.balance === 'number') S.balance = Math.max(0, S.balance - vf);
         nt.devPct = +dq2.pct.toFixed(2);
