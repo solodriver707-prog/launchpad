@@ -1906,7 +1906,7 @@
         '<span class="ar-kv"><span><small>24h vol</small><b class="mono">' + fmtK(t.vol) + '</b></span><span><small>Holders</small><b class="mono">' + fmtNum(t.holders) + '</b></span>' +
           '<span class="ar-tx" style="background:' + taxBg(tm) + '"><small>TAX</small><b>' + tm + '%</b>' + (splitOf(t) ? splitBar(splitOf(t), 'mini') : '') + '</span>' +
           '<span class="ar-pr">' + coinHTML(t.pair, 26) + '<span><small>' + (tm > 0 || t.qMint ? 'PAIRED WITH' : 'PLAIN') + '</small><b>' + esc(pairLabel(t.pair)) + '</b></span></span>' +
-          (function () { var r = rwInfo(t, 26); return r ? '<span class="ar-pr ar-rw">' + r.ic + '<span><small>🎁 HOLDERS PAID IN</small><b>' + esc(r.sym) + '</b></span></span>' : ''; })() + '</span></div></div>' +
+          (function () { var r = rwInfo(t, 26); return r && r.sym !== pairLabel(t.pair) && !(t.live && t.qMint && r.sym === qSymT(t)) ? '<span class="ar-pr ar-rw">' + r.ic + '<span><small>🎁 HOLDERS PAID IN</small><b>' + esc(r.sym) + '</b></span></span>' : ''; })() + '</span></div></div>' +
       '<div class="ar-r"><span class="ar-ch">' + arChart(t, 1000, 160) + '</span></div></div>';
   }
   // the trades that flow under the arena: real ones from the server (≥ $5), plus every new one as it happens

@@ -6598,3 +6598,21 @@ html body .tch-side:has(.rwin){width:86px}
 @media (max-width:760px){html body .tch-side:has(.rwin){width:80px}}
 .ar-kv>.ar-rw{background:rgba(12,32,23,.85);border-color:rgba(61,220,151,.4)}
 .ar-rw small{color:#9FF3CC!important}
+/* phones: the chart sits softly behind the bottom of the card, so a coin without a chart leaves no empty band (all slides are the same height) */
+@media (max-width:760px){
+  .ar-card{padding:14px 14px 16px!important}
+  .ar-r{position:absolute!important;left:0;right:0;bottom:0;height:46%!important;margin:0!important;z-index:1;opacity:.5;pointer-events:none}
+  .ar-l{position:relative;z-index:2}
+}
+@media (max-width:760px){
+  .ar-kv{flex-wrap:wrap;gap:10px 12px!important}
+  .ar-kv>.ar-tx,.ar-kv>.ar-pr{height:48px!important}
+  .ar-kv>.ar-tx{min-width:62px;padding:3px 9px!important}
+  .ar-kv>.ar-pr{padding:5px 10px 5px 6px}
+  .ar-pr .coin,.ar-pr .av{width:22px!important;height:22px!important}
+  .ar-pr small{font-size:7.5px!important}
+}
+@media (max-width:760px){
+  .ar-kv{display:grid!important;grid-template-columns:auto auto;justify-content:start;gap:10px 14px!important}
+  .ar-kv>.ar-rw{grid-column:1/-1;justify-self:start}
+}
