@@ -331,7 +331,7 @@
       var key = 'treid.rwSeen.' + acc, seen = 0; try { seen = +localStorage.getItem(key) || 0; } catch (e) {}
       var first = S.rw.acc !== acc, fresh = list.filter(function (r) { return r.ts > seen; });
       S.rw = { acc: acc, list: list, at: Date.now() };
-      if (fresh.length && seen) fresh.slice(0, 3).forEach(function (r) { toast('🎁 You received ' + fmtNum(r.amount) + ' $' + r.tokenSymbol + ' holder rewards' + (r.symbol && r.symbol !== r.tokenSymbol ? ' from $' + r.symbol : ''), rwTok(r.mint)); });
+      if (fresh.length && seen) fresh.slice(0, 3).forEach(function (r) { toast('You received ' + fmtNum(r.amount) + ' $' + r.tokenSymbol + ' holder rewards' + (r.symbol && r.symbol !== r.tokenSymbol ? ' from $' + r.symbol : ''), rwTok(r.mint)); });
       if (list.length) try { localStorage.setItem(key, String(list[0].ts)); } catch (e) {}
       if (S.walletMenu || first) render(); }).catch(function () {});
   }
@@ -610,7 +610,7 @@
           '<div class="wb-sol">' + coinHTML('SOL', 26) + '<b>SOL</b><span class="mono">' + solB.toFixed(4) + ' SOL</span><small class="muted mono">$' + money(solB * SOL_USD) + '</small></div>' +
           '<div class="wb-acts"><button class="btn pri" data-act="recvOpen">Deposit</button><button class="btn sec" data-act="wallet" data-arg="' + esc(S.account) + '">Profile</button><button class="btn sec" data-act="notifOpen" aria-label="Notifications">🔔</button>' + (CHAIN_ID !== 'solana:mainnet' ? '<button class="btn sec" data-act="airdrop"' + (S.airdropping ? ' disabled' : '') + '>' + (S.airdropping ? 'Requesting…' : 'Get 1 ' + NET + 'SOL') + '</button>' : '') + '</div>' +
           
-          '<div class="wb-tabs"><div class="seg sm"><button class="' + (S.wbTab !== 'closed' ? 'on' : '') + '" data-act="wbTab" data-arg="open">Open</button><button class="' + (S.wbTab === 'closed' ? 'on' : '') + '" data-act="wbTab" data-arg="closed">Closed</button><button class="' + (S.wbTab === 'rewards' ? 'on' : '') + '" data-act="wbTab" data-arg="rewards">🎁 Rewards</button></div><button class="link" data-act="refresh">↻ Refresh</button></div>' +
+          '<div class="wb-tabs"><div class="seg sm"><button class="' + (S.wbTab !== 'closed' ? 'on' : '') + '" data-act="wbTab" data-arg="open">Open</button><button class="' + (S.wbTab === 'closed' ? 'on' : '') + '" data-act="wbTab" data-arg="closed">Closed</button><button class="' + (S.wbTab === 'rewards' ? 'on' : '') + '" data-act="wbTab" data-arg="rewards">Rewards</button></div><button class="link" data-act="refresh">↻ Refresh</button></div>' +
           '<div class="wb-list">' + (S.wbTab === 'rewards' ? rwListHTML() : WP.loading ? '<div class="muted wb-empty"><span class="gr-sp"></span> Loading…</div>' : wbOpen.length ? wbOpen.map(function (c) { var up = c.profit >= 0, my = (S.comments[c.t.tick] || []).filter(function (x) { return x.w === S.account && x.reply == null && x.text; }).sort(function (a, z) { return z.t - a.t; })[0];
             return '<div class="wb-pos"><button class="wb-pt" data-act="open" data-arg="' + esc(c.t.tick) + '">' + avatarHTML(c.t, 42) + '<span class="wb-pn"><b>$' + esc(symOf(c.t)) + '</b><small class="muted">' + esc(c.t.name) + '</small></span><span class="wb-pv"><small>Position</small><b class="mono">$' + money(S.wbTab === 'closed' ? c.got : c.value) + '</b></span><span class="wb-pv"><small>Profit</small><b class="mono ' + (up ? 'up' : 'down') + '">' + (up ? '+' : '−') + '$' + money(c.profit) + '</b></span></button>' +
               '<div class="wb-pm"><span>Spent <b class="mono">$' + moneyS(c.spent) + '</b></span><span>Avg entry <b class="mono">' + (c.avgEntryMc ? fmtK(c.avgEntryMc / 1000) : '—') + '</b> → <b class="mono">' + fmtK(c.t.mcN) + ' MC</b></span></div>' + (my ? '<div class="wb-co">' + esc(my.text.length > 110 ? my.text.slice(0, 110) + '…' : my.text) + '</div>' : '') + '</div>'; }).join('') : '<div class="muted wb-empty">' + (S.wbTab === 'closed' ? 'No closed positions yet.' : 'No open positions on treid yet.') + '</div>') + '</div></div>' : '') + '</div>';
@@ -685,10 +685,10 @@
     ];
   }
   // board cards show the coin's activity; the risk checks (dev, top 10, snipers, bundles) are on the coin page ("What we can see")
-  function paidTile(t) {   // 🎁 what the tax has paid holders so far (USD at today's prices) · coins without a holder share: 🔥 share of supply burned
+  function paidTile(t) {   // what the tax has paid holders so far (USD at today's prices) · coins without a holder share: 🔥 share of supply burned
     var sp = splitOf(t), tp = t.taxPaid || {};
     if (sp && sp.h > 0 && Math.max(t.buy, t.sell) > 0) { var usd = (tp.holders || 0) * price(t) + (tp.holders_q || 0) * qUsdT(t);
-      return ['🎁 PAID', '$' + (usd >= 1000 ? fmtK(usd / 1000).replace('$', '') : usd >= 10 ? Math.round(usd) : usd > 0 ? usd.toFixed(2) : '0'), 'Paid to holders from the tax so far' + (tp.n ? ' · ' + tp.n + ' payouts' : '')]; }
+      return ['PAID', '$' + (usd >= 1000 ? fmtK(usd / 1000).replace('$', '') : usd >= 10 ? Math.round(usd) : usd > 0 ? usd.toFixed(2) : '0'), 'Paid to holders from the tax so far' + (tp.n ? ' · ' + tp.n + ' payouts' : '')]; }
     var bp = t.supply > 0 && t.supply < 1e9 ? (1e9 - t.supply) / 1e9 * 100 : 0;
     return ['🔥 BURNED', (bp >= 10 ? bp.toFixed(0) : bp >= 0.1 ? bp.toFixed(1) : bp > 0 ? '<0.1' : '0') + '%', 'Share of the supply burned for good'];
   }
@@ -1611,7 +1611,7 @@
     var chip = function (key, lab) { return '<button class="tf-chip' + (S[key] ? ' on' : '') + '" data-act="trT" data-arg="' + key + '">' + lab + '</button>'; };
     var n = ['trZero', 'trClean', 'trTrust', 'trRw'].filter(function (k) { return S[k]; }).length + ['trTax', 'trMc'].filter(function (k) { return S[k] != null && S[k] !== ''; }).length + (S.trCat && S.trCat !== 'all' ? 1 : 0);
     return '<div class="tn-filt">' + sel('trCat', 'Pair', [['all', 'All'], ['crypto', 'Crypto'], ['memes', 'Memes'], ['stocks', 'Stocks'], ['fx', 'Stablecoins']]) + sel('trTax', 'Tax', [['', 'Any'], ['0', '0%'], ['3', '≤ 3%'], ['5', '≤ 5%']]) + sel('trMc', 'MC', [['', 'Any'], ['5', '$5K+'], ['10', '$10K+'], ['25', '$25K+'], ['50', '$50K+']]) +
-      '<span class="tf-sep"></span>' + chip('trClean', 'No red flags') + chip('trTrust', '✓ Verified') + chip('trRw', '🎁 Pays holders') + (n ? '<button class="tf-clr" data-act="trClr">Clear ' + n + '</button>' : '') + '</div>';
+      '<span class="tf-sep"></span>' + chip('trClean', 'No red flags') + chip('trTrust', '✓ Verified') + chip('trRw', 'Pays holders') + (n ? '<button class="tf-clr" data-act="trClr">Clear ' + n + '</button>' : '') + '</div>';
   }
   function trenchPage() {
     var cols = [['✨ New', 'Fresh launches, newest first'], ['🔥 Graduating', 'Bonding curve ' + TR_GRAD + '%+ · close to Meteora'], ['🎓 Graduated', 'Trading on Meteora']], lists = [0, 1, 2].map(trList);
@@ -1955,7 +1955,7 @@
         '<span class="ar-kv"><span><small>24h vol</small><b class="mono">' + fmtK(t.vol) + '</b></span><span><small>Holders</small><b class="mono">' + fmtNum(t.holders) + '</b></span>' +
           '<span class="ar-tx" style="background:' + taxBg(tm) + '"><small>TAX</small><b>' + tm + '%</b>' + (splitOf(t) ? splitBar(splitOf(t), 'mini') : '') + '</span>' +
           '<span class="ar-pr">' + coinHTML(t.pair, 26) + '<span><small>' + (tm > 0 || t.qMint ? 'PAIRED WITH' : 'PLAIN') + '</small><b>' + esc(pairLabel(t.pair)) + '</b></span></span>' +
-          (function () { var r = rwInfo(t, 26); return r && r.sym !== pairLabel(t.pair) && !(t.live && t.qMint && r.sym === qSymT(t)) ? '<span class="ar-pr ar-rw">' + r.ic + '<span><small>🎁 HOLDERS PAID IN</small><b>' + esc(r.sym) + '</b></span></span>' : ''; })() + '</span></div></div>' +
+          (function () { var r = rwInfo(t, 26); return r && r.sym !== pairLabel(t.pair) && !(t.live && t.qMint && r.sym === qSymT(t)) ? '<span class="ar-pr ar-rw">' + r.ic + '<span><small>HOLDERS PAID IN</small><b>' + esc(r.sym) + '</b></span></span>' : ''; })() + '</span></div></div>' +
       '<div class="ar-r"><span class="ar-ch">' + arChart(t, 1000, 160) + '</span></div></div>';
   }
   // the trades that flow under the arena: real ones from the server (≥ $5), plus every new one as it happens
@@ -2902,7 +2902,7 @@
     var L = S.rw.acc === S.account ? S.rw.list : [], cl = CHAIN_ID === 'solana:devnet' ? '?cluster=devnet' : '';
     if (!L.length) return '<div class="muted wb-empty">No holder rewards yet. Hold taxed coins — every payout lands here with its transaction.</div>';
     return '<div class="rw-note muted">Some wallets hide transfers of new tokens. Each reward below links to its transaction on Solscan.</div>' + L.map(function (r) { var t = rwTok(r.mint);
-      return '<a class="rw-row" target="_blank" rel="noopener" href="https://solscan.io/tx/' + esc(r.sig) + cl + '">' + (t ? avatarHTML(t, 34) : '<span class="rw-g">🎁</span>') + '<span class="rw-n"><b>+' + fmtNum(r.amount) + ' $' + esc(r.tokenSymbol) + '</b><small class="muted">' + (r.symbol ? 'Holder reward · $' + esc(r.symbol) : 'Holder reward') + ' · ' + ago(r.ts) + '</small></span><span class="rw-v">Solscan ↗</span></a>'; }).join('');
+      return '<a class="rw-row" target="_blank" rel="noopener" href="https://solscan.io/tx/' + esc(r.sig) + cl + '">' + (t ? avatarHTML(t, 34) : '<span class="rw-g">+</span>') + '<span class="rw-n"><b>+' + fmtNum(r.amount) + ' $' + esc(r.tokenSymbol) + '</b><small class="muted">' + (r.symbol ? 'Holder reward · $' + esc(r.symbol) : 'Holder reward') + ' · ' + ago(r.ts) + '</small></span><span class="rw-v">Solscan ↗</span></a>'; }).join('');
   }
   function wprof(addr) {
     if (!DEMO && API) { var e = S.wprof[addr]; if (!e || (Date.now() - e.at > (S.walletMenu && addr === S.account ? 8e3 : 30e3) && !e.busy)) { e = S.wprof[addr] = e || { at: 0, d: null }; e.busy = true; apiGet('/api/wallet/' + addr).then(function (d) { e.d = d; e.at = Date.now(); e.busy = false; if (S.walletView === addr || (S.walletMenu && addr === S.account)) render(); if (pvFor === addr) pvFill(); }).catch(function () { e.busy = false; e.at = Date.now(); }); }
@@ -3120,7 +3120,7 @@
         socialsHTML(t, true, true) +
         '<button class="pill cs-pill" data-act="siteShow" data-arg="' + id + '">🌐 Coin site</button><button class="iconbtn" data-act="star" data-arg="' + id + '" aria-label="Watchlist" aria-pressed="' + on + '">' + I.star(on) + '</button><button class="iconbtn" data-act="share" aria-label="Copy link"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8h16v-8M12 3v13M7 8l5-5 5 5"/></svg></button></div></div>' +
       '<div class="tp-key">' + (trapLeft(t) > 0 ? trapBox(t, 'head') : '') + '<div class="tax" style="background:' + taxBg(tmax) + ';padding:9px 14px"><small>TAX</small><b style="font-size:24px">' + tmax + '%</b><small style="letter-spacing:.04em;font-size:9px">BUY & SELL</small>' + (splitOf(t) ? splitBar(splitOf(t), 'mini') : '') + '</div>' +
-        (tmax > 0 || (t.live && t.qMint) ? '<button class="pairbig" data-act="pairOpen" data-arg="' + esc(t.pair) + '">' + coinHTML(t.pair, 42) + '<div><small>PAIRED WITH</small><b>' + esc(pairLabel(t.pair)) + '</b><span>' + esc(pairInfo(t.pair).name) + '</span></div></button>' : '<div class="pairbig plain">' + coinHTML('SOL', 42) + '<div><small>NO PAIR</small><b>Plain coin</b><span>0% tax · trades in SOL</span></div></div>') + (function () { var r = rwInfo(t, 42); return r ? '<div class="pairbig rwbig" title="Holders get ' + splitOf(t).h + '% of the tax, paid in ' + esc(r.sym) + '">' + r.ic + '<div><small>🎁 HOLDERS PAID IN</small><b>' + esc(r.sym) + '</b><span>' + splitOf(t).h + '% of the tax' + (t.rw && t.rw !== 'coin' ? ' · auto-swapped' : ' · nothing sold') + '</span></div></div>' : ''; })() + '</div></section>';
+        (tmax > 0 || (t.live && t.qMint) ? '<button class="pairbig" data-act="pairOpen" data-arg="' + esc(t.pair) + '">' + coinHTML(t.pair, 42) + '<div><small>PAIRED WITH</small><b>' + esc(pairLabel(t.pair)) + '</b><span>' + esc(pairInfo(t.pair).name) + '</span></div></button>' : '<div class="pairbig plain">' + coinHTML('SOL', 42) + '<div><small>NO PAIR</small><b>Plain coin</b><span>0% tax · trades in SOL</span></div></div>') + (function () { var r = rwInfo(t, 42); return r ? '<div class="pairbig rwbig" title="Holders get ' + splitOf(t).h + '% of the tax, paid in ' + esc(r.sym) + '">' + r.ic + '<div><small>HOLDERS PAID IN</small><b>' + esc(r.sym) + '</b><span>' + splitOf(t).h + '% of the tax' + (t.rw && t.rw !== 'coin' ? ' · auto-swapped' : ' · nothing sold') + '</span></div></div>' : ''; })() + '</div></section>';
     var vampWarn = '';   // no big banner: the small 🧛 badge next to the name is enough (it explains itself on hover)
     var kpiH = '<div class="tb-kpi">' + [['Market cap', '<span data-mc="' + id + '" data-v="' + fmtK(t.mcN) + '">' + fmtK(t.mcN) + '</span><span class="chgpill ' + (c >= 0 ? 'up' : 'down') + '" data-chg="' + id + '">' + chgTxt(c) + '</span>', 'big'], ['24h vol', fmtK(t.vol)], ['Liquidity', fmtK(liqK(t))], ['Holders', fmtNum(t.holders)], ['ATH', fmtK(ath)]].map(function (r) { return '<div class="' + (r[2] || '') + '"><small>' + r[0] + '</small><b class="mono">' + r[1] + '</b></div>'; }).join('') + '</div>';
     head = head.replace('<div class="tp-key">', kpiH + '<div class="tp-key">');   // MC / volume / liquidity / holders / ATH inside the banner on a computer (like pump.fun)
@@ -3956,7 +3956,7 @@
       return k ? { sym: pairLabel(k), ic: coinHTML(k, size) } : { sym: short(m), ic: '<span class="coin img" style="width:' + size + 'px;height:' + size + 'px">' + (tokImg(m) ? '<img src="' + esc(tokImg(m)) + '" alt="">' : '') + '</span>' }; }
     return { sym: '$' + symOf(t), ic: avatarHTML(t, size) };
   }
-  function rwLine(t, size) { var r = rwInfo(t, size || 14); return r ? '<span class="rwin" title="Holders are paid in ' + esc(r.sym) + '">🎁' + r.ic + '<b>' + esc(r.sym.replace(/^\$/, '')) + '</b></span>' : ''; }
+  function rwLine(t, size) { var r = rwInfo(t, size || 14); return r ? '<span class="rwin" title="Holders are paid in ' + esc(r.sym) + '">' + r.ic + '<b>' + esc(r.sym.replace(/^\$/, '')) + '</b></span>' : ''; }
   function rwSym(t) { if (t.rw === 'pair') return t.live ? qSymT(t) : (t.pair || 'SOL'); if (t.rw && t.rw.mint) { var m = t.rw.mint; if (m === WSOL) return 'SOL'; if (m === USDC_MINT) return 'USDC'; for (var k in PAIR_INFO) if (PAIR_INFO[k].ca === m) return k; return short(m); } return '$' + symOf(t); }
   function splitPicker(c) {
     var base = c.buy; if (base <= 0) return '<div class="spk off fee0"><div class="spk-h"><b>Your creator rewards</b><span class="spk-lock">' + ICO.lock + 'automatic</span></div><div class="fee-big"><b class="mono">' + FEE.creatorPlain + '%</b><span>of every trade on your coin goes to you</span></div><small>Plain coins pay a ' + FEE.plain + '% trading fee per trade: ' + FEE.creatorPlain + '% to you, ' + FEE.treidPlain + '% to treid, ' + FEE.dexPlain + '% to Meteora (the on-chain DEX). Add a tax to also earn from your own tax split — the trading fee then drops to ' + FEE.taxed + '% (' + FEE.creatorTaxed + '% still yours).</small></div>';
@@ -4228,7 +4228,7 @@
     else body = '<div class="nt-main' + (on ? ' on' : '') + '"><span class="nt-bell">🔔</span><span><b>' + (on ? 'Notifications are on' : 'Get notified') + '</b><small class="muted">' + (on ? 'on this device' : 'even when treid is closed') + '</small></span>' +
         (on ? '<button class="btn sec" data-act="notifOff">Turn off</button>' : '<button class="btn pri" data-act="notifOn"' + (S.pushBusy ? ' disabled' : '') + '>' + (S.pushBusy ? 'Allowing…' : 'Turn on') + '</button>') + '</div>' +
       '<div class="nt-opts">' + tg('moves', '⭐', 'Watchlist moves', nW ? 'Big moves (±25%) and graduation of your ' + nW + ' starred coin' + (nW === 1 ? '' : 's') : 'Star coins with ☆ to follow them') +
-        tg('rewards', '🎁', 'My holder rewards', S.account ? 'When a coin pays holder rewards to ' + short(S.account) : 'Connect your wallet to get these', !S.account) +
+        tg('rewards', '', 'My holder rewards', S.account ? 'When a coin pays holder rewards to ' + short(S.account) : 'Connect your wallet to get these', !S.account) +
         tg('callouts', '🔥', 'Callouts from wallets I follow', nF ? nF + ' wallet' + (nF === 1 ? '' : 's') + ' followed' : 'Follow a wallet from its profile to get these') + '</div>' +
       '<small class="muted nt-foot">Each device is set up separately. Turning on shares this device’s push address' + (S.account ? ', your wallet address' : '') + ' and your watchlist with the treid server — nothing else.</small>';
     return '<div class="overlay" data-act="notifClose"><div class="terms card-s notif" data-stop><div class="terms-h"><b>Notifications</b><button class="iconbtn" data-act="notifClose" aria-label="Close">✕</button></div>' + body + '</div></div>';

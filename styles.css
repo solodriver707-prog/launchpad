@@ -6758,3 +6758,9 @@ html body .tch-side:has(.rwin){width:86px}
 .tf-clr{height:32px;padding:0 10px;border:0;background:none;color:#F7A2B3;font-size:12px;font-weight:700;cursor:pointer}
 @media (max-width:760px){.tn-filt{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin:0 -14px 10px;padding:0 14px}.tn-filt::-webkit-scrollbar{display:none}.tf-sel,.tf-chip{flex:none}}
 @media (max-width:760px){.tn-filt{margin:0 0 10px;padding:0}.tf-sel select{font-size:13px!important;min-height:0!important;height:auto!important;width:auto!important}.tf-sel{height:34px}}
+
+/* holders-paid-in block: same look as PAIRED WITH; DEV OUT badge brighter */
+.pairbig.rwbig{background:linear-gradient(135deg,rgba(163,177,194,.22),rgba(232,232,234,.12))!important;border-color:rgba(163,177,194,.45)!important}
+.pairbig.rwbig small{color:#C3CCD8!important}
+.ar-kv>.ar-rw{background:rgba(20,20,24,.82)!important;border-color:rgba(255,255,255,.1)!important}.ar-rw small{color:rgba(255,255,255,.55)!important}
+.crb.out{background:#E5484D!important;color:#fff!important;-webkit-text-fill-color:#fff!important;border-color:#FF6B70!important;box-shadow:0 0 0 1px rgba(229,72,77,.35),0 2px 10px rgba(229,72,77,.35)}
