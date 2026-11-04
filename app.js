@@ -692,6 +692,12 @@
     var bp = t.supply > 0 && t.supply < 1e9 ? (1e9 - t.supply) / 1e9 * 100 : 0;
     return ['🔥 BURNED', (bp >= 10 ? bp.toFixed(0) : bp >= 0.1 ? bp.toFixed(1) : bp > 0 ? '<0.1' : '0') + '%', 'Share of the supply burned for good'];
   }
+  function previewTiles(t, o) {   // Create preview: what buyers see at launch, in the same card
+    var dp = t.devPct || 0, col = dp < 3 ? '#3DDC97' : dp < 8 ? '#FFD15C' : '#F2708A', sn = o.snipe, tm = Math.max(t.buy || 0, t.sell || 0);
+    var R = [['YOU HOLD', '<span style="color:' + col + '">' + dp.toFixed(2) + '%</span>'], ['SNIPERS', '0%'], ['BUNDLES', '0%'], ['START MC', fmtK(t.mcN)]];
+    return '<div class="risk st-tiles">' + R.map(function (m) { return '<span class="rk-t lv-n"><span class="rk-l">' + m[0] + '</span><b class="mono">' + m[1] + '</b></span>'; }).join('') + '</div>' +
+      (sn ? '<div class="pv-trap pv-trap2">🪤 Sniper trap: ' + [0, 1, 2].map(function (i) { return trapStepFee(sn.start, tm, i) + '%'; }).join(' → ') + ' → ' + normalCost(tm) + '% over ' + (sn.dur < 60 ? sn.dur + 's' : sn.dur / 60 + ' min') + '</div>' : '');
+  }
   function statTiles(t) {
     var R = [['HOLDERS', fmtNum(t.holders || 0), 'Wallets holding this coin'], ['VOL 24H', fmtK(t.vol), 'Traded in the last 24 hours'], paidTile(t), ['ATH', fmtK(athOf(t)), 'Highest market cap so far']];
     return '<div class="risk st-tiles">' + R.map(function (m) { return '<span class="rk-t lv-n" data-tip="' + esc(m[2]) + '"><span class="rk-l">' + m[0] + '</span><b class="mono">' + m[1] + '</b></span>'; }).join('') + '</div>';
@@ -730,7 +736,7 @@
         '<div class="tch-side">' + (trapLeft(t) > 0 ? trapBox(t, 'card') : '<div class="tax" style="background:' + taxBg(tmax) + '" data-tip="' + esc(splitTip(t)) + '"><small>TAX</small><b>' + tmax + '%</b>' + (splitOf(t) ? splitBar(splitOf(t), 'mini') : '') + rwLine(t, 13) + '</div>') +
         (tmax > 0 || (t.live && t.qMint) ? '<div class="pairmini" data-tip="Paired with ' + esc(pairInfo(t.pair).name) + '">' + coinHTML(t.pair, 28) + '<small>PAIR</small><b>' + esc(pairLabel(t.pair)) + '</b></div>' : '<div class="pairmini plain" data-tip="0% tax — plain coin, no pair">' + coinHTML('SOL', 28) + '<small>PLAIN</small><b>SOL</b></div>') + '</div></div>' +
       '<div class="tc-name2"><b>' + esc(t.name) + crBadge(t) + '</b><span class="tc-tkr"><span class="mono">$' + esc(symOf(t)) + '</span>' + (opts.preview ? '' : '<button class="tc-ca mono" data-act="ca" data-arg="' + esc(t.tick) + '" data-tip="Copy contract address" aria-label="Copy contract address">' + esc(short(t.ca)) + I.copy + '</button>') + '</span></div>' +
-      statTiles(t) + socialsHTML(t) +
+      (opts.preview ? previewTiles(t, opts) : statTiles(t)) + socialsHTML(t) +
       '<div class="tc-mid"><div class="tc-mc"><div class="v"><span data-mc="' + esc(t.tick) + '" data-v="' + fmtK(t.mcN) + '">' + fmtK(t.mcN) + '</span>' +
         '<span class="chgpill ' + (c >= 0 ? 'up' : 'down') + '" data-chg="' + esc(t.tick) + '">' + chgTxt(c) + '</span></div><div class="l">market cap</div></div></div>' +
       '<div class="tc-chart ' + (c >= 0 ? 'up' : 'down') + '" data-cchart="' + esc(t.tick) + '">' + cardChart(t) + '</div>' +
@@ -4070,11 +4076,8 @@
           (S.account && DEMO ? '<button class="demo-l" data-act="demoLaunch">No ' + NET + 'SOL? Try a demo launch instead</button>' : '') +
           '<span class="note">' + (CHAIN_ID === 'solana:devnet' ? 'Devnet beta: your coin is created on the Solana test network.' : 'Your coin is created on-chain on Meteora (Solana mainnet).') + ' Your wallet signs every step.</span>' +
         '</section>' +
-        '<aside style="flex:1 1 320px;display:flex;flex-direction:column;gap:12px;position:sticky;top:90px"><span class="kicker">LIVE PREVIEW</span>' + card(preview, { preview: true }) +
-          '<div class="card-s panel pv-sum"><div class="pv-row">' + avatarHTML(preview, 52) + '<div><b>At launch</b><small class="muted">what buyers will see</small></div></div>' +
-            '<div class="pv-grid"><div><small>You hold</small><b class="mono" style="color:' + (dq.pct < 3 ? '#3DDC97' : dq.pct < 8 ? '#FFD15C' : '#F2708A') + '">' + dq.pct.toFixed(2) + '%</b></div><div><small>Snipers</small><b class="mono up">0%</b></div><div><small>Bundles</small><b class="mono up">0%</b></div><div><small>Tax</small><b class="mono">' + tmax + '%</b></div></div>' +
-            (c.buy > 0 && c.split && c.split.h > 0 ? '<div class="pv-rw">' + (rwOf(c) ? coinHTML(rwOf(c).key, 18) : avatarHTML(preview, 18)) + '<span>Holders get <b>' + c.split.h + '%</b> of the tax, paid in <b>' + esc(rwOf(c) ? rwOf(c).sym : '$' + symOf(preview)) + '</b></span></div>' : '') +
-            (c.snipe ? '<div class="pv-trap">🪤 Sniper trap: ' + [0, 1, 2].map(function (i) { return trapStepFee(c.snipe.start, tmax, i) + '%'; }).join(' → ') + ' → ' + normalCost(tmax) + '% over ' + (c.snipe.dur < 60 ? c.snipe.dur + 's' : c.snipe.dur / 60 + 'm') + '</div>' : '') + '</div></aside>' +
+        '<aside style="flex:1 1 320px;display:flex;flex-direction:column;gap:12px;position:sticky;top:90px"><span class="kicker">LIVE PREVIEW</span>' + card(preview, { preview: true, snipe: c.snipe }) +
+          '</aside>' +
       '</div></main>';
   }
 

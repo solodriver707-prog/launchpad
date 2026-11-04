@@ -6658,3 +6658,4 @@ html body .tch-side:has(.rwin){width:86px}
 }
 @media (min-width:1200px) and (max-width:1500px){.bn-2c .bn-row>*:nth-child(4){display:none}.bn-2c .bn-row{grid-template-columns:30px minmax(130px,1.1fr) minmax(110px,1fr) 70px 50px 46px}}
 @media (max-width:760px){.bn-src{font-size:10px!important;padding:2px 7px}.bn-src em{display:none}}
+.pv-trap2{margin:0;font-size:12px}
