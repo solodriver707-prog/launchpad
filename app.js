@@ -3764,10 +3764,10 @@
   var CURVE_STD = { mc0: 28, mc1: 420, q0: 30.0, b0: 1.071e9, sold: 7.9e8 }, CURVE_PRO = { mc0: 94.4, mc1: 213, q0: 169.4, b0: 1.794e9, sold: 4e8 };
   function startPicker(c) {
     var o = function (pro, ttl, sub, pts) { var cv = pro ? CURVE_PRO : CURVE_STD, on = !!c.pro === pro;
-      return '<button class="stp' + (on ? ' on' : '') + '" data-act="cstart" data-arg="' + (pro ? 1 : 0) + '"><span class="stp-h"><b>' + ttl + '</b>' + (pro ? '<em>NEW</em>' : '') + '</span><span class="stp-g"><em>Starts at</em><i></i><em>Graduates at</em><b class="mono">≈' + fmtK(cv.mc0 * SOL_USD / 1000) + '</b><i>→</i><b class="mono">≈' + fmtK(cv.mc1 * SOL_USD / 1000) + '</b></span><small>market cap (' + Math.round(cv.mc0) + ' → ' + Math.round(cv.mc1) + ' SOL) · in dollars it moves with the SOL price</small><ul>' + pts.map(function (x) { return '<li>' + x + '</li>'; }).join('') + '</ul></button>'; };
+      return '<button class="stp' + (on ? ' on' : '') + '" data-act="cstart" data-arg="' + (pro ? 1 : 0) + '"><span class="stp-h"><b>' + ttl + '</b>' + (pro ? '<em>NEW</em>' : '') + '</span><span class="stp-g1"><em>Starts at</em><b class="mono">' + fmtK(cv.mc0 * SOL_USD / 1000) + ' <u>MC</u></b></span><ul>' + pts.map(function (x) { return '<li>' + x + '</li>'; }).join('') + '</ul></button>'; };
     return '<div class="field stpf"><div class="lbl"><b>Starting market cap <span class="muted" style="font-weight:500;font-size:12px">· where your chart begins</span></b></div><div class="stp-row">' +
-      o(false, 'Standard', 'start → graduation', ['~' + Math.round(CURVE_STD.mc1 / CURVE_STD.mc0) + '× room on the curve', 'Like pump.fun — degens know it']) +
-      o(true, 'Pro start', 'start → graduation', ['Bots can’t buy the supply for pennies', 'Looks like a serious launch', '~' + (CURVE_PRO.mc1 / CURVE_PRO.mc0).toFixed(1) + '× room on the curve']) + '</div>' +
+      o(false, 'Standard', '', ['Like pump.fun — degens know it', 'Cheapest entry for early buyers']) +
+      o(true, 'Pro start', '', ['Bots can’t buy the supply for pennies', 'Looks like a serious launch']) + '</div>' +
       '<small class="muted stp-n">Both graduate to Meteora after about 85 SOL of buys. Pro start sells 40% of the supply on the curve (Standard ~80%); the rest goes into the locked pool at graduation.</small></div>';
   }
   function devQuote(amt) {   // amt is in SOL — you always pay with SOL; on a coin paired with something else it's swapped to the pair token first
