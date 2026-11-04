@@ -6570,3 +6570,6 @@ html body .fx-l.fx-r{-webkit-mask-image:linear-gradient(90deg,transparent,#000 3
 /* board card: activity tiles (risk checks live on the coin page) */
 .rk-t.lv-n{background:rgba(255,255,255,.035);border-color:rgba(255,255,255,.09);cursor:default}
 .rk-t.lv-n .rk-l{color:var(--muted);letter-spacing:.06em}
+/* hero rolling word: room for descenders (g, y, p) — the soft fade only touches the very edges */
+.kin-slot{height:1.32em!important;-webkit-mask-image:linear-gradient(180deg,transparent,#000 9%,#000 91%,transparent)!important;mask-image:linear-gradient(180deg,transparent,#000 9%,#000 91%,transparent)!important}
+.kin-w{height:1.32em!important;padding-bottom:.06em;box-sizing:border-box}
