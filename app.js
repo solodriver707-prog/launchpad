@@ -756,6 +756,7 @@
       if (S.rewardsOnly && !d.rewards) return false;
       if (S.watchOnly && S.watch.indexOf(d.tick) === -1) return false;
       if (S.cleanOnly && riskMetrics(d).some(function (m) { return m.lv === 'r'; })) return false;
+      if (S.trustOnly && !(d.xOk || (d.devLock && lockLive(d)))) return false;   // the dev confirmed the coin's X account, or locked their bag
       var mcr = rv('mc'), pr = rv('prog'), ag = rv('age'), am = (Date.now() - d.born) / 60000;
       if (d.prog < pr[0] || d.prog > pr[1] || d.mcN < mcr[0] || d.mcN > mcr[1] || am < ag[0] || am > ag[1]) return false;
       if (S.cat !== 'all' && (DEMO ? pairInfo(d.pair).cat : liveCat(d)) !== S.cat) return false;
@@ -1855,7 +1856,7 @@
     var pairOn = S.pair !== 'All' || S.cat !== 'all'; if (pairOn) active++;
     var pl = S.pair !== 'All' ? coinHTML(S.pair, 20) + '<b>' + esc(pairLabel(S.pair)) + '</b>' : S.cat !== 'all' ? '<b>' + CATS.filter(function (c) { return c[0] === S.cat; })[0][1] + '</b>' : '<b>Any</b>';
     var pairChip = '<div class="fdrop"><button class="fchip pairchip big' + (pairOn ? ' on' : '') + (S.fpop === 'pair' ? ' open' : '') + '" data-act="fpop" data-arg="pair"><span class="fc-l">Paired with</span>' + pl + '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg></button>' + (S.fpop === 'pair' ? pairPop() : '') + '</div>';
-    var tg = [['zeroOnly', '0% tax', ''], ['gradOnly', 'Graduated', ''], ['rewardsOnly', 'Rewards', I.gift], ['watchOnly', 'Watchlist', I.star(false)], ['cleanOnly', 'No warnings', '<span class="fdot"></span>']].map(function (t) {
+    var tg = [['zeroOnly', '0% tax', ''], ['gradOnly', 'Graduated', ''], ['rewardsOnly', 'Rewards', I.gift], ['watchOnly', 'Watchlist', I.star(false)], ['cleanOnly', 'No warnings', '<span class="fdot"></span>'], ['trustOnly', 'Verified', '✓ ']].map(function (t) {
       var on = !!S[t[0]]; if (on) active++;
       return '<button class="ftog' + (on ? ' on' : '') + '" data-act="toggle" data-arg="' + t[0] + '" aria-pressed="' + on + '">' + t[2] + t[1] + '</button>';
     }).join('');
@@ -3199,7 +3200,7 @@
       '<span class="muted" style="font-size:12.5px;line-height:1.55">' + (t.prog >= 100 ? 'Liquidity is live on Meteora.' : curveSol + ' ' + esc(qSymT(t)) + ' in the curve. Graduates to Meteora at 100%.') + '</span></section>';
     var mbuy = '<div class="m-bar"><button class="m-b" data-act="mSide" data-arg="buy">Buy</button><button class="m-s" data-act="mSide" data-arg="sell">Sell</button><span class="m-tx mono">' + (trapLeft(t) > 0 ? '🪤 ' + snipeNow(t) + '%' : 'tax ' + tmax + '%') + '</span></div>';
     return mbuy + '<main class="wrap tp-env" style="padding-top:14px;--coin:' + ((t.spec && t.spec.bg) || '#2A2418') + '"><div class="tp-glow" aria-hidden="true">' + avatarHTML(t, 300) + '</div><button class="link" data-act="home">' + I.back + 'Back to board</button>' +
-      '<div class="tp-grid3">' + thread + '<div class="tp-main">' + head + banEditModal(t) + lockBar(t) + vampWarn + kstats + chart + tabsHTML + '</div><aside class="tp-side">' + panel + posCard + activity + (t.desc ? '<section class="card-s panel about-b"><div class="ab-h">' + avatarHTML(t, 26) + '<b>About $' + sid + '</b></div><p class="ab-t' + (t.desc.length > 220 && !S.descOpen ? ' clamp' : '') + '">' + esc(t.desc) + '</p>' + (t.desc.length > 220 ? '<button class="ab-more" data-act="descToggle">' + (S.descOpen ? 'Show less' : 'Show more') + '</button>' : '') + '</section>' : '') + taxSplitPanel(t) + crPanel(t) + safety + curve + '</aside></div></main>';
+      '<div class="tp-grid3">' + thread + '<div class="tp-main">' + head + banEditModal(t) + lockBar(t) + xBar(t) + vampWarn + kstats + chart + tabsHTML + '</div><aside class="tp-side">' + panel + posCard + activity + (t.desc ? '<section class="card-s panel about-b"><div class="ab-h">' + avatarHTML(t, 26) + '<b>About $' + sid + '</b></div><p class="ab-t' + (t.desc.length > 220 && !S.descOpen ? ' clamp' : '') + '">' + esc(t.desc) + '</p>' + (t.desc.length > 220 ? '<button class="ab-more" data-act="descToggle">' + (S.descOpen ? 'Show less' : 'Show more') + '</button>' : '') + '</section>' : '') + taxSplitPanel(t) + crPanel(t) + safety + curve + '</aside></div></main>';
   }
   // give seeded trades real makers / prices
   S.trades.forEach(function (tr) { var t = find(tr.tick); tr.wallet = pickWallet(); tr.price = t ? price(t) * (1 + (Math.random() - 0.5) * 0.12) : 0; tr.tokens = tr.sol * SOL_USD / (tr.price || 1); tr.sig = b58(64); });
@@ -3628,7 +3629,22 @@
   function vampOf0(t) { if (t.live) { if (!t.vamp || !t.vamp.mint) return null; var o = S.live.filter(function (x) { return x.ca === t.vamp.mint; })[0]; return o || { tick: String(t.vamp.symbol || '?'), name: String(t.vamp.name || ''), ca: t.vamp.mint }; } if (t._vamp === undefined) t._vamp = vampMatch(t.tick, t.name, t.born, t); return t._vamp; }
   function vampBadge(t) { var o = vampOf(t); return o ? '<span class="vampb" title="Same name as $' + esc(symOf(o)) + ', an older coin — check the contract address before buying">' + VAMP + '</span>' : ''; }
   function vampNote(c) { var o = vampMatch(c.tick, c.name, 0, null); return o ? VAMP + ' <b>$' + esc(symOf(o)) + '</b> (' + esc(o.name) + ') already exists on treid. You can still launch, but your coin will show a <b>“Possible copy”</b> badge.' : ''; }
-  function crBadge(t) { return crBadge0(t) + lockBadge(t) + vampBadge(t); }
+  function crBadge(t) { return crBadge0(t) + xBadge(t) + lockBadge(t) + vampBadge(t); }
+  // ---- ✓ X: the X account in the coin's links posted its contract address (checked by the treid server) ----
+  function xHandleT(t) { var u = t && t.links && t.links.x; if (!u) return null; var v = String(u).replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/^@/, ''), m = /^(?:x|twitter)\.com\/([A-Za-z0-9_]{1,15})(?:$|[\/?#])/i.exec(v); if (m) v = m[1]; return /^[A-Za-z0-9_]{1,15}$/.test(v) && !/^(i|home|search|intent|share)$/i.test(v) ? v : null; }
+  function xBadge(t) { return t.live && t.xOk ? '<span class="xb" title="@' + esc(t.xOk) + ' posted this coin’s contract address on X — confirmed by treid">✓ 𝕏</span>' : ''; }
+  function xBar(t) {   // on the coin page, for its creator: confirm the coin's X account in two steps
+    if (!t.live || t.xOk || !S.account || S.account !== t.creator) return ''; var h = xHandleT(t); if (!h) return '';
+    return '<button class="lkfix xfix" data-act="xcOpen">✓ Confirm @' + esc(h) + ' — buyers see a “✓ 𝕏” badge</button>'; }
+  function xcModal() {
+    var X = S.xc, t = X && find(X.tick); if (!t) return ''; var h = xHandleT(t), txt = '$' + symOf(t) + ' is live on treid 🚀\n\nCA: ' + t.ca + '\n\n' + location.origin + location.pathname + '#/coin/' + t.ca;
+    return '<div class="overlay center" data-act="xcClose"><div class="modal xcm" data-stop role="dialog" aria-modal="true"><div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:18px">Confirm @' + esc(h) + '</b><button class="iconbtn" data-act="xcClose" aria-label="Close">✕</button></div>' +
+      '<p class="muted" style="margin:0;font-size:13.5px;line-height:1.5">Post the contract address from <b>@' + esc(h) + '</b>. treid reads the public post and your coin gets a <b>✓ 𝕏</b> badge — buyers know the X account is really behind this coin.</p>' +
+      '<a class="btn pri xcm-go" target="_blank" rel="noopener" href="https://x.com/intent/post?text=' + encodeURIComponent(txt) + '">1 · Post on X ↗</a>' +
+      '<label class="xcm-l">2 · Paste the link to your post<input id="xc-url" class="inp" placeholder="https://x.com/' + esc(h) + '/status/…" value="' + esc(X.url || '') + '" autocomplete="off"></label>' +
+      (X.err ? '<div class="xcm-err">' + esc(X.err) + '</div>' : '') +
+      '<button class="btn pri" data-act="xcGo"' + (X.busy ? ' disabled' : '') + '>' + (X.busy ? 'Checking the post…' : 'Confirm') + '</button></div></div>';
+  }
   // ---- locked dev bag (verified on-chain by the treid server: the creator's own Jupiter Lock escrow, no cancel, no recipient change) ----
   function lockDate(sec) { return new Date(sec * 1000).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }); }
   function lockLive(t) { var L = t.devLock; return !!(L && L.unlock_end * 1000 > Date.now() && L.locked_pct > 0.001); }
@@ -4405,7 +4421,7 @@
     var ovKeep = {}; [].forEach.call(document.querySelectorAll(OV_SEL), function (o) { var d = o.firstElementChild; ovKeep[ovKey(o)] = d ? d.scrollTop : 0; });   // modals already on screen: don't replay their open animation on live re-renders
     var detOpen = [].map.call(document.querySelectorAll('#app details'), function (d) { return d.open ? (d.className || 'd') : null; });
     if (S.screen === 'site') { document.getElementById('app').innerHTML = body + siteModal() + walletModal(); document.body.classList.add('on-site'); document.body.classList.remove('has-rail', 'has-rail-min'); return; } document.body.classList.remove('on-site');
-    document.getElementById('app').innerHTML = (RPC_DEV || API_DEV ? '<div class="devbar">⚠ Developer mode — custom ' + [RPC_DEV ? 'RPC' : '', API_DEV ? 'server' : ''].filter(Boolean).join(' + ') + ' (this tab only)</div>' : '') + '<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="ccUp" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3DDC97" stop-opacity=".28"/><stop offset="1" stop-color="#3DDC97" stop-opacity="0"/></linearGradient><linearGradient id="ccDn" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F2708A" stop-opacity=".26"/><stop offset="1" stop-color="#F2708A" stop-opacity="0"/></linearGradient></defs></svg>' + header() + tape() + body + footer() + walletModal() + demoImgModal() + termsModal() + calloutDrawer() + calloutRail() + palette() + walletDrawer() + holderMap() + burnModal() + ctoModal() + coModal() + shareModal() + siteModal() + notifModal() + recvModal();
+    document.getElementById('app').innerHTML = (RPC_DEV || API_DEV ? '<div class="devbar">⚠ Developer mode — custom ' + [RPC_DEV ? 'RPC' : '', API_DEV ? 'server' : ''].filter(Boolean).join(' + ') + ' (this tab only)</div>' : '') + '<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="ccUp" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3DDC97" stop-opacity=".28"/><stop offset="1" stop-color="#3DDC97" stop-opacity="0"/></linearGradient><linearGradient id="ccDn" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F2708A" stop-opacity=".26"/><stop offset="1" stop-color="#F2708A" stop-opacity="0"/></linearGradient></defs></svg>' + header() + tape() + body + footer() + walletModal() + xcModal() + demoImgModal() + termsModal() + calloutDrawer() + calloutRail() + palette() + walletDrawer() + holderMap() + burnModal() + ctoModal() + coModal() + shareModal() + siteModal() + notifModal() + recvModal();
     document.body.classList.toggle('has-rail', S.screen === 'home' && !S.coOpen && !S.railHidden); document.body.classList.toggle('has-rail-min', S.screen === 'home' && !S.coOpen && !!S.railHidden);
     [].forEach.call(document.querySelectorAll(OV_SEL), function (o) { var k = ovKey(o); if (k in ovKeep) { o.classList.add('ov-still'); var d = o.firstElementChild; if (d && ovKeep[k]) d.scrollTop = ovKeep[k]; } });
     if (fid) { var el = document.getElementById(fid); if (el) { el.focus({ preventScroll: true }); try { if (ss != null) el.setSelectionRange(ss, se); } catch (e) {} } }
@@ -4591,7 +4607,7 @@
       case 'sort': set({ sort: arg }); break;
       case 'pair': set({ pair: arg }); break;
       case 'toggle': var o = {}; o[arg] = !S[arg]; set(o); break;
-      case 'reset': S.r = JSON.parse(JSON.stringify(RDEF)); S.pairQ = ''; S.pairTab = 'all'; set({ fpop: null, cleanOnly: false, maxTax: 10, minProg: 0, minMc: 0, pair: 'All', cat: 'all', zeroOnly: false, gradOnly: false, rewardsOnly: false, watchOnly: false }); break;
+      case 'reset': S.r = JSON.parse(JSON.stringify(RDEF)); S.pairQ = ''; S.pairTab = 'all'; set({ fpop: null, cleanOnly: false, trustOnly: false, maxTax: 10, minProg: 0, minMc: 0, pair: 'All', cat: 'all', zeroOnly: false, gradOnly: false, rewardsOnly: false, watchOnly: false }); break;
       case 'tf': S.cpan = 0; S.cys = 1; S.cyo = 0; var tA2 = find(S.tick); if (tA2 && tA2.archived && tA2.span) { var bA2 = TFS.filter(function (x) { return x[0] === arg; })[0][2]; S.cpan = Math.max(0, Math.floor(Date.now() / bA2) - Math.floor((tA2.born + tA2.span) / bA2) - 3); } set({ tf: arg }); break;
       case 'ctype': set({ ctype: arg }); break;
       case 'ctog': S[arg] = !S[arg]; try { localStorage.setItem('dl.cmarks', JSON.stringify([S.cmarks, S.ccall, S.cma, S.cvol])); } catch (er) {} render(); break;
@@ -4712,6 +4728,11 @@
       case 'demoImgsReset': BASE.forEach(function (t) { if (DIMG[t.tick]) delete t.img; }); DIMG = {}; try { localStorage.removeItem('dl.demoimgs'); } catch (er) {} render(); break;
       case 'devbuy': setC({ devBuy: arg === '0' ? '' : arg }); break;
       case 'devlock': setC({ lock: +arg || 0 }); break;
+      case 'xcOpen': S.xc = { tick: S.tick, url: '', err: '', busy: false }; render(); break;
+      case 'xcClose': if (el.classList.contains('overlay') && e.target.closest('[data-stop]')) break; S.xc = null; render(); break;
+      case 'xcGo': (function () { var X = S.xc, tx = X && find(X.tick), u = (document.getElementById('xc-url') || {}).value || ''; if (!tx) return; X.url = u.trim(); X.busy = true; X.err = ''; render();
+        fetch(API + '/api/xconfirm', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mint: tx.ca, url: X.url }) }).then(function (r) { return r.json(); }).then(function (j) {
+          if (!j.ok) throw new Error(j.error || 'could not confirm'); tx.xOk = j.handle; S.xc = null; toast('✓ 𝕏 @' + j.handle + ' confirmed'); render(); }).catch(function (er) { if (S.xc) { S.xc.busy = false; S.xc.err = er.message; render(); } }); })(); break;
       case 'lockFinish': var tlk = find(S.tick); if (tlk && tlk.lockDays && S.account === tlk.creator) lockNow(tlk, tlk.lockDays).catch(function (e) { if (e && e.message !== 'busy') toast('Lock failed: ' + chainErr(e)); }); break;
       case 'feeK': setC({ feeK: arg }); setTimeout(function () { var i = document.getElementById('c-feev'); if (i && arg !== 'me') i.focus(); }, 30); break;
       case 'ctax': setC(+arg > 0 ? { buy: +arg, sell: +arg } : { buy: 0, sell: 0 }); break;
@@ -5723,7 +5744,7 @@
   if (window.TREID_PARTNER) S.escrowWallet = window.TREID_PARTNER;
   S.api = API; S.apiOk = false;
   function apiGet(path) { return fetch(API + path, { cache: 'no-store' }).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); }); }
-  function liveStat(t, c) { if (c.tax_paid) t.taxPaid = c.tax_paid; if (c.trades != null) t.nTx = c.trades; t.devLock = c.dev_lock || (t.lkLocal && Date.now() - t.lkLocal.at < 10 * 60e3 ? t.lkLocal.v : null);   /* the server re-checks the chain every ~30 s — keep the just-made lock until it does */ t.lockIntent = !!c.lock_intent; if (c.uri) { try { t.lockDays = +new URL(c.uri).searchParams.get('lk') || 0; } catch (e) {} } t.lstat = { dev: c.dev_pct || 0, top: c.top10_pct || 0, sn: c.snipers_pct || 0, bu: c.bundles_pct || 0, devSold: !!c.dev_sold }; }
+  function liveStat(t, c) { if (c.tax_paid) t.taxPaid = c.tax_paid; if (c.trades != null) t.nTx = c.trades; t.xOk = c.x_ok || null; t.devLock = c.dev_lock || (t.lkLocal && Date.now() - t.lkLocal.at < 10 * 60e3 ? t.lkLocal.v : null);   /* the server re-checks the chain every ~30 s — keep the just-made lock until it does */ t.lockIntent = !!c.lock_intent; if (c.uri) { try { t.lockDays = +new URL(c.uri).searchParams.get('lk') || 0; } catch (e) {} } t.lstat = { dev: c.dev_pct || 0, top: c.top10_pct || 0, sn: c.snipers_pct || 0, bu: c.bundles_pct || 0, devSold: !!c.dev_sold }; }
   function safeImg(u) { return typeof u === 'string' && (/^data:image\/(png|jpe?g|gif|webp);base64,[A-Za-z0-9+\/=]+$/.test(u) || /^https:\/\/[^\s"'<>\\]+$/.test(u)) ? u : null; }
   function trustedMeta(u) { try { var h = new URL(u).hostname; return /\/ipfs\//.test(u) && (h === 'gateway.pinata.cloud' || /\.mypinata\.cloud$/.test(h) || h === 'ipfs.io'); } catch (e) { return false; } }
   function liveTok(c) {
