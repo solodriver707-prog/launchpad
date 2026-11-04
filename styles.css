@@ -6644,3 +6644,17 @@ html body .tch-side:has(.rwin){width:86px}
 .stp-g1{display:flex;flex-direction:column;gap:1px;margin-top:4px}
 .stp-g1 em{font-style:normal;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em}
 .stp-g1 b{font-size:24px;font-weight:800;color:#fff}.stp-g1 u{text-decoration:none;font-size:13px;color:var(--muted)}
+/* burnery: leaderboard and live burns side by side on wide screens, tighter columns, readable type pills */
+.bn-src{display:inline-flex;align-items:center;gap:5px;justify-self:start;max-width:100%;padding:3px 9px;border-radius:99px;background:color-mix(in srgb,var(--c) 14%,transparent);border:1px solid color-mix(in srgb,var(--c) 35%,transparent);font-size:11px!important}
+.bn-row{font-size:13.5px}.bn-row .bn-c b{font-size:14px}.bn-bar b{font-size:13px}
+.bn-lg{font-size:13px}.bn-lg .bn-c b{font-size:13.5px}
+@media (min-width:1200px){
+  .bn-2c{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:18px;align-items:start}
+  .bn-2c>section{margin:0!important;min-width:0}
+  .bn-2c .bn-row{grid-template-columns:30px minmax(140px,1.1fr) minmax(120px,1fr) 92px 70px 50px 46px;gap:12px}
+  .bn-2c .bn-lh{flex-wrap:wrap}
+  .bn-2c .bn-lg{grid-template-columns:18px minmax(90px,1fr) max-content 104px 60px 44px 30px;gap:10px}
+  .bn-2c .bn-lg>*:nth-child(4){display:none}
+}
+@media (min-width:1200px) and (max-width:1500px){.bn-2c .bn-row>*:nth-child(4){display:none}.bn-2c .bn-row{grid-template-columns:30px minmax(130px,1.1fr) minmax(110px,1fr) 70px 50px 46px}}
+@media (max-width:760px){.bn-src{font-size:10px!important;padding:2px 7px}.bn-src em{display:none}}
