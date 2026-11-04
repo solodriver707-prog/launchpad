@@ -15,7 +15,7 @@ import { LockClient, CancelMode, UpdateRecipientMode, deriveEscrow } from '@mete
 // ---- treid rules (must match chain/scripts/01_launch.mjs) ----
 export const RULES = { minTrapBps: 5000, minTrapSecs: 30, trapSteps: 3, feePlainBps: 100, feeTaxedBps: 50, maxTaxBps: 1000, creatorFeePct: 50, mc0Sol: 28, mc1Sol: 420, proThrSol: 85, gradFeeBps: 100, supply: 1e9, decimals: 6 };
 // curve versions treid has launched (every old coin keeps passing the pin check): v1 20→60 SOL MC, 0.5% pool after graduation · v2 (Nov 2026, like pump.fun) 28→420 SOL MC (~86 SOL raised, ~79% of supply sold on the curve), 1% pool after graduation
-export const CURVES = [{ ratio: 3, gradFeeBps: 50 }, { ratio: 15, gradFeeBps: 100 }, { pct: 40, gradFeeBps: 100 }];   // v3 "Pro start": 40% of the supply sold on the curve for ~85 SOL (starts ~94 SOL MC, graduates ~213 SOL MC)
+export const CURVES = [{ ratio: 3, gradFeeBps: 50 }, { ratio: 15, gradFeeBps: 100 }, { pct: 40, gradFeeBps: 100 }];   // v3 "Pro start": 40% of the supply goes to the locked pool at migration (60% sold on the curve) for ~85 SOL (starts ~94 SOL MC, graduates ~213 SOL MC)
 const conns = {}; const C = (rpc) => conns[rpc] || (conns[rpc] = new Connection(rpc, 'confirmed'));
 const client = (rpc) => new DynamicBondingCurveClient(C(rpc), 'confirmed');
 const amms = {}; const ammC = (rpc) => amms[rpc] || (amms[rpc] = new CpAmm(C(rpc)));

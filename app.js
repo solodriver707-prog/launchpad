@@ -3761,14 +3761,14 @@
   }
   function effTax(t, at) { return Math.max(Math.max(t.buy, t.sell), snipeNow(t, at)); }
   // treid curves (SOL-equivalent): start / graduation market cap in SOL, and the virtual reserves that reproduce them
-  var CURVE_STD = { mc0: 28, mc1: 420, q0: 30.0, b0: 1.071e9, sold: 7.9e8 }, CURVE_PRO = { mc0: 94.4, mc1: 213, q0: 169.4, b0: 1.794e9, sold: 4e8 };
+  var CURVE_STD = { mc0: 28, mc1: 420, q0: 30.0, b0: 1.071e9, sold: 7.9e8 }, CURVE_PRO = { mc0: 94.4, mc1: 213, q0: 170, b0: 1.8e9, sold: 6e8 };
   function startPicker(c) {
     var o = function (pro, ttl, sub, pts) { var cv = pro ? CURVE_PRO : CURVE_STD, on = !!c.pro === pro;
       return '<button class="stp' + (on ? ' on' : '') + '" data-act="cstart" data-arg="' + (pro ? 1 : 0) + '"><span class="stp-h"><b>' + ttl + '</b>' + (pro ? '<em>NEW</em>' : '') + '</span><span class="stp-g1"><em>Starts at</em><b class="mono">' + fmtK(cv.mc0 * SOL_USD / 1000) + ' <u>MC</u></b></span><small>graduates to Meteora after 85 SOL of buys</small><ul>' + pts.map(function (x) { return '<li>' + x + '</li>'; }).join('') + '</ul></button>'; };
     return '<div class="field stpf"><div class="lbl"><b>Starting market cap <span class="muted" style="font-weight:500;font-size:12px">· where your chart begins</span></b></div><div class="stp-row">' +
       o(false, 'Standard', '', ['Like pump.fun — degens know it', 'Cheapest entry for early buyers']) +
       o(true, 'Pro start', '', ['Bots can’t buy the supply for pennies', 'Looks like a serious launch']) + '</div>' +
-      '<small class="muted stp-n">Pro start sells 40% of the supply on the curve (Standard ~80%); the rest goes into the locked pool at graduation.</small></div>';
+      '<small class="muted stp-n">Pro start sells 60% of the supply on the curve (Standard ~80%); the other 40% goes into the locked Meteora pool at graduation.</small></div>';
   }
   function devQuote(amt) {   // amt is in SOL — you always pay with SOL; on a coin paired with something else it's swapped to the pair token first
     var q = qOf(S.c), solIn = Math.max(0, +amt || 0); amt = q.sol ? solIn : (qUsd(q) > 0 ? solIn * SOL_USD / qUsd(q) : 0); var usd = amt * qUsd(q), solEq = usd / SOL_USD;

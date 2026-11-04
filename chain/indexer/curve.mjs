@@ -5,7 +5,7 @@ import { buildCurveWithMarketCap, buildCurve, getPriceFromSqrtPrice, TokenType, 
   MigrationOption, MigrationFeeOption, MigratedCollectFeeMode, DammV2DynamicFeeMode, ActivationType } from '@meteora-ag/dynamic-bonding-curve-sdk';
 export const RULES = { minTrapBps: 5000, minTrapSecs: 30, trapSteps: 3, feePlainBps: 100, feeTaxedBps: 50, maxTaxBps: 1000, creatorFeePct: 50, supply: 1e9 };
 // curve versions (must match chain/web/src.mjs CURVES): v1 20→60 SOL MC + 0.5% pool after graduation · v2 28→420 SOL MC + 1% pool
-export const CURVES = [{ ratio: 3, gradFeeBps: 50 }, { ratio: 15, gradFeeBps: 100 }, { pct: 40, gradFeeBps: 100 }];   // v3 "Pro start": 40% of the supply sold on the curve for ~85 SOL (starts ~94 SOL MC, graduates ~213 SOL MC)
+export const CURVES = [{ ratio: 3, gradFeeBps: 50 }, { ratio: 15, gradFeeBps: 100 }, { pct: 40, gradFeeBps: 100 }];   // v3 "Pro start": 40% of the supply goes to the locked pool at migration (60% sold on the curve) for ~85 SOL (starts ~94 SOL MC, graduates ~213 SOL MC)
 function curveBase({ taxBps = 0, trapBps = 5000, trapSecs = 30, quoteDecimals = 9, gradFeeBps = 100 }) {
   const trap = Math.min(9000, Math.max(RULES.minTrapBps, trapBps | 0)), secs = Math.max(RULES.minTrapSecs, trapSecs | 0), tax = Math.min(RULES.maxTaxBps, Math.max(0, taxBps | 0));
   return {
