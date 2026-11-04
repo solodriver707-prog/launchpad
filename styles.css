@@ -6734,3 +6734,7 @@ html body .tch-side:has(.rwin){width:86px}
 .bh-act .bx-ch{flex-direction:column;align-items:stretch;gap:10px}
 .bd-seg{transform:none;display:grid!important;grid-template-columns:repeat(4,1fr);width:100%}.bd-seg button{white-space:nowrap}
 .bn-more{display:block;width:100%;margin-top:10px;padding:11px;border-radius:12px;border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--soft);font-weight:700;cursor:pointer}.bn-more:hover{color:#fff;border-color:#3A3A40}
+.tg-live{font:800 10px var(--mono);letter-spacing:.08em;color:#3DDC97;align-self:flex-start}
+.tg-pre{font:800 9.5px var(--mono);letter-spacing:.1em;color:#FFD15C;border:1px solid rgba(255,209,92,.4);background:rgba(255,209,92,.08);padding:3px 7px;border-radius:6px;align-self:flex-start}
+.tg .bh-dv b em{font-style:normal;font-size:13px;color:var(--muted);font-weight:600}
+.tg-note{display:block;font-size:11px;color:var(--faint);text-align:center}
