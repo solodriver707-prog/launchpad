@@ -7,24 +7,24 @@ import bs58lib from 'bs58';
 const bs58enc = (b) => (bs58lib.default || bs58lib).encode(b instanceof Uint8Array ? b : Uint8Array.from(b));
 import { NATIVE_MINT, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, getAssociatedTokenAddressSync, createBurnCheckedInstruction, getMint, getExtensionTypes, ExtensionType, getTransferFeeConfig, getTransferHook, getDefaultAccountState, AccountState } from '@solana/spl-token';
 import BN from 'bn.js';
-import { getSwapQuoteTransferFees, DynamicBondingCurveClient, buildCurveWithMarketCap, TokenType, TokenDecimal, TokenAuthorityOption, BaseFeeMode, CollectFeeMode,
+import { getSwapQuoteTransferFees, DynamicBondingCurveClient, buildCurveWithMarketCap, buildCurve, TokenType, TokenDecimal, TokenAuthorityOption, BaseFeeMode, CollectFeeMode,
   MigrationOption, MigrationFeeOption, MigratedCollectFeeMode, DammV2DynamicFeeMode, ActivationType, deriveDbcPoolAddress, deriveDammV1MigrationMetadataAddress, SwapMode, getCurrentPoint, deriveDammV2PoolAddress, DAMM_V2_MIGRATION_FEE_ADDRESS, getPriceFromSqrtPrice } from '@meteora-ag/dynamic-bonding-curve-sdk';
 import { CpAmm, calculateTransferFeeExcludedAmount } from '@meteora-ag/cp-amm-sdk';
 import { LockClient, CancelMode, UpdateRecipientMode, deriveEscrow } from '@meteora-ag/met-lock-sdk';
 
 // ---- treid rules (must match chain/scripts/01_launch.mjs) ----
-export const RULES = { minTrapBps: 5000, minTrapSecs: 30, trapSteps: 3, feePlainBps: 100, feeTaxedBps: 50, maxTaxBps: 1000, creatorFeePct: 50, mc0Sol: 28, mc1Sol: 420, gradFeeBps: 100, supply: 1e9, decimals: 6 };
+export const RULES = { minTrapBps: 5000, minTrapSecs: 30, trapSteps: 3, feePlainBps: 100, feeTaxedBps: 50, maxTaxBps: 1000, creatorFeePct: 50, mc0Sol: 28, mc1Sol: 420, proThrSol: 85, gradFeeBps: 100, supply: 1e9, decimals: 6 };
 // curve versions treid has launched (every old coin keeps passing the pin check): v1 20→60 SOL MC, 0.5% pool after graduation · v2 (Nov 2026, like pump.fun) 28→420 SOL MC (~86 SOL raised, ~79% of supply sold on the curve), 1% pool after graduation
-export const CURVES = [{ ratio: 3, gradFeeBps: 50 }, { ratio: 15, gradFeeBps: 100 }];
+export const CURVES = [{ ratio: 3, gradFeeBps: 50 }, { ratio: 15, gradFeeBps: 100 }, { pct: 40, gradFeeBps: 100 }];   // v3 "Pro start": 40% of the supply sold on the curve for ~85 SOL (starts ~94 SOL MC, graduates ~213 SOL MC)
 const conns = {}; const C = (rpc) => conns[rpc] || (conns[rpc] = new Connection(rpc, 'confirmed'));
 const client = (rpc) => new DynamicBondingCurveClient(C(rpc), 'confirmed');
 const amms = {}; const ammC = (rpc) => amms[rpc] || (amms[rpc] = new CpAmm(C(rpc)));
 const DAMM_CFG = DAMM_V2_MIGRATION_FEE_ADDRESS[6], DBC_PROGRAM = new PublicKey('dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN');   // treid curves migrate into Meteora's customizable DAMM v2 config
 const pk = (x) => (x instanceof PublicKey ? x : new PublicKey(x));
 
-export function curveFor({ taxBps = 0, trapBps = 5000, trapSecs = 30, quoteDecimals = 9, mc0 = RULES.mc0Sol, mc1 = RULES.mc1Sol, gradFeeBps = RULES.gradFeeBps }) {
+function curveBase({ taxBps = 0, trapBps = 5000, trapSecs = 30, quoteDecimals = 9, gradFeeBps = RULES.gradFeeBps }) {
   const trap = Math.min(9000, Math.max(RULES.minTrapBps, trapBps | 0)), secs = Math.max(RULES.minTrapSecs, trapSecs | 0), tax = Math.min(RULES.maxTaxBps, Math.max(0, taxBps | 0));
-  return buildCurveWithMarketCap({
+  return {
     token: { tokenType: TokenType.Token2022, tokenBaseDecimal: TokenDecimal.SIX, tokenQuoteDecimal: quoteDecimals, tokenAuthorityOption: TokenAuthorityOption.Immutable, totalTokenSupply: RULES.supply, leftover: 0 },
     fee: { baseFeeParams: { baseFeeMode: BaseFeeMode.FeeSchedulerLinear, feeSchedulerParam: { startingFeeBps: trap, endingFeeBps: tax > 0 ? RULES.feeTaxedBps : RULES.feePlainBps, numberOfPeriod: RULES.trapSteps, totalDuration: secs } },
       dynamicFeeEnabled: false, collectFeeMode: CollectFeeMode.QuoteToken, creatorTradingFeePercentage: RULES.creatorFeePct, poolCreationFee: 0, enableFirstSwapWithMinFee: true },
@@ -32,9 +32,11 @@ export function curveFor({ taxBps = 0, trapBps = 5000, trapSecs = 30, quoteDecim
       migratedPoolFee: { collectFeeMode: MigratedCollectFeeMode.Compounding, dynamicFee: DammV2DynamicFeeMode.Disabled, poolFeeBps: gradFeeBps, compoundingFeeBps: 0 } },
     liquidityDistribution: { partnerPermanentLockedLiquidityPercentage: 50, partnerLiquidityPercentage: 0, creatorPermanentLockedLiquidityPercentage: 50, creatorLiquidityPercentage: 0 },
     lockedVesting: { totalLockedVestingAmount: 0, numberOfVestingPeriod: 0, cliffUnlockAmount: 0, totalVestingDuration: 0, cliffDurationFromMigrationTime: 0 },
-    activationType: ActivationType.Timestamp, initialMarketCap: mc0, migrationMarketCap: mc1,
-  });
+    activationType: ActivationType.Timestamp };
 }
+export function curveFor(p) { return buildCurveWithMarketCap({ ...curveBase(p), initialMarketCap: p.mc0 ?? RULES.mc0Sol, migrationMarketCap: p.mc1 ?? RULES.mc1Sol }); }
+// v3 "Pro start": a fixed share of the supply is sold on the curve for a fixed amount of the pair token (thr, in whole tokens)
+export function curveForPro(p) { return buildCurve({ ...curveBase(p), percentageSupplyOnMigration: p.pct || 40, migrationQuoteThreshold: p.thr }); }
 // ---- pair (quote) tokens ----
 const qCache = {};
 const ALLOWED_EXT = new Set([ExtensionType.MetadataPointer, ExtensionType.TokenMetadata, ExtensionType.ImmutableOwner]);
@@ -90,10 +92,10 @@ async function finish(rpc, txs, payer, keypairs) {
   return { bytes: txs.map((t) => t.serialize({ requireAllSignatures: false, verifySignatures: false })), lastValidBlockHeight, cosigners: keypairs.map((k) => Array.from(k.secretKey)) };
 }
 // create config + coin (+ optional dev first buy, never hit by the trap) — returns unsigned-by-wallet tx bytes
-export async function buildCreate({ rpc, payer, partner, treasury, name, symbol, uri, taxBps = 0, trapBps = 5000, trapSecs = 30, devBuySol = 0, mintSecret = null, extraFeeSol = 0, escrow = null, quoteMint = null, mc0 = null, mc1 = null }) {
+export async function buildCreate({ rpc, payer, partner, treasury, name, symbol, uri, taxBps = 0, trapBps = 5000, trapSecs = 30, devBuySol = 0, mintSecret = null, extraFeeSol = 0, escrow = null, quoteMint = null, mc0 = null, mc1 = null, pro = false, proThr = null }) {
   payer = pk(payer); partner = pk(partner); treasury = treasury ? pk(treasury) : partner;
   const qi = await quoteInfo({ rpc, mint: quoteMint || NATIVE_MINT }); if (!qi.ok) throw new Error(qi.reason); const QM = pk(qi.mint);
-  const cl = client(rpc), cfg = Keypair.generate(), mint = mintSecret ? Keypair.fromSecretKey(Uint8Array.from(mintSecret)) : Keypair.generate(), curve = curveFor({ taxBps, trapBps, trapSecs, quoteDecimals: qi.decimals, mc0: mc0 || RULES.mc0Sol, mc1: mc1 || RULES.mc1Sol });
+  const cl = client(rpc), cfg = Keypair.generate(), mint = mintSecret ? Keypair.fromSecretKey(Uint8Array.from(mintSecret)) : Keypair.generate(), curve = pro ? curveForPro({ taxBps, trapBps, trapSecs, quoteDecimals: qi.decimals, thr: proThr || RULES.proThrSol }) : curveFor({ taxBps, trapBps, trapSecs, quoteDecimals: qi.decimals, mc0: mc0 || RULES.mc0Sol, mc1: mc1 || RULES.mc1Sol });   // Pro start: 40% of the supply for ~85 SOL worth of the pair
   const common = { payer, config: cfg.publicKey, feeClaimer: partner, leftoverReceiver: treasury, quoteMint: QM, ...curve,
     transferFeeParameters: taxBps > 0 ? { transferFeeBasisPoints: Math.min(RULES.maxTaxBps, taxBps), withheldAuthority: 0, migratedTransferFeeAuthorityOption: 0 } : null,
     preCreatePoolParam: { name: String(name).slice(0, 32), symbol: String(symbol).slice(0, 10), uri: String(uri).split('MINT'.repeat(11)).join(mint.publicKey.toBase58()).slice(0, 200), poolCreator: payer, baseMint: mint.publicKey } };
@@ -124,14 +126,17 @@ export function curveOk(cf, quoteDecimals) {
   try { const n = (x) => Number(x?.toString?.() ?? x), bf = cf.poolFees.baseFee, taxBps = n(cf.transferFeeFlag) ? n(cf.transferFeeBasisPoints) : 0, trapBps = Math.round(n(bf.cliffFeeNumerator) / 1e5), trapSecs = n(bf.firstFactor) * n(bf.secondFactor);
     if (n(bf.baseFeeMode) !== BaseFeeMode.FeeSchedulerLinear || n(bf.firstFactor) !== RULES.trapSteps || trapBps < RULES.minTrapBps || trapBps > 9000 || trapSecs < RULES.minTrapSecs || trapSecs > 86400 || taxBps > RULES.maxTaxBps) return false;
     const mc0 = Number(getPriceFromSqrtPrice(cf.sqrtStartPrice, 6, quoteDecimals)) * RULES.supply; if (!(mc0 > 0) || !isFinite(mc0)) return false;
-    const ver = CURVES.find((v) => v.gradFeeBps === n(cf.migratedPoolFeeBps)); if (!ver) return false;
-    const want = curveFor({ taxBps, trapBps, trapSecs, quoteDecimals, mc0, mc1: mc0 * ver.ratio, gradFeeBps: ver.gradFeeBps }), wb = want.poolFees.baseFee;
+    const vers = CURVES.filter((v) => v.gradFeeBps === n(cf.migratedPoolFeeBps)); if (!vers.length) return false;
+    return vers.some((ver) => { try {   // every treid curve version is checked; the config must match one of them exactly
+    const thr = Number(cf.migrationQuoteThreshold.toString()) / 10 ** quoteDecimals;
+    const want = ver.pct ? curveForPro({ taxBps, trapBps, trapSecs, quoteDecimals, thr, pct: ver.pct, gradFeeBps: ver.gradFeeBps }) : curveFor({ taxBps, trapBps, trapSecs, quoteDecimals, mc0, mc1: mc0 * ver.ratio, gradFeeBps: ver.gradFeeBps }), wb = want.poolFees.baseFee;
     if (!nearBig(want.sqrtStartPrice, cf.sqrtStartPrice, 2e-6) || !nearBig(want.migrationQuoteThreshold, cf.migrationQuoteThreshold, 1e-4)) return false;
     if (['cliffFeeNumerator', 'firstFactor', 'secondFactor', 'thirdFactor'].some((k) => n(wb[k]) !== n(bf[k]))) return false;
     if (['migrationOption', 'migrationFeeOption', 'activationType', 'collectFeeMode', 'creatorTradingFeePercentage'].some((k) => n(want[k]) !== n(cf[k]))) return false;
     if (n(cf.migratedCollectFeeMode) !== MigratedCollectFeeMode.Compounding || n(cf.migratedDynamicFee) !== 0 || n(cf.migratedCompoundingFeeBps) !== 0 || n(cf.enableFirstSwapWithMinFee) !== 1 || n(cf.poolCreationFee) !== 0 || n(cf.migrationFeePercentage) !== 0 || n(cf.creatorMigrationFeePercentage) !== 0) return false;
     const pts = (c) => (c || []).filter((p) => p.liquidity.toString() !== '0'), a = pts(want.curve), b = pts(cf.curve); if (!b.length || a.length !== b.length) return false;
     return a.every((p, i) => nearBig(p.sqrtPrice, b[i].sqrtPrice, 1e-4) && nearBig(p.liquidity, b[i].liquidity, 1e-4));
+    } catch { return false; } });
   } catch { return false; } }
 async function poolCtx(rpc, pool, expect) {
   const cl = client(rpc), vpw = await cl.state.getPool(pk(pool)); if (!vpw) throw new Error('Pool not found');
