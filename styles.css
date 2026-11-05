@@ -6803,3 +6803,4 @@ html body .tch-side:has(.rwin){width:86px}
 @media (max-width:760px){
   .cs>.cs-back{position:static!important;display:block;margin:4px auto 28px!important;left:auto;bottom:auto}
 }
+@media (min-width:761px){html body main.tp-env .tp-main section.tp-banner>.tp-key:has(.rwbig)>*{flex:none!important;margin:0!important}}
