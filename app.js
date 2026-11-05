@@ -362,12 +362,8 @@
   var DLP = { phantom: { base: 'https://phantom.app/ul/v1/', pk: 'phantom_encryption_public_key', name: 'Phantom', icon: WICON.phantom }, solflare: { base: 'https://solflare.com/ul/v1/', pk: 'solflare_encryption_public_key', name: 'Solflare', icon: WICON.solflare } };
   function dlGet() { try { return JSON.parse(localStorage.getItem('treid.dl') || 'null'); } catch (e) { return null; } }
   function dlPut(o) { try { if (o) localStorage.setItem('treid.dl', JSON.stringify(o)); else localStorage.removeItem('treid.dl'); } catch (e) {} }
-  // the redirect link also carries what's needed to read the reply (dls), so it works even when the wallet comes back to a fresh tab that can't see this tab's storage (Safari private tabs are isolated)
-  function dlPack(st) { try { var T = window.TreidChain, p = st.pend || {}, o = { v: st.prov, k: st.sk, P: st.pk, w: st.wpk, a: st.account, s: st.session, p: { rid: p.rid, kind: p.kind, ret: p.ret, label: p.label, lvbh: p.lvbh, mint: p.mint, tick: p.tick, side: p.side, after: p.after, cos: (p.cos || []).map(function (x) { return typeof x === 'string' || !T ? x : T.dl.enc(Uint8Array.from(x)); }) } };
-    return btoa(unescape(encodeURIComponent(JSON.stringify(o)))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); } catch (e) { return ''; } }
-  function dlUnpack(z) { try { var o = JSON.parse(decodeURIComponent(escape(atob(z.replace(/-/g, '+').replace(/_/g, '/'))))); if (!o || !o.k || !o.p || !DLP[o.v]) return null;
-    var st = { prov: o.v, sk: o.k, pk: o.P, pend: o.p }; if (o.w) st.wpk = o.w; if (o.a) st.account = o.a; if (o.s) st.session = o.s; return st; } catch (e) { return null; } }
-  function dlBack(rid, st) { var z = st ? dlPack(st) : ''; return location.origin + location.pathname + '?dlr=' + rid + (z ? '&dls=' + z : ''); }
+  // security: the redirect link carries only the request id — never keys, session or cosigners. A reply is honoured only when its id was stored by THIS browser (treid.dl / treid.dlpre), so a crafted link can't 'connect' someone else's address
+  function dlBack(rid) { return location.origin + location.pathname + '?dlr=' + rid; }
   function dlRid() { return Math.random().toString(36).slice(2, 10); }
   function dlUrl(st, method, params) { return DLP[st.prov].base + method + '?' + Object.keys(params).map(function (k) { return k + '=' + encodeURIComponent(params[k]); }).join('&'); }
   function dlGo(st, method, params) { location.href = dlUrl(st, method, params); }
@@ -418,7 +414,6 @@
     var p = st && st.pend && rid && st.pend.rid === rid ? st.pend : null, pre = {};
     try { pre = JSON.parse(localStorage.getItem('treid.dlpre') || '{}'); } catch (e) {}
     if (!p && rid && pre[rid]) { st = pre[rid]; p = st.pend; }   // the tap handler may not have run before iOS switched apps
-    if (!p && rid && q.get('dls')) { var ds = dlUnpack(q.get('dls')); if (ds && ds.pend.rid === rid) { st = ds; p = ds.pend; } }   // came back to a tab that can't see the one we left (private tab): the link brought the keys
     var cands = p ? [] : [st].concat(Object.keys(pre).map(function (k) { return pre[k]; })).filter(function (x) { return x && x.sk && x.pend; });   // id lost on the way back: the reply can still be opened with whichever key we sent
     var ret = (p && p.ret) || (cands[0] && cands[0].pend && cands[0].pend.ret) || '';
     try { history.replaceState(null, '', location.pathname + ret); } catch (e) {}
