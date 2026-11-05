@@ -13,7 +13,7 @@ import { createHash } from 'node:crypto';
 import { HALT, halt, canWrite, withLock, dbGuard } from './lock.mjs';
 import { SwapMode, getCurrentPoint, deriveDammV2PoolAddress, DAMM_V2_MIGRATION_FEE_ADDRESS, getSwapQuoteTransferFees } from '@meteora-ag/dynamic-bonding-curve-sdk';
 import { CpAmm } from '@meteora-ag/cp-amm-sdk';
-import { sendTx, getTxRetry, fetchT, landOrExpire, JUP } from './txutil.mjs';
+import { sendTx, getTxRetry, fetchT, landOrExpire, JUP, PRIO } from './txutil.mjs';
 
 // OPS_SECRET: a real keypair (JSON array or base58). A plain string is accepted ONLY off mainnet (seeded key, for dev/test).
 export function opsKeypair(secret, { mainnet = false } = {}) {
@@ -36,14 +36,43 @@ const TREID = (process.env.TREID_MINT || '').trim(), TREID_BB = Math.min(1, Math
 export const treidCfg = { mint: TREID, pct: TREID_BB };
 // a swap built by an outside API (Jupiter) is signed by the ops hot key: allow only the instructions a plain swap needs, all on ops' own accounts
 const JUP6 = 'JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4', CB = 'ComputeBudget111111111111111111111111111111', ATAP = 'ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL', TOKP = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA', SYS = '11111111111111111111111111111111';
-function jupIxsOk(msg, opsPk) {
-  const me = opsPk.toBase58(), wsolAta = getAssociatedTokenAddressSync(new PublicKey(WSOL), opsPk, false).toBase58();
+// Jupiter v6 route instructions treid accepts (ExactIn, as the quote): both end with in_amount u64 · quoted_out u64 · slippage_bps u16 · platform_fee_bps u8,
+// and carry an optional platform-fee account (the program id itself when there is none). Anything else (new versions, exact-out, token ledger) is refused.
+const JUP_IX = { e517cb977ae3ad2a: 6, c1209b3341d69c81: 9 };   // route → platform_fee_account index 6 · shared_accounts_route → 9
+const n0 = (v, d) => { const x = Number(v); return Number.isFinite(x) ? x : d; };
+export const MAX_SWAP_LOSS_BPS = Math.min(5000, Math.max(0, Math.floor(n0(process.env.MAX_SWAP_LOSS_BPS ?? 300, 300))));   // worst case a swap may lose against an independent price
+export const JUP_SLIP = Math.max(10, Math.floor(MAX_SWAP_LOSS_BPS / 2));   // slippage asked of Jupiter (its guaranteed minimum must still be within MAX_SWAP_LOSS_BPS of the independent price)
+const SIM_TOL = 1_000_000, RENT_MAX = 3_000_000;   // 0.001 SOL for network fees · a new token account's rent (stays ops' own)
+export function jupIxsOk(msg, opsPk, exp = null, prio = PRIO) {
+  const me = opsPk.toBase58(), wsolAta = getAssociatedTokenAddressSync(new PublicKey(WSOL), opsPk, false).toBase58(); let routes = 0;
   for (const ix of msg.instructions) { const pid = ix.programId.toBase58(), k = (i) => ix.keys[i]?.pubkey.toBase58();
-    if (pid === JUP6 || pid === CB) continue;
+    if (pid === JUP6) { const d = Buffer.from(ix.data), fi = JUP_IX[d.subarray(0, 8).toString('hex')]; if (fi == null) return 'unknown Jupiter instruction ' + d.subarray(0, 8).toString('hex');
+      if (d.length < 8 + 19) return 'Jupiter instruction too short'; const L = d.length;
+      if (d[L - 1] !== 0) return 'route takes a platform fee'; if (k(fi) !== JUP6) return 'route has a platform-fee account';
+      if (exp) { if (d.readBigUInt64LE(L - 19) !== BigInt(exp.amt)) return 'route input differs from the quote'; if (d.readBigUInt64LE(L - 11) !== BigInt(exp.out)) return 'route output differs from the quote'; if (d.readUInt16LE(L - 3) !== exp.slip) return 'route slippage differs from the quote'; }
+      routes++; continue; }
+    if (pid === CB) { const d = Buffer.from(ix.data), op = d[0];
+      if (op === 3) { if (d.length < 9 || d.readBigUInt64LE(1) > BigInt(Math.floor(prio))) return 'priority fee above OPS_PRIORITY_MICROLAMPORTS'; continue; }   // SetComputeUnitPrice
+      if (op === 2) { if (d.length < 5 || d.readUInt32LE(1) > 1_400_000) return 'compute limit'; continue; }   // SetComputeUnitLimit
+      if (op === 1 || op === 4) continue; return 'compute budget instruction ' + op; }   // heap frame · loaded-accounts size limit
     if (pid === ATAP) { if (k(0) !== me || k(2) !== me) return 'account create for someone else'; continue; }   // payer and owner = ops
     if (pid === SYS) { if (ix.data.readUInt32LE(0) !== 2 || k(1) !== wsolAta) return 'SOL transfer outside ops'; continue; }   // only wrapping SOL into ops' own wSOL account
     if (pid === TOKP || pid === TOKEN_2022_PROGRAM_ID.toBase58()) { const op = ix.data[0]; if (op === 17) continue; if (op === 9 && k(1) === me && k(2) === me) continue; return 'token instruction ' + op; }   // sync native · close ops' account back to ops
     return 'unexpected program ' + pid; }
+  return routes === 1 ? null : 'expected exactly one Jupiter route instruction, got ' + routes;
+}
+// the quote must be exactly what was asked: same mints and amount, ExactIn, our slippage, no platform fee, a real minimum
+export function jupQuoteIssue(qr, { inM, outM, amt, slip }) {
+  if (!qr || qr.error) return 'no route'; if (qr.inputMint !== inM || qr.outputMint !== outM || String(qr.inAmount) !== String(amt)) return 'quote is for something else';
+  if (qr.swapMode !== 'ExactIn' || Number(qr.slippageBps) !== slip) return 'quote mode / slippage differs';
+  if (qr.platformFee && (String(qr.platformFee.amount || '0') !== '0' || Number(qr.platformFee.feeBps || 0) !== 0)) return 'quote takes a platform fee';
+  let out, min; try { out = BigInt(qr.outAmount); min = BigInt(qr.otherAmountThreshold); } catch { return 'quote amounts unreadable'; }
+  if (!(out > 0n) || !(min > 0n) || min > out) return 'quote has no real minimum output'; return null;
+}
+// a swap may lose at most maxBps against an independent reference amount (in output units): checked on the guaranteed minimum (and what the simulation delivered)
+export function lossIssue(ref, got, maxBps = MAX_SWAP_LOSS_BPS, what = 'guaranteed minimum') {
+  if (!(typeof ref === 'bigint') || ref <= 0n) return 'no independent price to check the route against';
+  if (got * 10000n < ref * BigInt(10000 - maxBps)) return what + ' is ' + (Number((ref - got) * 10000n / ref) / 100).toFixed(2) + '% below the independent price (max ' + (maxBps / 100) + '%)';
   return null;
 }
 // the route comes from an outside API: in the simulation, ops' own output account must really receive at least the guaranteed minimum
@@ -129,25 +158,61 @@ export function startOps({ conn, dbc, ops, treasury, q, q1, run, mainnet = false
   const treidBudget = () => { if (!TREID) return 0; const fees = q("SELECT r.lamports l FROM rlog r JOIN coins c ON c.mint=r.mint WHERE r.ts>=? AND (c.quote_mint IS NULL OR c.quote_mint=?) AND (r.kind='pfee' OR (r.kind='claimx' AND r.extra LIKE '%|platform|dammP'))", treidSince(), WSOL).reduce((a, r) => a + r.l, 0);
     return Math.max(0, Math.floor(Math.max(0, fees - callerCost(treidSince())) * TREID_BB) - sumT('tbuy')); };   // of treid's NET income: what callout callers earned out of those fees is not treid's to spend
   const treidLeft = () => Math.max(0, sumT('tleft') - sumT('tburnr'));   // bought but not yet burned (the part above the swap's guaranteed minimum)
+  // ---- swaps built by Jupiter: shared checks (quote, instructions, simulation) and an independent price ----
+  const jupPrice = async (m) => { try { const j = await (await fetchT(`${JUP}/price/v3?ids=${m}`)).json(); return +(j?.[m]?.usdPrice) || 0; } catch { return 0; } };
+  async function jupBuild(inM, outM, amt) {
+    const qr = await (await fetchT(`${JUP}/swap/v1/quote?inputMint=${inM}&outputMint=${outM}&amount=${amt}&slippageBps=${JUP_SLIP}&maxAccounts=40`)).json();
+    { const bad = jupQuoteIssue(qr, { inM, outM, amt, slip: JUP_SLIP }); if (bad) throw new Error('route refused: ' + bad); }
+    const body = { quoteResponse: qr, userPublicKey: ops.publicKey.toBase58(), wrapAndUnwrapSol: true, dynamicComputeUnitLimit: true, ...(PRIO > 0 ? { computeUnitPriceMicroLamports: PRIO } : { prioritizationFeeLamports: 0 }) };   // explicit priority fee, never Jupiter's "auto"
+    const sw = await (await fetchT(JUP + '/swap/v1/swap', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })).json(); if (!sw?.swapTransaction) throw new Error('no swap transaction');
+    const vt = VersionedTransaction.deserialize(Buffer.from(sw.swapTransaction, 'base64')); if (!vt.message.staticAccountKeys[0].equals(ops.publicKey)) throw new Error('route not paid by ops');
+    const luts = (await Promise.all(vt.message.addressTableLookups.map((l) => conn.getAddressLookupTable(l.accountKey)))).map((r) => r.value); if (luts.some((l) => !l)) throw new Error('route lookup table not found');
+    const msg = TransactionMessage.decompile(vt.message, { addressLookupTableAccounts: luts }); { const bad = jupIxsOk(msg, ops.publicKey, { amt, out: qr.outAmount, slip: JUP_SLIP }); if (bad) throw new Error('route refused: ' + bad); }
+    return { qr, sw, msg, luts, out: BigInt(qr.outAmount), minOut: BigInt(qr.otherAmountThreshold) };
+  }
+  // what the signed swap really does to ops, before anything is sent: SOL spent, input tokens that leave, output that arrives
+  async function jupSim(vt2, { inAta = null, inProg = null, outAta = null, outProg = null }) {
+    const addrs = [ops.publicKey.toBase58(), ...(inAta ? [inAta] : []), ...(outAta ? [outAta] : [])];
+    const pre = await conn.getBalance(ops.publicKey), preIn = inAta ? await tokBal(conn, inAta, inProg) : 0n, outAi = outAta ? await conn.getAccountInfo(new PublicKey(outAta)) : null, preOut = outAi ? unpackAccount(new PublicKey(outAta), outAi, outProg).amount : 0n;
+    const sim = await conn.simulateTransaction(vt2, { sigVerify: false, accounts: { encoding: 'base64', addresses: addrs } }); if (sim.value.err) throw new Error('route simulation failed');
+    const acc = sim.value.accounts || []; if (acc.length !== addrs.length) throw new Error('route simulation incomplete'); let j = 1;
+    const post = acc[0]?.lamports ?? 0, inAcc = inAta ? acc[j++] : null, outAcc = outAta ? acc[j++] : null;
+    if (inAta && !inAcc) throw new Error('route simulation: input account gone');   // ops' input account must still exist (and be readable) after the swap
+    const rentNew = outAta && !outAi && outAcc?.lamports ? Math.min(RENT_MAX, outAcc.lamports) : 0;   // a freshly opened output account's rent stays ops' own
+    return { pre, post, solSpent: pre - post, inSpent: inAta ? preIn - simTok(inAcc, inAta, inProg) : 0n, outGot: outAta ? simTok(outAcc, outAta, outProg) - preOut : 0n, rentNew };
+  }
+  // what the coin's OWN pool would give for `lamIn` of its pair token right now (net of the coin's transfer tax) — the reference for a buy
+  async function poolBuyNet(c, lamIn) {
+    const vpw = await dbc.state.getPool(new PublicKey(c.pool)), vp = vpw.poolState || vpw, mint = new PublicKey(c.mint);
+    if (Number(vp.isMigrated?.toString?.() ?? vp.isMigrated) > 0) {
+      const pool = deriveDammV2PoolAddress(DAMM_CFG, mint, qmOf(c)), ps = await amm.fetchPoolState(pool); if (ps.tokenAMint.toBase58() !== c.mint || !ps.tokenBMint.equals(qmOf(c))) return 0n;
+      const qt = amm.getQuote2({ inputTokenMint: ps.tokenBMint, slippage: 0, poolState: ps, currentPoint: await getCurrentPoint(conn, Number(ps.activationType)), hasReferral: false, tokenADecimal: DEC, tokenBDecimal: c.quote_dec ?? 9, swapMode: 0, amountIn: new BN(String(lamIn)) });
+      const g = BigInt(qt.outputAmount.toString()); return g - g * BigInt(c.tax_bps || 0) / 10000n; }   // the graduated-pool quote doesn't take the coin's transfer tax off
+    const cfg = await dbc.state.getPoolConfig(vp.config); if (BigInt(vp.quoteReserve.toString()) >= BigInt(cfg.migrationQuoteThreshold.toString())) return 0n;   // finished curve: no live price until it migrates
+    const tfx = Number(cfg.quoteTokenFlag?.toString?.() ?? cfg.quoteTokenFlag) === 1 ? await getSwapQuoteTransferFees(conn, cfg) : {};
+    const qt = dbc.pool.swapQuote2({ ...tfx, virtualPool: vpw.poolState ? vpw : { poolState: vp }, config: cfg, swapBaseForQuote: false, amountIn: new BN(String(lamIn)), slippageBps: 0, hasReferral: false, currentPoint: await getCurrentPoint(conn, cfg.activationType), swapMode: SwapMode.ExactIn });
+    return BigInt((qt.excludedTransferFeeAmountOut ?? qt.minimumAmountOut ?? 0).toString());   // the curve quote is already net of the coin's tax
+  }
+  async function treidRef(lam) {   // independent amount of $TREID that `lam` SOL is worth: its own treid pool, else SOL/USD ÷ $TREID/USD
+    const tc = q1('SELECT * FROM coins WHERE mint=?', TREID); if (tc && isSol(tc)) return poolBuyNet(tc, lam);
+    const ps = quoteUsd({ quote_mint: WSOL, quote_symbol: 'SOL' }) || 0, pt = await jupPrice(TREID); return ps > 0 && pt > 0 ? BigInt(Math.floor(lam / 1e9 * ps / pt * 10 ** DEC)) : 0n;
+  }
   async function treidBuyback() {
     if (!TREID || !mainnet) return; const tinfo = await conn.getAccountInfo(new PublicKey(TREID)); if (!tinfo) return; const tprog = tinfo.owner, tm = new PublicKey(TREID), ata = getAssociatedTokenAddressSync(tm, ops.publicKey, false, tprog);
     const left = treidLeft(); if (left > 0) { const ai = await conn.getAccountInfo(ata); const have = ai ? unpackAccount(ata, ai, tprog).amount : 0n, amt = BigInt(left) < have ? BigInt(left) : have;
       if (amt > 0n) { const sgr = await send([createBurnCheckedInstruction(ata, tm, ops.publicKey, amt, DEC, [], tprog), memoIx(`treid:tburnr:${TREID}:${amt}`)]); rec(sgr, 0, TREID, 'tburnr', amt); log('ops   $TREID residual burned', amt.toString()); } }
     const bal0 = await conn.getBalance(ops.publicKey), free = bal0 - 0.2e9 - liabilities() - pendingSol() - reserved(), lam = Math.floor(Math.min(treidBudget(), free));   // never spend SOL that is owed to creators or holders (part of the fees may already sit in the treasury)
     if (lam < TREID_MIN) return;
-    const qr = await (await fetchT(`${JUP}/swap/v1/quote?inputMint=${WSOL}&outputMint=${TREID}&amount=${lam}&slippageBps=300&maxAccounts=40`)).json();
-    if (!qr?.outAmount || qr.outputMint !== TREID || qr.inputMint !== WSOL || String(qr.inAmount) !== String(lam)) throw new Error('no $TREID route');
-    const sw = await (await fetchT(JUP + '/swap/v1/swap', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ quoteResponse: qr, userPublicKey: ops.publicKey.toBase58(), wrapAndUnwrapSol: true, dynamicComputeUnitLimit: true }) })).json();
-    const vt = VersionedTransaction.deserialize(Buffer.from(sw.swapTransaction, 'base64')); if (!vt.message.staticAccountKeys[0].equals(ops.publicKey)) throw new Error('route not paid by ops');
-    const luts = (await Promise.all(vt.message.addressTableLookups.map((l) => conn.getAddressLookupTable(l.accountKey)))).map((r) => r.value);
-    const minOut = BigInt(qr.otherAmountThreshold || 0), msg = TransactionMessage.decompile(vt.message, { addressLookupTableAccounts: luts }); { const bad = jupIxsOk(msg, ops.publicKey); if (bad) throw new Error('$TREID route refused: ' + bad); }
-    if (minOut > 0n) msg.instructions.push(createBurnCheckedInstruction(ata, tm, ops.publicKey, minOut, DEC, [], tprog));   // burned in the same transaction as the buy
+    const J = await jupBuild(WSOL, TREID, lam), minOut = J.minOut, msg = J.msg, luts = J.luts;
+    const ref = await treidRef(lam); { const bad = lossIssue(ref, minOut); if (bad) throw new Error('$TREID route refused: ' + bad); }   // against the coin's own pool (or SOL/USD ÷ $TREID/USD), not Jupiter's word
+    msg.instructions.push(createBurnCheckedInstruction(ata, tm, ops.publicKey, minOut, DEC, [], tprog));   // burned in the same transaction as the buy
     msg.instructions.push(memoIx(`treid:tbuy:${TREID}:${lam}:${minOut}`));
     const vt2 = new VersionedTransaction(msg.compileToV0Message(luts)); vt2.sign([ops]);
-    const pre = await conn.getBalance(ops.publicKey), preT = await tokBal(conn, ata, tprog), sim = await conn.simulateTransaction(vt2, { sigVerify: false, accounts: { encoding: 'base64', addresses: [ops.publicKey.toBase58(), ata.toBase58()] } });
-    if (sim.value.err) throw new Error('$TREID buyback simulation failed'); const post = sim.value.accounts?.[0]?.lamports ?? 0; if (pre - post > lam + 0.01e9) throw new Error('$TREID route would spend too much SOL — refused');
-    if (simTok(sim.value.accounts?.[1], ata, tprog) < preT) throw new Error('$TREID route doesn’t deliver the minimum to ops — refused');   // bought ≥ minOut, then minOut burned: never below where it started
-    if (HALT.on) throw new Error('ops halted'); const sig = await landOrExpire(conn, vt2.serialize(), bs58.encode(vt2.signatures[0]), sw.lastValidBlockHeight);
+    const sm = await jupSim(vt2, { outAta: ata.toBase58(), outProg: tprog });
+    if (sm.solSpent > lam + SIM_TOL + sm.rentNew) throw new Error('$TREID route would spend too much SOL — refused');
+    if (sm.outGot < 0n) throw new Error('$TREID route doesn’t deliver the minimum to ops — refused');   // bought ≥ minOut, then minOut burned: never below where it started
+    { const bad = lossIssue(ref, sm.outGot + minOut, MAX_SWAP_LOSS_BPS, 'simulated output'); if (bad) throw new Error('$TREID route refused: ' + bad); }
+    if (HALT.on) throw new Error('ops halted'); const sig = await landOrExpire(conn, vt2.serialize(), bs58.encode(vt2.signatures[0]), J.sw.lastValidBlockHeight);
     const t = await getTxRetry(conn, sig); if (!t) { unknown('$TREID buyback ' + sig); throw new Error('receipt unread'); } if (t.meta.err) throw new Error('$TREID buyback failed');
     recMany(sig, [[0, TREID, 'tbuy', lam], [1, TREID, 'tburn', minOut], [2, TREID, 'tleft', rwOut(t, ops.publicKey, TREID)]]);
     log('ops   $TREID buyback', (lam / 1e9).toFixed(4), 'SOL → burned', minOut.toString());
@@ -161,21 +226,25 @@ export function startOps({ conn, dbc, ops, treasury, q, q1, run, mainnet = false
     if (!mainnet) throw new Error('reward-token swaps need Jupiter (mainnet)'); if (!(await rewardOk(rw))) throw new Error('reward token not allowed');
     { const bad = await rewardMintCheck(rw, c); if (bad) throw new Error('reward token refused: ' + bad); }
     const amt = pendingPair(c.mint), inM = qmOf(c).toBase58(); if (amt <= 0) return 0;
-    const qr = await (await fetchT(`${JUP}/swap/v1/quote?inputMint=${inM}&outputMint=${rw}&amount=${amt}&slippageBps=300&maxAccounts=40`)).json();
-    if (!qr?.outAmount || qr.outputMint !== rw || qr.inputMint !== inM || String(qr.inAmount) !== String(amt)) throw new Error('no route');
-    const sw = await (await fetchT(JUP + '/swap/v1/swap', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ quoteResponse: qr, userPublicKey: ops.publicKey.toBase58(), wrapAndUnwrapSol: true, dynamicComputeUnitLimit: true }) })).json();
-    const vt = VersionedTransaction.deserialize(Buffer.from(sw.swapTransaction, 'base64')); if (!vt.message.staticAccountKeys[0].equals(ops.publicKey)) throw new Error('route not paid by ops');
-    const luts = (await Promise.all(vt.message.addressTableLookups.map((l) => conn.getAddressLookupTable(l.accountKey)))).map((r) => r.value);
-    const msg = TransactionMessage.decompile(vt.message, { addressLookupTableAccounts: luts }); { const bad = jupIxsOk(msg, ops.publicKey); if (bad) throw new Error('route refused: ' + bad); } msg.instructions.push(memoIx(`treid:taxconv:${c.mint}:${amt}:${rw}`));
-    const vt2 = new VersionedTransaction(msg.compileToV0Message(luts)); vt2.sign([ops]);
-    // never sign away more SOL than the swap itself can need (the route comes from an outside API)
-    const minOut = BigInt(qr.otherAmountThreshold || 0); if (minOut <= 0n) throw new Error('route has no minimum output');
     const rwInfo = rw === WSOL ? null : await conn.getAccountInfo(new PublicKey(rw)), rwProg = rwInfo?.owner, rwAta = rwProg ? getAssociatedTokenAddressSync(new PublicKey(rw), ops.publicKey, false, rwProg).toBase58() : null;
     if (rw !== WSOL && !rwAta) throw new Error('reward token not found');
-    const pre = await conn.getBalance(ops.publicKey), preT = rwAta ? await tokBal(conn, rwAta, rwProg) : 0n, sim = await conn.simulateTransaction(vt2, { sigVerify: false, accounts: { encoding: 'base64', addresses: [ops.publicKey.toBase58(), ...(rwAta ? [rwAta] : [])] } });
-    if (sim.value.err) throw new Error('route simulation failed'); const post = sim.value.accounts?.[0]?.lamports ?? 0, maxLoss = (inM === WSOL ? amt : 0) + 0.01e9; if (pre - post > maxLoss) throw new Error('route would spend too much SOL — refused');
-    if (rwAta ? simTok(sim.value.accounts?.[1], rwAta, rwProg) - preT < minOut : BigInt(post) - BigInt(pre) < minOut - 10000000n) throw new Error('route doesn’t deliver the minimum to ops — refused');   // SOL out: unwrapped to ops (minus fees/rent)
-    if (HALT.on) throw new Error('ops halted'); const sig = await landOrExpire(conn, vt2.serialize(), bs58.encode(vt2.signatures[0]), sw.lastValidBlockHeight);   // final answer only: landed, or expired and can never land
+    const inProg = inM === WSOL ? null : (await conn.getAccountInfo(new PublicKey(inM)))?.owner, inAta = inProg ? getAssociatedTokenAddressSync(new PublicKey(inM), ops.publicKey, false, inProg).toBase58() : null;
+    if (inM !== WSOL && !inAta) throw new Error('pair token not found');
+    const J = await jupBuild(inM, rw, amt), minOut = J.minOut, msg = J.msg, luts = J.luts;
+    // independent price: the pair token's and the reward token's USD prices (the indexer's feeds; Jupiter's price API only as a fallback for the reward token)
+    const outDec = rw === WSOL ? 9 : unpackMint(new PublicKey(rw), rwInfo, rwProg).decimals, pxIn = quoteUsd(c) || 0, pxOut = rw === WSOL ? (quoteUsd({ quote_mint: WSOL, quote_symbol: 'SOL' }) || 0) : ((quoteUsd({ quote_mint: rw }) || 0) || await jupPrice(rw));
+    const ref = pxIn > 0 && pxOut > 0 ? BigInt(Math.floor(amt / 10 ** (c.quote_dec ?? 9) * pxIn / pxOut * 10 ** outDec)) : 0n;
+    { const bad = lossIssue(ref, minOut); if (bad) throw new Error('route refused: ' + bad); }
+    msg.instructions.push(memoIx(`treid:taxconv:${c.mint}:${amt}:${rw}`));
+    const vt2 = new VersionedTransaction(msg.compileToV0Message(luts)); vt2.sign([ops]);
+    // never sign away more than the swap itself needs (the route comes from an outside API): SOL, the input tokens, and what arrives
+    const sm = await jupSim(vt2, { inAta, inProg, outAta: rwAta, outProg: rwProg });
+    if (sm.solSpent > (inM === WSOL ? amt : 0) + SIM_TOL + sm.rentNew) throw new Error('route would spend too much SOL — refused');
+    if (inAta && sm.inSpent > BigInt(amt)) throw new Error('route would take more ' + (c.quote_symbol || 'pair token') + ' than the quote — refused');
+    const got = rwAta ? sm.outGot : BigInt(sm.post - sm.pre) + 5000n + BigInt(Math.ceil(PRIO * 1.4));   // SOL out: unwrapped to ops, minus the network fee
+    if (rwAta ? got < minOut : BigInt(sm.post - sm.pre) < minOut - BigInt(SIM_TOL)) throw new Error('route doesn’t deliver the minimum to ops — refused');
+    { const bad = lossIssue(ref, got, MAX_SWAP_LOSS_BPS, 'simulated output'); if (bad) throw new Error('route refused: ' + bad); }
+    if (HALT.on) throw new Error('ops halted'); const sig = await landOrExpire(conn, vt2.serialize(), bs58.encode(vt2.signatures[0]), J.sw.lastValidBlockHeight);   // final answer only: landed, or expired and can never land
     const t = await getTxRetry(conn, sig); if (!t) { unknown('reward swap ' + sig); const e = new Error('receipt unread'); e.unconfirmed = true; throw e; } if (t.meta.err) throw new Error('reward swap failed');
     const out = rwOut(t, ops.publicKey, rw); recMany(sig, [[0, c.mint, 'taxconv', amt, rw], [1, c.mint, 'taxrw', out, rw]]);
     log('ops   swapped', amt, c.quote_symbol || 'SOL', 'units →', out, 'of', rw.slice(0, 6), '(holder reward)', c.symbol); return out;
