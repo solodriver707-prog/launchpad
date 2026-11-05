@@ -4215,8 +4215,8 @@
   }
 
   function palResults() {
-    var q = S.palQ.trim().toLowerCase();
-    var list = all().filter(function (t) { return !q || t.name.toLowerCase().indexOf(q) !== -1 || t.tick.toLowerCase().indexOf(q) !== -1 || t.ca.toLowerCase() === q; });
+    var raw = S.palQ.trim(), q = raw.toLowerCase().replace(/^\$+/, '');   // "$wow" finds WOW
+    var list = all().filter(function (t) { return !q || t.name.toLowerCase().indexOf(q) !== -1 || t.tick.toLowerCase().indexOf(q) !== -1 || symOf(t).toLowerCase().indexOf(q) !== -1 || (t.ca && t.ca.toLowerCase() === q) || (raw.length >= 4 && t.ca && t.ca.indexOf(raw.replace(/^\$+/, '')) !== -1); });   // part of the contract address (4+ chars, case-sensitive like base58)
     if (!q) list.sort(function (a, b) { return chg(b) - chg(a); });
     return list.slice(0, 8);
   }
