@@ -28,6 +28,8 @@
   var B58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
   function b58(n) { var s = ''; for (var i = 0; i < n; i++) s += B58[Math.floor(Math.random() * 58)]; return s; }
   function fakeCA(suf) { suf = suf || 'trd'; return b58(44 - suf.length) + suf; }
+  function numOk(v) { return /^\d*[.,]?\d*$/.test(String(v == null ? '' : v).trim()); }   // a plain positive decimal (or empty): no minus, one dot
+  function numVal(v) { v = String(v == null ? '' : v).trim().replace(',', '.'); return numOk(v) ? (parseFloat(v) || 0) : 0; }   // ONE parser for every amount box (trade box, dev buy)
   function symOf(t) { return t && typeof t === 'object' ? (t.sym || t.tick || '') : String(t || ''); }   // the coin's REAL ticker (two coins can share one; the internal key t.tick then gets a suffix)
   function short(a) { a = String(a || ''); return a ? esc(a.slice(0, 4) + '…' + a.slice(/treid$/.test(a) ? -5 : -4)) : ''; }   // escaped: addresses come from the server
   function taxBg(t) { return t === 0 ? 'var(--up)' : t <= 3 ? 'var(--yellow)' : t <= 6 ? 'var(--orange)' : 'var(--pink)'; }
@@ -2691,12 +2693,13 @@
   function qUsdT(t) { return t && t.live && t.qMint && t.qUsd ? t.qUsd : SOL_USD; }
   function qBalT(t) { return t && t.live && t.qMint ? (typeof t.qBal === 'number' ? t.qBal : null) : (S.account && typeof S.balance === 'number' ? S.balance : null); }
   function quoteFor(t) {
-    var isBuy = S.side === 'buy', amt = parseFloat(String(S.amount).replace(',', '.')) || 0, px = price(t);
+    var isBuy = S.side === 'buy', amt = numVal(S.amount), px = price(t);
     if (paySol(t)) amt = amt * SOL_USD / qUsdT(t) * 0.995;   // estimate after the Jupiter hop
     var QU = qUsdT(t), sol = isBuy ? amt : amt * px / QU, tr0 = snipeNow(t), pct = Math.max(t.buy, t.sell), tax = sol * pct / 100, fp = tr0 > 0 ? Math.max(feeOf(t), tr0 - pct) : feeOf(t), fee = sol * fp / 100, net = sol - tax - fee;   // during the trap its fee REPLACES the trading fee (same on-chain fee); the coin's tax comes on top
     var impact = Math.min(25, net * 3 / Math.sqrt(Math.max(t.mcN, 4)));
-    var outTok = isBuy ? net * QU / (px * (1 + impact / 200)) : 0, outSol = isBuy ? 0 : net * (1 - impact / 200);
-    var res = { isBuy: isBuy, amt: amt, sol: sol, pct: pct, tax: tax, fp: fp, fee: fee, impact: impact, out: isBuy ? outTok : outSol, min: (isBuy ? outTok : outSol) * (1 - S.slip / 100) };
+    var outTok = isBuy ? net * QU / (px * (1 + impact / 200)) : 0, outSol = isBuy ? 0 : net * (1 - impact / 200), capped = false;
+    if (isBuy && t.prog < 100) { var cvL = (t.pro ? CURVE_PRO : CURVE_STD).sold * Math.max(0, 1 - (t.prog || 0) / 100); if (outTok > cvL) { outTok = cvL; capped = true; } }   // the curve can't deliver more than it has left
+    var res = { isBuy: isBuy, amt: amt, sol: sol, pct: pct, tax: tax, fp: fp, fee: fee, impact: impact, out: isBuy ? outTok : outSol, min: (isBuy ? outTok : outSol) * (1 - S.slip / 100), capped: capped };
     if (t.live && t.pool && amt > 0) {   // real coins: exact on-chain quote (fetched in the background, panel re-renders when it lands)
       var key = t.tick + '|' + S.side + '|' + amt + '|' + S.slip, L = S.lq && S.lq.k === key ? S.lq.r : null;
       if (!L) { if (S.lqWant !== key) { S.lqWant = key; clearTimeout(S.lqT); S.lqT = setTimeout(function () { chainLib().then(function (T) { return T.quote({ rpc: RPC, expect: { mint: t.ca, partners: [PARTNER, TREASURY] }, pool: t.pool, side: isBuy ? 'buy' : 'sell', amount: amt, slippageBps: Math.round(S.slip * 100) }); }).then(function (r) { S.lq = { k: key, r: r }; if (S.lqWant === key && S.screen === 'token' && S.tick === t.tick) render(); }).catch(function () {}); }, 300); } res.pending = true; }
@@ -2705,7 +2708,17 @@
         else { res.out = L.out; res.min = L.minOut; res.tax = L.out * ct / Math.max(1e-9, 1 - ct); res.sol = L.out + L.feeSol; }
         res.grad = !!L.graduated; res.impact = typeof L.impact === 'number' && isFinite(L.impact) ? Math.min(99, L.impact) : 0; res.exact = true; }
     }
+    if (!isBuy && jupOn(t) && S.recvSol !== false && t.qMint) {   // "Receive: SOL" — the pair token is swapped to SOL in the same transaction, so show SOL
+      var k2s = qUsdT(t) / SOL_USD; ['out', 'min', 'tax', 'fee', 'sol'].forEach(function (k) { if (typeof res[k] === 'number') res[k] *= k2s; }); res.min *= 0.995; res.out *= 0.998; res.inSol = true; }
     return res;
+  }
+  // why the trade button can't go ahead right now (shown ON the button, before you tap) — null when it can
+  function tradeBlock(t, q) {
+    if (!S.account || !t) return null; var amt = numVal(S.amount); if (!(amt > 0)) return null;
+    if (!q.isBuy) { var ps = S.pos[t.tick]; if (ps && amt > ps.tok + 1e-6 && !(S.sellAll && amt - Math.floor(ps.tok) < 1)) return 'Not enough $' + symOf(t); return null; }
+    if (t.live && t.qMint && !paySol(t)) { var qb = qBalT(t); return qb != null && amt > qb ? 'Not enough ' + qSymT(t) : null; }
+    var reserve = t.live ? (t.qMint || jupOn(t) ? 0.01 : 0.003) : 0;
+    return typeof S.balance === 'number' && amt > S.balance - reserve ? 'Not enough ' + (t.live ? '' : NET) + 'SOL' : null;
   }
 
   // ================= WALLET PANEL (GMGN / Axiom style) =================
@@ -3184,8 +3197,8 @@
     var PS = paySol(t), bal = PS ? (typeof S.balance === 'number' ? S.balance : null) : qBalT(t), QS = PS ? 'SOL' : qSymT(t), QK = PS ? 'SOL' : t.live && t.qMint ? t.pair : 'SOL', qP = PS || !(t.live && t.qMint) ? { sol: true } : { sol: false, usd: qUsdT(t) };
     var presets = q.isBuy ? ['reset'].concat(qPresets(qP, ['0.1', '0.5', '1', '5'])).map(function (p) { return '<button data-act="preset" data-arg="' + p + '">' + (p === 'reset' ? 'Reset' : p + ' ' + esc(QS)) + '</button>'; }).join('') :
       ['25', '50', '75', '100'].map(function (p) { return '<button data-act="sellpct" data-arg="' + p + '"' + (pos ? '' : ' disabled') + '>' + p + '%</button>'; }).join('');
-    var U = PS ? SOL_USD : qUsdT(t), aN = parseFloat(String(S.amount).replace(',', '.')) || 0, pxU = price(t);
-    var inUsd = q.isBuy ? aN * U : aN * pxU, outUsd = q.isBuy ? Math.max(0, aN - (q.tax || 0) - (q.fee || 0)) * U * (1 - Math.min(99, q.impact || 0) / 100) : (q.out || 0) * U;
+    var U = PS ? SOL_USD : qUsdT(t), aN = numVal(S.amount), pxU = price(t);
+    var inUsd = q.isBuy ? aN * U : aN * pxU, outUsd = q.isBuy ? Math.max(0, aN - (q.tax || 0) - (q.fee || 0)) * U * (1 - Math.min(99, q.impact || 0) / 100) : (q.out || 0) * (q.inSol ? SOL_USD : U), QSo = q.inSol ? 'SOL' : QS, blk = tradeBlock(t, q);
     function usdS(v) { return v > 0 ? '≈ $' + (v < 0.01 ? '<0.01' : money(v)) : ''; }
     function f4(v) { return v > 0 && v < 0.0001 ? v.toPrecision(2) : v.toFixed(4); }
     var bsBar = '<div class="bs bs3"><button class="b' + (S.side === 'buy' ? ' on' : '') + '" data-act="side" data-arg="buy">Buy</button><button class="s' + (S.side === 'sell' ? ' on' : '') + '" data-act="side" data-arg="sell">Sell</button><button class="l' + (S.side === 'tpsl' ? ' on' : '') + '" data-act="side" data-arg="tpsl">TP / SL</button></div>';
@@ -3194,23 +3207,26 @@
       (jupOn(t) && q.isBuy ? '<div class="paywith"><span class="muted">Pay with</span><button class="' + (PS ? '' : 'on') + '" data-act="paySol" data-arg="0">' + coinHTML(t.pair, 16) + esc(qSymT(t)) + '</button><button class="' + (PS ? 'on' : '') + '" data-act="paySol" data-arg="1">' + coinHTML('SOL', 16) + 'SOL</button>' + (PS ? '<small class="muted">swapped to ' + esc(qSymT(t)) + ' in the same transaction · 1 wallet approval</small>' : '') + '</div>' : '') +
       '<div class="tb-top"><span class="muted" style="font-size:12.5px">' + (q.isBuy ? (bal != null ? 'Balance ' + (bal >= 1000 ? fmtNum(bal) : bal.toFixed(3)) + ' ' + esc(QS) : 'Amount in ' + esc(QS)) : (pos ? 'You hold ' + fmtNum(pos.tok) + ' $' + sid : 'You hold 0 $' + sid)) + '</span>' +
         '<button class="slipbtn" data-act="slip">Slippage ' + S.slip + '% ⚙</button></div>' +
-      (S.slipOpen ? '<div class="slipbox"><span class="muted" style="font-size:12px">Max slippage</span><div class="presets">' + [1, 3, 5, 10, 20].map(function (v) { return '<button class="' + (S.slip === v ? 'on' : '') + '" data-act="setslip" data-arg="' + v + '">' + v + '%</button>'; }).join('') + '</div><span class="muted" style="font-size:11.5px">Priority fee: 0.0001 SOL · MEV protection on</span></div>' : '') +
+      (S.slipOpen ? '<div class="slipbox"><span class="muted" style="font-size:12px">Max slippage</span><div class="presets">' + [1, 3, 5, 10, 20].map(function (v) { return '<button class="' + (S.slip === v ? 'on' : '') + '" data-act="setslip" data-arg="' + v + '">' + v + '%</button>'; }).join('') + '</div><span class="muted" style="font-size:11.5px">Priority fee: 0.0001 SOL</span></div>' : '') +
+      (S.slip > 5 ? '<div class="slip-warn">High slippage (' + S.slip + '%) — you may get much less than quoted, and bots can trade against you</div>' : '') +
       '<div class="amtwrap"><input id="amt" class="inp" inputmode="decimal" data-bind="amount" value="' + esc(S.amount) + '" placeholder="0.0"><span>' + (q.isBuy ? coinHTML(QK, 22) + esc(QS) : avatarHTML(t, 22) + '$' + sid) + '</span></div>' +
       (inUsd > 0 ? '<div class="amt-usd mono">' + usdS(inUsd) + (q.isBuy && q.out > 0 ? ' · ≈ ' + fmtNum(q.out) + ' $' + sid : '') + '</div>' : '') +
       '<div class="presets">' + presets + '</div>' +
-      (PS ? '<div class="quote">' + (function () { var sa = parseFloat(String(S.amount || '0').replace(',', '.')) || 0, f4s = function (v) { return (v > 0 && v < 0.0001 ? '<0.0001' : v.toFixed(4)) + ' SOL'; };   // same breakdown as SOL coins, in SOL
+      (PS ? '<div class="quote">' + (function () { var sa = numVal(S.amount), f4s = function (v) { return (v > 0 && v < 0.0001 ? '<0.0001' : v.toFixed(4)) + ' SOL'; };   // same breakdown as SOL coins, in SOL
           return (q.pct > 0 ? '<div><span class="muted">Coin ' + (q.isBuy ? 'buy' : 'sell') + ' tax (' + q.pct + '%)</span><span style="color:' + taxBg(q.pct) + '">' + f4s(sa * q.pct / 100) + '</span></div>' : '') +
             '<div><span class="muted">Trading fee (' + (+q.fp.toFixed(2)) + '%)</span><span>' + f4s(sa * q.fp / 100) + '</span></div>' +
             '<div><span class="muted">Swap SOL → ' + esc(qSymT(t)) + ' (~0.2%)</span><span>' + f4s(sa * 0.002) + '</span></div>' +
-            '<div class="q-tot"><span class="muted">Total cost</span><span class="mono">≈' + (+(q.pct + q.fp + 0.2).toFixed(2)) + '% · ' + f4s(sa * (q.pct + q.fp + 0.2) / 100) + '</span></div>'; })() + '<div style="padding-top:9px;border-top:1px solid var(--line)"><span class="muted">You receive ≈</span><span style="font-weight:800;font-size:15px">' + fmtNum(q.out) + ' $' + sid + (outUsd > 0 ? ' <small class="q-usd">' + usdS(outUsd) + '</small>' : '') + '</span></div></div>' :
-      '<div class="quote">' + (q.pct > 0 ? '<div><span class="muted">Coin ' + (q.isBuy ? 'buy' : 'sell') + ' tax (' + q.pct + '%)</span><span style="color:' + taxBg(q.pct) + '">' + f4(q.tax) + ' ' + esc(QS) + '</span></div>' : '') +
-        '<div><span class="muted">Trading fee (' + (+q.fp.toFixed(2)) + '%)' + (q.grad ? ' <em class="q-cr">' + gradCreator(t) + '% to creator</em>' : ' <em class="q-cr">' + (q.exact ? +(q.fp * 0.4).toFixed(2) : (q.pct > 0 ? FEE.creatorTaxed : FEE.creatorPlain)) + '% to creator</em>') + '</span><span>' + f4(q.fee) + ' ' + esc(QS) + '</span></div>' +
-        '<div class="q-tot"><span class="muted">Total cost</span><span class="mono">' + (+(q.pct + q.fp).toFixed(2)) + '% · ' + f4((q.tax + q.fee)) + ' ' + esc(QS) + '</span></div>' +
+            '<div class="q-tot"><span class="muted">Total cost</span><span class="mono">≈' + (+(q.pct + q.fp + 0.2).toFixed(2)) + '% · ' + f4s(sa * (q.pct + q.fp + 0.2) / 100) + '</span></div>' +
+            '<div><span class="muted">Price impact</span><span class="' + (q.impact > 5 ? 'down' : '') + '">' + (q.impact || 0).toFixed(2) + '%</span></div>' +
+            '<div><span class="muted">Min received (' + S.slip + '% slip)</span><span>' + fmtNum(q.min) + ' $' + sid + '</span></div>'; })() + (q.capped ? '<div class="q-cap muted">Capped at what\'s left on the bonding curve</div>' : '') + '<div style="padding-top:9px;border-top:1px solid var(--line)"><span class="muted">You receive ≈</span><span style="font-weight:800;font-size:15px">' + fmtNum(q.out) + ' $' + sid + (outUsd > 0 ? ' <small class="q-usd">' + usdS(outUsd) + '</small>' : '') + '</span></div></div>' :
+      '<div class="quote">' + (q.pct > 0 ? '<div><span class="muted">Coin ' + (q.isBuy ? 'buy' : 'sell') + ' tax (' + q.pct + '%)</span><span style="color:' + taxBg(q.pct) + '">' + f4(q.tax) + ' ' + esc(QSo) + '</span></div>' : '') +
+        '<div><span class="muted">Trading fee (' + (+q.fp.toFixed(2)) + '%)' + (q.grad ? ' <em class="q-cr">' + gradCreator(t) + '% to creator</em>' : ' <em class="q-cr">' + (q.exact ? +(q.fp * 0.4).toFixed(2) : (q.pct > 0 ? FEE.creatorTaxed : FEE.creatorPlain)) + '% to creator</em>') + '</span><span>' + f4(q.fee) + ' ' + esc(QSo) + '</span></div>' +
+        '<div class="q-tot"><span class="muted">Total cost</span><span class="mono">' + (+(q.pct + q.fp).toFixed(2)) + '% · ' + f4((q.tax + q.fee)) + ' ' + esc(QSo) + '</span></div>' +
         '<div><span class="muted">Price impact</span><span class="' + (q.impact > 5 ? 'down' : '') + '">' + q.impact.toFixed(2) + '%</span></div>' +
-        '<div><span class="muted">Min received (' + S.slip + '% slip)</span><span>' + (q.isBuy ? fmtNum(q.min) + ' $' + sid : q.min.toFixed(4) + ' ' + esc(QS)) + '</span></div>' +
-        '<div style="padding-top:9px;border-top:1px solid var(--line)"><span class="muted">You receive ≈</span><span style="font-weight:800;font-size:15px">' + (q.isBuy ? fmtNum(q.out) + ' $' + sid : q.out.toFixed(4) + ' ' + esc(QS)) + (outUsd > 0 ? ' <small class="q-usd">' + usdS(outUsd) + '</small>' : '') + '</span></div></div>') +
+        '<div><span class="muted">Min received (' + S.slip + '% slip)</span><span>' + (q.isBuy ? fmtNum(q.min) + ' $' + sid : q.min.toFixed(4) + ' ' + esc(QSo)) + '</span></div>' +
+        '<div style="padding-top:9px;border-top:1px solid var(--line)"><span class="muted">You receive ≈</span><span style="font-weight:800;font-size:15px">' + (q.isBuy ? fmtNum(q.out) + ' $' + sid : q.out.toFixed(4) + ' ' + esc(QSo)) + (outUsd > 0 ? ' <small class="q-usd">' + usdS(outUsd) + '</small>' : '') + '</span></div>' + (q.capped ? '<div class="q-cap muted">Capped at what\'s left on the bonding curve</div>' : '') + '</div>') +
       (trapLeft(t) > 0 ? trapBox(t, 'buy') : '') +
-      '<button class="big-btn btn ' + (!S.account ? 'pri' : q.isBuy ? 'up-b' : 'down-b') + '" data-act="trade" data-arg="' + id + '"' + (S.busy && !S.signSlow ? ' disabled' : '') + '>' + (S.signSlow ? 'No answer from wallet — tap to try again' : S.busy ? esc(S.busy) + '…' : !S.account ? 'Connect wallet to trade' : (q.isBuy ? 'Buy $' : 'Sell $') + id) + '</button>' + (q.isBuy && coRef(t) ? '<small class="co-cred">📣 This buy credits <b>' + esc(walletName(coRef(t).w)) + '</b>’s callout — costs you nothing extra</small>' : '') +
+      '<button class="big-btn btn ' + (!S.account ? 'pri' : q.isBuy ? 'up-b' : 'down-b') + '" data-act="trade" data-arg="' + id + '"' + ((S.busy && !S.signSlow) || (blk && !S.busy) ? ' disabled' : '') + '>' + (S.signSlow ? 'No answer from wallet — tap to try again' : S.busy ? esc(S.busy) + '…' : !S.account ? 'Connect wallet to trade' : blk ? esc(blk) : (q.isBuy ? 'Buy $' : 'Sell $') + sid) + '</button>' + (q.isBuy && coRef(t) ? '<small class="co-cred">📣 This buy credits <b>' + esc(walletName(coRef(t).w)) + '</b>’s callout — costs you nothing extra</small>' : '') +
       '<span class="note">' + (t.live ? 'Real on-chain coin' + NETP + ' — every buy and sell is signed by your wallet.' : 'Demo coin — trades here are simulated, nothing is sent on-chain.') + '</span></section>';
     var posCard = pos ? (function () {
       var ps = t.live && S.myPs && S.myPs[t.ca] && S.myPs[t.ca].trades > 0 ? S.myPs[t.ca] : null, U2 = qUsdT(t);
@@ -3813,7 +3829,7 @@
       '<small class="muted stp-n">Pro start sells 60% of the supply on the curve (Standard ~80%); the other 40% goes into the locked Meteora pool at graduation.</small></div>';
   }
   function devQuote(amt) {   // amt is in SOL — you always pay with SOL; on a coin paired with something else it's swapped to the pair token first
-    var q = qOf(S.c), solIn = Math.max(0, +amt || 0); amt = q.sol ? solIn : (qUsd(q) > 0 ? solIn * SOL_USD / qUsd(q) : 0); var usd = amt * qUsd(q), solEq = usd / SOL_USD;
+    var q = qOf(S.c), solIn = Math.max(0, numVal(amt)); amt = q.sol ? solIn : (qUsd(q) > 0 ? solIn * SOL_USD / qUsd(q) : 0); var usd = amt * qUsd(q), solEq = usd / SOL_USD;
     var cv = S.c.pro ? CURVE_PRO : CURVE_STD, tok = cv.b0 * solEq / (cv.q0 + solEq); tok = Math.min(tok, cv.sold);   // the curve as virtual reserves (SOL-equivalent): tokens out = B0·x / (Q0 + x)
     return { sol: amt, solIn: solIn, tok: tok, pct: tok / 1e9 * 100, sym: q.sym, key: q.key, isSol: !!q.sol, mint: q.mint };
   }
@@ -4108,7 +4124,8 @@
             '<li><b>Show up at least once every 72h</b>: a trade in your coin, “I’m still here” (free signature), a callout or update about your coin, or “Claim now”. We push a reminder 24h and 6h before.</li>' +
             '<li><b>Miss it</b> → your fees pause and buy back & burn your coin until you tap “Resume my fees” (paused fees are not paid back).</li>' +
             '<li><b>You’re out</b> (the community can take over) after 7 days away, or if you sell/move 70%+ of your peak bag <i>and</i> keep under 0.5% of supply.</li></ul></div>' +
-          '<button class="big-btn btn pri" data-act="launch"' + (S.busy && !S.signSlow ? ' disabled' : '') + '>' + (S.signSlow ? 'No answer from wallet — tap to try again' : S.busy ? esc(S.busy) + '…' : S.account ? 'Launch on-chain' + NETP + '' : 'Connect wallet to launch') + '</button>' +
+          (function () { var nb = !S.busy && S.account && !S.demoLaunch && typeof S.balance === 'number' && dq.solIn > 0 && S.balance < dq.solIn + 0.03;   // over balance: say so on the button, before the tap
+            return '<button class="big-btn btn pri" data-act="launch"' + ((S.busy && !S.signSlow) || nb ? ' disabled' : '') + '>' + (S.signSlow ? 'No answer from wallet — tap to try again' : S.busy ? esc(S.busy) + '…' : nb ? 'Not enough ' + NET + 'SOL for a ' + esc(String(+dq.solIn.toFixed(4))) + ' SOL dev buy' : S.account ? 'Launch on-chain' + NETP + '' : 'Connect wallet to launch') + '</button>'; })() +
           (S.account && DEMO ? '<button class="demo-l" data-act="demoLaunch">No ' + NET + 'SOL? Try a demo launch instead</button>' : '') +
           '<span class="note">' + (CHAIN_ID === 'solana:devnet' ? 'Devnet beta: your coin is created on the Solana test network.' : 'Your coin is created on-chain on Meteora (Solana mainnet).') + ' Your wallet signs every step.</span>' +
         '</section>' +
@@ -4703,7 +4720,7 @@
         var b = { t: t, tok: tok, pct: tok / 1e9 * 100, usd: tok * price(t), at: Date.now(), src: devOf(t) === S.account ? 'dev' : 'hold', who: S.account, sig: b58(64), mine: true, fresh: true }; S.myBurns = S.myBurns || []; S.myBurns.push({ tick: t.tick, tok: tok, usd: b.usd, at: b.at, who: S.account, sig: b.sig }); try { localStorage.setItem('dl.myburns', JSON.stringify(S.myBurns)); } catch (er) {} S._burns = null; S._bnAgg = null;
         S.burnOpen = false; S._bnAgg = null; toast('🔥 Burned ' + fmtNum(Math.round(tok)) + ' $' + symOf(t) + ' — gone forever'); if (S.screen === 'burn') { render(); setTimeout(function () { var fl = document.getElementById('bn-fly'); if (fl) { var r = fl.getBoundingClientRect(); bnImpact(b, r.width / 2, r.height * .74); } }, 400); } else render(); })(); break;
       case 'hmapClose': if (el.classList.contains('hm-ov') && e.target.closest('[data-stop]')) break; set({ hmap: null }); break;
-      case 'side': set({ side: arg }); setTimeout(lwRefit, 30); break;
+      case 'side': if (arg !== S.side) { S.amount = ''; S.sellAll = false; S.pctAmt = 0; } set({ side: arg }); setTimeout(lwRefit, 30); break;
       case 'terms': e.preventDefault && e.preventDefault(); set({ termsOpen: true }); break;
       case 'notifOpen': S.walletMenu = false; set({ notifOpen: true }); break;
       case 'notifClose': if (e.target.closest('[data-stop]') && !e.target.closest('.iconbtn')) break; set({ notifOpen: false }); break;
@@ -4879,7 +4896,7 @@
       case 'slip': set({ slipOpen: !S.slipOpen }); break;
       case 'setslip': set({ slip: +arg, slipOpen: false }); break;
       case 'share': copy(location.href.split('#')[0] + '#' + (S.tick || ''), 'Link copied'); break;
-      case 'sellpct': var tp0 = find(S.tick), ps0 = tp0 && S.pos[tp0.tick]; if (ps0) set({ side: 'sell', amount: (ps0.tok * (+arg) / 100).toFixed(0) }); break;
+      case 'sellpct': var tp0 = find(S.tick), ps0 = tp0 && S.pos[tp0.tick]; if (ps0) set({ side: 'sell', sellAll: arg === '100', amount: String(Math.floor(ps0.tok * (+arg) / 100 * 1e6) / 1e6) }); break;   // rounded DOWN: never more than you hold
       case 'sellall': var tp1 = find(S.tick), ps1 = tp1 && S.pos[tp1.tick]; if (ps1) set({ side: 'sell', amount: String(Math.floor(ps1.tok)), sellAll: true }); break;
       case 'coImgDel': S.coImg = null; render(); break;
       case 'coNew': S.coModal = { upd: false }; S.replyTo = null; S.coErr = ''; S.tick = S.tick || arg; render(); setTimeout(function () { var x = document.getElementById('cmt-in'); if (x) x.focus(); }, 30); break;
@@ -4990,15 +5007,16 @@
       case 'trade':
         if (!S.account) { set({ walletOpen: true }); break; }
         if (S.signSlow && S.signCancel) { S.signCancel(); S.busy = null; S.busyId = (S.busyId || 0) + 1; }   // wallet silent 10s+ → this tap starts over
-        var t = find(arg), amt = parseFloat(String(S.amount).replace(',', '.')) || 0;
+        var t = find(arg), amt = numVal(S.amount);
         if (!t) break;
         if (amt <= 0) { toast('Enter an amount first'); break; }
+        var blk0 = tradeBlock(t, { isBuy: S.side === 'buy' }); if (blk0) { var ps9 = S.pos[t.tick]; toast(S.side === 'sell' && ps9 ? 'You only hold ' + fmtNum(ps9.tok) + ' $' + symOf(t) : blk0); break; }
         if (t.live) {
           var side0 = S.side, ps0 = S.pos[t.tick] || { tok: 0 };
           var qb0 = qBalT(t); if (!paySol(t) && side0 === 'buy' && qb0 != null && amt > qb0 - (t.qMint ? 0 : 0.003)) { toast('Not enough ' + qSymT(t) + ' — balance ' + (qb0 >= 1000 ? fmtNum(qb0) : qb0.toFixed(3))); break; }
           if (t.qMint && typeof S.balance === 'number' && S.balance < 0.003) { toast('You need a little SOL for network fees'); break; }
           if (side0 === 'sell' && !(ps0.tok > 0) && !S.posChecked) { S.posChecked = true; toast('Checking your balance…'); livePos(t).then(function () { setTimeout(function () { S.posChecked = false; }, 15e3); if (S.pos[t.tick] && S.pos[t.tick].tok > 0) toast('Balance loaded — tap Sell again'); else toast('You don\'t hold any $' + symOf(t) + ' yet — buy first'); }); break; }
-          if (side0 === 'sell') { if (amt > ps0.tok) amt = ps0.tok; if (amt <= 0) { toast('You don\'t hold any $' + symOf(t) + ' yet — buy first'); break; } }
+          if (side0 === 'sell') { if (amt > ps0.tok && (amt - ps0.tok < 1e-6 || (S.sellAll && amt - Math.floor(ps0.tok) < 1))) amt = ps0.tok; if (amt > ps0.tok) { toast('You only hold ' + fmtNum(ps0.tok) + ' $' + symOf(t)); break; } if (amt <= 0) { toast('You don\'t hold any $' + symOf(t) + ' yet — buy first'); break; } }
           if (!(S.wallet && S.wallet.dl) && jupOn(t) && !S.solTwoStep && ((side0 === 'buy' && paySol(t)) || (side0 === 'sell' && S.recvSol !== false))) {   // ONE transaction: SOL in / SOL out, like stonk.fun
             if (side0 === 'buy' && typeof S.balance === 'number' && amt > S.balance - 0.01) { toast('Not enough SOL — balance ' + S.balance.toFixed(3)); break; } if (S.busy) break;
             solSwapRun(t, side0, amt); break; }
@@ -5137,8 +5155,10 @@
     var v = el.value;
     if (el.getAttribute('data-num')) v = Number(v);
     if (key === 'c.tick') v = v.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
-    if (key === 'c.devBuy') v = v.replace(/[^0-9.,]/g, '').slice(0, 8);
-    if (key === 'amount') { v = v.replace(/[^0-9.,]/g, ''); S.pctAmt = 0; }
+    if (key === 'c.devBuy' || key === 'amount') {   // amount boxes: refuse what isn't a plain positive number (no minus, one dot) instead of quietly rewriting it
+      var prevV = key === 'amount' ? String(S.amount || '') : String(S.c.devBuy || ''); v = v.replace(/\s/g, '');
+      if (!numOk(v) || v.length > 16) { el.value = prevV; el.classList.remove('inp-bad'); void el.offsetWidth; el.classList.add('inp-bad'); clearTimeout(el._badT); el._badT = setTimeout(function () { el.classList.remove('inp-bad'); }, 900); toast(/-/.test(v) ? 'Amounts can’t be negative' : 'Enter a number like 0.5'); return; }
+      if (key === 'amount') { S.pctAmt = 0; S.sellAll = false; } }
     if (key === 'pctAmt') { var base = (S.account && typeof S.balance === 'number') ? Math.max(0, S.balance - 0.01) : 10; el.style.setProperty('--p', v + '%'); set({ pctAmt: v, amount: v ? (base * v / 100).toFixed(3) : '' }); return; }
     if (key.indexOf('c.') === 0) { var p = {}; p[key.slice(2)] = v; setC(p); return; }
     var o = {}; o[key] = v; if (key === 'palQ') o.palIdx = 0; set(o);
