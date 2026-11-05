@@ -57,11 +57,16 @@ export function startCallouts({ q, q1, run, push, rate, coinStats, pinJSON, pinF
   }
 
   // ---- IPFS backup: one JSON snapshot, the previous one is unpinned ----
-  let timer = null, lastCid = null;
-  function backupSoon() { if (!pinataJwt || timer) return; timer = setTimeout(async () => { timer = null; try {
-    const all = q('SELECT * FROM callouts ORDER BY id DESC LIMIT 20000'), url = await pinJSON({ v: 1, at: Date.now(), callouts: all.map((r) => ({ ...row(r), sig: r.sig })) }, 'callouts');
-    const cid = url.split('/ipfs/')[1]; if (lastCid && lastCid !== cid) fetch('https://api.pinata.cloud/pinning/unpin/' + lastCid, { method: 'DELETE', headers: { authorization: 'Bearer ' + pinataJwt } }).catch(() => {}); lastCid = cid;
-  } catch (e) { log('callouts backup err', e.message.slice(0, 100)); } }, 20e3); }
+  // debounced: at most one snapshot per 30 min (the DB is the live copy; this only covers a lost disk), plus one on shutdown
+  const BACKUP_EVERY = 30 * 60e3; let timer = null, lastCid = null, lastAt = 0, dirty = false, busy = null;
+  function backupSoon() { if (!pinataJwt) return; dirty = true; if (timer || busy) return; timer = setTimeout(backupNow, Math.max(20e3, lastAt + BACKUP_EVERY - Date.now())); }
+  async function backupNow() { if (timer) { clearTimeout(timer); timer = null; } if (!pinataJwt || !dirty) return; if (busy) return busy;
+    dirty = false; lastAt = Date.now();
+    busy = (async () => { try {
+      const all = q('SELECT * FROM callouts ORDER BY id DESC LIMIT 20000'), url = await pinJSON({ v: 1, at: Date.now(), callouts: all.map((r) => ({ ...row(r), sig: r.sig })) }, 'callouts');
+      const cid = url.split('/ipfs/')[1]; if (lastCid && lastCid !== cid) fetch('https://api.pinata.cloud/pinning/unpin/' + lastCid, { method: 'DELETE', headers: { authorization: 'Bearer ' + pinataJwt } }).catch(() => {}); lastCid = cid;
+    } catch (e) { dirty = true; log('callouts backup err', e.message.slice(0, 100)); } finally { busy = null; if (dirty) backupSoon(); } })();
+    return busy; }
   async function restore() {
     if (!pinataJwt) return; try {
       const r = await fetch('https://api.pinata.cloud/data/pinList?status=pinned&metadata[name]=treid-callouts.json&pageLimit=20', { headers: { authorization: 'Bearer ' + pinataJwt } }), j = await r.json();
@@ -72,5 +77,5 @@ export function startCallouts({ q, q1, run, push, rate, coinStats, pinJSON, pinF
       log('callouts restored from IPFS:', n); for (const x of rows.slice(1)) fetch('https://api.pinata.cloud/pinning/unpin/' + x.ipfs_pin_hash, { method: 'DELETE', headers: { authorization: 'Bearer ' + pinataJwt } }).catch(() => {});
     } catch (e) { log('callouts restore err', e.message.slice(0, 100)); }
   }
-  return { post, list, restore, react };
+  return { post, list, restore, react, flush: backupNow };
 }

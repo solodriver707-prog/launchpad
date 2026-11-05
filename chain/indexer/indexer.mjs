@@ -585,7 +585,8 @@ let stopping = false;
 async function shutdown(sig) {
   if (stopping) return; stopping = true; console.log('shutdown', sig, '— finishing what is in flight');
   if (!HALT.on) { HALT.on = true; HALT.why = 'restarting'; }   // every send checks this: nothing new leaves the ops wallet
-  await Promise.race([lockIdle(), new Promise((r) => setTimeout(r, 25e3))]);
+  const coFlush = Promise.resolve().then(() => CO?.flush && CO.flush()).catch(() => {});   // last callouts snapshot to IPFS (backups are debounced to 30 min), in parallel
+  await Promise.race([Promise.all([lockIdle(), coFlush]), new Promise((r) => setTimeout(r, 25e3))]);
   for (const c of clients) { try { c.write('retry: 3000\nevent: bye\ndata: {}\n\n'); c.end(); } catch {} }
   try { server.close(); } catch {} try { db.close(); } catch {}
   console.log('shutdown done'); process.exit(0);
