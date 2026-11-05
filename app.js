@@ -30,6 +30,7 @@
   function fakeCA(suf) { suf = suf || 'trd'; return b58(44 - suf.length) + suf; }
   function numOk(v) { return /^\d*[.,]?\d*$/.test(String(v == null ? '' : v).trim()); }   // a plain positive decimal (or empty): no minus, one dot
   function numVal(v) { v = String(v == null ? '' : v).trim().replace(',', '.'); return numOk(v) ? (parseFloat(v) || 0) : 0; }   // ONE parser for every amount box (trade box, dev buy)
+  function symK(k) { var t0 = typeof find === 'function' ? find(k) : null; return t0 ? symOf(t0) : String(k || ''); }   // real ticker for an internal key
   function symOf(t) { return t && typeof t === 'object' ? (t.sym || t.tick || '') : String(t || ''); }   // the coin's REAL ticker (two coins can share one; the internal key t.tick then gets a suffix)
   function short(a) { a = String(a || ''); return a ? esc(a.slice(0, 4) + '…' + a.slice(/treid$/.test(a) ? -5 : -4)) : ''; }   // escaped: addresses come from the server
   function taxBg(t) { return t === 0 ? 'var(--up)' : t <= 3 ? 'var(--yellow)' : t <= 6 ? 'var(--orange)' : 'var(--pink)'; }
@@ -625,7 +626,7 @@
             return '<div class="wb-pos"><button class="wb-pt" data-act="open" data-arg="' + esc(c.t.tick) + '">' + avatarHTML(c.t, 42) + '<span class="wb-pn"><b>$' + esc(symOf(c.t)) + '</b><small class="muted">' + esc(c.t.name) + '</small></span><span class="wb-pv"><small>Position</small><b class="mono">$' + money(S.wbTab === 'closed' ? c.got : c.value) + '</b></span><span class="wb-pv"><small>Profit</small><b class="mono ' + (up ? 'up' : 'down') + '">' + (up ? '+' : '−') + '$' + money(c.profit) + '</b></span></button>' +
               '<div class="wb-pm"><span>Spent <b class="mono">$' + moneyS(c.spent) + '</b></span><span>Avg entry <b class="mono">' + (c.avgEntryMc ? fmtK(c.avgEntryMc / 1000) : '—') + '</b> → <b class="mono">' + fmtK(c.t.mcN) + ' MC</b></span></div>' + (my ? '<div class="wb-co">' + esc(my.text.length > 110 ? my.text.slice(0, 110) + '…' : my.text) + '</div>' : '') + '</div>'; }).join('') : '<div class="muted wb-empty">' + (S.wbTab === 'closed' ? 'No closed positions yet.' : 'No open positions on treid yet.') + '</div>') + '</div></div>' : '') + '</div>';
     } else {
-      right = '<button class="btn sec" data-act="openWallet">Connect<span class="cw-w"> wallet</span></button>';
+      right = '<button class="btn sec" data-act="openWallet"><span>Connect<span class="cw-w"> wallet</span></span></button>';
     }
     return '<header><div class="wrap hdr">' +
       '<button class="brand" data-act="home" aria-label="treid home"><span class="brand-name">treid</span></button>' +
@@ -2609,7 +2610,7 @@
     if (c.reply == null && c.pos > 0) { var rl = document.getElementById('rail-list'); if (rl && rl.offsetParent === null) rl = null; if (rl) { var away = rl.scrollTop > 40, h0 = rl.scrollHeight; rl.insertAdjacentHTML('afterbegin', commentHTML(c, t, !away, { coinTag: true })); if (away) rl.scrollTop += rl.scrollHeight - h0; while (rl.children.length > 30) rl.removeChild(rl.lastChild); } else { var rn = document.getElementById('rail-n'); S.railNew = (S.railNew || 0) + 1; if (rn) rn.textContent = S.railNew; coPeek(c, t); } }
     var nb = document.getElementById('co-new'); if (nb && !S.coOpen) { nb.textContent = (+nb.textContent || 0) + 1; nb.style.display = ''; }
   }
-  if (DEMO) setInterval(function () { var ch = false; Object.keys(S.cto).forEach(function (k) { var c = S.cto[k]; if (c.approved || c.demo) return; c.support += .15 + Math.random() * .6; if (c.support >= DR.ctoNeed) { c.approved = true; c.at = Date.now(); toast('🎉 $' + k + ' takeover approved by holders'); } ch = true; }); if (ch) { drSave(); if (S.screen === 'token' && S.cto[S.tick] && !document.querySelector('.hm-ov')) { var c0 = S.cto[S.tick], cp = document.querySelector('.cr-panel'), t = find(S.tick); if (c0.approved) render(); else if (cp && t) cp.outerHTML = crPanel(t); } } }, 6000);
+  if (DEMO) setInterval(function () { var ch = false; Object.keys(S.cto).forEach(function (k) { var c = S.cto[k]; if (c.approved || c.demo) return; c.support += .15 + Math.random() * .6; if (c.support >= DR.ctoNeed) { c.approved = true; c.at = Date.now(); toast('🎉 $' + symK(k) + ' takeover approved by holders'); } ch = true; }); if (ch) { drSave(); if (S.screen === 'token' && S.cto[S.tick] && !document.querySelector('.hm-ov')) { var c0 = S.cto[S.tick], cp = document.querySelector('.cr-panel'), t = find(S.tick); if (c0.approved) render(); else if (cp && t) cp.outerHTML = crPanel(t); } } }, 6000);
   function position(t) { var p = S.pos[t.tick]; if (!p || p.tok <= 0) return null; var val = p.tok * price(t) / qUsdT(t); return { tok: p.tok, cost: p.cost, val: val, pnl: val - p.cost, pct: p.cost ? (val / p.cost - 1) * 100 : 0 }; }
   // ---- Buy with SOL on pair coins: SOL → pair token via Jupiter, then the normal pool buy (mainnet only — Jupiter has no devnet) ----
   var JUP = 'https://lite-api.jup.ag/swap/v1';
@@ -3452,74 +3453,74 @@
     classic: function (t, P, id) {
       return P.top() + '<div class="cs-glow" aria-hidden="true">' + P.av(400) + '</div>' +
         '<section class="cs-hero">' + (t.banner ? '<div class="cs-ban"><img src="' + esc(t.banner) + '" alt=""></div>' : '') +
-        '<div class="cs-id"><span class="cs-logo">' + P.av(150) + '</span><h1>' + esc(t.name) + '</h1><span class="cs-tk mono">$' + id + '</span>' + (P.desc ? '<p class="cs-desc">' + P.desc + '</p>' : '') +
-        '<div class="cs-ctas">' + P.buy('Buy $' + id + ' on treid') + P.ca() + '</div></div></section>' + P.warn + P.stats4() +
+        '<div class="cs-id"><span class="cs-logo">' + P.av(150) + '</span><h1>' + esc(t.name) + '</h1><span class="cs-tk mono">$' + esc(symOf(t)) + '</span>' + (P.desc ? '<p class="cs-desc">' + P.desc + '</p>' : '') +
+        '<div class="cs-ctas">' + P.buy('Buy $' + esc(symOf(t)) + ' on treid') + P.ca() + '</div></div></section>' + P.warn + P.stats4() +
         '<section class="cs-chart">' + P.chart() + '<button class="cs-chartbtn" data-act="open" data-arg="' + id + '">Open live chart →</button></section>' + P.info() + P.safe() + P.how() + P.foot;
     },
     bento: function (t, P, id) {
       return P.top() +
         '<section class="bn">' +
           '<div class="bn-t bn-logo">' + (t.banner ? '<img class="bn-banbg" src="' + esc(t.banner) + '" alt="">' : '') + '<span class="bn-av">' + P.av(170) + '</span></div>' +
-          '<div class="bn-t bn-name"><small class="mono">$' + id + ' · Solana</small><h1>' + esc(t.name) + '</h1>' + (P.desc ? '<p>' + P.desc + '</p>' : '') + '</div>' +
+          '<div class="bn-t bn-name"><small class="mono">$' + esc(symOf(t)) + ' · Solana</small><h1>' + esc(t.name) + '</h1>' + (P.desc ? '<p>' + P.desc + '</p>' : '') + '</div>' +
           '<div class="bn-t bn-mc"><small>Market cap</small><b class="mono">' + P.mc + '</b><em class="' + (P.up ? 'up' : 'down') + '">' + P.chg + ' · 24h</em></div>' +
           '<div class="bn-t bn-ho"><small>Holders</small><b class="mono">' + P.hold + '</b><em>vol ' + P.vol + '</em></div>' +
           '<div class="bn-t bn-ch"><div class="bn-chh"><small>Price · 24h</small><button data-act="open" data-arg="' + id + '">Live chart ↗</button></div>' + P.chart() + '</div>' +
           '<div class="bn-t bn-ring"><i style="--p:' + P.prog.toFixed(0) + '"><b class="mono">' + (P.grad ? '🎓' : P.prog.toFixed(0) + '%') + '</b></i><small>' + (P.grad ? 'Graduated' : 'Bonding curve') + '</small></div>' +
           '<div class="bn-t bn-tax"><small>Tax</small><b class="mono">' + P.tax + '</b><em>' + P.split + '</em></div>' +
-          '<button class="bn-t bn-buy" data-act="open" data-arg="' + id + '"><small>Trade on treid</small><b>Buy $' + id + '</b><span>↗</span></button>' +
+          '<button class="bn-t bn-buy" data-act="open" data-arg="' + id + '"><small>Trade on treid</small><b>Buy $' + esc(symOf(t)) + '</b><span>↗</span></button>' +
           '<div class="bn-t bn-ca"><small>Contract address</small>' + P.ca('bn-cab') + (P.soc ? '<div class="bn-soc">' + P.soc + '</div>' : '') + '</div>' +
         '</section>' + P.warn + P.info() + P.safe() + P.how() + P.foot;
     },
     editorial: function (t, P, id) {
       var d = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-      return '<div class="ed-mast"><div class="ed-rule"><span>' + d + '</span><span>Solana edition</span><span>' + P.soc + '</span></div><h1 class="ed-title">' + esc(t.name) + '</h1><div class="ed-rule b"><span class="mono">$' + id + '</span><span>Market cap ' + P.mc + ' <em class="' + (P.up ? 'up' : 'down') + '">' + P.chg + '</em></span><span>' + P.buy('Buy $' + id, 'sm') + '</span></div></div>' +
-        csMarquee(['$' + id + ' ' + P.mc, 'Holders ' + P.hold, 'Vol ' + P.vol, 'Tax ' + P.tax, P.grad ? 'Graduated' : 'Curve ' + P.prog.toFixed(0) + '%', 'Paired with ' + esc(pairLabel(t.pair))]) +
-        '<section class="ed-lead"><div class="ed-story"><span class="ed-kicker">The story</span><h2>' + (P.desc ? esc(t.desc.split(/[.!?]/)[0]).slice(0, 90) : 'A new coin takes the stage') + '</h2>' + (P.desc ? '<p class="ed-drop">' + P.desc + '</p>' : '<p class="ed-drop">$' + id + ' launched on treid, paired with ' + esc(pairLabel(t.pair)) + '. Every trade is on-chain and in the open.</p>') +
-          '<div class="cs-ctas">' + P.buy('Buy $' + id + ' on treid') + P.ca() + '</div></div>' +
-          '<figure class="ed-fig"><div class="ed-img">' + (t.banner ? '<img src="' + esc(t.banner) + '" alt="">' : '') + '<span>' + P.av(220) + '</span></div><figcaption>Fig. 1 — $' + id + ', created ' + ago(t.born) + ' ago</figcaption></figure></section>' + P.warn +
-        '<section class="ed-cols"><article><span class="ed-kicker">Markets</span><b class="mono">' + P.mc + '</b><p>Market cap, ' + P.chg + ' over 24 hours · ' + P.vol + ' total volume.</p></article><article><span class="ed-kicker">Community</span><b class="mono">' + P.hold + '</b><p>Wallets holding $' + id + ' right now, read straight from the chain.</p></article><article><span class="ed-kicker">Economics</span><b class="mono">' + P.tax + '</b><p>Tax on every trade — ' + P.split + '.</p></article></section>' +
+      return '<div class="ed-mast"><div class="ed-rule"><span>' + d + '</span><span>Solana edition</span><span>' + P.soc + '</span></div><h1 class="ed-title">' + esc(t.name) + '</h1><div class="ed-rule b"><span class="mono">$' + esc(symOf(t)) + '</span><span>Market cap ' + P.mc + ' <em class="' + (P.up ? 'up' : 'down') + '">' + P.chg + '</em></span><span>' + P.buy('Buy $' + esc(symOf(t)), 'sm') + '</span></div></div>' +
+        csMarquee(['$' + esc(symOf(t)) + ' ' + P.mc, 'Holders ' + P.hold, 'Vol ' + P.vol, 'Tax ' + P.tax, P.grad ? 'Graduated' : 'Curve ' + P.prog.toFixed(0) + '%', 'Paired with ' + esc(pairLabel(t.pair))]) +
+        '<section class="ed-lead"><div class="ed-story"><span class="ed-kicker">The story</span><h2>' + (P.desc ? esc(t.desc.split(/[.!?]/)[0]).slice(0, 90) : 'A new coin takes the stage') + '</h2>' + (P.desc ? '<p class="ed-drop">' + P.desc + '</p>' : '<p class="ed-drop">$' + esc(symOf(t)) + ' launched on treid, paired with ' + esc(pairLabel(t.pair)) + '. Every trade is on-chain and in the open.</p>') +
+          '<div class="cs-ctas">' + P.buy('Buy $' + esc(symOf(t)) + ' on treid') + P.ca() + '</div></div>' +
+          '<figure class="ed-fig"><div class="ed-img">' + (t.banner ? '<img src="' + esc(t.banner) + '" alt="">' : '') + '<span>' + P.av(220) + '</span></div><figcaption>Fig. 1 — $' + esc(symOf(t)) + ', created ' + ago(t.born) + ' ago</figcaption></figure></section>' + P.warn +
+        '<section class="ed-cols"><article><span class="ed-kicker">Markets</span><b class="mono">' + P.mc + '</b><p>Market cap, ' + P.chg + ' over 24 hours · ' + P.vol + ' total volume.</p></article><article><span class="ed-kicker">Community</span><b class="mono">' + P.hold + '</b><p>Wallets holding $' + esc(symOf(t)) + ' right now, read straight from the chain.</p></article><article><span class="ed-kicker">Economics</span><b class="mono">' + P.tax + '</b><p>Tax on every trade — ' + P.split + '.</p></article></section>' +
         '<figure class="ed-chart">' + P.chart(2) + '<figcaption>Fig. 2 — Price, last 24 hours. <button class="link" data-act="open" data-arg="' + id + '">Open the live chart →</button></figcaption></figure>' + P.info() + P.safe() + P.how() + P.foot;
     },
     maison: function (t, P, id) {
-      var ring = ('$' + id + ' · SOLANA · TREID · ').toUpperCase(); ring = ring + ring;
-      return '<div class="ms-top"><span class="ms-soc">' + P.soc + '</span><span class="ms-mark">' + esc(t.tick).split('').join(' ') + '</span><span>' + P.buy('Acquire', 'sm') + '</span></div>' +
+      var ring = ('$' + esc(symOf(t)) + ' · SOLANA · TREID · ').toUpperCase(); ring = ring + ring;
+      return '<div class="ms-top"><span class="ms-soc">' + P.soc + '</span><span class="ms-mark">' + esc(symOf(t)).split('').join(' ') + '</span><span>' + P.buy('Acquire', 'sm') + '</span></div>' +
         '<section class="ms-hero"><div class="ms-ring"><svg viewBox="0 0 200 200" aria-hidden="true"><defs><path id="msr" d="M100,100 m-86,0 a86,86 0 1,1 172,0 a86,86 0 1,1 -172,0"/></defs><text><textPath href="#msr" textLength="535">' + esc(ring) + '</textPath></text></svg><span class="ms-av">' + P.av(190) + '</span></div>' +
           '<span class="ms-est">Est. ' + new Date(t.born).getFullYear() + ' — On Solana</span><h1>' + esc(t.name) + '</h1>' + (P.desc ? '<p class="ms-desc">' + P.desc + '</p>' : '') +
-          '<div class="ms-ctas">' + P.buy('Acquire $' + id) + P.ca() + '</div></section>' + P.warn +
+          '<div class="ms-ctas">' + P.buy('Acquire $' + esc(symOf(t))) + P.ca() + '</div></section>' + P.warn +
         '<section class="ms-stats"><div><small>Valuation</small><b>' + P.mc + '</b><em class="' + (P.up ? 'up' : 'down') + '">' + P.chg + '</em></div><div><small>Holders</small><b>' + P.hold + '</b><em>' + P.vol + ' traded</em></div><div><small>Tax</small><b>' + P.tax + '</b><em>' + (Math.max(t.buy, t.sell) ? 'on each trade' : 'none') + '</em></div><div><small>' + (P.grad ? 'Status' : 'Curve') + '</small><b>' + (P.grad ? 'Graduated' : P.prog.toFixed(0) + '%') + '</b><em>' + esc(pairLabel(t.pair)) + ' pair</em></div></section>' +
         '<section class="ms-chart"><span class="ms-lab">Performance</span>' + P.chart(1.5) + '<button class="link" data-act="open" data-arg="' + id + '">View the live chart</button></section>' + P.info() + P.safe() + P.how() + P.foot;
     },
     cinema: function (t, P, id) {
-      return P.top() + '<section class="cn-hero"><div class="cn-bg" aria-hidden="true">' + (t.banner ? '<img src="' + esc(t.banner) + '" alt="">' : P.av(900)) + '</div><div class="cn-in"><span class="cn-av">' + P.av(110) + '</span><span class="cn-tag mono">Now trading · $' + id + '</span><h1>' + esc(t.name) + '</h1>' + (P.desc ? '<p>' + P.desc + '</p>' : '') + '<div class="cs-ctas">' + P.buy('Buy $' + id) + P.ca() + '</div></div>' +
+      return P.top() + '<section class="cn-hero"><div class="cn-bg" aria-hidden="true">' + (t.banner ? '<img src="' + esc(t.banner) + '" alt="">' : P.av(900)) + '</div><div class="cn-in"><span class="cn-av">' + P.av(110) + '</span><span class="cn-tag mono">Now trading · $' + esc(symOf(t)) + '</span><h1>' + esc(t.name) + '</h1>' + (P.desc ? '<p>' + P.desc + '</p>' : '') + '<div class="cs-ctas">' + P.buy('Buy $' + esc(symOf(t))) + P.ca() + '</div></div>' +
         '<div class="cn-bar"><div><small>Market cap</small><b class="mono">' + P.mc + '</b><em class="' + (P.up ? 'up' : 'down') + '">' + P.chg + '</em></div><div><small>Holders</small><b class="mono">' + P.hold + '</b></div><div><small>Volume</small><b class="mono">' + P.vol + '</b></div><div><small>Tax</small><b class="mono">' + P.tax + '</b></div><div><small>' + (P.grad ? 'Status' : 'Curve') + '</small><b class="mono">' + (P.grad ? 'Graduated' : P.prog.toFixed(0) + '%') + '</b></div></div></section>' + P.warn +
         '<section class="cs-chart">' + P.chart() + '<button class="cs-chartbtn" data-act="open" data-arg="' + id + '">Open live chart →</button></section>' + P.info() + P.safe() + P.how() + P.foot;
     },
     split: function (t, P, id) {
-      return P.top() + '<section class="sp-hero"><div class="sp-txt"><span class="sp-k mono">$' + id + ' // SOLANA</span><h1>' + esc(t.name) + '</h1>' + (P.desc ? '<p>' + P.desc + '</p>' : '') + '<div class="cs-ctas">' + P.buy('Buy $' + id) + P.ca() + '</div>' +
+      return P.top() + '<section class="sp-hero"><div class="sp-txt"><span class="sp-k mono">$' + esc(symOf(t)) + ' // SOLANA</span><h1>' + esc(t.name) + '</h1>' + (P.desc ? '<p>' + P.desc + '</p>' : '') + '<div class="cs-ctas">' + P.buy('Buy $' + esc(symOf(t))) + P.ca() + '</div>' +
         '<ul class="sp-list"><li><span>Market cap</span><b class="mono">' + P.mc + ' <em class="' + (P.up ? 'up' : 'down') + '">' + P.chg + '</em></b></li><li><span>Holders</span><b class="mono">' + P.hold + '</b></li><li><span>Tax</span><b class="mono">' + P.tax + '</b></li><li><span>' + (P.grad ? 'Status' : 'Bonding curve') + '</span><b class="mono">' + (P.grad ? 'Graduated' : P.prog.toFixed(0) + '%') + '</b></li></ul></div>' +
         '<div class="sp-art"><span class="sp-sun"></span><span class="sp-av">' + P.av(220) + '</span><span class="sp-floor"></span></div></section>' + P.warn +
         '<section class="cs-chart">' + P.chart() + '<button class="cs-chartbtn" data-act="open" data-arg="' + id + '">Open live chart →</button></section>' + P.info() + P.safe() + P.how() + P.foot;
     },
     terminal: function (t, P, id) {
       var ln = function (k, v, cls) { return '<div class="tm-l"><span>' + k + '</span><i></i><b class="' + (cls || '') + '">' + v + '</b></div>'; };
-      return '<div class="tm"><aside class="tm-side"><span class="tm-av">' + P.av(120) + '</span><h1>' + esc(t.name) + '</h1><span class="mono tm-tk">$' + id + '</span>' + (P.desc ? '<p>' + P.desc + '</p>' : '') + P.buy('./buy $' + id) + P.ca() + (P.soc ? '<div class="tm-soc">' + P.soc + '</div>' : '') + '</aside>' +
+      return '<div class="tm"><aside class="tm-side"><span class="tm-av">' + P.av(120) + '</span><h1>' + esc(t.name) + '</h1><span class="mono tm-tk">$' + esc(symOf(t)) + '</span>' + (P.desc ? '<p>' + P.desc + '</p>' : '') + P.buy('./buy $' + esc(symOf(t))) + P.ca() + (P.soc ? '<div class="tm-soc">' + P.soc + '</div>' : '') + '</aside>' +
         '<main class="tm-main"><div class="tm-win"><div class="tm-bar"><i></i><i></i><i></i><span>treid — ' + esc(t.tick.toLowerCase()) + ' — live</span></div><div class="tm-body">' +
-          '<div class="tm-cmd">$ treid stats --coin ' + id + '</div>' + ln('market_cap', P.mc) + ln('change_24h', P.chg, P.up ? 'up' : 'down') + ln('holders', P.hold) + ln('volume', P.vol) + ln('tax', P.tax + ' (' + P.split + ')') + ln('curve', P.grad ? 'GRADUATED' : P.prog.toFixed(0) + '% ' + '█'.repeat(Math.round(P.prog / 10)) + '░'.repeat(10 - Math.round(P.prog / 10))) + ln('pair', esc(pairLabel(t.pair))) +
+          '<div class="tm-cmd">$ treid stats --coin ' + esc(symOf(t)) + '</div>' + ln('market_cap', P.mc) + ln('change_24h', P.chg, P.up ? 'up' : 'down') + ln('holders', P.hold) + ln('volume', P.vol) + ln('tax', P.tax + ' (' + P.split + ')') + ln('curve', P.grad ? 'GRADUATED' : P.prog.toFixed(0) + '% ' + '█'.repeat(Math.round(P.prog / 10)) + '░'.repeat(10 - Math.round(P.prog / 10))) + ln('pair', esc(pairLabel(t.pair))) +
           '<div class="tm-cmd">$ treid chart --24h</div><div class="tm-chart">' + P.chart(2) + '</div>' +
-          '<div class="tm-cmd">$ treid audit ' + id + '</div>' + riskMetrics(t).map(function (m) { return '<div class="tm-l"><span>' + (m.lv === 'g' ? '[ OK ]' : m.lv === 'y' ? '[WARN]' : '[RISK]') + ' ' + m.lab.toLowerCase().replace(/\s+/g, '_') + '</span><i></i><b class="lv-' + m.lv + '">' + m.val + '</b></div>'; }).join('') +
+          '<div class="tm-cmd">$ treid audit ' + esc(symOf(t)) + '</div>' + riskMetrics(t).map(function (m) { return '<div class="tm-l"><span>' + (m.lv === 'g' ? '[ OK ]' : m.lv === 'y' ? '[WARN]' : '[RISK]') + ' ' + m.lab.toLowerCase().replace(/\s+/g, '_') + '</span><i></i><b class="lv-' + m.lv + '">' + m.val + '</b></div>'; }).join('') +
           '<div class="tm-cmd">$ <span class="tm-cur"></span></div></div></div>' + P.warn + P.how() + '</main></div>' + P.foot;
     },
     arcade: function (t, P, id) {
       var rows = [['MKT CAP', P.mc], ['HOLDERS', P.hold], ['VOL 24H', P.vol], ['TAX', P.tax], [P.grad ? 'STATUS' : 'CURVE', P.grad ? 'GRAD!' : P.prog.toFixed(0) + '%']];
-      return P.top() + '<section class="ar-screen"><div class="ar-hud"><span>1UP</span><span>HI-SCORE ' + P.mc + '</span><span>$' + id + '</span></div><span class="ar-av">' + P.av(150) + '</span><h1>' + esc(t.name) + '</h1>' + (P.desc ? '<p>' + P.desc + '</p>' : '') +
+      return P.top() + '<section class="ar-screen"><div class="ar-hud"><span>1UP</span><span>HI-SCORE ' + P.mc + '</span><span>$' + esc(symOf(t)) + '</span></div><span class="ar-av">' + P.av(150) + '</span><h1>' + esc(t.name) + '</h1>' + (P.desc ? '<p>' + P.desc + '</p>' : '') +
         '<button class="ar-start" data-act="open" data-arg="' + id + '">▶ PRESS START TO BUY</button>' + P.ca() + '<div class="ar-coin">INSERT COIN · ' + P.chg + ' TODAY</div></section>' + P.warn +
         '<section class="ar-table"><h2>High scores</h2>' + rows.map(function (r, i) { return '<div><span>' + (i + 1) + (['ST', 'ND', 'RD', 'TH', 'TH'][i]) + '</span><span>' + r[0] + '</span><b>' + r[1] + '</b></div>'; }).join('') + '</section>' +
         '<section class="cs-chart">' + P.chart() + '<button class="cs-chartbtn" data-act="open" data-arg="' + id + '">LIVE CHART →</button></section>' + P.info() + P.how() + P.foot;
     },
     sticker: function (t, P, id) {
-      return P.top() + '<section class="sk-hero"><div class="sk-art"><span class="sk-burst" style="clip-path:' + csBurst(14) + '"></span><span class="sk-av">' + P.av(200) + '</span><span class="sk-tag">$' + id + '</span></div>' +
-        '<div class="sk-txt"><h1>' + esc(t.name) + '</h1>' + (P.desc ? '<div class="sk-bub">' + P.desc + '</div>' : '') + '<div class="cs-ctas">' + P.buy('BUY $' + id + '!') + P.ca() + '</div></div></section>' + P.warn +
-        csMarquee(['$' + id, 'MC ' + P.mc, P.chg + ' TODAY', P.hold + ' HOLDERS', 'TAX ' + P.tax]) +
+      return P.top() + '<section class="sk-hero"><div class="sk-art"><span class="sk-burst" style="clip-path:' + csBurst(14) + '"></span><span class="sk-av">' + P.av(200) + '</span><span class="sk-tag">$' + esc(symOf(t)) + '</span></div>' +
+        '<div class="sk-txt"><h1>' + esc(t.name) + '</h1>' + (P.desc ? '<div class="sk-bub">' + P.desc + '</div>' : '') + '<div class="cs-ctas">' + P.buy('BUY $' + esc(symOf(t)) + '!') + P.ca() + '</div></div></section>' + P.warn +
+        csMarquee(['$' + esc(symOf(t)), 'MC ' + P.mc, P.chg + ' TODAY', P.hold + ' HOLDERS', 'TAX ' + P.tax]) +
         '<section class="sk-stats"><div><small>Market cap</small><b class="mono">' + P.mc + '</b></div><div><small>Holders</small><b class="mono">' + P.hold + '</b></div><div><small>Tax</small><b class="mono">' + P.tax + '</b></div><div><small>' + (P.grad ? 'Status' : 'Curve') + '</small><b class="mono">' + (P.grad ? 'GRAD 🎓' : P.prog.toFixed(0) + '%') + '</b></div></section>' +
         '<section class="cs-chart">' + P.chart(4) + '<button class="cs-chartbtn" data-act="open" data-arg="' + id + '">Live chart →</button></section>' + P.info() + P.how() + P.foot;
     }
@@ -3561,7 +3562,7 @@
   function coComposer(t, id, ph) {
     if (S.coModal) return '';
     if (!S.account) return '<div class="co-gate"><span class="muted">Connect a wallet to post a callout.</span><button class="btn sec" data-act="openWallet">Connect</button></div>';
-    if (!coCanPost(t)) return '<div class="co-gate muted">Hold at least <b>$1</b> of $' + esc(id) + ' to post callouts.</div>';
+    if (!coCanPost(t)) return '<div class="co-gate muted">Hold at least <b>$1</b> of $' + esc(symOf(t)) + ' to post callouts.</div>';
     if (!coOpen()) return '';
     return '<div class="composer"><textarea id="cmt-in" class="inp" data-bind="cmtDraft" placeholder="' + (S.replyTo != null ? 'Replying to #' + (1000 + S.replyTo) + '…' : ph) + '" maxlength="280">' + esc(S.cmtDraft || '') + '</textarea>' + coImgBar() +
       (S.coErr ? '<small class="co-err">' + esc(S.coErr) + '</small>' : '') + '</div>';
@@ -4654,7 +4655,7 @@
     if (Math.random() < 0.5 || !S.trapSeen) { t.snipe = { on: true, start: pick([50, 80, 90]), dur: pick([20, 30, 45, 60]) }; S.trapSeen = true; }
     S.launched.unshift(t); if (S.launched.length > 20) S.launched.pop();
     var hl = document.getElementById('hlive-n'); if (hl) { hl.textContent = all().length; hl.classList.remove('tick'); void hl.offsetWidth; hl.classList.add('tick'); }
-    if (!isMob()) toast('New launch: ' + name + ' $' + tick, t);
+    if (!isMob()) toast('New launch: ' + name + ' $' + symOf(t), t);
     machineLaunch(t);
     raceRefresh();
     var i2 = document.getElementById('i2-fresh'); if (i2) { i2.insertAdjacentHTML('afterbegin', i2Row(t)); i2.firstElementChild.classList.add('enter'); while (i2.children.length > 3) i2.removeChild(i2.lastChild); }
@@ -4702,7 +4703,7 @@
         var on = S.watch.indexOf(arg) !== -1;
         S.watch = on ? S.watch.filter(function (x) { return x !== arg; }) : S.watch.concat([arg]);
         try { localStorage.setItem(LS.watch, JSON.stringify(S.watch)); } catch (er) {}
-        render(); toast(on ? 'Removed $' + arg + ' from watchlist' : 'Added $' + arg + ' to watchlist', find(arg)); break;
+        render(); toast(on ? 'Removed $' + symK(arg) + ' from watchlist' : 'Added $' + symK(arg) + ' to watchlist', find(arg)); break;
       case 'ca': var tk = find(arg); if (tk) copy(tk.ca, 'Contract address copied'); break;
       case 'copyAddr': copy(S.account, 'Address copied'); break;
       case 'social': toast('Links are added by the creator at launch'); break;
@@ -4737,7 +4738,7 @@
       case 'ctoClose': if (el.classList.contains('hm-ov') && e.target.closest('[data-stop]')) break; set({ ctoOpen: null }); break;
       case 'ctoApplyDemo': (function () { var t = find(S.ctoOpen); if (!t || !S.account) return; var g = function (i) { var x = document.getElementById(i); return x ? x.value.trim() : ''; };
         S.cto[t.tick] = { lead: S.account, x: g('cto-x'), tg: g('cto-tg'), plan: g('cto-plan') || 'Rebuilding the community', support: (position(t) ? position(t).tok / 1e9 * 100 : 0), at: Date.now(), approved: false, backed: true }; var cc = S.cto[t.tick]; if (cc.support >= DR.ctoNeed) cc.approved = true; drSave(); S.ctoOpen = null; toast(cc.approved ? '🎉 Takeover approved — your bag alone covers ' + DR.ctoNeed + '% support' : 'Takeover submitted — holders can now back it'); render(); })(); break;
-      case 'ctoBack': (function () { var t = find(arg), c = S.cto[arg]; if (!c) return; if (!S.account) { set({ walletOpen: true }); return; } var add = position(t) ? position(t).tok / 1e9 * 100 : 0; if (!add) { toast('Hold some $' + arg + ' to back a takeover'); return; } c.support += add; c.backed = true; if (c.support >= DR.ctoNeed) { c.approved = true; c.at = Date.now(); toast('🎉 Takeover approved — $' + arg + ' is now community-run'); } else toast('Backed with ' + add.toFixed(2) + '% of supply'); drSave(); render(); })(); break;
+      case 'ctoBack': (function () { var t = find(arg), c = S.cto[arg]; if (!c) return; if (!S.account) { set({ walletOpen: true }); return; } var add = position(t) ? position(t).tok / 1e9 * 100 : 0; if (!add) { toast('Hold some $' + symK(arg) + ' to back a takeover'); return; } c.support += add; c.backed = true; if (c.support >= DR.ctoNeed) { c.approved = true; c.at = Date.now(); toast('🎉 Takeover approved — $' + symK(arg) + ' is now community-run'); } else toast('Backed with ' + add.toFixed(2) + '% of supply'); drSave(); render(); })(); break;
       case 'burnOpen': set({ burnOpen: true, burnTick: arg || S.burnTick, burnPct: S.burnPct || 25 });
         if (S.account && API) { var bw = S.account; S.burnLoading = true; render(); apiGet('/api/wallet/' + bw).then(function (d) { if (S.account !== bw) return; (d && d.coins || []).forEach(function (c) { var t = S.live.filter(function (x) { return x.ca === c.mint; })[0]; if (t && +c.held > 1 && !(S.pos[t.tick] && S.pos[t.tick].tok > 0)) S.pos[t.tick] = { tok: +c.held, cost: Math.max(0, (+c.spent || 0) - (+c.got || 0)) / qUsdT(t) }; }); })
           .catch(function () {}).then(function () { S.burnLoading = false; if (S.burnOpen) render(); }); }   // every coin you hold, not only ones you opened this visit
@@ -4842,7 +4843,7 @@
         fetch(API + '/api/xconfirm', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mint: tx.ca, url: X.url }) }).then(function (r) { return r.json(); }).then(function (j) {
           if (!j.ok) throw new Error(j.error || 'could not confirm'); tx.xOk = j.handle; S.xc = null; toast('✓ 𝕏 @' + j.handle + ' confirmed'); render(); }).catch(function (er) { if (S.xc) { S.xc.busy = false; S.xc.err = er.message; render(); } }); })(); break;
       case 'lockFinish': lockOpen(find(S.tick)); break;
-      case 'lockX': S.lockConf = null; render(); break;
+      case 'lockX': if (el.classList.contains('overlay') && e.target.closest('[data-stop]')) break; S.lockConf = null; render(); break;
       case 'lockGo': { var tlk = S.lockConf && find(S.lockConf.tick); if (!tlk || !tlk.lockDays || S.account !== tlk.creator) break; var lkB = (S.pos[tlk.tick] || {}).tok || 0, lkL = launchTokOf(tlk), lkA = lkL > 0 ? Math.min(lkL, lkB) : 0; S.lockConf = null;
         lockNow(tlk, tlk.lockDays, lkA).catch(function (e) { if (e && e.message !== 'busy') toast('Lock failed: ' + chainErr(e)); render(); }); break; }
       case 'feeK': setC({ feeK: arg }); setTimeout(function () { var i = document.getElementById('c-feev'); if (i && arg !== 'me') i.focus(); }, 30); break;
@@ -4893,7 +4894,7 @@
         var row = document.querySelector('.wl-row[data-wl="' + arg + '"]');
         var doUn = function () { S.watch = S.watch.filter(function (x) { return x !== arg; }); try { localStorage.setItem(LS.watch, JSON.stringify(S.watch)); } catch (er) {} render(); };
         if (row) { row.classList.add('bye'); setTimeout(doUn, 320); } else doUn();
-        toast('Removed $' + arg + ' from watchlist', find(arg)); break;
+        toast('Removed $' + symK(arg) + ' from watchlist', find(arg)); break;
       case 'wlClear': if (!S.wlConfirm) { set({ wlConfirm: true }); setTimeout(function () { if (S.wlConfirm) set({ wlConfirm: false }); }, 3000); break; }
         S.watch = []; S.wlConfirm = false; try { localStorage.setItem(LS.watch, '[]'); } catch (er) {} render(); toast('Watchlist cleared'); break;
       case 'lbtab': set({ lbTab: arg }); break;
@@ -5253,10 +5254,32 @@
   document.addEventListener('dragleave', function (e) { var d = e.target.closest && e.target.closest('[data-drop]'); if (d) d.classList.remove('over'); });
   document.addEventListener('drop', function (e) { var d = e.target.closest && e.target.closest('[data-drop]'); if (!d) return; e.preventDefault(); d.classList.remove('over'); if (d.getAttribute('data-drop') === 'demo') demoImgsAdd(e.dataTransfer.files); else loadMedia(e.dataTransfer.files && e.dataTransfer.files[0], d.getAttribute('data-drop')); });
 
+  // Escape closes the top-most open modal / drawer (one per press)
+  function escClose() {
+    if (S.lockConf) S.lockConf = null;
+    else if (S.xc) S.xc = null;
+    else if (S.share) S.share = null;
+    else if (S.siteShare) S.siteShare = null;
+    else if (S.banEdit && !S.banEdit.busy) S.banEdit = null;
+    else if (S.tpFlt) S.tpFlt = null;
+    else if (S.coModal) { S.coModal = null; S.coCompose = false; S.replyTo = null; S.coErr = ''; S.coImg = null; }
+    else if (S.burnOpen) S.burnOpen = false;
+    else if (S.ctoOpen) S.ctoOpen = null;
+    else if (S.hmap) S.hmap = null;
+    else if (S.notifOpen) S.notifOpen = false;
+    else if (S.recvOpen) { clearInterval(S.recvT); S.recvOpen = false; }
+    else if (S.termsOpen) S.termsOpen = false;
+    else if (S.demoImgOpen) S.demoImgOpen = false;
+    else if (S.palOpen || S.walletOpen || S.walletMenu || S.walletView) { S.palOpen = false; S.walletOpen = false; S.walletMenu = false; S.walletView = null; }
+    else if (S.coOpen) S.coOpen = false;
+    else if (S.fpop) S.fpop = null;
+    else return;
+    render();
+  }
   document.addEventListener('keydown', function (e) {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); set({ palOpen: !S.palOpen, palQ: '', palIdx: 0 }); return; }
     if (e.target && e.target.id === 'pairq') { if (e.key === 'Enter') { var pr0 = pairIds('all', S.pairQ)[0]; if (pr0) { S.pairQ = ''; set({ pair: pr0, cat: pairInfo(pr0).cat }); } return; } if (e.key === 'Escape') { set({ pairQ: '' }); return; } }
-    if (e.key === 'Escape') { if (S.palOpen || S.walletOpen || S.walletMenu || S.walletView) set({ palOpen: false, walletOpen: false, walletMenu: false, walletView: null }); return; }
+    if (e.key === 'Escape') { escClose(); return; }
     if (S.palOpen) {
       var res = palResults();
       if (e.key === 'ArrowDown') { e.preventDefault(); set({ palIdx: Math.min(res.length - 1, S.palIdx + 1) }); }
@@ -5712,7 +5735,7 @@
     setTimeout(function () {
       if (dir === 'right' && t) {
         if (S.watch.indexOf(tick) === -1) { S.watch = S.watch.concat([tick]); try { localStorage.setItem(LS.watch, JSON.stringify(S.watch)); } catch (er) {} }
-        toast('Added $' + tick + ' to your watchlist', t);
+        toast('Added $' + symK(tick) + ' to your watchlist', t);
       }
       S.deckIdx = (S.deckIdx + 1) % deckList().length;
       if (dir === 'up' && t) { openToken(tick); return; }
