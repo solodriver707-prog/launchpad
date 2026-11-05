@@ -54,6 +54,13 @@ const parseSplit = (uri) => { let pair = false, rw = null; try { const u = new U
     if (s) { const p = s.split('.').map(Number); if (p.length === 3 && p.every((x) => Number.isInteger(x) && x >= 0 && x <= 100) && p[0] + p[1] + p[2] === 100) { const cap = u.searchParams.get('dc') === '1' ? 100 : 50, d = Math.min(cap, p[2]); return { h: p[0], b: p[1] + p[2] - d, d, pair, rw }; } /* dev share: up to 100% for coins launched with dc=1 (the creator chose it, shown on the coin); older coins keep the 50% cap they launched with (the rest is burned) */ } } catch {} return { h: 70, b: 20, d: 10, pair, rw }; };
 
 export { parseSplit };
+// the withheld-tax accounts worth a withdraw instruction: biggest first, until they hold `frac` of all withheld tax (the dust tail is swept
+// at most once a day — each 24 accounts cost a transaction)
+export function pickWithheld(list, amt, frac = 0.95) {
+  const s = [...list].filter((a) => amt(a) > 0n).sort((x, y) => (amt(y) > amt(x) ? 1 : amt(y) < amt(x) ? -1 : 0)), tot = s.reduce((t, a) => t + amt(a), 0n);
+  const need = tot * BigInt(Math.round(Math.min(1, Math.max(0, frac)) * 1e4)) / 10000n, out = []; let cum = 0n;
+  for (const a of s) { if (cum >= need) break; out.push(a); cum += amt(a); } return out;
+}
 export function startOps({ conn, dbc, ops, treasury, q, q1, run, mainnet = false, rewardOk = async () => false, quoteUsd = () => 150, poolAuthority, log = console.log, everyMs = 10 * 60e3, liabilities = () => 0, reserved = () => 0, callerCost = () => 0, devState = (c) => ({ state: 'active', creator: c.creator }), ready = () => true }) {
   dbGuard(mainnet);   // mainnet: no money moves from a throw-away database (HALT stops every send)
   const send = (ixs) => { if (HALT.on) throw new Error('ops halted'); return sendTx(conn, ixs, [ops]); },   // nothing leaves the ops wallet once the ledger is broken
@@ -229,8 +236,13 @@ export function startOps({ conn, dbc, ops, treasury, q, q1, run, mainnet = false
   async function taxCycle(c) {
     const mint = new PublicKey(c.mint), opsAta = getAssociatedTokenAddressSync(mint, ops.publicKey, false, TOKEN_2022_PROGRAM_ID), px = lastPx(c.mint);
     if (!(px > 0)) return null;
+    { // database-only "is this tax worth harvesting" first — the holder scan below is the expensive call. Only when nothing from an earlier
+      // round is still being settled (pending buyback burn / unfinished round): those must be looked at whatever the tax is
+      const lastH0 = q1("SELECT MAX(ts) t FROM rlog WHERE mint=? AND kind='taxburn'", c.mint)?.t || 0, realTax0 = (q1('SELECT COALESCE(SUM(usd),0) v FROM trades WHERE mint=? AND ts>? AND wallet<>?', c.mint, lastH0, ops.publicKey.toBase58())?.v || 0) * (c.tax_bps || 0) / 1e4;
+      if (realTax0 < HARVEST_USD && !(carryGet(c.mint) > 0n) && Date.now() - lastH0 < 7 * 864e5 && !kvJ('bbpend:' + c.mint) && !kvJ('toburn:' + c.mint) && !kvJ('taxround:' + c.mint)) return null; }
     const accs = (await conn.getProgramAccounts(TOKEN_2022_PROGRAM_ID, { filters: [{ memcmp: { offset: 0, bytes: c.mint } }] })).map((a) => { try { return unpackAccount(a.pubkey, a.account, TOKEN_2022_PROGRAM_ID); } catch { return null; } }).filter(Boolean);
-    const wa = (a) => getTransferFeeAmount(a)?.withheldAmount || 0n, withheld = accs.filter((a) => wa(a) > 0n).sort((x, y) => (wa(y) > wa(x) ? 1 : -1)).slice(0, MAX_ACCTS);
+    const wa = (a) => getTransferFeeAmount(a)?.withheldAmount || 0n, sweepK = 'taxsweep:' + c.mint, sweepDue = Date.now() - +(q1('SELECT v FROM kv WHERE k=?', sweepK)?.v || 0) > 864e5;
+    const withheld = (sweepDue ? accs.filter((a) => wa(a) > 0n).sort((x, y) => (wa(y) > wa(x) ? 1 : -1)) : pickWithheld(accs, wa, 0.95)).slice(0, MAX_ACCTS);   // dust accounts: at most a daily sweep
     const mintInfo = await getMint(conn, mint, 'confirmed', TOKEN_2022_PROGRAM_ID), inMint = getTransferFeeConfig(mintInfo)?.withheldAmount || 0n;   // tax anyone "harvested to the mint" is collected too
     let opsAcc = accs.find((a) => a.address.equals(opsAta));
     // creator-fee buybacks whose burn didn't finish: those tokens belong to the burn, never to the tax split
@@ -257,6 +269,7 @@ export function startOps({ conn, dbc, ops, treasury, q, q1, run, mainnet = false
     if (realTax < HARVEST_USD && !(carryGet(c.mint) > 0n) && Date.now() - lastH < 7 * 864e5) return null;   // the price above comes from the coin's own curve; this checks real money actually traded (a toy curve can't make ops spend fees)
     if (!opsAcc) await send([createAssociatedTokenAccountIdempotentInstruction(ops.publicKey, opsAta, ops.publicKey, mint, TOKEN_2022_PROGRAM_ID)]);
     for (let i = 0; i < withheld.length; i += 24) await send([createWithdrawWithheldTokensFromAccountsInstruction(mint, opsAta, ops.publicKey, [], withheld.slice(i, i + 24).map((a) => a.address), TOKEN_2022_PROGRAM_ID)]);   // 24 accounts per tx (size limit)
+    if (sweepDue) try { run('INSERT OR REPLACE INTO kv(k,v) VALUES(?,?)', sweepK, String(Date.now())); } catch {}   // only a timer: losing it just means one more sweep
     if (inMint > 0n) await send([createWithdrawWithheldTokensFromMintInstruction(mint, opsAta, ops.publicKey, [], TOKEN_2022_PROGRAM_ID)]);
     const got = (await getAccount(conn, opsAta, 'confirmed', TOKEN_2022_PROGRAM_ID)).amount; if (got <= 0n) return null;   // the WHOLE balance: harvest + anything stranded earlier
     const f0 = (x) => (Number(x) / 10 ** DEC).toFixed(0), sp = parseSplit(c.uri);
