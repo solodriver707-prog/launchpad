@@ -3847,7 +3847,7 @@
     return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(v) ? { v: 'w.' + v, show: short(v) } : { err: 'Enter the Solana wallet that should get the creator fees' };
   }
   function feeToPicker(c) {
-    var k = c.feeK || 'me', opts = [['me', 'Me'], ['x', 'X account'], ['g', 'GitHub'], ['w', 'Other wallet']], fp = fParam(c);
+    var k = c.feeK || 'me', opts = [['me', 'Me'], ['x', 'X account'], ['g', 'GitHub']], fp = fParam(c);
     var ph = { x: '@handle or x.com/handle', g: 'GitHub username', w: 'Solana wallet address' }[k];
     return '<div class="field feeto"><div class="lbl"><b>Creator fees go to <span class="muted" style="font-weight:500;font-size:12px">· set once, can’t be changed after launch</span></b></div>' +
       '<div class="feeto-q">' + opts.map(function (o) { return '<button class="' + (k === o[0] ? 'on' : '') + '" data-act="feeK" data-arg="' + o[0] + '">' + o[1] + '</button>'; }).join('') + '</div>' +
