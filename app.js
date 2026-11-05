@@ -4895,7 +4895,7 @@
       case 'cmode': S.chartMode = arg === 'price' ? 'price' : 'mc'; cviewSave(); render(); break;
       case 'slip': set({ slipOpen: !S.slipOpen }); break;
       case 'setslip': set({ slip: +arg, slipOpen: false }); break;
-      case 'share': copy(location.href.split('#')[0] + '#' + (S.tick || ''), 'Link copied'); break;
+      case 'share': { var shT = find(S.tick); copy(location.href.split('#')[0] + (shT ? '#/coin/' + encodeURIComponent(shT.live ? shT.ca : shT.tick) : ''), 'Link copied'); break; }
       case 'sellpct': var tp0 = find(S.tick), ps0 = tp0 && S.pos[tp0.tick]; if (ps0) set({ side: 'sell', sellAll: arg === '100', amount: String(Math.floor(ps0.tok * (+arg) / 100 * 1e6) / 1e6) }); break;   // rounded DOWN: never more than you hold
       case 'sellall': var tp1 = find(S.tick), ps1 = tp1 && S.pos[tp1.tick]; if (ps1) set({ side: 'sell', amount: String(Math.floor(ps1.tok)), sellAll: true }); break;
       case 'coImgDel': S.coImg = null; render(); break;
