@@ -18,7 +18,7 @@ import { CpAmm, getUnClaimLpFee } from '@meteora-ag/cp-amm-sdk';
 import { ed25519 } from '@noble/curves/ed25519';
 import bs58 from 'bs58';
 import BN from 'bn.js';
-import { withLock , HALT, halt, canWrite } from './lock.mjs';
+import { withLock , HALT, halt, canWrite, dbGuard } from './lock.mjs';
 import { sendTx as sendTx0, getTxRetry } from './txutil.mjs';
 const sendTx = (...a) => { if (HALT.on) throw new Error('ops halted'); return sendTx0(...a); };   // nothing leaves the ops wallet once the ledger is broken
 import { rwOut } from './ops.mjs';
@@ -47,6 +47,7 @@ const DAMM_CFG = DAMM_V2_MIGRATION_FEE_ADDRESS[6], GRAD_WAIT_MS = +(process.env.
 const num = (x) => Number(x?.toString?.() ?? x ?? 0);
 
 export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, quoteUsd = () => 150, mainnet = false, log = console.log, lockedOf = async () => 0 }) {
+  dbGuard(mainnet);   // mainnet: no money moves from a throw-away database (HALT stops every send)
   const amm = new CpAmm(conn);
   const units = (c, usd) => { const p = quoteUsd(c) || 0, d = 10 ** (c.quote_dec ?? 9); return p > 0 ? Math.ceil(usd / p * d) : Infinity; };   // no price → never act
   run(`CREATE TABLE IF NOT EXISTS rlog(sig TEXT, i INT, mint TEXT, kind TEXT, lamports INT, ts INT, PRIMARY KEY(sig, i))`);

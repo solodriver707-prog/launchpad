@@ -9,7 +9,7 @@ import { TOKEN_2022_PROGRAM_ID, unpackAccount, getTransferFeeAmount, getMint, ge
 import bs58 from 'bs58';
 import BN from 'bn.js';
 import { createHash } from 'node:crypto';
-import { HALT, halt, canWrite, withLock } from './lock.mjs';
+import { HALT, halt, canWrite, withLock, dbGuard } from './lock.mjs';
 import { SwapMode, getCurrentPoint, deriveDammV2PoolAddress, DAMM_V2_MIGRATION_FEE_ADDRESS, getSwapQuoteTransferFees } from '@meteora-ag/dynamic-bonding-curve-sdk';
 import { CpAmm } from '@meteora-ag/cp-amm-sdk';
 import { sendTx, getTxRetry, fetchT, landOrExpire, JUP } from './txutil.mjs';
@@ -55,6 +55,7 @@ const parseSplit = (uri) => { let pair = false, rw = null; try { const u = new U
 
 export { parseSplit };
 export function startOps({ conn, dbc, ops, treasury, q, q1, run, mainnet = false, rewardOk = async () => false, quoteUsd = () => 150, poolAuthority, log = console.log, everyMs = 10 * 60e3, liabilities = () => 0, reserved = () => 0, callerCost = () => 0, devState = (c) => ({ state: 'active', creator: c.creator }), ready = () => true }) {
+  dbGuard(mainnet);   // mainnet: no money moves from a throw-away database (HALT stops every send)
   const send = (ixs) => { if (HALT.on) throw new Error('ops halted'); return sendTx(conn, ixs, [ops]); },   // nothing leaves the ops wallet once the ledger is broken
     amm = new CpAmm(conn), DAMM_CFG = DAMM_V2_MIGRATION_FEE_ADDRESS[6];
   const rec = (sig, i, mint, kind, amt, extra = null) => { try { run('INSERT OR IGNORE INTO rlog(sig,i,mint,kind,lamports,ts,extra) VALUES(?,?,?,?,?,?,?)', sig, i, mint, kind, Number(amt), Date.now(), extra); } catch (e) { halt(e.message); throw e; } };

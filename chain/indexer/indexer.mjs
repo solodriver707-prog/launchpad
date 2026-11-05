@@ -97,7 +97,7 @@ const LOCKS = lockCache(conn);   // "Locked launch": the creator's launch buy in
 const dbc = new DynamicBondingCurveClient(conn, 'confirmed'), amm = new CpAmm(conn);
 let DB_PATH = process.env.DB || 'treid.db', db;
 try { db = new DatabaseSync(DB_PATH); db.exec('CREATE TABLE IF NOT EXISTS _w(x INT); DROP TABLE _w;'); }   // the persistent disk must be writable
-catch (e) { console.error('!! DATABASE NOT WRITABLE at', DB_PATH, '-', e.message, '— falling back to /tmp (data is rebuilt from chain on every restart)'); DB_PATH = '/tmp/treid.db'; db = new DatabaseSync(DB_PATH); }
+catch (e) { console.error('!! DATABASE NOT WRITABLE at', DB_PATH, '-', e.message, '— falling back to /tmp (data is rebuilt from chain on every restart)'); DB_PATH = '/tmp/treid.db'; process.env.TREID_DB_VOLATILE = '1'; db = new DatabaseSync(DB_PATH); }   // flag read by lock.mjs dbGuard: no money moves on mainnet
 db.exec(`CREATE TABLE IF NOT EXISTS coins(mint TEXT PRIMARY KEY, pool TEXT, config TEXT, creator TEXT, name TEXT, symbol TEXT, uri TEXT, tax_bps INT, created_slot INT, created_at INT);
 CREATE TABLE IF NOT EXISTS trades(sig TEXT PRIMARY KEY, mint TEXT, wallet TEXT, side TEXT, sol REAL, tokens REAL, price_usd REAL, mcap_usd REAL, slot INT, ts INT, sniper INT DEFAULT 0, bundle INT DEFAULT 0, fee_sol REAL DEFAULT 0, progress REAL DEFAULT 0);
 CREATE INDEX IF NOT EXISTS t_mint ON trades(mint, ts);

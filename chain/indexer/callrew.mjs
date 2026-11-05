@@ -6,7 +6,7 @@
 // rebuilt from chain on startup like every other ops payout), so a restart never pays twice.
 import { PublicKey, SystemProgram, TransactionInstruction } from '@solana/web3.js';
 import { sendTx, getTxRetry } from './txutil.mjs';
-import { HALT, halt, withLock, canWrite } from './lock.mjs';
+import { HALT, halt, withLock, canWrite, dbGuard } from './lock.mjs';
 
 const MEMO = new PublicKey('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr');
 const memoIx = (s) => new TransactionInstruction({ keys: [], programId: MEMO, data: Buffer.from(s) });
@@ -25,6 +25,7 @@ export function coMemoOf(tx, keys) {
 }
 
 export function startCalloutRewards({ conn, ops, q, q1, run, solUsd = () => 0, mainnet = false, ready = () => true, otherLiab = () => 0, log = console.log }) {
+  dbGuard(mainnet);   // mainnet: no payouts from a throw-away database
   run(`CREATE TABLE IF NOT EXISTS coattr(sig TEXT PRIMARY KEY, co INT, caller TEXT, trader TEXT, mint TEXT, lam INT, fee_lam INT, usd REAL, ts INT)`);
   run('CREATE INDEX IF NOT EXISTS coattr_caller ON coattr(caller)');
   const paidTo = (w) => q1("SELECT COALESCE(SUM(lamports),0) s FROM rlog WHERE kind='copay' AND mint=?", w)?.s || 0;
