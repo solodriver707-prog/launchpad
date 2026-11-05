@@ -13,7 +13,7 @@
 // Memo format: "treid:<kind>:<mint>:<amount>[:<extra>]" — only memos in transactions PAID BY OPS count.
 import { PublicKey, Transaction, TransactionInstruction, SystemProgram } from '@solana/web3.js';
 import { TOKEN_2022_PROGRAM_ID, NATIVE_MINT, unpackAccount, unpackMint, getTransferFeeConfig, getTransferFeeAmount, getAssociatedTokenAddressSync, createBurnCheckedInstruction, createTransferCheckedInstruction, createCloseAccountInstruction, createAssociatedTokenAccountIdempotentInstruction } from '@solana/spl-token';
-import { SwapMode, getCurrentPoint, deriveDammV2PoolAddress, DAMM_V2_MIGRATION_FEE_ADDRESS, getSwapQuoteTransferFees } from '@meteora-ag/dynamic-bonding-curve-sdk';
+import { SwapMode, getCurrentPoint, deriveDammV2PoolAddress, DAMM_V2_MIGRATION_FEE_ADDRESS, getSwapQuoteTransferFees, getSurplusBreakdown } from '@meteora-ag/dynamic-bonding-curve-sdk';
 import { CpAmm, getUnClaimLpFee } from '@meteora-ag/cp-amm-sdk';
 import { ed25519 } from '@noble/curves/ed25519';
 import bs58 from 'bs58';
@@ -154,21 +154,25 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, q
   const quoteOf = (c) => new PublicKey(c.quote_mint || NATIVE_MINT.toBase58());
   const qprogOf = async (c) => (await conn.getAccountInfo(quoteOf(c))).owner;
   // the graduated pool + ops' two locked LP positions, in a fixed order: [0] = treid's share, [1] = the creator's share
-  async function dammCtx(c) {
+  async function dammCtx(c, n = 2) {   // n = 1: only ops' biggest locked position (pools where ops is NOT the creator: that one is treid's partner share)
     const pool = c.damm ? new PublicKey(c.damm) : deriveDammV2PoolAddress(DAMM_CFG, new PublicKey(c.mint), quoteOf(c)), ps = await amm.fetchPoolState(pool);
     if (ps.tokenAMint.toBase58() !== c.mint || !ps.tokenBMint.equals(quoteOf(c))) throw new Error('graduated pool does not match the coin');
     // only the two positions the migration created (permanently locked, ~50% each): anyone can open an extra empty position owned by ops, which
     // must not stop the payouts — so take the two biggest locked ones, then order them as before
     const lockedOf = (p) => BigInt(p.positionState?.permanentLockedLiquidity?.toString?.() || '0');
-    const pos = (await amm.getUserPositionByPool(pool, ops.publicKey)).filter((p) => lockedOf(p) > 0n).sort((a, b) => (lockedOf(b) > lockedOf(a) ? 1 : lockedOf(b) < lockedOf(a) ? -1 : 0)).slice(0, 2)
+    const pos = (await amm.getUserPositionByPool(pool, ops.publicKey)).filter((p) => lockedOf(p) > 0n).sort((a, b) => (lockedOf(b) > lockedOf(a) ? 1 : lockedOf(b) < lockedOf(a) ? -1 : 0)).slice(0, n)
       .sort((a, b) => (a.position.toBase58() < b.position.toBase58() ? -1 : 1));
     return { pool, ps, pos, fee: (i) => (pos[i] ? num(getUnClaimLpFee(ps, pos[i].positionState).feeTokenB) : 0) };
   }
   // src: 'dbc' = creator fees still in the bonding curve · 'dammP' / 'dammC' = treid's / the creator's graduated LP position
+  //      'dammO' = ops' own (partner) LP position in a pool ops didn't create · 'surP' / 'surC' = the partner's / creator's share of a finished curve's surplus
+  const isDbcSrc = (src) => src === 'dbc' || src === 'surP' || src === 'surC';   // paid out of the bonding curve's quote vault
   async function claim(c, amount, dest, purpose, src = 'dbc') {
     let ixs;
     if (src === 'dbc') ixs = (await dbc.creator.claimCreatorTradingFee({ creator: ops.publicKey, payer: ops.publicKey, pool: new PublicKey(c.pool), maxBaseAmount: new BN(0), maxQuoteAmount: new BN(amount) })).instructions;
-    else { const d = await dammCtx(c), p = d.pos[src === 'dammP' ? 0 : 1]; if (!p) throw new Error('LP position not found');
+    else if (src === 'surC') ixs = (await dbc.creator.creatorWithdrawSurplus({ creator: ops.publicKey, pool: new PublicKey(c.pool) })).instructions;   // the whole creator share, once (the program refuses a second time)
+    else if (src === 'surP') ixs = (await dbc.partner.partnerWithdrawSurplus({ feeClaimer: ops.publicKey, pool: new PublicKey(c.pool) })).instructions;
+    else { const d = await dammCtx(c, src === 'dammO' ? 1 : 2), p = d.pos[src === 'dammC' ? 1 : 0]; if (!p) throw new Error('LP position not found');
       ixs = (await amm.claimPositionFee2({ receiver: ops.publicKey, owner: ops.publicKey, feePayer: ops.publicKey, pool: d.pool, position: p.position, positionNftAccount: p.positionNftAccount, tokenAVault: d.ps.tokenAVault, tokenBVault: d.ps.tokenBVault,
         tokenAMint: d.ps.tokenAMint, tokenBMint: d.ps.tokenBMint, tokenAProgram: TOKEN_2022_PROGRAM_ID, tokenBProgram: await qprogOf(c) })).instructions; }
     const extra = `${dest}|${purpose}` + (src === 'dbc' ? '' : '|' + src), tx = new Transaction().add(...ixs, memo(`treid:claimx:${c.mint}:${amount}:${extra}`));
@@ -178,7 +182,7 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, q
   // how much a confirmed claim actually moved into ops (SOL: lamport change + fee; tokens: ops' token balance change)
   async function claimedBy(c, sig, src = 'dbc') {   // exactly what left the pool's quote vault in that claim tx
     const t = await getTxRetry(conn, sig); if (!t) throw new Error('claim receipt not readable yet — retry later'); if (t.meta.err) return 0;   // unread ≠ empty: never mark a real claim as done
-    let vault; if (src === 'dbc') { const vpw = await dbc.state.getPool(new PublicKey(c.pool)); vault = (vpw.poolState || vpw).quoteVault.toBase58(); } else vault = (await dammCtx(c)).ps.tokenBVault.toBase58();
+    let vault; if (isDbcSrc(src)) { const vpw = await dbc.state.getPool(new PublicKey(c.pool)); vault = (vpw.poolState || vpw).quoteVault.toBase58(); } else vault = (await dammCtx(c)).ps.tokenBVault.toBase58();
     const keys = t.transaction.message.getAccountKeys({ accountKeysFromLookups: t.meta.loadedAddresses }), idx = [...Array(keys.length).keys()].find((i) => keys.get(i).toBase58() === vault);
     if (idx == null) return 0; const amt = (arr) => Number((arr || []).find((b) => b.accountIndex === idx)?.uiTokenAmount.amount || 0);
     const out = Math.max(0, amt(t.meta.preTokenBalances) - amt(t.meta.postTokenBalances)), qm = quoteOf(c).toBase58(); if (qm === NATIVE_MINT.toBase58()) return out;   // SOL: unwrapped straight into ops
@@ -357,11 +361,14 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, q
     if (lt > ld) return true;                                   // new trades since we last looked
     if (!c.damm && (q1('SELECT progress p FROM trades WHERE mint=? ORDER BY ts DESC, slot DESC LIMIT 1', c.mint)?.p || 0) >= 100) return true;   // finished curve: watch until migrated
     { const e = era(c); if (e.type === 'out' && q1(`SELECT 1 FROM rlog WHERE mint=? AND kind='ctoapply' AND ts>=?`, c.mint, e.start)) return true; }   // a takeover vote is open: check support every cycle (~10 min), so "held 24h" means held, not a few snapshots
+    if (c.damm && Date.now() - ld > 36e5 && !q1('SELECT 1 FROM kv WHERE k=?', 'surdone:' + c.mint)) return true;   // graduated, curve surplus not settled yet: hourly
     if (Date.now() - ld > 6 * 36e5) { const e = era(c); if (e.type !== 'out') return true; }   // creator in charge: idle timers run → every 6h · out & no trades: fees can't grow
     const st = state(c); return st.era !== 'out' && (st.state !== (lastDone.get(c.mint + '|st') || 'active'));   // a state change by time (idle → paused/out)
   }
   async function cycleCoin(c) {
-    const vpw = await dbc.state.getPool(new PublicKey(c.pool)), vp = vpw?.poolState || vpw; if (!vp || vp.creator.toBase58() !== ops.publicKey.toBase58()) { lastDone.set(c.mint, Date.now()); return; }
+    const vpw = await dbc.state.getPool(new PublicKey(c.pool)), vp = vpw?.poolState || vpw; if (!vp) { lastDone.set(c.mint, Date.now()); return; }
+    if (vp.creator.toBase58() !== ops.publicKey.toBase58()) {   // a pool ops didn't create: only treid's own partner share (LP fees after graduation, curve surplus) — the creator's side is not ours to touch
+      try { await partnerOnly(c, vp); } finally { lastDone.set(c.mint, Date.now()); } return; }
     const cfg = cfgCache.get(c.mint) || await dbc.state.getPoolConfig(vp.config); cfgCache.set(c.mint, cfg); if (await maybeMigrate(c, vp, cfg).catch((er) => { log('rewards migrate err', c.symbol, er.message.slice(0, 100)); return false; })) return;   // fees are picked up next cycle
     const e = era(c); if (e.wallet) balNow.set(c.mint + '|' + e.wallet, await walletBal(c.mint, e.wallet) + (e.wallet === c.creator ? await lockedOf(c) : 0));   // tokens in the creator's own lock escrow are still theirs — locking is not selling (an RPC failure throws → this cycle is skipped, never a false 'out')
     if (e.type === 'dev' && e.to && c.creator && c.creator !== e.wallet) balNow.set(c.mint + '|' + c.creator, await walletBal(c.mint, c.creator) + await lockedOf(c));   // fees to a handle: the launch wallet's real bag is watched too
@@ -375,7 +382,32 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, q
       else if (st.era !== 'out' && st.state === 'frozen') { if (inPool >= units(c, ACTION_USD)) await payout(c, inPool, 'burn', 'buyback', from); }   // claimed NOW, so a later check-in can't collect the idle period's fees
       else if (st.era === 'out' && inPool >= units(c, ACTION_USD)) await payout(c, inPool, treasury, 'split', from);   // one claim: half treid, half buyback & burn
     }
+    await surplus(c, vp, cfg, st, true);
     lastDone.set(c.mint, Date.now()); lastDone.set(c.mint + '|st', state(c).state);
+  }
+  // ---- a finished curve's surplus (quote above the migration threshold): withdrawn once per pool after migration ----
+  // partner share → treasury (like partner fees) · creator share → the creator-fee rules (paid / bought back & burned / split) · a handle that hasn't
+  // claimed yet keeps it in the pool. Idempotent: the program's own withdrawn flags + our claimx row (memo, rebuilt from chain) are both checked.
+  const surClaimed = (mint, src) => !!q1("SELECT 1 FROM rlog WHERE mint=? AND kind='claimx' AND extra LIKE ?", mint, '%|' + src);
+  async function surplus(c, vp, cfg, st, mine) {
+    if (!(num(vp.isMigrated) > 0)) return;   // after migration only (never interferes with the migration itself)
+    const sp = getSurplusBreakdown(vp.quoteReserve, cfg.migrationQuoteThreshold, num(cfg.creatorTradingFeePercentage)), dust = units(c, ACTION_USD);   // no price → Infinity → never acts
+    let open = false;
+    if (cfg.feeClaimer.toBase58() === ops.publicKey.toBase58() && num(vp.isPartnerWithdrawSurplus) === 0 && !surClaimed(c.mint, 'surP')) {
+      if (!Number.isFinite(dust)) open = true; else if (num(sp.partner) >= dust) { await payout(c, num(sp.partner), treasury, 'platform', 'surP'); log('rewards surplus (partner)', c.symbol, '→ treasury'); } }   // below $0.5: not worth a transaction, left in the pool
+    if (mine && num(vp.isCreatorWithdrawSurplus) === 0 && !surClaimed(c.mint, 'surC')) { const amt = num(sp.creator);
+      if (!Number.isFinite(dust)) open = true;
+      else if (amt >= dust) { if (st.era !== 'out' && st.state === 'active') await payout(c, amt, st.creator, 'pay', 'surC');
+        else if (st.era !== 'out' && st.state === 'frozen') await payout(c, amt, 'burn', 'buyback', 'surC');
+        else if (st.era === 'out') await payout(c, amt, treasury, 'split', 'surC');
+        else open = true; } }   // a handle that hasn't claimed yet: waits in the pool, like its fees
+    if (!open) try { run('INSERT OR REPLACE INTO kv(k,v) VALUES(?,?)', 'surdone:' + c.mint, String(Date.now())); } catch {}   // only stops re-checking (the on-chain flags stay the real guard)
+  }
+  // a pool ops didn't create, but whose partner (fee claimer) ops is: treid's own graduated LP position's fees → treasury, and the partner surplus
+  async function partnerOnly(c, vp) {
+    const cfg = cfgCache.get(c.mint) || await dbc.state.getPoolConfig(vp.config); cfgCache.set(c.mint, cfg); if (cfg.feeClaimer.toBase58() !== ops.publicKey.toBase58()) return;
+    if (num(vp.isMigrated) > 0) try { const d = await dammCtx(c, 1); const f = d.pos.length ? d.fee(0) : 0; if (f >= units(c, PAY_USD)) await payout(c, f, treasury, 'platform', 'dammO'); } catch (e) { if (HALT.on || e.unconfirmed) throw e; log('rewards partner LP', c.symbol, String(e.message).slice(0, 100)); }
+    await surplus(c, vp, cfg, null, false);
   }
   let cycQueued = false;
   const cycle = () => { if (!READY || cycQueued || HALT.on || !canWrite(run)) return; cycQueued = true; return withLock(async () => {

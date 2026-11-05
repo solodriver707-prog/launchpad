@@ -166,8 +166,8 @@ export function startOps({ conn, dbc, ops, treasury, q, q1, run, mainnet = false
   if (TREID && !q1('SELECT v FROM kv WHERE k=?', TSK)) run('INSERT INTO kv(k,v) VALUES(?,?)', TSK, String(Date.now()));
   const treidSince = () => +(q1('SELECT v FROM kv WHERE k=?', TSK)?.v || Date.now());
   const sumT = (kind) => q1('SELECT COALESCE(SUM(lamports),0) s FROM rlog WHERE mint=? AND kind=?', TREID, kind)?.s || 0;
-  // budget = TREID_BUYBACK_PCT of treid's SOL income since TREID_MINT was set: curve partner fees (pfee) + treid's LP fees after graduation (claimx …|platform|dammP)
-  const treidBudget = () => { if (!TREID) return 0; const fees = q("SELECT r.lamports l FROM rlog r JOIN coins c ON c.mint=r.mint WHERE r.ts>=? AND (c.quote_mint IS NULL OR c.quote_mint=?) AND (r.kind='pfee' OR (r.kind='claimx' AND r.extra LIKE '%|platform|dammP'))", treidSince(), WSOL).reduce((a, r) => a + r.l, 0);
+  // budget = TREID_BUYBACK_PCT of treid's SOL income since TREID_MINT was set: curve partner fees (pfee) + treid's LP fees after graduation (claimx …|platform|dammP, dammO) + partner curve surplus (…|platform|surP)
+  const treidBudget = () => { if (!TREID) return 0; const fees = q("SELECT r.lamports l FROM rlog r JOIN coins c ON c.mint=r.mint WHERE r.ts>=? AND (c.quote_mint IS NULL OR c.quote_mint=?) AND (r.kind='pfee' OR (r.kind='claimx' AND (r.extra LIKE '%|platform|dammP' OR r.extra LIKE '%|platform|dammO' OR r.extra LIKE '%|platform|surP')))", treidSince(), WSOL).reduce((a, r) => a + r.l, 0);
     return Math.max(0, Math.floor(Math.max(0, fees - callerCost(treidSince())) * TREID_BB) - sumT('tbuy')); };   // of treid's NET income: what callout callers earned out of those fees is not treid's to spend
   const treidLeft = () => Math.max(0, sumT('tleft') - sumT('tburnr'));   // bought but not yet burned (the part above the swap's guaranteed minimum)
   // ---- swaps built by Jupiter: shared checks (quote, instructions, simulation) and an independent price ----
