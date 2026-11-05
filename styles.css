@@ -6769,3 +6769,11 @@ html body .tch-side:has(.rwin){width:86px}
 .tf-clr{height:36px;padding:0 10px;border:0;background:none;color:#F7A2B3;font-size:12px;font-weight:700;cursor:pointer}
 @media (max-width:760px){.tn-filt{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;padding:6px}.tn-filt::-webkit-scrollbar{display:none}.tf-g,.tf-ts{flex:none}.tf-ts{flex-wrap:nowrap;margin-left:0}}
 @media (max-width:1600px){.tf-seg button{padding:0 8px}.tf-t{padding:0 11px}.tn-filt{gap:6px}.tf-g{gap:6px}}
+/* sniper trap preview: timer and steps side by side, less stretched */
+.trap .tl3{display:grid!important;grid-template-columns:minmax(180px,.9fr) minmax(0,1.4fr);gap:10px;align-items:stretch;margin-top:12px}
+.trap .tl3 .liq-prev{height:auto!important;min-height:0;border-radius:14px;display:flex;align-items:center}
+.trap .tl3 .liq-prev .liq-c{flex-direction:column;align-items:flex-start;gap:4px}
+.trap .tl3 .liq-prev .lq-big{font-size:30px}
+.trap .tl3 .tstair{margin-top:0;height:84px}
+.trap .tl3 .tstair span{max-height:84px;border-radius:9px}
+@media (max-width:640px){.trap .tl3{grid-template-columns:1fr}.trap .tl3 .liq-prev{min-height:56px}.trap .tl3 .liq-prev .liq-c{flex-direction:row;align-items:center}}
