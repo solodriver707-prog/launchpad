@@ -6777,3 +6777,4 @@ html body .tch-side:has(.rwin){width:86px}
 .trap .tl3 .tstair{margin-top:0;height:84px}
 .trap .tl3 .tstair span{max-height:84px;border-radius:9px}
 @media (max-width:640px){.trap .tl3{grid-template-columns:1fr}.trap .tl3 .liq-prev{min-height:56px}.trap .tl3 .liq-prev .liq-c{flex-direction:row;align-items:center}}
+.tstair span{min-height:42px!important;padding:5px 2px 4px!important;overflow:hidden}.tstair small{padding-bottom:0!important}
