@@ -41,17 +41,26 @@ const PORT = +(process.env.PORT || 8787), PUBLIC_URL = (process.env.PUBLIC_URL |
 let SOL_USD = +(process.env.SOL_USD || 150);
 // permanent coin images + metadata on IPFS via Pinata (set PINATA_JWT); without it metadata lives in this server's memory only
 const PINATA_JWT = process.env.PINATA_JWT || '', PINATA_GW = (process.env.PINATA_GATEWAY || 'https://gateway.pinata.cloud').replace(/\/+$/, '');
+// content-addressed dedupe: the same bytes (an image) or the same metadata JSON are pinned once and the earlier URL is reused
+// (launch retries don't pile up duplicate pins). Table pinc is created with the other tables below.
+const pinBusy = new Map();
+async function pinOnce(hash, fn) { const row = q1('SELECT url FROM pinc WHERE h=?', hash); if (row?.url) return row.url; if (pinBusy.has(hash)) return pinBusy.get(hash);
+  const pr = fn().then((url) => { try { run('INSERT OR REPLACE INTO pinc(h, url, at) VALUES(?,?,?)', hash, url, Date.now()); } catch {} return url; }).finally(() => pinBusy.delete(hash));
+  pinBusy.set(hash, pr); return pr; }
 async function pinFile(dataUrl, name) {
-  const [h, b64] = dataUrl.split(','), type = h.slice(5, h.indexOf(';')), fd = new FormData();
-  fd.append('file', new Blob([Buffer.from(b64, 'base64')], { type }), name + '.' + (type.split('/')[1] || 'png').replace('svg+xml', 'svg'));
-  fd.append('pinataMetadata', JSON.stringify({ name: 'treid-' + name }));
-  const r = await fetchT('https://api.pinata.cloud/pinning/pinFileToIPFS', { method: 'POST', headers: { authorization: 'Bearer ' + PINATA_JWT }, body: fd });
-  const j = await r.json(); if (!j.IpfsHash) throw new Error('pinata file: ' + JSON.stringify(j).slice(0, 120)); return PINATA_GW + '/ipfs/' + j.IpfsHash;
+  const [h, b64] = dataUrl.split(','), type = h.slice(5, h.indexOf(';')), bytes = Buffer.from(b64, 'base64');
+  return pinOnce('f:' + createHash('sha256').update(type + '\0').update(bytes).digest('hex'), async () => { const fd = new FormData();
+    fd.append('file', new Blob([bytes], { type }), name + '.' + (type.split('/')[1] || 'png').replace('svg+xml', 'svg'));
+    fd.append('pinataMetadata', JSON.stringify({ name: 'treid-' + name }));
+    const r = await fetchT('https://api.pinata.cloud/pinning/pinFileToIPFS', { method: 'POST', headers: { authorization: 'Bearer ' + PINATA_JWT }, body: fd });
+    const j = await r.json(); if (!j.IpfsHash) throw new Error('pinata file: ' + JSON.stringify(j).slice(0, 120)); return PINATA_GW + '/ipfs/' + j.IpfsHash; });
 }
-async function pinJSON(obj, name) {
+async function pinJSON0(obj, name) {
   const r = await fetchT('https://api.pinata.cloud/pinning/pinJSONToIPFS', { method: 'POST', headers: { authorization: 'Bearer ' + PINATA_JWT, 'content-type': 'application/json' }, body: JSON.stringify({ pinataContent: obj, pinataMetadata: { name: 'treid-' + name + '.json' } }) });
   const j = await r.json(); if (!j.IpfsHash) throw new Error('pinata json: ' + JSON.stringify(j).slice(0, 120)); return PINATA_GW + '/ipfs/' + j.IpfsHash;
 }
+// dedupe only for launch metadata; the callouts backup (unpins its previous snapshot) always pins fresh
+async function pinJSON(obj, name, { dedupe = false } = {}) { return dedupe ? pinOnce('j:' + createHash('sha256').update(JSON.stringify(obj)).digest('hex'), () => pinJSON0(obj, name)) : pinJSON0(obj, name); }
 async function solPrice() { try { const r = await fetchT('https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd'); const j = await r.json(); if (j?.solana?.usd) SOL_USD = j.solana.usd; } catch {} }
 const HIDDEN = new Set(String(process.env.HIDDEN_MINTS || '').split(',').map((s) => s.trim()).filter(Boolean));   // our own test coins: kept on-chain (and paid out fairly), just not listed on the site
 const SUPPLY = 1e9, WSOL = 'So11111111111111111111111111111111111111112';
@@ -206,6 +215,7 @@ const MAGIC = { png: [0x89, 0x50, 0x4e, 0x47], jpeg: [0xff, 0xd8, 0xff], jpg: [0
 function realImage(v, maxBytes) { const m = /^data:image\/(png|jpe?g|gif|webp);base64,([A-Za-z0-9+/=]+)$/.exec(typeof v === 'string' ? v : ''); if (!m) return false; const b = Buffer.from(m[2], 'base64');
   return b.length > 12 && b.length <= maxBytes && MAGIC[m[1]].every((x, i) => b[i] === x) && (m[1] !== 'webp' || b.subarray(8, 12).toString() === 'WEBP'); }
 // coin images: fetched once from IPFS (slow public gateways) and served from here with a long browser cache
+run('CREATE TABLE IF NOT EXISTS pinc(h TEXT PRIMARY KEY, url TEXT, at INT)');   // pin dedupe: sha256 of content → IPFS URL
 run('CREATE TABLE IF NOT EXISTS cimg(mint TEXT, b INT, ct TEXT, data BLOB, at INT, PRIMARY KEY(mint, b))');
 const imgBusy = new Map();
 function ipfsUrls(u) { const m = String(u || '').match(/\/ipfs\/([A-Za-z0-9]+)(\/[^?#]*)?/) || String(u || '').match(/^ipfs:\/\/([A-Za-z0-9]+)(\/[^?#]*)?/); if (!m) return /^https:\/\//.test(u) ? [u] : []; const path = m[1] + (m[2] || ''); return [PINATA_GW + '/ipfs/' + path, 'https://ipfs.io/ipfs/' + path, 'https://gateway.pinata.cloud/ipfs/' + path].filter((x, i, a) => a.indexOf(x) === i); }
@@ -649,7 +659,7 @@ async function handleReq(req, res) {
       const image = ok(m.image) ? await pinFile(m.image, tag) : null, banner = ok(m.banner) ? await pinFile(m.banner, tag + '-banner') : null;
       const meta = { name: String(m.name || '').slice(0, 32), symbol: String(m.symbol || '').slice(0, 10), description: String(m.description || '').slice(0, 600), image, banner, external_url: 'https://treid.fun', properties: { files: image ? [{ uri: image, type: 'image' }] : [] } };
       if (m.x) meta.twitter = String(m.x).slice(0, 100); if (m.tg) meta.telegram = String(m.tg).slice(0, 100); if (m.web) meta.website = String(m.web).slice(0, 100);
-      J({ uri: await pinJSON(meta, tag), image, banner }); } catch (e) { console.log('upload err', e.message); res.writeHead(502, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ uri: null, error: pubErr(e) })); } });
+      J({ uri: await pinJSON(meta, tag, { dedupe: true }), image, banner }); } catch (e) { console.log('upload err', e.message); res.writeHead(502, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ uri: null, error: pubErr(e) })); } });
     return;
   }
   if (p[1] === 'meta' && req.method === 'POST') { res.writeHead(410, { 'access-control-allow-origin': '*' }); return res.end('{"ok":false,"error":"metadata lives on IPFS now"}'); }
