@@ -2,6 +2,7 @@
 // Notifications: big moves + graduation of watchlist coins, your holder rewards, callouts from wallets you follow.
 // Set VAPID_PUBLIC + VAPID_PRIVATE (base64url, from `npx web-push generate-vapid-keys`) and VAPID_SUBJECT (mailto: or https:) in Render.
 import crypto from 'node:crypto';
+import { checkSession } from './sig.mjs';
 
 const b64u = (b) => Buffer.from(b).toString('base64url');
 const unb64u = (s) => Buffer.from(String(s || ''), 'base64url');
@@ -38,23 +39,35 @@ export function vapidAuth(endpoint, key, pub, subject) {
   return 'vapid t=' + data + '.' + b64u(crypto.sign('sha256', Buffer.from(data), { key, dsaEncoding: 'ieee-p1363' })) + ', k=' + pub;
 }
 
-export function startPush({ q, q1, run, pub, priv, subject, log = console.log }) {
+export function startPush({ q, q1, run, pub, priv, subject, rate = () => true, log = console.log }) {
   run('CREATE TABLE IF NOT EXISTS pushalert(id INTEGER PRIMARY KEY AUTOINCREMENT, ep TEXT, mint TEXT, tp REAL, sl REAL, at INT)');
   run('CREATE INDEX IF NOT EXISTS pa_mint ON pushalert(mint)');
+  run('CREATE INDEX IF NOT EXISTS pa_ep ON pushalert(ep)');
   run('CREATE TABLE IF NOT EXISTS pushsub(ep TEXT PRIMARY KEY, p256dh TEXT, auth TEXT, wallet TEXT, watch TEXT, follow TEXT, moves INT, rewards INT, callouts INT, at INT)');
   let key = null; try { if (pub && priv) key = vapidKey(pub, priv); } catch (e) { log('!! push disabled:', e.message); }
   if (!key) { if (!pub) log('push   off (set VAPID_PUBLIC / VAPID_PRIVATE / VAPID_SUBJECT to turn on notifications)'); const off = () => { throw new Error('notifications are not enabled on this server'); }; return { on: false, publicKey: null, save: off, drop() {}, onEvent() {}, alertAdd: off, alertList: off, alertDel: off }; }
   const SUBJ = /^(mailto:|https:)/.test(subject || '') ? subject : 'mailto:hello@treid.fun';
   const isAddr = (s) => /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(s), addrs = (a, n) => [...new Set((Array.isArray(a) ? a : []).map(String).filter(isAddr))].slice(0, n);
 
-  function save(b) {
+  const SUB_MAX = +(process.env.PUSH_MAX_SUBS || 200000);
+  run('CREATE INDEX IF NOT EXISTS ps_at ON pushsub(at)');
+  function evict() {   // full: drop subscriptions not refreshed for 90 days, else the oldest 1% — never refuse every new device
+    const old = q('SELECT ep FROM pushsub WHERE at < ? ORDER BY at LIMIT 5000', Date.now() - 90 * 864e5).map((r) => r.ep);
+    const eps = old.length ? old : q('SELECT ep FROM pushsub ORDER BY at LIMIT ?', Math.max(1, Math.ceil(SUB_MAX / 100))).map((r) => r.ep);
+    for (const ep of eps) drop(ep); log('push   evicted', eps.length, 'old subscriptions');
+  }
+  function save(b, ipAddr = '') {
     const s = b && b.sub, ep = String(s?.endpoint || ''), k = s?.keys || {};
     if (!okEndpoint(ep)) throw new Error('unsupported push service'); encrypt('x', k.p256dh, k.auth);   // validates the keys
-    const wallet = isAddr(String(b.wallet || '')) ? String(b.wallet) : null;
-    if (!q1('SELECT 1 FROM pushsub WHERE ep=?', ep) && q1('SELECT COUNT(*) n FROM pushsub').n >= 200000) throw new Error('notifications are full right now');
+    const prev = q1('SELECT wallet FROM pushsub WHERE ep=?', ep);
+    // a wallet (→ reward / creator notifications) only with a sign-in session for that wallet; a refresh of the same device keeps its wallet
+    const want = isAddr(String(b.wallet || '')) ? String(b.wallet) : null, sess = b.session ? checkSession(b.session) : null;
+    const wallet = want && (sess === want || prev?.wallet === want) ? want : null;
+    if (!prev) { if (!rate('pnew|' + ipAddr, 10, 864e5)) throw new Error('too many new devices from this network today');
+      if (q1('SELECT COUNT(*) n FROM pushsub').n >= SUB_MAX) evict(); }
     run('INSERT OR REPLACE INTO pushsub(ep,p256dh,auth,wallet,watch,follow,moves,rewards,callouts,at) VALUES(?,?,?,?,?,?,?,?,?,?)', ep, String(k.p256dh), String(k.auth), wallet,
       JSON.stringify(addrs(b.watch, 300)), JSON.stringify(addrs(b.follow, 300)), b.moves === false ? 0 : 1, b.rewards === false || !wallet ? 0 : 1, b.callouts === false ? 0 : 1, Date.now());
-    return { ok: true };
+    return { ok: true, wallet: !!wallet };
   }
   function drop(ep) { run('DELETE FROM pushsub WHERE ep=?', String(ep || '')); run('DELETE FROM pushalert WHERE ep=?', String(ep || '')); return { ok: true }; }
   // TP/SL price alerts (for coins Jupiter can't hold, e.g. ones with a transfer tax): one-shot, by market cap; the push endpoint is the credential

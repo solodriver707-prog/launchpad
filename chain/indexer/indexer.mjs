@@ -624,7 +624,7 @@ async function handleReq(req, res) {
       withBody(() => { try { const b = JSON.parse(body); J(p[2] === 'alert' ? PUSH.alertAdd(b) : p[2] === 'alerts' ? PUSH.alertList(b) : PUSH.alertDel(b)); } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: pubErr(e) })); } }); return; }
     if (p[1] === 'jt') return jtProxy(req, res, u, p);   // Jupiter Trigger V2 (limit / TP / SL orders), with the server's API key
     if (p[1] === 'push' && (p[2] === 'sub' || p[2] === 'unsub') && req.method === 'POST') { if (!rate('push|' + ip(req), 30, 36e5)) { res.writeHead(429, { 'access-control-allow-origin': '*' }); return res.end(JSON.stringify({ ok: false, error: 'too many requests — try again later' })); } let body; try { body = await readBody(req, res, 40000); } catch (e) { return bodyFail(res, e); }
-      withBody(() => { try { const b = JSON.parse(body); J(p[2] === 'sub' ? PUSH.save(b) : PUSH.drop(b.endpoint)); } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: pubErr(e) })); } }); return; }
+      withBody(() => { try { const b = JSON.parse(body); J(p[2] === 'sub' ? PUSH.save(b, ip(req)) : PUSH.drop(b.endpoint)); } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: pubErr(e) })); } }); return; }
     if (p[1] === 'qprice' && !rate('qp|' + ip(req), 30, 6e4)) { res.writeHead(429, { 'access-control-allow-origin': '*' }); return res.end('{}'); }
     if (p[1] === 'ticon') {   // logo of a verified token by exact symbol (e.g. tokenized stocks), fetched once and served from here — raster images only
       const sym = String(u.searchParams.get('sym') || ''), mintQ = String(u.searchParams.get('mint') || '');
@@ -761,7 +761,7 @@ if (MAINNET && !(+process.env.OPS_PRIORITY_MICROLAMPORTS > 0)) console.error('!!
 if (MAINNET && OPS && PARTNER === OPS.publicKey.toBase58()) { console.error('On mainnet the treasury (PARTNER) must be a separate cold wallet, not the hot ops wallet'); process.exit(1); }
 setTimeout(async () => { for (const c of q('SELECT mint FROM coins ORDER BY created_at DESC LIMIT 300')) { if (!q1('SELECT 1 FROM cimg WHERE mint=? AND b=0', c.mint)) await coinImage(c.mint, 0); } }, 20e3);   // warm missing images after a restart
 BUB = startBubbles({ conn, q, q1, run, holdersCached });
-PUSH = startPush({ q, q1, run, pub: process.env.VAPID_PUBLIC, priv: process.env.VAPID_PRIVATE, subject: process.env.VAPID_SUBJECT });
+PUSH = startPush({ q, q1, run, rate, pub: process.env.VAPID_PUBLIC, priv: process.env.VAPID_PRIVATE, subject: process.env.VAPID_SUBJECT });
 CO = startCallouts({ q, q1, run, push, rate, pinJSON, pinFile, pinataJwt: PINATA_JWT, gateway: PINATA_GW,
   coinStats: async (mint, wallet) => { const last = q1('SELECT mcap_usd, price_usd FROM trades WHERE mint=? ORDER BY ts DESC, slot DESC LIMIT 1', mint) || {}; let pos = 0;
     let held = false; try { const hs = await holdersCached(mint); const h = hs.find((x) => x.wallet === wallet && !x.curve); if (h) { held = true; pos = h.pct / 100 * SUPPLY * (last.price_usd || 0); } } catch {}
