@@ -21,8 +21,8 @@ const MAINNET = process.env.CLUSTER === 'mainnet' || /mainnet/.test(process.env.
 const GOOD = !!(process.env.SESSION_SECRET && process.env.SESSION_SECRET.length >= 32);
 // seals made before SESSION_SECRET was set (callouts backed up to IPFS) — accepted ONLY when restoring that backup, never for new posts/likes
 const LEGACY_SECRET = createHash('sha256').update('treid-session|' + (process.env.OPS_SECRET || '') + '|' + (process.env.PARTNER || '')).digest('hex');
-const SECRET = GOOD ? process.env.SESSION_SECRET : MAINNET ? null : LEGACY_SECRET;
-if (!GOOD) console.error(MAINNET ? '!! SESSION_SECRET is missing or shorter than 32 characters — SIGN-IN IS DISABLED on mainnet until it is set (callouts still work with a wallet signature per post)'
+const SECRET = GOOD ? process.env.SESSION_SECRET : (process.env.OPS_SECRET || !MAINNET) ? LEGACY_SECRET : null;   // until SESSION_SECRET is set: a key derived from OPS_SECRET (a real secret on mainnet), so sign-in keeps working
+if (!GOOD) console.error(MAINNET ? '!! SESSION_SECRET is missing or shorter than 32 characters — using a key derived from OPS_SECRET until it is set; set SESSION_SECRET on Render'
   : '!! SESSION_SECRET is missing or shorter than 32 characters — devnet: using a derived key; set it before mainnet');
 export const sessionsOn = () => !!SECRET;
 export const hmac = (s) => { if (!SECRET) throw new Error('sign-in is unavailable right now — sign the post with your wallet'); return createHmac('sha256', SECRET).update(s).digest('base64url'); };
