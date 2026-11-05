@@ -1579,7 +1579,7 @@
   function bnImpact(b, x, y) {
     var fly = document.getElementById('bn-fly'); if (!fly) return; BN.boost = performance.now(); BN.big = performance.now();
     var w = document.createElement('span'); w.className = 'bh-wave'; w.style.left = x + 'px'; w.style.top = y + 'px'; fly.appendChild(w); setTimeout(function () { w.remove(); }, 900);
-    var p = document.createElement('span'); p.className = 'bh-pop'; p.style.left = x + 'px'; p.style.top = (y - 150) + 'px'; p.innerHTML = '🔥 −' + fmtNum(Math.round(b.tok)) + ' <em>$' + esc(symOf(b.t)) + '</em>'; fly.appendChild(p); setTimeout(function () { p.remove(); }, 1800);
+    var p = document.createElement('span'); p.className = 'bh-pop'; p.style.left = x + 'px'; p.style.top = (y - (fly.clientHeight < 400 ? 100 : 150)) + 'px';   /* short (phone) stage: stay clear of the "$ value burned" line */ p.innerHTML = '🔥 −' + fmtNum(Math.round(b.tok)) + ' <em>$' + esc(symOf(b.t)) + '</em>'; fly.appendChild(p); setTimeout(function () { p.remove(); }, 1800);
     if (b.fresh) { bnCount(b.tok); bhKick(b); b.fresh = false; } else bhKick(b, true);
     var nw = document.getElementById('bn-now'); if (nw) { nw.innerHTML = '<b>$' + esc(symOf(b.t)) + '</b> burned ' + b.pct.toFixed(2) + '% supply · <span style="color:' + BSRC[b.src][1] + '">' + BSRC[b.src][0] + '</span> · <span class="bn-usd">$' + fmtNum(Math.round(b.usd)) + '</span>'; nw.classList.remove('go'); void nw.offsetWidth; nw.classList.add('go'); }
     var fire = document.getElementById('bn-fire'); if (fire) { fire.classList.remove('shake'); void fire.offsetWidth; fire.classList.add('shake'); }

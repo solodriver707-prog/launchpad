@@ -6799,3 +6799,7 @@ html body .tch-side:has(.rwin){width:86px}
 .lkc .lkc-w{color:var(--yellow)}
 .lkc .lkc-l{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;font-size:13px}
 .lkc .lkc-l li{display:flex;justify-content:space-between;gap:10px}
+/* fix-ui: coin mini-site on phones — the floating "← Trade on treid" pill covered the stat cards; it sits at the end of the page instead */
+@media (max-width:760px){
+  .cs>.cs-back{position:static!important;display:block;margin:4px auto 28px!important;left:auto;bottom:auto}
+}
