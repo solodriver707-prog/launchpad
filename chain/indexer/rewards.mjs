@@ -12,7 +12,7 @@
 // Both steps leave on-chain memos, so an interrupted payout is found and finished after any restart (reconcile).
 // Memo format: "treid:<kind>:<mint>:<amount>[:<extra>]" — only memos in transactions PAID BY OPS count.
 import { PublicKey, Transaction, TransactionInstruction, SystemProgram } from '@solana/web3.js';
-import { TOKEN_2022_PROGRAM_ID, NATIVE_MINT, unpackAccount, getTransferFeeAmount, getAssociatedTokenAddressSync, createBurnCheckedInstruction, createTransferCheckedInstruction, createCloseAccountInstruction, createAssociatedTokenAccountIdempotentInstruction } from '@solana/spl-token';
+import { TOKEN_2022_PROGRAM_ID, NATIVE_MINT, unpackAccount, unpackMint, getTransferFeeConfig, getTransferFeeAmount, getAssociatedTokenAddressSync, createBurnCheckedInstruction, createTransferCheckedInstruction, createCloseAccountInstruction, createAssociatedTokenAccountIdempotentInstruction } from '@solana/spl-token';
 import { SwapMode, getCurrentPoint, deriveDammV2PoolAddress, DAMM_V2_MIGRATION_FEE_ADDRESS, getSwapQuoteTransferFees } from '@meteora-ag/dynamic-bonding-curve-sdk';
 import { CpAmm, getUnClaimLpFee } from '@meteora-ag/cp-amm-sdk';
 import { ed25519 } from '@noble/curves/ed25519';
@@ -21,7 +21,7 @@ import BN from 'bn.js';
 import { withLock , HALT, halt, canWrite, dbGuard } from './lock.mjs';
 import { sendTx as sendTx0, getTxRetry } from './txutil.mjs';
 const sendTx = (...a) => { if (HALT.on) throw new Error('ops halted'); return sendTx0(...a); };   // nothing leaves the ops wallet once the ledger is broken
-import { rwOut } from './ops.mjs';
+import { rwOut, taxswapGot } from './ops.mjs';
 import { verifySig } from './sig.mjs';
 
 export const RULES = { idleFreezeMs: 72 * 3600e3, idleOutMs: 7 * 864e5, soldOut: 70, keepPct: 0.5, ctoApplyPct: 1, ctoSupportPct: 10, ctoHoldMs: 24 * 36e5 };
@@ -75,9 +75,7 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, q
         const msg = t.transaction.message, keys = msg.getAccountKeys ? msg.getAccountKeys({ accountKeysFromLookups: t.meta.loadedAddresses }) : null, key = (i) => (keys ? keys.get(i) : msg.accountKeys[i]);
         if (!key(0) || !key(0).equals(ops.publicKey)) { run('INSERT OR IGNORE INTO rscan VALUES(?)', x.signature); continue; }   // only transactions PAID BY ops
         const items = (msg.compiledInstructions || []).filter((ix) => key(ix.programIdIndex)?.equals(MEMO)).map((ix) => Buffer.from(ix.data).toString('utf8')).filter((m) => m.startsWith('treid:')).map((m) => { const p = m.split(':'); return { kind: p[1], mint: p[2], lamports: +p[3] || 0, extra: p.length > 4 ? p.slice(4).join(':') : null }; });
-        for (const it of items) if (it.kind === 'taxswap' && it.extra) {   // pair-token sale for holders: the receipt is what left the pool's quote vault
-          const vi = [...Array(keys ? keys.length : msg.accountKeys.length).keys()].find((i) => key(i)?.toBase58() === it.extra), bal = (arr) => Number((arr || []).find((b) => b.accountIndex === vi)?.uiTokenAmount.amount || 0);
-          it.lamports = vi == null ? 0 : Math.max(0, bal(t.meta.preTokenBalances) - bal(t.meta.postTokenBalances)); }
+        for (const it of items) if (it.kind === 'taxswap' && it.extra) it.lamports = taxswapGot(t, it.extra, ops.publicKey.toBase58());   // pair-token sale for holders: what left the pool's quote vault (a token: never more than arrived in ops) — same figure as the live receipt
         for (const it of [...items]) if (it.kind === 'tbuy') { items.push({ kind: 'tburn', mint: it.mint, lamports: +(it.extra || 0) || 0, extra: null }, { kind: 'tleft', mint: it.mint, lamports: rwOut(t, ops.publicKey, it.mint), extra: null }); it.extra = null; }   // $TREID buyback: burned in-tx + what stayed
         for (const it of [...items]) if (it.kind === 'taxconv' && it.extra) items.push({ kind: 'taxrw', mint: it.mint, lamports: rwOut(t, ops.publicKey, it.extra), extra: it.extra });   // what that reward swap delivered
         items.forEach((it, i) => run('INSERT OR IGNORE INTO rlog(sig,i,mint,kind,lamports,ts,extra) VALUES(?,?,?,?,?,?,?)', x.signature, i, it.mint, it.kind, it.lamports, (x.blockTime || 0) * 1000, it.extra)); n += items.length;
@@ -183,8 +181,16 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, q
     let vault; if (src === 'dbc') { const vpw = await dbc.state.getPool(new PublicKey(c.pool)); vault = (vpw.poolState || vpw).quoteVault.toBase58(); } else vault = (await dammCtx(c)).ps.tokenBVault.toBase58();
     const keys = t.transaction.message.getAccountKeys({ accountKeysFromLookups: t.meta.loadedAddresses }), idx = [...Array(keys.length).keys()].find((i) => keys.get(i).toBase58() === vault);
     if (idx == null) return 0; const amt = (arr) => Number((arr || []).find((b) => b.accountIndex === idx)?.uiTokenAmount.amount || 0);
-    return Math.max(0, amt(t.meta.preTokenBalances) - amt(t.meta.postTokenBalances));
+    const out = Math.max(0, amt(t.meta.preTokenBalances) - amt(t.meta.postTokenBalances)), qm = quoteOf(c).toBase58(); if (qm === NATIVE_MINT.toBase58()) return out;   // SOL: unwrapped straight into ops
+    const ob = (arr) => (arr || []).filter((b) => b.mint === qm && b.owner === ops.publicKey.toBase58()).reduce((a, b) => a + Number(b.uiTokenAmount.amount), 0);
+    return Math.max(0, Math.min(out, ob(t.meta.postTokenBalances) - ob(t.meta.preTokenBalances)));   // a pair token with its own transfer fee arrives short: pass on only what arrived
   }
+  // a pair token that charges its own transfer fee (claimed amount ≠ amount received) — such pools never use the one-transaction payout
+  const taxedQ = new Map();
+  async function taxedQuote(c) { const qm = quoteOf(c); if (qm.equals(NATIVE_MINT)) return false; const h = taxedQ.get(qm.toBase58()); if (h && Date.now() - h.at < 36e5) return h.v;
+    const ai = await conn.getAccountInfo(qm); if (!ai) throw new Error('pair token not found'); let v = false;
+    if (ai.owner.equals(TOKEN_2022_PROGRAM_ID)) { const tf = getTransferFeeConfig(unpackMint(qm, ai, ai.owner)); v = !!tf && (tf.olderTransferFee.transferFeeBasisPoints > 0 || tf.newerTransferFee.transferFeeBasisPoints > 0 || (!!tf.transferFeeConfigAuthority && !tf.transferFeeConfigAuthority.equals(PublicKey.default))); }   // a fee that can still be switched on counts as taxed
+    taxedQ.set(qm.toBase58(), { v, at: Date.now() }); return v; }
   // ops' token account for a coin is only needed for a moment: close it when it's empty so its rent comes back
   async function closeIfEmpty(c) { const ata = getAssociatedTokenAddressSync(new PublicKey(c.mint), ops.publicKey, false, TOKEN_2022_PROGRAM_ID), ai = await conn.getAccountInfo(ata); if (!ai) return null;
     try { const a = unpackAccount(ata, ai, TOKEN_2022_PROGRAM_ID); if (a.amount === 0n && !(getTransferFeeAmount(a)?.withheldAmount > 0n)) return createCloseAccountInstruction(ata, ops.publicKey, ops.publicKey, [], TOKEN_2022_PROGRAM_ID); } catch {} return null; }
@@ -298,7 +304,7 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, q
     const s = await sendTx(conn, ixs, [ops]); record(s, [{ mint: c.mint, kind, lamports: amount, extra: `${dest}|atomic` }]);
     log('rewards', kind, c.symbol, (amount / 10 ** (c.quote_dec ?? 9)).toFixed(4), c.quote_symbol || 'SOL', '→', dest.slice(0, 6), '(1 tx)'); return s;
   }
-  async function payout(c, amount, dest, purpose, src = 'dbc') { if (src === 'dbc' && (purpose === 'pay' || purpose === 'platform')) return payAtomic(c, amount, dest, purpose);
+  async function payout(c, amount, dest, purpose, src = 'dbc') { if (src === 'dbc' && (purpose === 'pay' || purpose === 'platform') && !(await taxedQuote(c))) return payAtomic(c, amount, dest, purpose);   // taxed pair token: claim, then pass on what really arrived
     const s = await claim(c, amount, dest, purpose, src); await settle(c, s, `${dest}|${purpose}` + (src === 'dbc' ? '' : '|' + src)); return s; }
   // the creator's fees, wherever they are: still in the curve, and (after graduation) the creator's LP position
   async function creatorSources(c, vp) {

@@ -32,6 +32,18 @@ function rwOut(t, owner, rw) {
   return Math.max(0, tb(t.meta.postTokenBalances) - tb(t.meta.preTokenBalances));
 }
 export { rwOut };
+// the most a Token-2022 transfer fee can take from `amt` (older or newer epoch's fee: whichever is bigger, so ops never sends more than it got)
+export function maxTransferFee(tf, amt) { if (!tf) return 0n; const a = BigInt(amt), f1 = calculateFee(tf.olderTransferFee, a), f2 = calculateFee(tf.newerTransferFee, a); return f1 > f2 ? f1 : f2; }
+// what a pair-token sale for holders really put into ops: what left the pool's quote vault, but for a token (not SOL) never more than ops'
+// own balance grew — a pair token with its own transfer fee arrives short, and holders are paid only what arrived (used live and by the ledger rebuild)
+export function taxswapGot(t, vault, owner) {
+  const msg = t.transaction.message, keys = msg.getAccountKeys ? msg.getAccountKeys({ accountKeysFromLookups: t.meta.loadedAddresses }) : null, n = keys ? keys.length : msg.accountKeys.length, key = (i) => (keys ? keys.get(i) : msg.accountKeys[i]);
+  const vi = [...Array(n).keys()].find((i) => key(i)?.toBase58() === String(vault)); if (vi == null) return 0;
+  const vb = (arr) => (arr || []).find((b) => b.accountIndex === vi), out = Math.max(0, Number(vb(t.meta.preTokenBalances)?.uiTokenAmount.amount || 0) - Number(vb(t.meta.postTokenBalances)?.uiTokenAmount.amount || 0));
+  const qm = vb(t.meta.preTokenBalances)?.mint || vb(t.meta.postTokenBalances)?.mint; if (!qm || qm === 'So11111111111111111111111111111111111111112') return out;   // SOL: unwrapped straight into ops (the vault figure is exact)
+  const ob = (arr) => (arr || []).filter((b) => b.mint === qm && b.owner === owner).reduce((a, b) => a + Number(b.uiTokenAmount.amount), 0);
+  return Math.max(0, Math.min(out, ob(t.meta.postTokenBalances) - ob(t.meta.preTokenBalances)));
+}
 const TREID = (process.env.TREID_MINT || '').trim(), TREID_BB = Math.min(1, Math.max(0, +(process.env.TREID_BUYBACK_PCT || 60) / 100)), TREID_MIN = +(process.env.TREID_MIN_SOL || 0.05) * 1e9;   // $TREID flywheel: share of treid's SOL fees that buys back + burns $TREID
 export const treidCfg = { mint: TREID, pct: TREID_BB };
 // a swap built by an outside API (Jupiter) is signed by the ops hot key: allow only the instructions a plain swap needs, all on ops' own accounts
@@ -266,8 +278,7 @@ export function startOps({ conn, dbc, ops, treasury, q, q1, run, mainnet = false
     }
     const sg = await send([...ixs, memoIx(`treid:taxswap:${c.mint}:0:${vault.toBase58()}`), ...(tag ? [memoIx(`treid:txr:${c.mint}:${amt}:${tag}`)] : [])]);
     const t = await getTxRetry(conn, sg); if (!t) { unknown('pair sale ' + sg); const e = new Error('receipt unread'); e.unconfirmed = true; throw e; }
-    const keys = t.transaction.message.getAccountKeys({ accountKeysFromLookups: t.meta.loadedAddresses }), vi = [...Array(keys.length).keys()].find((i) => keys.get(i).equals(vault));
-    const bal = (arr) => BigInt((arr || []).find((b) => b.accountIndex === vi)?.uiTokenAmount.amount || 0), out = vi == null ? 0n : bal(t.meta.preTokenBalances) - bal(t.meta.postTokenBalances);
+    const out = BigInt(taxswapGot(t, vault.toBase58(), ops.publicKey.toBase58()));   // what really arrived in ops (a taxed pair token arrives short) — the ledger rebuild computes the same
     recMany(sg, [[0, c.mint, 'taxswap', out, vault.toBase58()], ...(tag ? [[1, c.mint, 'txr', amt, tag]] : [])]); return out;
   }
   // pay pending pair-token rewards pro rata to the holder list (SOL straight to wallets; tokens only into accounts that already exist)
@@ -306,9 +317,10 @@ export function startOps({ conn, dbc, ops, treasury, q, q1, run, mainnet = false
         // claimed INTO ops (a claim "to the treasury" would open a coin account for the treasury and pay its rent, for every coin), then:
         // SOL → the sweep forwards it; other pair tokens → passed on to the treasury in the same transaction, exact amount
         const amt = BigInt(vp.partnerQuoteFee.toString()), mint = new PublicKey(c.mint), tx = await dbc.partner.claimPartnerTradingFeeToReceiver({ pool: new PublicKey(c.pool), feeClaimer: ops.publicKey, payer: ops.publicKey, maxBaseAmount: new BN(0), maxQuoteAmount: new BN(amt.toString()), receiver: ops.publicKey });
-        const qm = new PublicKey(c.quote_mint || WSOL); let tBurn = 0n; if (!qm.equals(new PublicKey(WSOL))) { const qprog = (await conn.getAccountInfo(qm)).owner, dst = getAssociatedTokenAddressSync(qm, new PublicKey(treasury), true, qprog), src0 = getAssociatedTokenAddressSync(qm, ops.publicKey, false, qprog);
-          if (TREID && c.quote_mint === TREID) { tBurn = amt * BigInt(Math.round(TREID_BB * 1000)) / 1000n; if (tBurn > 0n) tx.add(createBurnCheckedInstruction(src0, qm, ops.publicKey, tBurn, c.quote_dec ?? 6, [], qprog)); }   // coins paired with $TREID burn $TREID directly
-          if (amt - tBurn > 0n) tx.add(createAssociatedTokenAccountIdempotentInstruction(ops.publicKey, dst, new PublicKey(treasury), qm, qprog), createTransferCheckedInstruction(src0, qm, dst, ops.publicKey, amt - tBurn, c.quote_dec ?? 6, [], qprog)); }
+        const qm = new PublicKey(c.quote_mint || WSOL); let tBurn = 0n; if (!qm.equals(new PublicKey(WSOL))) { const qai = await conn.getAccountInfo(qm), qprog = qai.owner, dst = getAssociatedTokenAddressSync(qm, new PublicKey(treasury), true, qprog), src0 = getAssociatedTokenAddressSync(qm, ops.publicKey, false, qprog);
+          const net = qprog.equals(TOKEN_2022_PROGRAM_ID) ? amt - maxTransferFee(getTransferFeeConfig(unpackMint(qm, qai, qprog)), amt) : amt;   // a pair token with its own transfer fee arrives short: pass on only what arrived (ops never tops it up)
+          if (TREID && c.quote_mint === TREID) { tBurn = net * BigInt(Math.round(TREID_BB * 1000)) / 1000n; if (tBurn > 0n) tx.add(createBurnCheckedInstruction(src0, qm, ops.publicKey, tBurn, c.quote_dec ?? 6, [], qprog)); }   // coins paired with $TREID burn $TREID directly
+          if (net - tBurn > 0n) tx.add(createAssociatedTokenAccountIdempotentInstruction(ops.publicKey, dst, new PublicKey(treasury), qm, qprog), createTransferCheckedInstruction(src0, qm, dst, ops.publicKey, net - tBurn, c.quote_dec ?? 6, [], qprog)); }
         if (tBurn > 0n) tx.add(memoIx(`treid:tburn:${TREID}:${tBurn}`));
         const ata = getAssociatedTokenAddressSync(mint, ops.publicKey, false, TOKEN_2022_PROGRAM_ID), ai = await conn.getAccountInfo(ata); let closeOk = !ai;
         if (ai) { try { const a = unpackAccount(ata, ai, TOKEN_2022_PROGRAM_ID); closeOk = a.amount === 0n && !(getTransferFeeAmount(a)?.withheldAmount > 0n); } catch {} }
