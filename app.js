@@ -1592,7 +1592,7 @@
     return '<main class="wrap trend"><div class="tr-head"><div><span class="kicker">TOP 100</span><h1 class="tr-h">Trending</h1></div><span class="muted mono">' + Math.min(100, a.length) + ' coins · updates live</span></div>' +
       '<div class="tr-bar"><div class="seg">' + pre.map(function (x) { return '<button class="' + (S.lsort === x[0] ? 'on' : '') + '" data-act="tpreset" data-arg="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div>' +
       '<div class="seg tr-cats">' + [['all', 'All pairs']].concat((DEMO ? CATS.slice(1) : RW_TABS).map(function (c) { return [c[0], c[1]]; })).map(function (c) { return '<button class="' + (S.tcat === c[0] ? 'on' : '') + '" data-act="tcat" data-arg="' + c[0] + '">' + c[1] + '</button>'; }).join('') + '</div></div>' +
-      listHTML(a) + '</main>';
+      (a.length ? listHTML(a) : '<div class="empty"><b style="font-size:19px">' + (S.tcat !== 'all' ? 'No ' + esc(String(((DEMO ? CATS : RW_TABS).filter(function (c) { return c[0] === S.tcat; })[0] || [0, S.tcat])[1]).toLowerCase()) + ' pairs yet' : 'No coins yet') + '</b><span class="muted">' + (S.tcat !== 'all' ? 'Nothing trades against this kind of token yet.' : 'Be the first — launch a coin in a minute.') + '</span>' + (S.tcat !== 'all' ? '<button class="btn sec" data-act="tcat" data-arg="all">All pairs</button>' : '<button class="btn pri" data-act="create">Launch a coin →</button>') + '</div>') + '</main>';
   }
   // ===== TRENCHES: New / Graduating / Graduated, live from /api/stream (phones: swipeable tabs) =====
   var TR_GRAD = 50;   // bonding-curve % from which a coin counts as "graduating"
@@ -1626,6 +1626,8 @@
   function trenchPage() {
     var cols = [['✨ New', 'Fresh launches, newest first'], ['🔥 Graduating', 'Bonding curve ' + TR_GRAD + '%+ · close to Meteora'], ['🎓 Graduated', 'Trading on Meteora']], lists = [0, 1, 2].map(trList);
     var empty = ['No new coins yet — be the first to launch.', 'Nothing near graduation right now.', 'No coin has graduated yet.'];
+    var trF = (S.trTax != null && S.trTax !== '' && S.trTax !== 'any') || (S.trMc && S.trMc !== 'any') || (S.trCat && S.trCat !== 'all');
+    if (trF) empty = empty.map(function (m, b) { var n = all().filter(function (t) { return trBucket(t) === b; }).length; return n ? 'Your filters hide ' + n + ' coin' + (n === 1 ? '' : 's') + ' here — <button class="link" data-act="trClr">clear filters</button>' : m; });
     return '<main class="wrap trench"><div class="tn-head"><h1 class="tr-h">Trenches</h1>' +
       '<div class="tn-f"><button class="link" data-act="trendList">Trending →</button></div></div>' + trFilters() +
       '<div class="tn-tabs" role="tablist">' + cols.map(function (c, i) { return '<button role="tab" aria-selected="' + (S.trTab === i) + '" class="' + (S.trTab === i ? 'on' : '') + '" data-act="trTab" data-arg="' + i + '">' + c[0] + ' <b class="mono">' + lists[i].length + '</b></button>'; }).join('') + '<i class="tn-ind" style="transform:translateX(' + (S.trTab * 100) + '%)"></i></div>' +
@@ -1934,7 +1936,18 @@
       var ir = e && e.closest('.irange'); if (ir) ir.classList.toggle('on', l !== 'Any');
     });
     if (S.view === 'orbit') raceRefresh();
-    if (g && S.view !== 'bubbles' && S.view !== 'list') g.innerHTML = list.length ? list.map(function (t) { return isMob() ? mrow(t) : card(t); }).join('') : '<div class="empty"><b style="font-size:19px">No coins in this range</b><span class="muted">Widen a slider or hit Reset.</span><button class="btn pri" data-act="reset">Reset filters</button></div>';
+    if (g && S.view !== 'bubbles' && S.view !== 'list') g.innerHTML = list.length ? list.map(function (t) { return isMob() ? mrow(t) : card(t); }).join('') : boardEmpty();
+  }
+  // the Board's empty grid says WHY it's empty (watchlist, graduated, a category, rewards…), not always "loosen the filters"
+  function boardEmpty() {
+    var A = all(), box = function (h, sub, btn) { return '<div class="empty"><b style="font-size:19px">' + h + '</b><span class="muted">' + sub + '</span>' + (btn || '<button class="btn pri" data-act="reset">Reset filters</button>') + '</div>'; };
+    var catN = S.cat !== 'all' ? ((DEMO ? CATS : RW_TABS).filter(function (c) { return c[0] === S.cat; })[0] || [0, S.cat])[1] : '';
+    if (!A.length) return box('No coins yet', 'Be the first — launch a coin in a minute.', '<button class="btn pri" data-act="create">Launch a coin →</button>');
+    if (S.watchOnly && !S.watch.some(function (k) { return find(k); })) return box('Your watchlist is empty', 'Tap the ☆ on any coin and it shows up here.', '<button class="btn pri" data-act="toggle" data-arg="watchOnly">Show all coins</button>');
+    if (S.gradOnly && !A.some(function (t) { return t.prog >= 100; })) return box('No coin has graduated yet', 'A coin graduates to Meteora when its bonding curve fills.', '<button class="btn pri" data-act="toggle" data-arg="gradOnly">Show all coins</button>');
+    if (S.rewardsOnly && !A.some(function (t) { return t.rewards; })) return box('No coins pay holder rewards yet', 'Coins with a tax and a holder share pay their holders on every trade.', '<button class="btn pri" data-act="toggle" data-arg="rewardsOnly">Show all coins</button>');
+    if (S.cat !== 'all' && !A.some(function (t) { return catOf(t) === S.cat; })) return box('No ' + esc(String(catN).toLowerCase()) + ' pairs yet', 'No coin trades against a ' + esc(String(catN).toLowerCase()) + ' token yet — launch the first one.', '<span style="display:flex;gap:8px;justify-content:center"><button class="btn pri" data-act="create">Launch a coin</button><button class="btn sec" data-act="reset">Show all</button></span>');
+    return box('No tokens match these filters', 'Loosen the filters or hit Reset.');
   }
   var SLOGANS = ['The market', 'is yours.'];
   var KIN = DEMO ? [['GOLD', 'gold'], ['$NFROG', 'frogs'], ['TSLAx', 'tesla'], ['SOL', 'solana'], ['$CHAD', 'chads'], ['EUR', 'euros'], ['BTC', 'bitcoin'], ['', 'anything.']] : [['SOL', 'solana'], ['USDC', 'dollars'], ['BTC', 'bitcoin'], ['GOLD', 'gold'], ['', 'your own coin'], ['', 'anything.']];
@@ -2046,9 +2059,9 @@
 
     var filters = filterBar();
 
-    var grid = (!S.loading && S.view === 'list') ? listHTML(shown, true) + more : (!S.loading && S.view === 'orbit') ? (function () { var a = list; return '<div class="orb-inline">' + orbitStage(a, a.filter(function (t) { return t.prog < 100; }), a.filter(function (t) { return t.prog >= 100; })) + '</div>'; })() : (!S.loading && S.view === 'bubbles') ? bubblesHTML(list) : '<section class="grid" id="grid">' + (S.loading ? [0, 1, 2, 3, 4, 5].map(skeletonCard).join('') : list.length ? shown.map(function (t) { return isMob() ? mrow(t) : card(t); }).join('') :
+    var grid = (!S.loading && S.view === 'list') ? (list.length ? listHTML(shown, true) + more : '<section class="grid" id="grid">' + boardEmpty() + '</section>') : (!S.loading && S.view === 'orbit') ? (function () { var a = list; return '<div class="orb-inline">' + orbitStage(a, a.filter(function (t) { return t.prog < 100; }), a.filter(function (t) { return t.prog >= 100; })) + '</div>'; })() : (!S.loading && S.view === 'bubbles') ? bubblesHTML(list) : '<section class="grid" id="grid">' + (S.loading ? [0, 1, 2, 3, 4, 5].map(skeletonCard).join('') : list.length ? shown.map(function (t) { return isMob() ? mrow(t) : card(t); }).join('') :
       (!DEMO && S.pair !== 'All' && !all().some(function (x) { return pairLabel(x.pair) === S.pair || x.pair === S.pair; }) ? '<div class="empty"><b style="font-size:19px">No coins paired with ' + esc(S.pair) + ' yet</b><span class="muted">Be the first — launch a coin that trades against ' + esc(S.pair) + '.</span><span style="display:flex;gap:8px;justify-content:center"><button class="btn pri" data-act="launchPair" data-arg="' + esc(S.pair) + '">Launch paired with ' + esc(S.pair) + '</button><button class="btn sec" data-act="pclear">Show all</button></span></div>' :
-      '<div class="empty"><b style="font-size:19px">No tokens match these filters</b><span class="muted">Loosen the tax or market cap filters.</span><button class="btn pri" data-act="reset">Reset filters</button></div>')) + '</section>' + (S.loading ? '' : more);
+      boardEmpty())) + '</section>' + (S.loading ? '' : more);
 
     var how = '<section id="how" style="margin-top:56px"><h2 class="h2" style="margin-bottom:16px">How treid works</h2><div class="row">' +
       [['01', 'Pick a name & logo', 'Use the built-in mascot builder or upload your own image. Takes under a minute.'],
