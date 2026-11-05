@@ -388,9 +388,9 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, q
     needReady(); const c = coin(mint); fresh(ts); if (!verify(claimMessage(mint, ts), sig, wallet, ts)) throw new Error('bad signature'); guard('claim', wallet, sig);
     return withLock(async () => { const st = state(c); if (wallet !== st.creator) throw new Error('only the current creator can claim');
       if (st.state !== 'active') throw new Error(st.state === 'frozen' ? 'payouts are paused — tap “Resume my fees” first' : 'creator is out');
-      run('CREATE TABLE IF NOT EXISTS kv(k TEXT PRIMARY KEY, v TEXT)'); run('INSERT OR REPLACE INTO kv(k,v) VALUES(?,?)', 'claimed:' + c.mint + ':' + wallet, String(Date.now()));   // claiming counts as showing up
       const vpw = await dbc.state.getPool(new PublicKey(c.pool)), src = await creatorSources(c, vpw.poolState || vpw), inPool = src.list.reduce((a, x) => a + x[1], 0);
-      if (inPool < units(c, CLAIM_USD)) throw new Error('claims start at $1 — keep building fees');
+      if (inPool < units(c, CLAIM_USD)) throw new Error('claims start at $1 — keep building fees');   // a refused claim is NOT activity (it would let a creator reset the idle timers for free)
+      run('CREATE TABLE IF NOT EXISTS kv(k TEXT PRIMARY KEY, v TEXT)'); run('INSERT OR REPLACE INTO kv(k,v) VALUES(?,?)', 'claimed:' + c.mint + ':' + wallet, String(Date.now()));   // a real claim (≥ $1 waiting) counts as showing up
       const before = sum(c.mint, 'pay'); let s = null; for (const [from, amt] of src.list) if (amt >= units(c, 0.05)) s = await payout(c, amt, wallet, 'pay', from); const paid = sum(c.mint, 'pay') - before;
       return { ok: true, sol: paid / 10 ** (c.quote_dec ?? 9), quote: c.quote_symbol || 'SOL', sig: s }; });
   }
