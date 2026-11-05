@@ -478,14 +478,29 @@ function devRecord(w) {
 db.exec('CREATE TABLE IF NOT EXISTS xconf(mint TEXT PRIMARY KEY, handle TEXT, url TEXT, at INT)');
 function xHandleOf(c) { try { let v = String(new URL(c.uri).searchParams.get('x') || '').trim().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/^@/, '');
   const m = /^(?:x|twitter)\.com\/([A-Za-z0-9_]{1,15})(?:$|[/?#])/i.exec(v); if (m) v = m[1]; if (!/^[A-Za-z0-9_]{1,15}$/.test(v) || /^(i|home|search|intent|share)$/i.test(v)) return null; return v; } catch { return null; } }
-async function xPostHas(handle, url, needle) {
-  const id = /(?:twitter|x)\.com\/[^/]+\/status(?:es)?\/(\d{5,25})/.exec(url)?.[1]; if (!id) throw new Error('paste the link to the post (x.com/…/status/…)'); const H = handle.toLowerCase();
+try { db.exec('ALTER TABLE xconf ADD COLUMN post_id TEXT'); } catch {} try { db.exec('ALTER TABLE xconf ADD COLUMN chk INT'); } catch {}
+const xPostId = (url) => /(?:twitter|x)\.com\/[^/]+\/status(?:es)?\/(\d{5,25})(?:$|[/?#])/.exec(String(url || ''))?.[1] || null;
+const snowflakeMs = (id) => { try { return Number((BigInt(id) >> 22n) + 1288834974657n); } catch { return 0; } };
+// → true / false when X gave a definite answer (false also when the post is deleted); throws when X couldn't be read (unknown)
+// a match = posted by the coin's X account, AFTER the coin was created, and its text has the contract address AND the word "treid"
+async function xPostCheck(handle, id, mint, createdAt) {
+  const H = handle.toLowerCase(), textOk = (t) => String(t || '').includes(mint) && /treid/i.test(String(t || ''));
+  if (!(snowflakeMs(id) > (+createdAt || 0))) return false;   // a post older than the coin can't be about it
+  let gone = false;
   try { const tok = ((Number(id) / 1e15) * Math.PI).toString(36).replace(/(0+|\.)/g, ''), r = await fetch(`https://cdn.syndication.twimg.com/tweet-result?id=${id}&lang=en&token=${tok}`, { signal: AbortSignal.timeout(10e3) });
-    if (r.ok) { const j = await r.json(), who = String(j?.user?.screen_name || '').toLowerCase(); if (who) return who === H && String(j?.text || '').includes(needle); } } catch {}
+    if (r.ok) { const j = await r.json(), who = String(j?.user?.screen_name || '').toLowerCase(); if (who) return who === H && String(j?.id_str || id) === id && textOk(j?.text); } else if (r.status === 404) gone = true; } catch {}
   const r2 = await fetch(`https://publish.twitter.com/oembed?omit_script=1&url=${encodeURIComponent('https://twitter.com/i/status/' + id)}`, { signal: AbortSignal.timeout(10e3) });
+  if (r2.status === 404 || (gone && r2.status === 403)) return false;
   if (!r2.ok) throw new Error('could not read that post — is it public? try again in a minute');
-  const j2 = await r2.json(); return String(j2.author_url || '').split('/').pop().toLowerCase() === H && String(j2.html || '').includes(needle);
+  const j2 = await r2.json(); return String(j2.author_url || '').split('/').pop().toLowerCase() === H && textOk(j2.html);
 }
+// confirmed posts are re-checked once a day: deleted, edited away or the coin's X link changed → the ✓ is dropped
+async function xRecheck() { for (const r of q('SELECT * FROM xconf WHERE chk IS NULL OR chk < ? ORDER BY chk LIMIT 40', Date.now() - 864e5)) {
+  const c = q1('SELECT * FROM coins WHERE mint=?', r.mint), h = c && xHandleOf(c), id = r.post_id || xPostId(r.url);
+  let ok; try { ok = !!(c && h && id && h.toLowerCase() === r.handle) && await xPostCheck(h, id, c.mint, c.created_at); } catch { continue; }   // X unreadable: try again next round
+  if (ok) run('UPDATE xconf SET chk=?, post_id=? WHERE mint=?', Date.now(), id, r.mint); else { run('DELETE FROM xconf WHERE mint=?', r.mint); coinsSnap = null; console.log('x confirm dropped', r.mint.slice(0, 6), '@' + r.handle); }
+  await new Promise((ok2) => setTimeout(ok2, 3e3)); } }
+setTimeout(() => { xRecheck().catch(() => {}); setInterval(() => xRecheck().catch(() => {}), 36e5); }, 5 * 60e3);
 function stats(mint, list = false, scanOk = true) {
   const c = q1('SELECT * FROM coins WHERE mint=?', mint); if (!c) return null;
   const last = q1('SELECT mcap_usd, progress, reserve FROM trades WHERE mint=? ORDER BY ts DESC, slot DESC LIMIT 1', mint);
@@ -670,8 +685,9 @@ async function handleReq(req, res) {
       let body; try { body = await readBody(req, res, 2000); } catch (e) { return bodyFail(res, e); }
       withBody(async () => { try { const b = JSON.parse(body), c = q1('SELECT * FROM coins WHERE mint=?', String(b.mint || '')); if (!c) throw new Error('unknown coin');
           const h = xHandleOf(c); if (!h) throw new Error('this coin has no X account in its links');
-          const ok = await xPostHas(h, String(b.url || ''), c.mint); if (!ok) throw new Error(`that post isn’t from @${h} or doesn’t contain the contract address`);
-          run('INSERT OR REPLACE INTO xconf(mint, handle, url, at) VALUES(?,?,?,?)', c.mint, h.toLowerCase(), String(b.url).slice(0, 200), Date.now()); coinsSnap = null; J({ ok: true, handle: h });
+          const id = xPostId(b.url); if (!id) throw new Error('paste the link to the post (x.com/…/status/…)');
+          const ok = await xPostCheck(h, id, c.mint, c.created_at); if (!ok) throw new Error(`that post must be from @${h}, made after the coin launched, and contain both the contract address and the word "treid"`);
+          run('INSERT OR REPLACE INTO xconf(mint, handle, url, at, post_id, chk) VALUES(?,?,?,?,?,?)', c.mint, h.toLowerCase(), String(b.url).slice(0, 200), Date.now(), id, Date.now()); coinsSnap = null; J({ ok: true, handle: h });
         } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: pubErr(e) })); } }); return; }
     if (p[1] === 'banner' && req.method === 'POST') {   // the creator replaces the coin's banner later (signed by the creator wallet; served instead of the one from launch)
       if (!rate('ban|' + ip(req), 10, 36e5)) { res.writeHead(429, { 'access-control-allow-origin': '*' }); return res.end('{"ok":false,"error":"too many changes — try again later"}'); }
