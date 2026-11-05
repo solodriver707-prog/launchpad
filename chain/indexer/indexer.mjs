@@ -12,6 +12,9 @@ import http from 'node:http';
 import zlib from 'node:zlib';
 import net from 'node:net';
 import dns from 'node:dns/promises';
+import dnsCb from 'node:dns';
+import https from 'node:https';
+import { Readable } from 'node:stream';
 import { timingSafeEqual, createHash } from 'node:crypto';
 import { opsKeypair, startOps, treidCfg, parseSplit } from './ops.mjs';
 import { startRewards, RULES as REW_RULES } from './rewards.mjs';
@@ -197,11 +200,32 @@ run('CREATE TABLE IF NOT EXISTS cimg(mint TEXT, b INT, ct TEXT, data BLOB, at IN
 const imgBusy = new Map();
 function ipfsUrls(u) { const m = String(u || '').match(/\/ipfs\/([A-Za-z0-9]+)(\/[^?#]*)?/) || String(u || '').match(/^ipfs:\/\/([A-Za-z0-9]+)(\/[^?#]*)?/); if (!m) return /^https:\/\//.test(u) ? [u] : []; const path = m[1] + (m[2] || ''); return [PINATA_GW + '/ipfs/' + path, 'https://ipfs.io/ipfs/' + path, 'https://gateway.pinata.cloud/ipfs/' + path].filter((x, i, a) => a.indexOf(x) === i); }
 const badHost = (h) => /^(\d+\.){3}\d+$|^\[|localhost|\.internal$|\.local$|^metadata\./i.test(h) || !h.includes('.');
-const privIp = (a) => { if (net.isIPv4(a)) { const [x, y] = a.split('.').map(Number); return x === 10 || x === 127 || x === 0 || (x === 169 && y === 254) || (x === 172 && y >= 16 && y <= 31) || (x === 192 && y === 168) || (x === 100 && y >= 64 && y <= 127) || x >= 224; }
-  const l = a.toLowerCase(); if (l.startsWith('::ffff:')) return privIp(l.slice(7)); return l === '::1' || l === '::' || /^f[cd]/.test(l) || /^fe[89ab]/.test(l); };
+// any address that isn't plain public unicast is refused (private, loopback, link-local, CGNAT, benchmark 198.18/15, documentation,
+// multicast/reserved, NAT64 64:ff9b::/96 + 64:ff9b:1::/48, 6to4, IPv4-mapped/-compatible IPv6 → checked as the embedded IPv4)
+const PRIV4 = new net.BlockList(), PRIV6 = new net.BlockList();
+for (const c of ['0.0.0.0/8', '10.0.0.0/8', '100.64.0.0/10', '127.0.0.0/8', '169.254.0.0/16', '172.16.0.0/12', '192.0.0.0/24', '192.0.2.0/24', '192.88.99.0/24', '192.168.0.0/16', '198.18.0.0/15', '198.51.100.0/24', '203.0.113.0/24', '224.0.0.0/3']) { const [a, b] = c.split('/'); PRIV4.addSubnet(a, +b, 'ipv4'); }
+for (const c of ['::/96', '::ffff:0:0/96', '64:ff9b::/96', '64:ff9b:1::/48', '100::/64', '2001::/23', '2001:db8::/32', '2002::/16', 'fc00::/7', 'fe80::/10', 'fec0::/10', 'ff00::/8']) { const [a, b] = c.split('/'); PRIV6.addSubnet(a, +b, 'ipv6'); }
+const privIp = (a0) => { const a = String(a0 || '').trim().replace(/^\[|\]$/g, '').replace(/%.*$/, '');
+  if (net.isIPv4(a)) return PRIV4.check(a, 'ipv4'); if (!net.isIPv6(a)) return true;
+  let l; try { l = new URL('http://[' + a + ']').hostname.slice(1, -1).toLowerCase(); } catch { return true; }   // canonical form
+  const m = /^::(?:ffff:)?([0-9a-f]{1,4}):([0-9a-f]{1,4})$/.exec(l) || /^64:ff9b::([0-9a-f]{1,4}):([0-9a-f]{1,4})$/.exec(l);   // embedded IPv4
+  if (m) { const hi = parseInt(m[1], 16), lo = parseInt(m[2], 16); if (PRIV4.check([hi >> 8, hi & 255, lo >> 8, lo & 255].join('.'), 'ipv4')) return true; }
+  return PRIV6.check(l, 'ipv6'); };
 async function hostOk(h) { if (badHost(h)) return false; try { const as = await dns.lookup(h, { all: true }); return as.length > 0 && !as.some((a) => privIp(a.address)); } catch { return false; } }   // a public name pointing at an internal address is refused too
+// the connection itself uses this lookup: the address that is checked IS the address connected to (no DNS-rebinding window between check and fetch)
+function safeLookup(host, opts, cb) { if (typeof opts === 'function') { cb = opts; opts = {}; }
+  dnsCb.lookup(host, { all: true }, (err, as) => { if (err) return cb(err); const ok = (as || []).filter((a) => !privIp(a.address));
+    if (!ok.length || ok.length !== as.length) return cb(Object.assign(new Error('blocked address'), { code: 'EBLOCKED' }));
+    const fam = opts.family === 4 || opts.family === 6 ? ok.filter((a) => a.family === opts.family) : ok; if (!fam.length) return cb(Object.assign(new Error('no address'), { code: 'ENOTFOUND' }));
+    if (opts.all) cb(null, fam); else cb(null, fam[0].address, fam[0].family); }); }
+function pinnedGet(href, ms) { return new Promise((ok, no) => {
+  const req = https.request(new URL(href), { method: 'GET', lookup: safeLookup, signal: AbortSignal.timeout(ms), headers: { 'user-agent': 'treid-indexer', accept: '*/*', 'accept-encoding': 'identity' } }, (res) => {
+    const h = new Headers(); for (const [k, v] of Object.entries(res.headers)) if (v != null) { try { h.set(k, Array.isArray(v) ? v.join(', ') : String(v)); } catch {} }
+    const st = res.statusCode || 502, noBody = st < 200 || st === 204 || st === 304 || st >= 300 && st < 400; if (noBody) res.resume();
+    try { ok(new Response(noBody ? null : Readable.toWeb(res), { status: st < 200 || st > 599 ? 502 : st, headers: h })); } catch (e) { res.destroy(); no(e); } });
+  req.on('error', no); req.end(); }); }
 async function fetchSafe(x, ms) { let u = x; for (let hop = 0; hop < 4; hop++) { const url = new URL(u); if (url.protocol !== 'https:' || !(await hostOk(url.hostname))) return null;   // every redirect hop is checked again
-    const r = await fetch(u, { signal: AbortSignal.timeout(ms), redirect: 'manual' }); if (r.status >= 300 && r.status < 400 && r.headers.get('location')) { u = new URL(r.headers.get('location'), u).href; continue; } return r; } return null; }
+    const r = await pinnedGet(u, ms); if (r.status >= 300 && r.status < 400 && r.headers.get('location')) { u = new URL(r.headers.get('location'), u).href; continue; } return r; } return null; }
 async function fetchAny(urls, ms = 12e3) { for (const x of urls) { try { const r = await fetchSafe(x, ms); if (r && r.ok) return r; } catch {} } return null; }
 // what an image really is, from its first bytes (many hosts send logos as octet-stream / text/plain); SVG is served only as an image with a strict CSP
 function imgType(buf, hdr) { const h = buf.subarray(0, 16), a = (i) => h[i];
@@ -650,7 +674,7 @@ async function handleReq(req, res) {
           const url = t && typeof t.icon === 'string' ? new URL(t.icon) : null;
           if (url && url.protocol === 'https:') { const r = await fetchAny(ipfsUrls(url.href), 8000);   // IPFS logos through our own gateway first; every redirect hop re-checked (no SSRF)
             const buf = r ? await readCapped(r, 1.5e6) : null, ct = buf ? imgType(buf, String(r.headers.get('content-type') || '').split(';')[0]) : null;   // never read more than 1.5 MB
-            if (buf && ct) { h.buf = buf; h.ct = ct; } } } catch {}
+            if (buf && ct && /^image\/(png|jpeg|gif|webp)$/.test(ct)) { h.buf = buf; h.ct = ct; } } } catch {}   // raster only: never SVG (script-capable) from here
         iconC.set(ik, h); iconB += h.buf ? h.buf.length : 0; while (iconC.size > 300 || iconB > 25e6) { const [k0, v0] = iconC.entries().next().value; iconC.delete(k0); iconB -= v0.buf ? v0.buf.length : 0; } }   // bounded memory (count + bytes)
       if (!h.buf) { res.writeHead(404, { 'access-control-allow-origin': '*' }); return res.end(); }
       res.writeHead(200, { 'content-type': h.ct, 'cache-control': 'public, max-age=86400', 'access-control-allow-origin': '*', 'x-content-type-options': 'nosniff', 'content-security-policy': "default-src 'none'" }); return res.end(h.buf); }
