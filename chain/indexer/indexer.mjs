@@ -506,6 +506,23 @@ function stats(mint, list = false, scanOk = true) {
 }
 // errors our own code throws on purpose are meant for the user; anything else (library, RPC, database, parser) gets a generic text
 const pubErr = (e) => { const m = String(e?.message || ''); if (e && e.constructor === Error && !e.code && m && m.length < 200 && !/sqlite|database|ECONN|ENOTFOUND|EAI_AGAIN|fetch failed|timed? ?out|abort|socket|JSON|Unexpected token|failed to get|getaddrinfo|status code|Cannot read|is not a function|undefined|\bat \S+:\d+/i.test(m)) return m; console.log('err (hidden)', m.slice(0, 160)); return 'something went wrong — try again'; };
+// ---- request bodies: size known before reading (Content-Length), read into a Buffer with a hard per-route cap, and a global
+// in-flight byte budget so many parallel large POSTs can't exhaust memory. Rate limits run BEFORE this is called.
+const BODY_CAP = +(process.env.BODY_CAP_MB || 64) * 1e6; let bodyBytes = 0;
+const bodyErr = (msg, status) => Object.assign(new Error(msg), { status });
+function readBody(req, res, max) { return new Promise((ok, no) => {
+  const cl = req.headers['content-length'], len = cl == null ? null : Number(cl);
+  const refuse = (e) => { try { res.setHeader('connection', 'close'); } catch {} no(e); };   // the rest of the body is never read
+  if (len != null && !(Number.isInteger(len) && len >= 0)) return refuse(bodyErr('bad request', 400));
+  if (len != null && len > max) return refuse(bodyErr('request too big', 413));
+  const reserve = len ?? max; if (bodyBytes + reserve > BODY_CAP) return refuse(bodyErr('server busy — try again in a moment', 503));
+  bodyBytes += reserve; const parts = []; let n = 0, done = false;
+  const fin = (e, v) => { if (done) return; done = true; bodyBytes -= reserve; if (e) no(e); else ok(v); };
+  req.on('data', (d) => { if (done) return; n += d.length; if (n > (len ?? max)) { fin(bodyErr('request too big', 413)); req.destroy(); return; } parts.push(d); });
+  req.on('end', () => fin(null, Buffer.concat(parts, n))); req.on('error', () => fin(bodyErr('aborted', 400))); req.on('close', () => fin(bodyErr('aborted', 400)));
+}); }
+function bodyFail(res, e) { if (res.headersSent || res.destroyed) return; res.writeHead(e?.status || 400, { 'content-type': 'application/json', 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, uri: null, error: e?.status ? e.message : 'bad request' })); }
+const withBody = (fn) => fn();   // runs a handler whose body was already read (keeps the old handler shape)
 // deploys / restarts: Render sends SIGTERM first. Stop starting new money transactions, let the one in flight finish (its receipt
 // is recorded), tell live viewers to reconnect, then exit — so a restart never cuts a payout in half.
 let stopping = false;
@@ -548,7 +565,7 @@ async function jtProxy(req, res, u, p) {
   const path = p.slice(2).join('/'); if (!JT_ROUTES.some(([m, re]) => m === req.method && re.test(path))) return out(404, { error: 'not found' });
   if (!process.env.JUP_API_KEY) return out(503, { error: 'limit orders are not enabled on this server (JUP_API_KEY missing)' });
   if (!rate('jt|' + ip(req), 400, 36e5)) return out(429, { error: 'too many requests — try again later' });
-  let body = null; if (req.method === 'POST') { body = await new Promise((ok, no) => { let b = ''; req.on('data', (d) => { b += d; if (b.length > 3e5) { req.destroy(); no(new Error('too big')); } }); req.on('end', () => ok(b)); req.on('error', no); }); }
+  let body = null; if (req.method === 'POST') { try { body = await readBody(req, res, 3e5); } catch (e) { return out(e.status || 400, { error: e.message }); } }
   const auth = String(req.headers.authorization || ''), qs = path === 'orders/history' ? '?' + new URLSearchParams([...u.searchParams].filter(([k]) => ['state', 'mint', 'limit', 'offset', 'sort', 'dir'].includes(k))).toString() : '';
   try { const r = await fetchT('https://api.jup.ag/trigger/v2/' + path + qs, { method: req.method, body: body || undefined, headers: { 'content-type': 'application/json', ...(/^Bearer [A-Za-z0-9._~+\/=-]{10,4000}$/.test(auth) ? { authorization: auth } : {}) } }, 20e3);
     const txt = await r.text(); res.writeHead(r.status, { 'content-type': 'application/json', 'access-control-allow-origin': '*', 'cache-control': 'no-store' }); res.end(txt.slice(0, 2e6)); }
@@ -561,12 +578,13 @@ async function handleReq(req, res) {
     if (gz && body.length > 4096) { res.writeHead(st, { 'content-type': 'application/json', 'access-control-allow-origin': '*', 'cache-control': 'no-store', 'content-encoding': 'gzip', vary: 'Accept-Encoding' }); return res.end(zlib.gzipSync(body, { level: 6 })); }
     res.writeHead(st, { 'content-type': 'application/json', 'access-control-allow-origin': '*', 'cache-control': 'no-store' }); res.end(body); };
   if (!originOk(req) && !(!p.length || p[1] === 'health')) { res.writeHead(403, { 'content-type': 'application/json' }); return res.end('{"error":"use the public API address"}'); }   // bypassed Cloudflare (ORIGIN_SECRET set)
+  if (req.method === 'POST' && !rate('post|' + ip(req), 1500, 36e5)) { res.writeHead(429, { 'access-control-allow-origin': '*', connection: 'close' }); return res.end('{"ok":false,"error":"too many requests — try again later"}'); }   // before any body is read
   if (req.method === 'OPTIONS') { res.writeHead(204, { 'access-control-allow-origin': '*', 'access-control-allow-headers': 'authorization, *', 'access-control-allow-methods': 'GET,POST' }); return res.end(); }
   // coin metadata (image / description) posted by the site at launch — first write wins. TODO mainnet: pin to IPFS instead.
   if (p[1] === 'upload' && req.method === 'POST') {   // before launch: pin image(s) + metadata JSON to IPFS, return the permanent URI
     if (!rate('up|' + ip(req), 6, 36e5)) { res.writeHead(429, { 'access-control-allow-origin': '*' }); return res.end(JSON.stringify({ uri: null, error: 'too many uploads — try again later' })); }
-    let body = ''; req.on('data', (d) => { body += d; if (body.length > 3e6) req.destroy(); });
-    req.on('end', async () => { try { if (!PINATA_JWT) return J({ uri: null });
+    let body; try { body = await readBody(req, res, 3e6); } catch (e) { return bodyFail(res, e); }
+    withBody(async () => { try { if (!PINATA_JWT) return J({ uri: null });
       const m = JSON.parse(body), wl = String(m.wallet || ''), wts = +m.ts;   // only a real wallet with SOL can pin (protects the IPFS account)
       if (!(Math.abs(Date.now() - wts) <= 5 * 60e3) || !verifySig(`treid: upload — ${wl} — ${wts}`, m.sig, wl, wts)) throw new Error('sign the upload with your wallet');
       if (!rate('upw|' + wl, 10, 864e5)) throw new Error('upload limit reached for today'); if ((await conn.getBalance(new PublicKey(wl))) < 0.02e9) throw new Error('your wallet needs a little SOL to launch');
@@ -602,11 +620,11 @@ async function handleReq(req, res) {
       sseByIp.set(ipx, nIp + 1); req.on('close', () => { const v = (sseByIp.get(ipx) || 1) - 1; if (v > 0) sseByIp.set(ipx, v); else sseByIp.delete(ipx); });
       res.writeHead(200, { 'content-type': 'text/event-stream', 'access-control-allow-origin': '*', 'cache-control': 'no-cache' }); res.write(': hi\n\n'); clients.add(res); req.on('close', () => clients.delete(res)); return; }
     if (p[1] === 'push' && p[2] === 'key') return J({ key: PUSH?.publicKey || null });   // web push: the server's VAPID public key (null = off)
-    if (p[1] === 'push' && ['alert', 'alerts', 'alertdel'].includes(p[2]) && req.method === 'POST') { let body = ''; req.on('data', (d) => { body += d; if (body.length > 4000) req.destroy(); });
-      req.on('end', () => { try { if (!rate('pal|' + ip(req), 120, 36e5)) throw new Error('too many requests — try again later'); const b = JSON.parse(body); J(p[2] === 'alert' ? PUSH.alertAdd(b) : p[2] === 'alerts' ? PUSH.alertList(b) : PUSH.alertDel(b)); } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: pubErr(e) })); } }); return; }
+    if (p[1] === 'push' && ['alert', 'alerts', 'alertdel'].includes(p[2]) && req.method === 'POST') { if (!rate('pal|' + ip(req), 120, 36e5)) { res.writeHead(429, { 'access-control-allow-origin': '*' }); return res.end(JSON.stringify({ ok: false, error: 'too many requests — try again later' })); } let body; try { body = await readBody(req, res, 4000); } catch (e) { return bodyFail(res, e); }
+      withBody(() => { try { const b = JSON.parse(body); J(p[2] === 'alert' ? PUSH.alertAdd(b) : p[2] === 'alerts' ? PUSH.alertList(b) : PUSH.alertDel(b)); } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: pubErr(e) })); } }); return; }
     if (p[1] === 'jt') return jtProxy(req, res, u, p);   // Jupiter Trigger V2 (limit / TP / SL orders), with the server's API key
-    if (p[1] === 'push' && (p[2] === 'sub' || p[2] === 'unsub') && req.method === 'POST') { let body = ''; req.on('data', (d) => { body += d; if (body.length > 40000) req.destroy(); });
-      req.on('end', () => { try { if (!rate('push|' + ip(req), 30, 36e5)) throw new Error('too many requests — try again later'); const b = JSON.parse(body); J(p[2] === 'sub' ? PUSH.save(b) : PUSH.drop(b.endpoint)); } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: pubErr(e) })); } }); return; }
+    if (p[1] === 'push' && (p[2] === 'sub' || p[2] === 'unsub') && req.method === 'POST') { if (!rate('push|' + ip(req), 30, 36e5)) { res.writeHead(429, { 'access-control-allow-origin': '*' }); return res.end(JSON.stringify({ ok: false, error: 'too many requests — try again later' })); } let body; try { body = await readBody(req, res, 40000); } catch (e) { return bodyFail(res, e); }
+      withBody(() => { try { const b = JSON.parse(body); J(p[2] === 'sub' ? PUSH.save(b) : PUSH.drop(b.endpoint)); } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: pubErr(e) })); } }); return; }
     if (p[1] === 'qprice' && !rate('qp|' + ip(req), 30, 6e4)) { res.writeHead(429, { 'access-control-allow-origin': '*' }); return res.end('{}'); }
     if (p[1] === 'ticon') {   // logo of a verified token by exact symbol (e.g. tokenized stocks), fetched once and served from here — raster images only
       const sym = String(u.searchParams.get('sym') || ''), mintQ = String(u.searchParams.get('mint') || '');
@@ -649,32 +667,32 @@ async function handleReq(req, res) {
     if (['cto', 'claim', 'ping', 'hlink'].includes(p[1]) && req.method === 'POST' && !rate('act|' + ip(req), 30, 36e5)) { res.writeHead(429, { 'access-control-allow-origin': '*' }); return res.end('{"ok":false,"error":"too many requests — try again later"}'); }
     if (p[1] === 'xconfirm' && req.method === 'POST') {   // the coin's own X account posted its contract address → "✓ X @handle" (a public post is the proof; no wallet needed)
       if (!rate('xc|' + ip(req), 12, 36e5)) { res.writeHead(429, { 'access-control-allow-origin': '*' }); return res.end('{"ok":false,"error":"too many tries — try again later"}'); }
-      let body = ''; req.on('data', (d) => { body += d; if (body.length > 2000) req.destroy(); });
-      req.on('end', async () => { try { const b = JSON.parse(body), c = q1('SELECT * FROM coins WHERE mint=?', String(b.mint || '')); if (!c) throw new Error('unknown coin');
+      let body; try { body = await readBody(req, res, 2000); } catch (e) { return bodyFail(res, e); }
+      withBody(async () => { try { const b = JSON.parse(body), c = q1('SELECT * FROM coins WHERE mint=?', String(b.mint || '')); if (!c) throw new Error('unknown coin');
           const h = xHandleOf(c); if (!h) throw new Error('this coin has no X account in its links');
           const ok = await xPostHas(h, String(b.url || ''), c.mint); if (!ok) throw new Error(`that post isn’t from @${h} or doesn’t contain the contract address`);
           run('INSERT OR REPLACE INTO xconf(mint, handle, url, at) VALUES(?,?,?,?)', c.mint, h.toLowerCase(), String(b.url).slice(0, 200), Date.now()); coinsSnap = null; J({ ok: true, handle: h });
         } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: pubErr(e) })); } }); return; }
     if (p[1] === 'banner' && req.method === 'POST') {   // the creator replaces the coin's banner later (signed by the creator wallet; served instead of the one from launch)
       if (!rate('ban|' + ip(req), 10, 36e5)) { res.writeHead(429, { 'access-control-allow-origin': '*' }); return res.end('{"ok":false,"error":"too many changes — try again later"}'); }
-      let body = ''; req.on('data', (d) => { body += d; if (body.length > 1_200_000) req.destroy(); });
-      req.on('end', () => { try { const b = JSON.parse(body), c = q1('SELECT * FROM coins WHERE mint=?', String(b.mint || '')); if (!c) throw new Error('unknown coin');
+      let body; try { body = await readBody(req, res, 1_200_000); } catch (e) { return bodyFail(res, e); }
+      withBody(() => { try { const b = JSON.parse(body), c = q1('SELECT * FROM coins WHERE mint=?', String(b.mint || '')); if (!c) throw new Error('unknown coin');
           const ts = +b.ts; if (!(Math.abs(Date.now() - ts) <= 2 * 60e3)) throw new Error('signature expired — try again');
           if (b.wallet !== c.creator) throw new Error('only the creator can change the banner');
           if (!verifySig(`treid: set banner — ${c.mint} — ${ts}`, b.sig, b.wallet, ts)) throw new Error('bad signature');
           const img = String(b.image || ''); if (!/^data:image\/(webp|jpeg|png);base64,[A-Za-z0-9+/=]+$/.test(img) || img.length > 1_100_000) throw new Error('use a PNG, JPG or WEBP banner under 800 KB');
           run('INSERT INTO meta(mint, name, symbol, banner, at) VALUES(?,?,?,?,?) ON CONFLICT(mint) DO UPDATE SET banner=excluded.banner, at=excluded.at', c.mint, c.name, c.symbol, img, Date.now());
           coinsSnap = null; J({ ok: true, v: Date.now() }); } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: pubErr(e) })); } }); return; }
-    if (p[1] === 'hlink' && req.method === 'POST') { let body = ''; req.on('data', (d) => { body += d; if (body.length > 4000) req.destroy(); });   // an X / GitHub account claims the fees sent to it
-      req.on('end', async () => { try { if (!REW) throw new Error('rewards escrow not enabled'); J(await REW.link(JSON.parse(body))); } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: pubErr(e) })); } }); return; }
-    if (p[1] === 'cto' && (p[2] === 'apply' || p[2] === 'vote') && req.method === 'POST') { let body = ''; req.on('data', (d) => { body += d; if (body.length > 6000) req.destroy(); });
-      req.on('end', async () => { try { if (!REW) throw new Error('rewards escrow not enabled'); const b = JSON.parse(body); J(p[2] === 'apply' ? await REW.ctoApply(b) : await REW.ctoVote(b)); } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: pubErr(e) })); } }); return; }
-    if (p[1] === 'session' && req.method === 'POST') { let body = ''; req.on('data', (d) => { body += d; if (body.length > 2000) req.destroy(); });   // sign in once (24 h)
-      req.on('end', () => { try { if (!rate('ss|' + ip(req), 20, 36e5)) throw new Error('too many sign-ins'); J(issueSession(JSON.parse(body))); } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: pubErr(e) })); } }); return; }
-    if (p[1] === 'callout' && req.method === 'POST') { let body = ''; req.on('data', (d) => { body += d; if (body.length > 2.3e6) req.destroy(); });   // text + optional image
-      req.on('end', async () => { try { J(await CO.post(JSON.parse(body), ip(req))); } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: pubErr(e) })); } }); return; }
-    if (p[1] === 'coreact' && req.method === 'POST') { let body = ''; req.on('data', (d) => { body += d; if (body.length > 3000) req.destroy(); });
-      req.on('end', () => { try { J(CO.react(JSON.parse(body), ip(req))); } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: pubErr(e) })); } }); return; }
+    if (p[1] === 'hlink' && req.method === 'POST') { let body; try { body = await readBody(req, res, 4000); } catch (e) { return bodyFail(res, e); }   // an X / GitHub account claims the fees sent to it
+      withBody(async () => { try { if (!REW) throw new Error('rewards escrow not enabled'); J(await REW.link(JSON.parse(body))); } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: pubErr(e) })); } }); return; }
+    if (p[1] === 'cto' && (p[2] === 'apply' || p[2] === 'vote') && req.method === 'POST') { let body; try { body = await readBody(req, res, 6000); } catch (e) { return bodyFail(res, e); }
+      withBody(async () => { try { if (!REW) throw new Error('rewards escrow not enabled'); const b = JSON.parse(body); J(p[2] === 'apply' ? await REW.ctoApply(b) : await REW.ctoVote(b)); } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: pubErr(e) })); } }); return; }
+    if (p[1] === 'session' && req.method === 'POST') { if (!rate('ss|' + ip(req), 20, 36e5)) { res.writeHead(429, { 'access-control-allow-origin': '*' }); return res.end(JSON.stringify({ ok: false, error: 'too many sign-ins' })); } let body; try { body = await readBody(req, res, 2000); } catch (e) { return bodyFail(res, e); }   // sign in once (24 h)
+      withBody(() => { try { J(issueSession(JSON.parse(body))); } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: pubErr(e) })); } }); return; }
+    if (p[1] === 'callout' && req.method === 'POST') { if (!rate('copre|' + ip(req), 300, 36e5)) { res.writeHead(429, { 'access-control-allow-origin': '*' }); return res.end(JSON.stringify({ ok: false, error: 'slow down — too many callouts' })); } let body; try { body = await readBody(req, res, 2.3e6); } catch (e) { return bodyFail(res, e); }   // text + optional image
+      withBody(async () => { try { J(await CO.post(JSON.parse(body), ip(req))); } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: pubErr(e) })); } }); return; }
+    if (p[1] === 'coreact' && req.method === 'POST') { if (!rate('crpre|' + ip(req), 600, 36e5)) { res.writeHead(429, { 'access-control-allow-origin': '*' }); return res.end(JSON.stringify({ ok: false, error: 'slow down' })); } let body; try { body = await readBody(req, res, 3000); } catch (e) { return bodyFail(res, e); }
+      withBody(() => { try { J(CO.react(JSON.parse(body), ip(req))); } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: pubErr(e) })); } }); return; }
     if (['callouts', 'coearn', 'dev', 'pos', 'mytrades', 'vampcheck', 'rewards'].includes(p[1]) && req.method === 'GET' && !rate('rd|' + ip(req), 240, 6e4)) { res.writeHead(429, { 'access-control-allow-origin': '*', 'content-type': 'application/json', 'retry-after': '30' }); return res.end('{"error":"too many requests"}'); }   // reads computed per wallet / coin: a flood of random keys can't pin the CPU
     if (p[1] === 'callouts') { const cm = u.searchParams.get('mint') || null, me0 = String(u.searchParams.get('me') || ''), me = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(me0) ? me0 : null; return J(cached('co|' + (cm || '') + '|' + (me || ''), 5e3, () => { const memo = new Map(); const L = CO.list(cm, me), ern = CR ? CR.byCallout(L.map((c) => c.id)) : {}; return L.map((c) => { const k = c.mint + '|' + c.wallet; if (!memo.has(k)) memo.set(k, posStats(c.mint, c.wallet)); return { ...c, ps: memo.get(k), earn: ern[c.id] || null }; }); })); }   // every callout carries its author's live position
     if (p[1] === 'coearn') { if (!CR) return J(null); if (p[2]) { const w = String(p[2]); if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(w)) return J(null); return J(cached('cre|' + w, 15e3, () => CR.stats(w))); } return J(cached('cretop', 60e3, () => ({ share: CO_SHARE, top: CR.top(30) }))); }   // callout rewards: one caller's earnings, or the 30-day top callers
@@ -697,8 +715,8 @@ async function handleReq(req, res) {
     if (p[1] === 'pos') { const m = String(u.searchParams.get('mint') || ''), w = String(u.searchParams.get('wallet') || ''); if (!q1('SELECT 1 FROM coins WHERE mint=?', m) || !/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(w)) return J(null); return J(posStats(m, w)); }
     if (p[1] === 'mytrades') { const m = String(u.searchParams.get('mint') || ''), w = String(u.searchParams.get('wallet') || ''); return J(q('SELECT sig, side, sol, tokens, usd, mcap_usd, ts FROM trades WHERE mint=? AND wallet=? ORDER BY ts DESC LIMIT 100', m, w)); }
     if (p[1] === 'burned' && req.method === 'POST' && !rate('burn|' + ip(req), 30, 36e5)) { res.writeHead(429, { 'access-control-allow-origin': '*' }); return res.end('{"ok":false,"error":"too many requests"}'); }
-    if (p[1] === 'burned' && req.method === 'POST') { let body = ''; req.on('data', (d) => { body += d; if (body.length > 1000) req.destroy(); });
-      req.on('end', async () => { try { J(await verifyBurn(String(JSON.parse(body).sig || ''))); } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: pubErr(e) })); } }); return; }
+    if (p[1] === 'burned' && req.method === 'POST') { let body; try { body = await readBody(req, res, 1000); } catch (e) { return bodyFail(res, e); }
+      withBody(async () => { try { J(await verifyBurn(String(JSON.parse(body).sig || ''))); } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: pubErr(e) })); } }); return; }
     if (p[1] === 'leaderboard' && !['24h', '7d', 'all'].includes(u.searchParams.get('per') || 'all')) return J({ traders: [], devs: [], hall: [] });
     if (p[1] === 'leaderboard' && lbCache.has(u.searchParams.get('per') || 'all') && Date.now() - lbCache.get(u.searchParams.get('per') || 'all').ts < 60e3) return J(lbCache.get(u.searchParams.get('per') || 'all').v);
     if (p[1] === 'leaderboard') { const pm = { '24h': 864e5, '7d': 6048e5 }[u.searchParams.get('per')] || 1e13, since = Date.now() - pm;
@@ -722,10 +740,10 @@ async function handleReq(req, res) {
         out.push({ mint: c.mint, burned, tax: r.tax, buyback: r.bb, other: Math.max(0, burned - r.tax - r.bb) }); }
       const ev = (REW ? q(`SELECT mint, CASE kind WHEN 'taxburn' THEN 'tax' ELSE 'frozen' END src, lamports/1e6 tok, ts, sig, NULL wallet FROM rlog WHERE kind IN ('taxburn','burntok') AND lamports > 0`) : []).concat(q(`SELECT mint, 'dev' src, tok, ts, sig, wallet FROM uburn`)).sort((a, b) => b.ts - a.ts).slice(0, 200);
       burnsSnap = { at: Date.now(), v: { coins: out, events: ev } }; return J(burnsSnap.v); }
-    if (p[1] === 'claim' && req.method === 'POST') { let body = ''; req.on('data', (d) => { body += d; if (body.length > 4000) req.destroy(); });
-      req.on('end', async () => { try { if (!REW) throw new Error('rewards escrow not enabled'); J(await REW.claimNow(JSON.parse(body))); } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: pubErr(e) })); } }); return; }
-    if (p[1] === 'ping' && req.method === 'POST') { let body = ''; req.on('data', (d) => { body += d; if (body.length > 4000) req.destroy(); });
-      req.on('end', async () => { try { if (!REW) throw new Error('rewards escrow not enabled'); J(await REW.ping(JSON.parse(body))); } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: pubErr(e) })); } }); return; }
+    if (p[1] === 'claim' && req.method === 'POST') { let body; try { body = await readBody(req, res, 4000); } catch (e) { return bodyFail(res, e); }
+      withBody(async () => { try { if (!REW) throw new Error('rewards escrow not enabled'); J(await REW.claimNow(JSON.parse(body))); } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: pubErr(e) })); } }); return; }
+    if (p[1] === 'ping' && req.method === 'POST') { let body; try { body = await readBody(req, res, 4000); } catch (e) { return bodyFail(res, e); }
+      withBody(async () => { try { if (!REW) throw new Error('rewards escrow not enabled'); J(await REW.ping(JSON.parse(body))); } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: pubErr(e) })); } }); return; }
     if (p[1] === 'payouts') return J(OPS && REW ? q(`SELECT sig, MAX(ts) ts, SUM(lamports)/1e6 harvested, SUM(CASE WHEN kind='taxburn' THEN lamports ELSE 0 END)/1e6 burned, SUM(CASE WHEN kind='taxdev' THEN lamports ELSE 0 END)/1e6 dev, SUM(CASE WHEN kind='taxhold' THEN lamports ELSE 0 END)/1e6 holders, MAX(CASE WHEN kind='taxhold' THEN CAST(extra AS INT) END) n_holders FROM rlog WHERE mint=? AND kind IN ('taxburn','taxdev','taxhold') GROUP BY sig ORDER BY ts DESC LIMIT 50`, p[2]) : []);
     if (p[1] === 'candles') { const tf = u.searchParams.get('tf') || '1m'; return J(cached('cd|' + p[2] + '|' + tf, 5e3, () => candles(p[2], tf))); }
     if (p[1] === 'bubbles' && p[2]) { if (!rate('bub|' + ip(req), 30, 60e3)) return J({ error: 'slow down' }, 429); const k = 'bub|' + p[2], c0 = bubC.get(k); if (c0 && Date.now() - c0.ts < (c0.v?.done ? 60e3 : 6e3)) return J(c0.v);
