@@ -493,7 +493,20 @@
     crypto: [['SOL', 'SOL', 'icons/sol.svg'], ['BTC', 'cbBTC', 'icons/btc.svg', 'cbbtcf3aa214zXHbiAZQwf4122FBYbraNdFqgw4iMij'], ['ETH', 'ETH', 'icons/eth.svg', '7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs'], ['JUP', 'JUP', 'icons/jup.webp', 'JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN'], ['RAY', 'RAY', 'icons/ray.svg', '4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R'], ['PYTH', 'PYTH', 'icons/pyth.webp', 'HZ1JovNiVvGrGNiiYvEozEVgZ58xaU3RKwX8eACQBCt3'], ['JTO', 'JTO', 'icons/jto.webp', 'jtojtomepa8beP8AuQc6eXt5FriJwfFMwQx2v2f9mCL'], ['LINK', 'LINK', 'icons/link.svg']],
     stocks: [['SPYx', 'SPYx', null], ['NVDAx', 'NVDAx', null], ['TSLAx', 'TSLAx', null], ['AAPLx', 'AAPLx', null], ['MSFTx', 'MSFTx', null], ['GOOGLx', 'GOOGLx', null], ['METAx', 'METAx', null], ['AMZNx', 'AMZNx', null]],
     fx: [['USDC', 'USDC', 'icons/usdc.svg'], ['USDT', 'USDT', 'icons/usdt.svg', 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB'], ['EURC', 'EURC', 'icons/eur.svg', 'HzwqbKZw8HxMN6bF2yFZNrht3c2iXXzpKcFu7uBEDKtr'], ['PYUSD', 'PYUSD', 'icons/pyusd.webp', '2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo']] };
-  function liveCat(t) { var L = pairLabel(t.pair); if (L === 'SOL') return 'crypto'; for (var k in RW_PRE) for (var i = 0; i < RW_PRE[k].length; i++) if (RW_PRE[k][i][0] === L || RW_PRE[k][i][1] === L) return k; return 'other'; }
+  var LIVE_CAT_X = {   // pair tokens outside the RW_PRE lists: majors → crypto, gold / commodities / tokenized equities → stocks, stables → fx
+    crypto: 'BTC WBTC CBBTC TBTC ETH WETH BNB XRP DOGE ADA AVAX SUI TRX TON LTC BCH XLM DOT NEAR APT ATOM UNI AAVE ONDO HYPE ZEC XMR ENA TAO RENDER RNDR INJ SEI TIA W KMNO DRIFT ORCA MNDE MSOL JITOSOL BSOL JUPSOL INF HNT',
+    stocks: 'GOLD GLDX XAUT PAXG XAU SILVER SLVX XAG OIL USOX COPPER',
+    fx: 'USDC USDT EURC PYUSD USDE USDS USD1 FDUSD DAI USDG USDY EURE GBPT JPYC XSGD',
+    memes: '' };
+  // the category of a live coin's PAIR token — the same answer on Board, Trenches and Trending
+  function catOf(t) { return DEMO ? pairInfo(t.pair).cat : liveCat(t); }   // one categorisation for Board, Trenches and Trending
+  function liveCat(t) { var L = pairLabel(t.pair); if (L === 'SOL') return 'crypto';
+    var sy = String(t.qSym || t.pair || '').replace(/^\$/, '').replace(/·.*$/, ''), SY = sy.toUpperCase();
+    for (var k in RW_PRE) for (var i = 0; i < RW_PRE[k].length; i++) { var r = RW_PRE[k][i]; if (r[0] === L || r[1] === L || r[0].toUpperCase() === SY || String(r[1]).toUpperCase() === SY || (r[3] && r[3] === t.qMint)) return k; }
+    for (var c in LIVE_CAT_X) if ((' ' + LIVE_CAT_X[c] + ' ').indexOf(' ' + SY + ' ') > -1) return c;
+    if (/^[A-Z]{1,5}x$/.test(sy)) return 'stocks';   // xStocks-style tickers (SPYx, NVDAx…)
+    if (/USD|EUR/.test(SY)) return 'fx';
+    return 'memes'; }   // anything else paired with a community token is a meme pair
   function preIcon(p, size) { if (!p[2] && API) p = [p[0], p[1], API + '/api/ticon?sym=' + encodeURIComponent(p[1])];   // the token's own logo (e.g. xStocks), served by the treid server
     return p[2] ? '<img class="coin rwp-ic" src="' + esc(p[2]) + '" alt="" data-ini="' + esc(p[0].slice(0, 2)) + '" style="width:' + size + 'px;height:' + size + 'px">' : '<span class="coin rwp-ic" style="width:' + size + 'px;height:' + size + 'px;background:#2E2E33;font-size:' + Math.round(size * .42) + 'px">' + esc(p[0].slice(0, 2)) + '</span>'; }
   function preOf(sym) { for (var t in RW_PRE) for (var i = 0; i < RW_PRE[t].length; i++) if (RW_PRE[t][i][1] === sym) return RW_PRE[t][i]; return null; }
@@ -762,7 +775,7 @@
       if (S.trustOnly && !(d.xOk || (d.devLock && lockLive(d)))) return false;   // the dev confirmed the coin's X account, or locked their bag
       var mcr = rv('mc'), pr = rv('prog'), ag = rv('age'), am = (Date.now() - d.born) / 60000;
       if (d.prog < pr[0] || d.prog > pr[1] || d.mcN < mcr[0] || d.mcN > mcr[1] || am < ag[0] || am > ag[1]) return false;
-      if (S.cat !== 'all' && (DEMO ? pairInfo(d.pair).cat : liveCat(d)) !== S.cat) return false;
+      if (S.cat !== 'all' && catOf(d) !== S.cat) return false;
       if (S.pair !== 'All' && d.pair !== S.pair && pairLabel(d.pair) !== S.pair) return false;
       return true;
     });
@@ -1364,7 +1377,7 @@
     var key = { rank: function (t) { return chgOver(t, 360) * Math.log10(t.vol * 1000 + 10); }, tax: function (t) { return Math.max(t.buy, t.sell); }, mc: function (t) { return t.mcN; }, price: function (t) { return t.mcN; }, age: function (t) { return t.born; }, near: function (t) { return t.prog < 100 ? t.prog : -1; }, tx: function (t) { return lstats(t).tx; }, vol: function (t) { return t.vol; }, tr: function (t) { return lstats(t).tr; }, c5: function (t) { return chgOver(t, 5); }, c1: function (t) { return chgOver(t, 60); }, c6: function (t) { return chgOver(t, 360); }, c24: function (t) { return chg(t); }, liq: function (t) { return t.prog; }, curve: function (t) { return t.prog; } };
     var k = key[S.lsort] || key.rank, rows = keep ? list.slice(0, 100) : list.slice().sort(function (a, b) { return (k(b) - k(a)) * (S.ldir === -1 ? 1 : -1); }).slice(0, 100);
     var pc = function (v) { return '<span class="' + (v >= 0 ? 'up' : 'down') + '">' + (Math.abs(v) >= 1000 ? (v >= 0 ? '+' : '') + Math.round(v).toLocaleString('en') + '%' : chgTxt(v)) + '</span>'; };
-    var head = '<div class="lrow2 lhead">' + LCOLS.map(function (c) { return keep ? '<span class="' + c[2] + '">' + c[1] + '</span>' : '<button class="' + c[2] + (S.lsort === c[0] ? ' on' : '') + '" data-act="lsort" data-arg="' + c[0] + '">' + c[1] + (S.lsort === c[0] ? (S.ldir === -1 ? ' ↓' : ' ↑') : '') + '</button>'; }).join('') + '</div>';
+    var head = '<div class="lrow2 lhead">' + LCOLS.map(function (c) { return keep ? '<span class="' + c[2] + '">' + c[1] + '</span>' : '<button class="' + c[2] + (S.lsort === c[0] ? ' on' : '') + '" data-act="lsort" data-arg="' + c[0] + '">' + c[1] + (S.lsort === c[0] ? ((S.ldir === -1) !== (c[0] === 'age') ? ' ↓' : ' ↑') : '') + '</button>'; }).join('') + '</div>';
     var body = rows.map(function (t, i) { var ls = lstats(t), tm = Math.max(t.buy, t.sell), rk = riskMetrics(t).some(function (m) { return m.lv === 'r'; }), liq = liqK(t);
       return '<div class="lrow2" data-act="open" data-arg="' + esc(t.tick) + '"><span class="lr-n mono">#' + (i + 1) + '</span>' +
         '<span class="lr-tok">' + avatarHTML(t, 28) + '<span class="lt-n"><b>' + esc(symOf(t)) + '</b><small>/ ' + esc(pairLabel(t.pair).replace('$', '')) + '</small><em>' + esc(t.name) + '</em>' + (rk ? '<i class="lt-flag" title="Risk flag">⚠</i>' : '') + (trapLeft(t) > 0 ? '<i class="lt-trap">🪤</i>' : '') + '</span></span>' +
@@ -1573,11 +1586,11 @@
   function bnKick() { if (!BN.raf && document.getElementById('bn-fire')) BN.raf = requestAnimationFrame(bnLoop); }
   S.tcat = 'all';
   function trendPage() {
-    var a = all().filter(function (t) { return (S.tcat === 'all' || pairInfo(t.pair).cat === S.tcat) && (S.lsort !== 'near' || t.prog < 100); });
+    var a = all().filter(function (t) { return (S.tcat === 'all' || catOf(t) === S.tcat) && (S.lsort !== 'near' || t.prog < 100); });
     var pre = [['rank', '🔥 Trending'], ['vol', 'Top volume'], ['c1', '📈 Gainers 1h'], ['age', '✨ New'], ['near', '🎓 Near graduation'], ['mc', 'Market cap']];
     return '<main class="wrap trend"><div class="tr-head"><div><span class="kicker">TOP 100</span><h1 class="tr-h">Trending</h1></div><span class="muted mono">' + Math.min(100, a.length) + ' coins · updates live</span></div>' +
       '<div class="tr-bar"><div class="seg">' + pre.map(function (x) { return '<button class="' + (S.lsort === x[0] ? 'on' : '') + '" data-act="tpreset" data-arg="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div>' +
-      '<div class="seg tr-cats">' + [['all', 'All pairs']].concat(CATS.slice(1).map(function (c) { return [c[0], c[1]]; })).map(function (c) { return '<button class="' + (S.tcat === c[0] ? 'on' : '') + '" data-act="tcat" data-arg="' + c[0] + '">' + c[1] + '</button>'; }).join('') + '</div></div>' +
+      '<div class="seg tr-cats">' + [['all', 'All pairs']].concat((DEMO ? CATS.slice(1) : RW_TABS).map(function (c) { return [c[0], c[1]]; })).map(function (c) { return '<button class="' + (S.tcat === c[0] ? 'on' : '') + '" data-act="tcat" data-arg="' + c[0] + '">' + c[1] + '</button>'; }).join('') + '</div></div>' +
       listHTML(a) + '</main>';
   }
   // ===== TRENCHES: New / Graduating / Graduated, live from /api/stream (phones: swipeable tabs) =====
@@ -1585,7 +1598,7 @@
   S.trTab = 0; S.trScroll = null;
   function trBucket(t) { return t.prog >= 100 ? 2 : t.prog >= TR_GRAD ? 1 : 0; }
   function trList(b) {
-    var l = all().filter(function (t) { if (trBucket(t) !== b) return false; var tm = Math.max(t.buy, t.sell);       if (S.trTax != null && S.trTax !== '' && S.trTax !== 'any' && tm > +S.trTax) return false; if (S.trMc && S.trMc !== 'any' && t.mcN < +S.trMc) return false; if (S.trCat && S.trCat !== 'all' && (DEMO ? pairInfo(t.pair).cat : liveCat(t)) !== S.trCat) return false; return true; });
+    var l = all().filter(function (t) { if (trBucket(t) !== b) return false; var tm = Math.max(t.buy, t.sell);       if (S.trTax != null && S.trTax !== '' && S.trTax !== 'any' && tm > +S.trTax) return false; if (S.trMc && S.trMc !== 'any' && t.mcN < +S.trMc) return false; if (S.trCat && S.trCat !== 'all' && catOf(t) !== S.trCat) return false; return true; });
     l.sort(b === 0 ? function (a, z) { return z.born - a.born; } : b === 1 ? function (a, z) { return z.prog - a.prog || z.mcN - a.mcN; } : function (a, z) { return (z._lt || 0) - (a._lt || 0) || z.mcN - a.mcN; });
     l.forEach(function (t) { t._tb = b; }); return l;
   }
@@ -1942,7 +1955,7 @@
       '<path d="' + line + ' L' + w + ' ' + h + ' L0 ' + h + ' Z" fill="url(#' + gid + ')"/><path d="' + line + '" fill="none" stroke="' + col + '" stroke-width="2.5" stroke-linejoin="round" vector-effect="non-scaling-stroke"/><circle cx="' + L[0].toFixed(1) + '" cy="' + L[1].toFixed(1) + '" r="4" fill="' + col + '"/></svg>';
   }
   function tcHTML(t, k) {
-    var c = chgOver(t, 360), tm = Math.max(t.buy, t.sell), id = esc(t.tick), sid = esc(symOf(t));
+    var c = chg(t), tm = Math.max(t.buy, t.sell), id = esc(t.tick), sid = esc(symOf(t));
     return '<div class="tc-in ar-card" role="button" tabindex="0" data-act="open" data-arg="' + id + '">' +
       '<div class="ar-bg' + (t.banner ? ' ban' : '') + (t._banLow ? ' low' : '') + '" aria-hidden="true">' + (t.banner ? '<img src="' + esc(t.banner) + '" alt="" onload="if(this.naturalWidth<this.clientWidth*Math.min(2,window.devicePixelRatio||1)*.9)this.parentNode.classList.add(\'low\')">' : avatarHTML(t, 300)) + '</div>' +
       '<div class="ar-l"><div class="ar-info"><span class="ar-k"><i class="livedot"></i>Top meme #' + (k + 1) + '</span>' +
@@ -2000,7 +2013,7 @@
   function i2Fill(fresh) {
     var h = fresh.map(i2Row), seen = {}, acts = S.trades.filter(function (x) { var t = find(x.tick); if (!t || t.archived || seen[x.sig]) return false; seen[x.sig] = 1; return true; });
     for (var i = 0; h.length < 3 && i < acts.length; i++) h.push(i2Act(acts[i]));
-    if (h.length < 2) { var st = stats(); h.push('<button class="i2-row i2-act" data-act="board"><span class="i2-plus">📈</span><span class="i2-n"><b>' + fmtK(st.vol) + ' traded · 24h</b><small>' + st.tokens + ' coin' + (st.tokens === 1 ? '' : 's') + ' live on treid</small></span><span class="i2-go">Browse →</span></button>'); }
+    if (h.length < 2) { var st = stats(); h.push('<button class="i2-row i2-act" data-act="board"><span class="i2-plus">📈</span><span class="i2-n"><b>' + fmtK(st.vol) + ' traded</b><small>' + st.tokens + ' coin' + (st.tokens === 1 ? '' : 's') + ' live on treid</small></span><span class="i2-go">Browse →</span></button>'); }
     if (h.length < 3) h.push('<button class="i2-row i2-cta" data-act="create"><span class="i2-plus">+</span><span class="i2-n"><b>Your coin here</b><small>Launch in under a minute · any pair</small></span><span class="i2-go">Launch →</span></button>');
     return h.slice(0, 3).join('');
   }
@@ -2050,9 +2063,9 @@
   // ===== sliding "trending now" strip (persistent node, moved in on every render so the slide never jumps) =====
   var TS = { el: null, key: '', x: 0, last: 0, hover: false, at: 0 };
   function tsList() { return all().filter(function (t) { return !t.archived; }).sort(function (a, b) { return chgOver(b, 360) * Math.log10(b.vol * 1000 + 10) - chgOver(a, 360) * Math.log10(a.vol * 1000 + 10); }).slice(0, 14); }
-  function tsCard(t, i) { var c = chgOver(t, 360), up = c >= 0;
+  function tsCard(t, i) { var c = chg(t), up = c >= 0;   // same % as the coin header and cards (vs 24h ago)
     return '<button class="ts-card" data-act="open" data-arg="' + esc(t.tick) + '"><span class="ts-img">' + avatarHTML(t, 240) + '</span><span class="ts-rk mono">#' + (i + 1) + '</span>' + (vampOf(t) ? '<span class="ts-vamp" title="Possible copy">' + VAMP + '</span>' : '') +
-      '<span class="ts-bot"><b class="ts-n">' + esc(t.name) + '</b><span class="ts-r"><small class="mono">$' + esc(symOf(t)) + '</small><em class="mono ' + (Math.abs(c) < 0.05 ? 'muted' : up ? 'up' : 'down') + '" title="change over the last 6 hours">' + (Math.abs(c) < 0.05 ? '' : up ? '▲ ' : '▼ ') + Math.abs(c).toFixed(1) + '% <small>6h</small></em></span>' +
+      '<span class="ts-bot"><b class="ts-n">' + esc(t.name) + '</b><span class="ts-r"><small class="mono">$' + esc(symOf(t)) + '</small><em class="mono ' + (Math.abs(c) < 0.05 ? 'muted' : up ? 'up' : 'down') + '" title="change over the last 24 hours">' + (Math.abs(c) < 0.05 ? '' : up ? '▲ ' : '▼ ') + Math.abs(c).toFixed(1) + '% <small>24h</small></em></span>' +
       '<span class="ts-r"><b class="mono ts-mc">' + fmtK(t.mcN) + '</b>' + lbSpark(t, 70, 22, 'ts' + i) + '</span><span class="ts-cv"><i style="width:' + Math.min(100, t.prog).toFixed(0) + '%"></i></span></span></button>'; }
   function tsMount() {
     var slot = document.getElementById('ts-slot'); if (!slot) return;
@@ -2376,7 +2389,7 @@
     if (S.tpMaker) c.push(['maker', 'Trader ' + short(S.tpMaker)]);
     ['usd', 'sol', 'tok'].forEach(function (k) { var F = S.tpF[k]; if (!F) return; var u = k === 'usd' ? function (v) { return '$' + fmtNum(v); } : k === 'sol' ? function (v) { return v + ' SOL'; } : function (v) { return fmtNum(v); }, n = k === 'usd' ? 'USD' : k === 'sol' ? 'SOL' : sid();
       c.push([k, n + ' ' + (F.min != null && F.max != null ? u(F.min) + '–' + u(F.max) : F.min != null ? '> ' + u(F.min) : '< ' + u(F.max))]); });
-    if (S.tpSort) c.push(['sort', 'Sorted by ' + { t: 'age', usd: 'USD', sol: 'SOL', tok: 'amount', px: 'price' }[S.tpSort.k] + (S.tpSort.d > 0 ? ' ↑' : ' ↓')]);
+    if (S.tpSort) c.push(['sort', 'Sorted by ' + { t: 'age', usd: 'USD', sol: 'SOL', tok: 'amount', px: 'price' }[S.tpSort.k] + ((S.tpSort.d > 0) !== (S.tpSort.k === 't') ? ' ↑' : ' ↓')]);
     return c.length ? '<div class="tp-chips">' + c.map(function (x) { return '<button class="chip on" data-act="tpChipX" data-arg="' + x[0] + '">' + esc(x[1]) + ' ✕</button>'; }).join('') + (c.length > 1 ? '<button class="link" data-act="tpChipX" data-arg="all">Clear all</button>' : '') + '</div>' : ''; }
   function timeTxt(ts) { if (!S.absTime) return ago(ts); var d = new Date(ts); return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2) + ':' + ('0' + d.getSeconds()).slice(-2); }
   function tradeRow(tr, t, enter) {
@@ -3129,9 +3142,9 @@
       '<div class="tp-key">' + (trapLeft(t) > 0 ? trapBox(t, 'head') : '') + '<div class="tax" style="background:' + taxBg(tmax) + ';padding:9px 14px"><small>TAX</small><b style="font-size:24px">' + tmax + '%</b><small style="letter-spacing:.04em;font-size:9px">BUY & SELL</small>' + (splitOf(t) ? splitBar(splitOf(t), 'mini') : '') + '</div>' +
         (tmax > 0 || (t.live && t.qMint) ? '<button class="pairbig" data-act="pairOpen" data-arg="' + esc(t.pair) + '">' + coinHTML(t.pair, 42) + '<div><small>PAIRED WITH</small><b>' + esc(pairLabel(t.pair)) + '</b><span>' + esc(pairInfo(t.pair).name) + '</span></div></button>' : '<div class="pairbig plain">' + coinHTML('SOL', 42) + '<div><small>NO PAIR</small><b>Plain coin</b><span>0% tax · trades in SOL</span></div></div>') + (function () { var r = rwInfo(t, 42); return r ? '<div class="pairbig rwbig" title="Holders get ' + splitOf(t).h + '% of the tax, paid in ' + esc(r.sym) + '">' + r.ic + '<div><small>HOLDERS PAID IN</small><b>' + esc(r.sym) + '</b><span>' + splitOf(t).h + '% of the tax' + (t.rw && t.rw !== 'coin' ? ' · auto-swapped' : ' · nothing sold') + '</span></div></div>' : ''; })() + '</div></section>';
     var vampWarn = '';   // no big banner: the small 🧛 badge next to the name is enough (it explains itself on hover)
-    var kpiH = '<div class="tb-kpi">' + [['Market cap', '<span data-mc="' + id + '" data-v="' + fmtK(t.mcN) + '">' + fmtK(t.mcN) + '</span><span class="chgpill ' + (c >= 0 ? 'up' : 'down') + '" data-chg="' + id + '">' + chgTxt(c) + '</span>', 'big'], ['24h vol', fmtK(t.vol)], ['Liquidity', fmtK(liqK(t))], ['Holders', fmtNum(t.holders)], ['ATH', fmtK(ath)]].map(function (r) { return '<div class="' + (r[2] || '') + '"><small>' + r[0] + '</small><b class="mono">' + r[1] + '</b></div>'; }).join('') + '</div>';
+    var kpiH = '<div class="tb-kpi">' + [['Market cap', '<span data-mc="' + id + '" data-v="' + fmtK(t.mcN) + '">' + fmtK(t.mcN) + '</span><span class="chgpill ' + (c >= 0 ? 'up' : 'down') + '" data-chg="' + id + '">' + chgTxt(c) + '</span>', 'big'], ['Vol', fmtK(t.vol)], ['Liquidity', fmtK(liqK(t))], ['Holders', fmtNum(t.holders)], ['ATH', fmtK(ath)]].map(function (r) { return '<div class="' + (r[2] || '') + '"><small>' + r[0] + '</small><b class="mono">' + r[1] + '</b></div>'; }).join('') + '</div>';
     head = head.replace('<div class="tp-key">', kpiH + '<div class="tp-key">');   // MC / volume / liquidity / holders / ATH inside the banner on a computer (like pump.fun)
-    var kstats = '<section class="card-s kst">' + [['Market cap', '<span data-mc="' + id + '" data-v="' + fmtK(t.mcN) + '">' + fmtK(t.mcN) + '</span> <span class="chgpill ' + (c >= 0 ? 'up' : 'down') + '" data-chg="' + id + '">' + chgTxt(c) + '</span>', 'big'], ['24h vol', fmtK(t.vol)], ['Liquidity', fmtK(liqK(t))], ['Holders', fmtNum(t.holders)], ['ATH', fmtK(ath)]].map(function (r) { return '<div class="' + (r[2] || '') + '"><small>' + r[0] + '</small><b class="mono">' + r[1] + '</b></div>'; }).join('') + '</section>';
+    var kstats = '<section class="card-s kst">' + [['Market cap', '<span data-mc="' + id + '" data-v="' + fmtK(t.mcN) + '">' + fmtK(t.mcN) + '</span> <span class="chgpill ' + (c >= 0 ? 'up' : 'down') + '" data-chg="' + id + '">' + chgTxt(c) + '</span>', 'big'], ['Vol', fmtK(t.vol)], ['Liquidity', fmtK(liqK(t))], ['Holders', fmtNum(t.holders)], ['ATH', fmtK(ath)]].map(function (r) { return '<div class="' + (r[2] || '') + '"><small>' + r[0] + '</small><b class="mono">' + r[1] + '</b></div>'; }).join('') + '</section>';
     var bp = nb + ns ? nb / (nb + ns) * 100 : 50, vp = vb + vs ? vb / (vb + vs) * 100 : 50, offAth = (1 - t.mcN / ath) * 100;
     var activity = '<section class="card-s panel actbox">' +
       (function () {
@@ -3165,7 +3178,7 @@
       body = '<div class="tfilters"><div class="seg">' + [['all', 'All'], ['buy', 'Buys'], ['sell', 'Sells'], ['whale', 'Whales'], ['mine', 'Mine']].map(function (f) { return '<button class="' + (S.tpFilter === f[0] ? 'on' : '') + '" data-act="tpf" data-arg="' + f[0] + '">' + f[1] + '</button>'; }).join('') + '</div>' +
         tpChips() +
         '<span class="paused" id="tp-paused" style="display:none" data-act="resume">Paused · <b id="tp-qn">0</b> new trades — click to resume</span></div>' +
-        '<div class="tbl" id="tp-tbl"><div class="trow h"><span class="th"><button class="th-l" data-act="tpSort" data-arg="t" title="Sort">' + (S.absTime ? 'Time' : 'Age') + (S.tpSort && S.tpSort.k === 't' ? (S.tpSort.d > 0 ? ' ↑' : ' ↓') : '') + '</button><button class="th-f" data-act="abs" title="Switch between age and clock time">⇄</button></span>' +
+        '<div class="tbl" id="tp-tbl"><div class="trow h"><span class="th"><button class="th-l" data-act="tpSort" data-arg="t" title="Sort">' + (S.absTime ? 'Time' : 'Age') + (S.tpSort && S.tpSort.k === 't' ? ((S.tpSort.d > 0) !== !S.absTime ? ' ↑' : ' ↓') : '') + '</button><button class="th-f" data-act="abs" title="Switch between age and clock time">⇄</button></span>' +
           tpHead('type', 'Type', { sort: false }) + tpHead('usd', 'USD', { r: 1 }) + tpHead('sol', 'SOL', { r: 1 }) + tpHead('tok', '$' + sid, { r: 1 }) + tpHead('px', 'Price', { r: 1, filter: false }) + tpHead('maker', 'Trader', { r: 1, sort: false }) + '<span class="r">Txn</span></div>' +
         '<div id="tp-trades">' + (rows.length ? rows.map(function (x) { return tradeRow(x, t); }).join('') : '<div class="muted" style="padding:24px;text-align:center">No trades match these filters</div>') + '</div></div>' + tpFltModal(t);
     } else if (S.tpTab === 'thread') {
@@ -3460,11 +3473,11 @@
     editorial: function (t, P, id) {
       var d = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
       return '<div class="ed-mast"><div class="ed-rule"><span>' + d + '</span><span>Solana edition</span><span>' + P.soc + '</span></div><h1 class="ed-title">' + esc(t.name) + '</h1><div class="ed-rule b"><span class="mono">$' + id + '</span><span>Market cap ' + P.mc + ' <em class="' + (P.up ? 'up' : 'down') + '">' + P.chg + '</em></span><span>' + P.buy('Buy $' + id, 'sm') + '</span></div></div>' +
-        csMarquee(['$' + id + ' ' + P.mc, 'Holders ' + P.hold, 'Vol 24h ' + P.vol, 'Tax ' + P.tax, P.grad ? 'Graduated' : 'Curve ' + P.prog.toFixed(0) + '%', 'Paired with ' + esc(pairLabel(t.pair))]) +
+        csMarquee(['$' + id + ' ' + P.mc, 'Holders ' + P.hold, 'Vol ' + P.vol, 'Tax ' + P.tax, P.grad ? 'Graduated' : 'Curve ' + P.prog.toFixed(0) + '%', 'Paired with ' + esc(pairLabel(t.pair))]) +
         '<section class="ed-lead"><div class="ed-story"><span class="ed-kicker">The story</span><h2>' + (P.desc ? esc(t.desc.split(/[.!?]/)[0]).slice(0, 90) : 'A new coin takes the stage') + '</h2>' + (P.desc ? '<p class="ed-drop">' + P.desc + '</p>' : '<p class="ed-drop">$' + id + ' launched on treid, paired with ' + esc(pairLabel(t.pair)) + '. Every trade is on-chain and in the open.</p>') +
           '<div class="cs-ctas">' + P.buy('Buy $' + id + ' on treid') + P.ca() + '</div></div>' +
           '<figure class="ed-fig"><div class="ed-img">' + (t.banner ? '<img src="' + esc(t.banner) + '" alt="">' : '') + '<span>' + P.av(220) + '</span></div><figcaption>Fig. 1 — $' + id + ', created ' + ago(t.born) + ' ago</figcaption></figure></section>' + P.warn +
-        '<section class="ed-cols"><article><span class="ed-kicker">Markets</span><b class="mono">' + P.mc + '</b><p>Market cap, ' + P.chg + ' over 24 hours on ' + P.vol + ' of volume.</p></article><article><span class="ed-kicker">Community</span><b class="mono">' + P.hold + '</b><p>Wallets holding $' + id + ' right now, read straight from the chain.</p></article><article><span class="ed-kicker">Economics</span><b class="mono">' + P.tax + '</b><p>Tax on every trade — ' + P.split + '.</p></article></section>' +
+        '<section class="ed-cols"><article><span class="ed-kicker">Markets</span><b class="mono">' + P.mc + '</b><p>Market cap, ' + P.chg + ' over 24 hours · ' + P.vol + ' total volume.</p></article><article><span class="ed-kicker">Community</span><b class="mono">' + P.hold + '</b><p>Wallets holding $' + id + ' right now, read straight from the chain.</p></article><article><span class="ed-kicker">Economics</span><b class="mono">' + P.tax + '</b><p>Tax on every trade — ' + P.split + '.</p></article></section>' +
         '<figure class="ed-chart">' + P.chart(2) + '<figcaption>Fig. 2 — Price, last 24 hours. <button class="link" data-act="open" data-arg="' + id + '">Open the live chart →</button></figcaption></figure>' + P.info() + P.safe() + P.how() + P.foot;
     },
     maison: function (t, P, id) {
@@ -3478,7 +3491,7 @@
     },
     cinema: function (t, P, id) {
       return P.top() + '<section class="cn-hero"><div class="cn-bg" aria-hidden="true">' + (t.banner ? '<img src="' + esc(t.banner) + '" alt="">' : P.av(900)) + '</div><div class="cn-in"><span class="cn-av">' + P.av(110) + '</span><span class="cn-tag mono">Now trading · $' + id + '</span><h1>' + esc(t.name) + '</h1>' + (P.desc ? '<p>' + P.desc + '</p>' : '') + '<div class="cs-ctas">' + P.buy('Buy $' + id) + P.ca() + '</div></div>' +
-        '<div class="cn-bar"><div><small>Market cap</small><b class="mono">' + P.mc + '</b><em class="' + (P.up ? 'up' : 'down') + '">' + P.chg + '</em></div><div><small>Holders</small><b class="mono">' + P.hold + '</b></div><div><small>Volume 24h</small><b class="mono">' + P.vol + '</b></div><div><small>Tax</small><b class="mono">' + P.tax + '</b></div><div><small>' + (P.grad ? 'Status' : 'Curve') + '</small><b class="mono">' + (P.grad ? 'Graduated' : P.prog.toFixed(0) + '%') + '</b></div></div></section>' + P.warn +
+        '<div class="cn-bar"><div><small>Market cap</small><b class="mono">' + P.mc + '</b><em class="' + (P.up ? 'up' : 'down') + '">' + P.chg + '</em></div><div><small>Holders</small><b class="mono">' + P.hold + '</b></div><div><small>Volume</small><b class="mono">' + P.vol + '</b></div><div><small>Tax</small><b class="mono">' + P.tax + '</b></div><div><small>' + (P.grad ? 'Status' : 'Curve') + '</small><b class="mono">' + (P.grad ? 'Graduated' : P.prog.toFixed(0) + '%') + '</b></div></div></section>' + P.warn +
         '<section class="cs-chart">' + P.chart() + '<button class="cs-chartbtn" data-act="open" data-arg="' + id + '">Open live chart →</button></section>' + P.info() + P.safe() + P.how() + P.foot;
     },
     split: function (t, P, id) {
@@ -3491,7 +3504,7 @@
       var ln = function (k, v, cls) { return '<div class="tm-l"><span>' + k + '</span><i></i><b class="' + (cls || '') + '">' + v + '</b></div>'; };
       return '<div class="tm"><aside class="tm-side"><span class="tm-av">' + P.av(120) + '</span><h1>' + esc(t.name) + '</h1><span class="mono tm-tk">$' + id + '</span>' + (P.desc ? '<p>' + P.desc + '</p>' : '') + P.buy('./buy $' + id) + P.ca() + (P.soc ? '<div class="tm-soc">' + P.soc + '</div>' : '') + '</aside>' +
         '<main class="tm-main"><div class="tm-win"><div class="tm-bar"><i></i><i></i><i></i><span>treid — ' + esc(t.tick.toLowerCase()) + ' — live</span></div><div class="tm-body">' +
-          '<div class="tm-cmd">$ treid stats --coin ' + id + '</div>' + ln('market_cap', P.mc) + ln('change_24h', P.chg, P.up ? 'up' : 'down') + ln('holders', P.hold) + ln('volume_24h', P.vol) + ln('tax', P.tax + ' (' + P.split + ')') + ln('curve', P.grad ? 'GRADUATED' : P.prog.toFixed(0) + '% ' + '█'.repeat(Math.round(P.prog / 10)) + '░'.repeat(10 - Math.round(P.prog / 10))) + ln('pair', esc(pairLabel(t.pair))) +
+          '<div class="tm-cmd">$ treid stats --coin ' + id + '</div>' + ln('market_cap', P.mc) + ln('change_24h', P.chg, P.up ? 'up' : 'down') + ln('holders', P.hold) + ln('volume', P.vol) + ln('tax', P.tax + ' (' + P.split + ')') + ln('curve', P.grad ? 'GRADUATED' : P.prog.toFixed(0) + '% ' + '█'.repeat(Math.round(P.prog / 10)) + '░'.repeat(10 - Math.round(P.prog / 10))) + ln('pair', esc(pairLabel(t.pair))) +
           '<div class="tm-cmd">$ treid chart --24h</div><div class="tm-chart">' + P.chart(2) + '</div>' +
           '<div class="tm-cmd">$ treid audit ' + id + '</div>' + riskMetrics(t).map(function (m) { return '<div class="tm-l"><span>' + (m.lv === 'g' ? '[ OK ]' : m.lv === 'y' ? '[WARN]' : '[RISK]') + ' ' + m.lab.toLowerCase().replace(/\s+/g, '_') + '</span><i></i><b class="lv-' + m.lv + '">' + m.val + '</b></div>'; }).join('') +
           '<div class="tm-cmd">$ <span class="tm-cur"></span></div></div></div>' + P.warn + P.how() + '</main></div>' + P.foot;
@@ -5857,6 +5870,7 @@
       if (!t.img) { try { var cimg = safeImg(localStorage.getItem('dl.img.' + c.mint)); if (cimg) t.img = cimg; } catch (e) {} }
       var viaApi = function () { return API ? apiGet('/api/meta/' + c.mint) : Promise.reject(); };
       (trustedMeta(c.uri) ? fetch(c.uri.split('?')[0]).then(function (r) { if (!r.ok) throw new Error('meta ' + r.status); return r.json(); }).catch(viaApi) : viaApi()).then(function (m) { var ch = false; if (m && safeImg(m.image)) { try { localStorage.setItem('dl.img.' + c.mint, safeImg(m.image)); } catch (e) {} } if (m && safeImg(m.image) && !t.img) { t.img = safeImg(m.image); ch = true; } if (m && m.description && !t.desc) { t.desc = m.description; ch = true; } if (m && safeImg(m.banner) && !t.banner) { t.banner = API ? API + '/api/img/' + c.mint + '?b=1' : safeImg(m.banner); ch = true; } if (ch) render(); }).catch(function () { setTimeout(function () { t._uri = 0; }, 15000); }); }
+    var spR = splitOf(t); t.rewards = !!(spR && spR.h > 0);   // pays holder rewards: taxed, with a holder share
     return t;
   }
   function liveLoad(t) {
