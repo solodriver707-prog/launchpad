@@ -12,6 +12,7 @@ import http from 'node:http';
 import zlib from 'node:zlib';
 import net from 'node:net';
 import dns from 'node:dns/promises';
+import { timingSafeEqual, createHash } from 'node:crypto';
 import { opsKeypair, startOps, treidCfg, parseSplit } from './ops.mjs';
 import { startRewards, RULES as REW_RULES } from './rewards.mjs';
 import { startCallouts } from './callouts.mjs';
@@ -425,12 +426,35 @@ function holdersCached(mint) { const h = hCache.get(mint); if (h?.list && Date.n
 // simple in-memory rate limiter (per key, n hits per window)
 // short response cache for the heavier read endpoints (a burst of visitors costs one computation, not hundreds of queries each)
 const rcache = new Map(); function cached(key, ms, fn) { const h = rcache.get(key); if (h && Date.now() - h.at < ms) return h.v; const v = fn(); rcache.set(key, { at: Date.now(), v }); if (rcache.size > 3000) { const now = Date.now(); for (const [k2, x] of rcache) if (now - x.at > 6e4) rcache.delete(k2); if (rcache.size > 3000) rcache.clear(); } return v; }
-const hits = new Map(); function rate(k, n, ms) { const now = Date.now(), a = (hits.get(k) || []).filter((t) => now - t < ms); if (a.length >= n) { hits.set(k, a); return false; } a.push(now); hits.set(k, a);
-  if (hits.size > 50000) for (const [key, v] of hits) if (now - v[v.length - 1] > 36e5) hits.delete(key);   // evict by age, never wipe all limits
+// per-key sliding windows; the map is an LRU (a touched key moves to the end) capped at HITS_MAX keys, oldest evicted first — O(1) per call
+const hits = new Map(), HITS_MAX = 50000;
+function rate(k, n, ms) { const now = Date.now(); let a = hits.get(k); if (a) { hits.delete(k); let i = 0; while (i < a.length && now - a[i] >= ms) i++; if (i) a = a.slice(i); } else a = [];
+  if (a.length >= n) { hits.set(k, a); return false; } a.push(now); hits.set(k, a);
+  while (hits.size > HITS_MAX) hits.delete(hits.keys().next().value);
   return true; }
-// Render sits behind Cloudflare: X-Forwarded-For = "<anything the client sent>, <client IP added by Cloudflare>, <Cloudflare edge added by Render>".
-// So the client is the SECOND-TO-LAST entry (checked on production via /api/whoami); the rightmost is a shared Cloudflare edge address.
-const ip = (req) => { const x = String(req.headers['x-forwarded-for'] || '').split(',').map((v) => v.trim()).filter(Boolean); return x.length >= 2 ? x[x.length - 2] : x.length ? x[0] : String(req.socket.remoteAddress || ''); };
+// ---- client IP ----
+// Production path: browser → Cloudflare → Render → this server. Render appends the address that connected to it as the LAST
+// X-Forwarded-For entry; when that is a Cloudflare edge, Cloudflare's own CF-Connecting-IP is the real client.
+// The *.onrender.com origin is also reachable directly (no Cloudflare): then the last XFF entry IS the client and anything
+// before it was written by the client (never trusted).
+// ORIGIN_SECRET (recommended): a long random string. In Cloudflare → Rules → Transform Rules → "Modify Request Header",
+// add a rule for the API hostname that SETS header `x-origin-secret: <ORIGIN_SECRET>`. Requests without it (i.e. that
+// bypassed Cloudflare) are refused, except /api/health for Render's health check. Without ORIGIN_SECRET, "came via Cloudflare"
+// is decided by the last XFF hop being inside Cloudflare's published ranges (https://www.cloudflare.com/ips/).
+const ORIGIN_SECRET = process.env.ORIGIN_SECRET || '';
+if (ORIGIN_SECRET && ORIGIN_SECRET.length < 24) console.error('!! ORIGIN_SECRET is shorter than 24 characters — use a long random value');
+const CF_NETS = new net.BlockList();
+for (const c of ['173.245.48.0/20', '103.21.244.0/22', '103.22.200.0/22', '103.31.4.0/22', '141.101.64.0/18', '108.162.192.0/18', '190.93.240.0/20', '188.114.96.0/20', '197.234.240.0/22', '198.41.128.0/17', '162.158.0.0/15', '104.16.0.0/13', '104.24.0.0/14', '172.64.0.0/13', '131.0.72.0/22']) { const [a, b] = c.split('/'); CF_NETS.addSubnet(a, +b, 'ipv4'); }
+for (const c of ['2400:cb00::/32', '2606:4700::/32', '2803:f800::/32', '2405:b500::/32', '2405:8100::/32', '2a06:98c0::/29', '2c0f:f248::/32']) { const [a, b] = c.split('/'); CF_NETS.addSubnet(a, +b, 'ipv6'); }
+const normIp = (a) => { a = String(a || '').trim(); if (a.toLowerCase().startsWith('::ffff:') && net.isIPv4(a.slice(7))) a = a.slice(7); return net.isIP(a) ? a : ''; };
+const inCf = (a) => { a = normIp(a); return !!a && CF_NETS.check(a, net.isIPv4(a) ? 'ipv4' : 'ipv6'); };
+function originOk(req) { if (!ORIGIN_SECRET) return true; const g = Buffer.from(String(req.headers['x-origin-secret'] || '')), w = Buffer.from(ORIGIN_SECRET); return g.length === w.length && timingSafeEqual(g, w); }
+const xffOf = (req) => String(req.headers['x-forwarded-for'] || '').split(',').map((v) => v.trim()).filter(Boolean).slice(-2);   // never more than the last two hops
+function viaCf(req) { if (ORIGIN_SECRET) return originOk(req); const x = xffOf(req); return inCf(x.length ? x[x.length - 1] : req.socket.remoteAddress); }
+const ip = (req) => { if (req._ip) return req._ip; const x = xffOf(req), cf = viaCf(req);
+  let v = cf ? normIp(req.headers['cf-connecting-ip']) || normIp(x.length >= 2 ? x[0] : '') : '';   // via Cloudflare: its header, else the hop Cloudflare added
+  if (!v) v = normIp(x.length ? x[x.length - 1] : '') || normIp(req.socket.remoteAddress) || 'unknown';   // direct: the address that connected to Render
+  return (req._ip = v); };
 function liveHolders(mint, refresh = true) { const h = hCache.get(mint); if (refresh && (!h || Date.now() - h.ts > 120e3) && holderSlots()) { if (!h?.busy) { const e = h || { ts: 0, list: null }; e.busy = true; hCache.set(mint, e); hRun++; holders(mint).then((l) => { hCache.set(mint, { ts: Date.now(), list: l }); }).catch(() => { e.busy = false; e.ts = Date.now() - 60e3; }).finally(() => { hRun--; }); } } return h?.list || null; }
 let hRun = 0; const holderSlots = () => hRun < 3;   // at most 3 holder scans at a time (each is a getProgramAccounts)
 // a creator's track record, from the indexed trades of each coin they launched (never guessed):
@@ -536,6 +560,7 @@ async function handleReq(req, res) {
     if (o && o.__gz) { res.writeHead(st, { 'content-type': 'application/json', 'access-control-allow-origin': '*', 'cache-control': 'no-store', ...(gz ? { 'content-encoding': 'gzip', vary: 'Accept-Encoding' } : {}) }); return res.end(gz ? o.__gz : o.raw); }
     if (gz && body.length > 4096) { res.writeHead(st, { 'content-type': 'application/json', 'access-control-allow-origin': '*', 'cache-control': 'no-store', 'content-encoding': 'gzip', vary: 'Accept-Encoding' }); return res.end(zlib.gzipSync(body, { level: 6 })); }
     res.writeHead(st, { 'content-type': 'application/json', 'access-control-allow-origin': '*', 'cache-control': 'no-store' }); res.end(body); };
+  if (!originOk(req) && !(!p.length || p[1] === 'health')) { res.writeHead(403, { 'content-type': 'application/json' }); return res.end('{"error":"use the public API address"}'); }   // bypassed Cloudflare (ORIGIN_SECRET set)
   if (req.method === 'OPTIONS') { res.writeHead(204, { 'access-control-allow-origin': '*', 'access-control-allow-headers': 'authorization, *', 'access-control-allow-methods': 'GET,POST' }); return res.end(); }
   // coin metadata (image / description) posted by the site at launch — first write wins. TODO mainnet: pin to IPFS instead.
   if (p[1] === 'upload' && req.method === 'POST') {   // before launch: pin image(s) + metadata JSON to IPFS, return the permanent URI
