@@ -5,7 +5,8 @@
 //   · spare SOL → swept to the treasury (never what's owed to creators mid-payout)
 import { Keypair, PublicKey, TransactionInstruction, SystemProgram, VersionedTransaction, TransactionMessage } from '@solana/web3.js';
 import { TOKEN_2022_PROGRAM_ID, unpackAccount, getTransferFeeAmount, getMint, getTransferFeeConfig, getAssociatedTokenAddressSync, createAssociatedTokenAccountIdempotentInstruction,
-  createTransferCheckedInstruction, createBurnCheckedInstruction, createCloseAccountInstruction, createWithdrawWithheldTokensFromAccountsInstruction, createWithdrawWithheldTokensFromMintInstruction, getAccount } from '@solana/spl-token';
+  createTransferCheckedInstruction, createBurnCheckedInstruction, createCloseAccountInstruction, createWithdrawWithheldTokensFromAccountsInstruction, createWithdrawWithheldTokensFromMintInstruction, getAccount,
+  getExtensionTypes, ExtensionType, getTransferHook, unpackMint, calculateFee, TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import bs58 from 'bs58';
 import BN from 'bn.js';
 import { createHash } from 'node:crypto';
@@ -54,6 +55,24 @@ const parseSplit = (uri) => { let pair = false, rw = null; try { const u = new U
     if (s) { const p = s.split('.').map(Number); if (p.length === 3 && p.every((x) => Number.isInteger(x) && x >= 0 && x <= 100) && p[0] + p[1] + p[2] === 100) { const cap = u.searchParams.get('dc') === '1' ? 100 : 50, d = Math.min(cap, p[2]); return { h: p[0], b: p[1] + p[2] - d, d, pair, rw }; } /* dev share: up to 100% for coins launched with dc=1 (the creator chose it, shown on the coin); older coins keep the 50% cap they launched with (the rest is burned) */ } } catch {} return { h: 70, b: 20, d: 10, pair, rw }; };
 
 export { parseSplit };
+// a third reward token (r=<mint>) gets the same safety bar as a pair token, stricter: holders must receive exactly what ops sends, and nobody
+// may be able to freeze, claw back or tax it. Returns null when it's fine, else the reason.
+const RW_FREEZE_OK = new Set(['EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB', ...(process.env.REWARD_FREEZE_OK || '').split(',').map((x) => x.trim()).filter(Boolean)]);   // USDC, USDT (+ env allowlist): stables carry a freeze authority
+const RW_EXT_OK = new Set([ExtensionType.MetadataPointer, ExtensionType.TokenMetadata, ExtensionType.GroupPointer, ExtensionType.TokenGroup, ExtensionType.GroupMemberPointer, ExtensionType.TokenGroupMember]);
+export function rewardMintIssue(mi, prog, addr) {
+  const p = prog?.toBase58?.() ?? String(prog);
+  if (p !== TOKEN_PROGRAM_ID.toBase58() && p !== TOKEN_2022_PROGRAM_ID.toBase58()) return 'not a token mint';
+  if (!mi || !mi.isInitialized) return 'mint not initialized';
+  if (mi.freezeAuthority && !RW_FREEZE_OK.has(addr)) return 'has a freeze authority';
+  if (p !== TOKEN_2022_PROGRAM_ID.toBase58()) return null;
+  for (const e of getExtensionTypes(mi.tlvData)) {
+    if (RW_EXT_OK.has(e)) continue;
+    if (e === ExtensionType.TransferFeeConfig) { const f = getTransferFeeConfig(mi); if (f && (f.olderTransferFee.transferFeeBasisPoints > 0 || f.newerTransferFee.transferFeeBasisPoints > 0)) return 'has a transfer fee'; if (f?.transferFeeConfigAuthority && !f.transferFeeConfigAuthority.equals(PublicKey.default)) return 'its transfer fee can be turned on'; continue; }
+    if (e === ExtensionType.TransferHook) { const h = getTransferHook(mi); if (h && (!h.programId.equals(PublicKey.default) || (h.authority && !h.authority.equals(PublicKey.default)))) return 'has a transfer hook'; continue; }   // an empty, locked hook runs nothing
+    return e === ExtensionType.PermanentDelegate ? 'has a permanent delegate' : 'unsupported token extension ' + (ExtensionType[e] || e);
+  }
+  return null;
+}
 // the withheld-tax accounts worth a withdraw instruction: biggest first, until they hold `frac` of all withheld tax (the dust tail is swept
 // at most once a day — each 24 accounts cost a transaction)
 export function pickWithheld(list, amt, frac = 0.95) {
@@ -69,6 +88,8 @@ export function startOps({ conn, dbc, ops, treasury, q, q1, run, mainnet = false
   // several receipt rows of ONE transaction: all or none (a half-written receipt would make the ledger say part of it never happened)
   const recMany = (sig, rows) => { try { run('BEGIN'); rows.forEach(([i, mint, kind, amt, extra = null]) => run('INSERT OR IGNORE INTO rlog(sig,i,mint,kind,lamports,ts,extra) VALUES(?,?,?,?,?,?,?)', sig, i, mint, kind, Number(amt), Date.now(), extra)); run('COMMIT'); }
     catch (e) { try { run('ROLLBACK'); } catch {} halt(e.message); throw e; } };
+  const rewardMintCheck = async (rw, c) => { if (rw === WSOL) return null; if (rw === c.mint || (TREID && rw === TREID)) return 'reward token is the coin itself / $TREID';
+    const ai = await conn.getAccountInfo(new PublicKey(rw)); if (!ai) return 'reward token not found'; let mi; try { mi = unpackMint(new PublicKey(rw), ai, ai.owner); } catch { return 'not a token mint'; } return rewardMintIssue(mi, ai.owner, rw); };
   // a transaction that may have landed but whose receipt we couldn't read: stop, and restart the server so the startup ledger
   // rebuild (from our on-chain memos) records it — retrying blindly could pay or swap the same amount twice
   const unknown = (where) => { halt('unknown outcome: ' + where); log('!! ops stopped —', where, '— restarting so the ledger rebuild settles it'); setTimeout(() => process.exit(1), 20e3); };
@@ -138,6 +159,7 @@ export function startOps({ conn, dbc, ops, treasury, q, q1, run, mainnet = false
   // a third reward token: the pair-token proceeds are swapped through Jupiter (mainnet), with our receipt memo inside the same transaction
   async function convertTo(c, rw) {
     if (!mainnet) throw new Error('reward-token swaps need Jupiter (mainnet)'); if (!(await rewardOk(rw))) throw new Error('reward token not allowed');
+    { const bad = await rewardMintCheck(rw, c); if (bad) throw new Error('reward token refused: ' + bad); }
     const amt = pendingPair(c.mint), inM = qmOf(c).toBase58(); if (amt <= 0) return 0;
     const qr = await (await fetchT(`${JUP}/swap/v1/quote?inputMint=${inM}&outputMint=${rw}&amount=${amt}&slippageBps=300&maxAccounts=40`)).json();
     if (!qr?.outAmount || qr.outputMint !== rw || qr.inputMint !== inM || String(qr.inAmount) !== String(amt)) throw new Error('no route');
@@ -182,6 +204,7 @@ export function startOps({ conn, dbc, ops, treasury, q, q1, run, mainnet = false
   // pay pending pair-token rewards pro rata to the holder list (SOL straight to wallets; tokens only into accounts that already exist)
   async function payQuote(c, hs, px, rw = null) {   // rw: pay the third reward token instead of the pair token
     let left = BigInt(rw ? pendingRw(c.mint) : pendingQ(c.mint)); if (left <= 0n || !hs.length) return { paid: 0n, n: 0 };
+    if (rw) { const bad = await rewardMintCheck(rw, c); if (bad) throw new Error('reward token refused: ' + bad + ' — not paid'); }   // what was bought stays in ops
     const QM = rw ? new PublicKey(rw) : qmOf(c), sol = QM.equals(new PublicKey(WSOL)), qai = sol ? null : await conn.getAccountInfo(QM), qprog = qai ? qai.owner : null;
     const qd = sol ? 9 : rw ? (await getMint(conn, QM, 'confirmed', qprog)).decimals : (c.quote_dec ?? 9);
     const qusd = rw ? (quoteUsd(c) || 0) * (sumK(c.mint, 'taxconv') / 10 ** (c.quote_dec ?? 9)) / Math.max(1e-18, sumK(c.mint, 'taxrw') / 10 ** qd) : (quoteUsd(c) || 0);   // reward price = what we paid for it
@@ -273,7 +296,7 @@ export function startOps({ conn, dbc, ops, treasury, q, q1, run, mainnet = false
     if (inMint > 0n) await send([createWithdrawWithheldTokensFromMintInstruction(mint, opsAta, ops.publicKey, [], TOKEN_2022_PROGRAM_ID)]);
     const got = (await getAccount(conn, opsAta, 'confirmed', TOKEN_2022_PROGRAM_ID)).amount; if (got <= 0n) return null;   // the WHOLE balance: harvest + anything stranded earlier
     const f0 = (x) => (Number(x) / 10 ** DEC).toFixed(0), sp = parseSplit(c.uri);
-    const rwT = sp.rw && sp.rw !== qmOf(c).toBase58() ? sp.rw : null, inPair = sp.pair || !!sp.rw;   // rwT: a third token (not the pair)
+    const rwSelf = !!sp.rw && (sp.rw === c.mint || (!!TREID && sp.rw === TREID)), rwT = sp.rw && !rwSelf && sp.rw !== qmOf(c).toBase58() ? sp.rw : null, inPair = sp.pair || (!!sp.rw && !rwSelf);   // rwT: a third token (not the pair) · r=<the coin> or r=<$TREID>: paid in the coin
     if (inPair && (pendingQ(c.mint) > 0 || (rwT && pendingRw(c.mint) > 0))) { const hl = await holderList(c);   // leftovers from an earlier round first
       if (rwT && pendingRw(c.mint) > 0) await payQuote(c, hl, px, rwT).catch(() => {}); if (!rwT && pendingQ(c.mint) > 0) await payQuote(c, hl, px).catch(() => {}); }
     const net = (l) => l.map((x) => ({ ...x, amt: x.amt - x.amt * BigInt(c.tax_bps || 0) / 10000n }));   // receipts show what lands in the wallet (the coin's own transfer tax is held back on arrival)
