@@ -59,6 +59,9 @@ export function startOps({ conn, dbc, ops, treasury, q, q1, run, mainnet = false
   const send = (ixs) => { if (HALT.on) throw new Error('ops halted'); return sendTx(conn, ixs, [ops]); },   // nothing leaves the ops wallet once the ledger is broken
     amm = new CpAmm(conn), DAMM_CFG = DAMM_V2_MIGRATION_FEE_ADDRESS[6];
   const rec = (sig, i, mint, kind, amt, extra = null) => { try { run('INSERT OR IGNORE INTO rlog(sig,i,mint,kind,lamports,ts,extra) VALUES(?,?,?,?,?,?,?)', sig, i, mint, kind, Number(amt), Date.now(), extra); } catch (e) { halt(e.message); throw e; } };
+  // several receipt rows of ONE transaction: all or none (a half-written receipt would make the ledger say part of it never happened)
+  const recMany = (sig, rows) => { try { run('BEGIN'); rows.forEach(([i, mint, kind, amt, extra = null]) => run('INSERT OR IGNORE INTO rlog(sig,i,mint,kind,lamports,ts,extra) VALUES(?,?,?,?,?,?,?)', sig, i, mint, kind, Number(amt), Date.now(), extra)); run('COMMIT'); }
+    catch (e) { try { run('ROLLBACK'); } catch {} halt(e.message); throw e; } };
   // a transaction that may have landed but whose receipt we couldn't read: stop, and restart the server so the startup ledger
   // rebuild (from our on-chain memos) records it — retrying blindly could pay or swap the same amount twice
   const unknown = (where) => { halt('unknown outcome: ' + where); log('!! ops stopped —', where, '— restarting so the ledger rebuild settles it'); setTimeout(() => process.exit(1), 20e3); };
@@ -118,7 +121,7 @@ export function startOps({ conn, dbc, ops, treasury, q, q1, run, mainnet = false
     if (simTok(sim.value.accounts?.[1], ata, tprog) < preT) throw new Error('$TREID route doesn’t deliver the minimum to ops — refused');   // bought ≥ minOut, then minOut burned: never below where it started
     if (HALT.on) throw new Error('ops halted'); const sig = await landOrExpire(conn, vt2.serialize(), bs58.encode(vt2.signatures[0]), sw.lastValidBlockHeight);
     const t = await getTxRetry(conn, sig); if (!t) { unknown('$TREID buyback ' + sig); throw new Error('receipt unread'); } if (t.meta.err) throw new Error('$TREID buyback failed');
-    rec(sig, 0, TREID, 'tbuy', lam); rec(sig, 1, TREID, 'tburn', minOut); rec(sig, 2, TREID, 'tleft', rwOut(t, ops.publicKey, TREID));
+    recMany(sig, [[0, TREID, 'tbuy', lam], [1, TREID, 'tburn', minOut], [2, TREID, 'tleft', rwOut(t, ops.publicKey, TREID)]]);
     log('ops   $TREID buyback', (lam / 1e9).toFixed(4), 'SOL → burned', minOut.toString());
   }
   const pendingPair = (mint) => Math.max(0, sumK(mint, 'taxswap') - sumK(mint, 'taxholdq') - sumK(mint, 'taxconv'));
@@ -145,7 +148,7 @@ export function startOps({ conn, dbc, ops, treasury, q, q1, run, mainnet = false
     if (rwAta ? simTok(sim.value.accounts?.[1], rwAta, rwProg) - preT < minOut : BigInt(post) - BigInt(pre) < minOut - 10000000n) throw new Error('route doesn’t deliver the minimum to ops — refused');   // SOL out: unwrapped to ops (minus fees/rent)
     if (HALT.on) throw new Error('ops halted'); const sig = await landOrExpire(conn, vt2.serialize(), bs58.encode(vt2.signatures[0]), sw.lastValidBlockHeight);   // final answer only: landed, or expired and can never land
     const t = await getTxRetry(conn, sig); if (!t) { unknown('reward swap ' + sig); const e = new Error('receipt unread'); e.unconfirmed = true; throw e; } if (t.meta.err) throw new Error('reward swap failed');
-    const out = rwOut(t, ops.publicKey, rw); rec(sig, 0, c.mint, 'taxconv', amt, rw); rec(sig, 1, c.mint, 'taxrw', out, rw);
+    const out = rwOut(t, ops.publicKey, rw); recMany(sig, [[0, c.mint, 'taxconv', amt, rw], [1, c.mint, 'taxrw', out, rw]]);
     log('ops   swapped', amt, c.quote_symbol || 'SOL', 'units →', out, 'of', rw.slice(0, 6), '(holder reward)', c.symbol); return out;
   }
   // sell the holders' share of the tax for the pair token, on the coin's own pool; returns exactly what left the pool's quote vault
@@ -167,7 +170,7 @@ export function startOps({ conn, dbc, ops, treasury, q, q1, run, mainnet = false
     const t = await getTxRetry(conn, sg); if (!t) { unknown('pair sale ' + sg); const e = new Error('receipt unread'); e.unconfirmed = true; throw e; }
     const keys = t.transaction.message.getAccountKeys({ accountKeysFromLookups: t.meta.loadedAddresses }), vi = [...Array(keys.length).keys()].find((i) => keys.get(i).equals(vault));
     const bal = (arr) => BigInt((arr || []).find((b) => b.accountIndex === vi)?.uiTokenAmount.amount || 0), out = vi == null ? 0n : bal(t.meta.preTokenBalances) - bal(t.meta.postTokenBalances);
-    rec(sg, 0, c.mint, 'taxswap', out, vault.toBase58()); if (tag) rec(sg, 1, c.mint, 'txr', amt, tag); return out;
+    recMany(sg, [[0, c.mint, 'taxswap', out, vault.toBase58()], ...(tag ? [[1, c.mint, 'txr', amt, tag]] : [])]); return out;
   }
   // pay pending pair-token rewards pro rata to the holder list (SOL straight to wallets; tokens only into accounts that already exist)
   async function payQuote(c, hs, px, rw = null) {   // rw: pay the third reward token instead of the pair token
@@ -212,7 +215,7 @@ export function startOps({ conn, dbc, ops, treasury, q, q1, run, mainnet = false
         if (ai) { try { const a = unpackAccount(ata, ai, TOKEN_2022_PROGRAM_ID); closeOk = a.amount === 0n && !(getTransferFeeAmount(a)?.withheldAmount > 0n); } catch {} }
         if (closeOk) tx.add(createCloseAccountInstruction(ata, ops.publicKey, ops.publicKey, [], TOKEN_2022_PROGRAM_ID));   // the claim opens ops' coin account; close it again, rent back
         tx.add(memoIx(`treid:pfee:${c.mint}:${amt}`));
-        const sgf = await send(tx); if (tBurn > 0n) { rec(sgf, 0, TREID, 'tburn', tBurn); rec(sgf, 1, c.mint, 'pfee', amt); } else rec(sgf, 0, c.mint, 'pfee', amt);   // same order as the memos, so a ledger rebuild lands on the same rows
+        const sgf = await send(tx); if (tBurn > 0n) recMany(sgf, [[0, TREID, 'tburn', tBurn], [1, c.mint, 'pfee', amt]]); else rec(sgf, 0, c.mint, 'pfee', amt);   // same order as the memos, so a ledger rebuild lands on the same rows
         seenFee.set(c.mint, Date.now()); log('ops   claimed', fee.toFixed(4), c.quote_symbol || 'SOL', 'from', c.symbol, '→ treasury');
       } catch (e) { log('ops   claim err', c.symbol, e.message.slice(0, 120)); }
     }
@@ -294,7 +297,7 @@ export function startOps({ conn, dbc, ops, treasury, q, q1, run, mainnet = false
     ixs.push(...[['taxburn', toBurn, null], ['taxdev', devPaid, devBurn ? null : devTo], ['taxhold', paid, String(n)]].map(([k, a, x]) => memoIx(`treid:${k}:${c.mint}:${a}` + (x ? ':' + x : ''))), txr(toBurn, 'f'));
     const sg = await send(ixs);
     try { kvJSet('taxround:' + c.mint, null); carrySet(c.mint, aborted && !saleUnsure ? now - toBurn : 0n); bcarrySet(c.mint, 0n); dcarrySet(c.mint, 0n); } catch (e) { halt(e.message); }   // round done: written before the receipts below, so a failing receipt can't leave a stale carry
-    [['taxburn', toBurn, null], ['taxdev', devPaid, devBurn ? null : devTo], ['taxhold', paid, String(n)], ['txr', toBurn, tag('f')]].forEach(([k, a, x], i) => rec(sg, i, c.mint, k, a, x));   // exactly what is still in ops' account (a batch that did land isn't counted again)   // holders' unpaid part waits for the next round, unsplit
+    recMany(sg, [['taxburn', toBurn, null], ['taxdev', devPaid, devBurn ? null : devTo], ['taxhold', paid, String(n)], ['txr', toBurn, tag('f')]].map(([k, a, x], i) => [i, c.mint, k, a, x]));   // exactly what is still in ops' account (a batch that did land isn't counted again)   // holders' unpaid part waits for the next round, unsplit
     try { const a = await getAccount(conn, opsAta, 'confirmed', TOKEN_2022_PROGRAM_ID); if (a.amount === 0n && !(getTransferFeeAmount(a)?.withheldAmount > 0n)) await send([createCloseAccountInstruction(opsAta, ops.publicKey, ops.publicKey, [], TOKEN_2022_PROGRAM_ID)]); } catch {}   // rent back to ops
     const f = (x) => (Number(x) / 10 ** DEC).toFixed(0);
     log('ops   tax', c.symbol, 'harvested', f(got), 'burn', f(toBurn), 'dev', devBurn ? 'burned' : f(devAmt), 'holders', f(paid), 'to', n);

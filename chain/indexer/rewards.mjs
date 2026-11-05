@@ -55,7 +55,7 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, q
   run(`CREATE TABLE IF NOT EXISTS rpeak(mint TEXT, wallet TEXT, since INT, peak REAL, PRIMARY KEY(mint, wallet, since))`);   // biggest bag seen per era (kept on a persistent disk)
   run('CREATE TABLE IF NOT EXISTS rscan(sig TEXT PRIMARY KEY)');   // ops-wallet txs already read by the ledger rebuild
   run(`CREATE TABLE IF NOT EXISTS ctovotes(mint TEXT, round INT, voter TEXT, applicant TEXT, ts INT, sig TEXT, PRIMARY KEY(mint, round, voter))`);   // off-chain: votes cost ops nothing
-  const record = (sig, items) => { try { items.forEach((it, i) => run('INSERT OR IGNORE INTO rlog(sig,i,mint,kind,lamports,ts,extra) VALUES(?,?,?,?,?,?,?)', sig, i, it.mint, it.kind, it.lamports, Date.now(), it.extra ?? null)); } catch (e) { halt(e.message); throw e; } };
+  const record = (sig, items) => { const many = items.length > 1; try { if (many) run('BEGIN'); items.forEach((it, i) => run('INSERT OR IGNORE INTO rlog(sig,i,mint,kind,lamports,ts,extra) VALUES(?,?,?,?,?,?,?)', sig, i, it.mint, it.kind, it.lamports, Date.now(), it.extra ?? null)); if (many) run('COMMIT'); } catch (e) { if (many) try { run('ROLLBACK'); } catch {} halt(e.message); throw e; } };   // several rows: all or none
   const stamp = async (mint, kind, lamports = 0, extra = null, more = []) => { const s = await sendTx(conn, [...more, memo(`treid:${kind}:${mint}:${lamports}` + (extra ? ':' + extra : ''))], [ops]); record(s, [{ mint, kind, lamports, extra }]); return s; };
   const verify = (msg, sig, wallet, ts) => verifySig(msg, sig, wallet, ts);   // site line + legacy window (sig.mjs)
   const fresh = (ts) => { if (!(Math.abs(Date.now() - ts) <= 2 * 60e3)) throw new Error('signature expired — try again'); };
