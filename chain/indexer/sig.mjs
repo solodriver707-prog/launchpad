@@ -15,20 +15,29 @@ export function verifySig(msg, sig, wallet, ts) {
 
 // ---- sign in once: one wallet signature → a 24 h session token (HMAC by the server), so posting doesn't need a wallet popup each time ----
 import { createHmac, createHash, timingSafeEqual } from 'node:crypto';
-// SESSION_SECRET (≥ 32 random chars) must be set in the server env; the derived fallback only keeps old setups running and is reported loudly
-const SECRET = process.env.SESSION_SECRET && process.env.SESSION_SECRET.length >= 32 ? process.env.SESSION_SECRET : createHash('sha256').update('treid-session|' + (process.env.OPS_SECRET || '') + '|' + (process.env.PARTNER || '')).digest('hex');
-if (!(process.env.SESSION_SECRET && process.env.SESSION_SECRET.length >= 32)) console.error('!! SESSION_SECRET is missing or shorter than 32 characters — set it in the server env (sign-in tokens use a derived fallback until then)');
-export const hmac = (s) => createHmac('sha256', SECRET).update(s).digest('base64url');
-// seals made before SESSION_SECRET was set (callouts backed up to IPFS) still verify after it changes
+// SESSION_SECRET (≥ 32 random chars) must be set in the server env. On mainnet there is NO fallback: without it sign-in is refused
+// (a key derived from other env values is guessable if they leak or are unset). Devnet/local: a derived key keeps dev setups working.
+const MAINNET = process.env.CLUSTER === 'mainnet' || /mainnet/.test(process.env.RPC || '');
+const GOOD = !!(process.env.SESSION_SECRET && process.env.SESSION_SECRET.length >= 32);
+// seals made before SESSION_SECRET was set (callouts backed up to IPFS) — accepted ONLY when restoring that backup, never for new posts/likes
 const LEGACY_SECRET = createHash('sha256').update('treid-session|' + (process.env.OPS_SECRET || '') + '|' + (process.env.PARTNER || '')).digest('hex');
-export function sealMatches(given, data) { const g = Buffer.from(String(given || '')); return [SECRET, LEGACY_SECRET].some((k) => { const w = Buffer.from('h:' + createHmac('sha256', k).update(data).digest('base64url')); return w.length === g.length && timingSafeEqual(w, g); }); }
+const SECRET = GOOD ? process.env.SESSION_SECRET : MAINNET ? null : LEGACY_SECRET;
+if (!GOOD) console.error(MAINNET ? '!! SESSION_SECRET is missing or shorter than 32 characters — SIGN-IN IS DISABLED on mainnet until it is set (callouts still work with a wallet signature per post)'
+  : '!! SESSION_SECRET is missing or shorter than 32 characters — devnet: using a derived key; set it before mainnet');
+export const sessionsOn = () => !!SECRET;
+export const hmac = (s) => { if (!SECRET) throw new Error('sign-in is unavailable right now — sign the post with your wallet'); return createHmac('sha256', SECRET).update(s).digest('base64url'); };
+const macEq = (k, data, given) => { const w = Buffer.from('h:' + createHmac('sha256', k).update(data).digest('base64url')); return w.length === given.length && timingSafeEqual(w, given); };
+// { legacy: true } only from the IPFS restore path
+export function sealMatches(given, data, { legacy = false } = {}) { const g = Buffer.from(String(given || '')); return (!!SECRET && macEq(SECRET, data, g)) || (legacy && macEq(LEGACY_SECRET, data, g)); }
 export const signInMessage = (wallet, ts) => `treid: sign in — ${wallet} — ${ts}`;
 export function issueSession({ wallet, ts, sig }) {
+  if (!SECRET) throw new Error('sign-in is unavailable right now — sign each post with your wallet instead');
   if (!(Math.abs(Date.now() - +ts) <= 2 * 60e3)) throw new Error('signature expired — try again');
   if (!verifySig(signInMessage(wallet, ts), sig, wallet, ts)) throw new Error('bad signature');
   const exp = Date.now() + 24 * 36e5; return { token: `${wallet}.${exp}.${hmac(wallet + '|' + exp)}`, exp };
 }
 export function checkSession(token) {   // → wallet, or null
+  if (!SECRET) return null;
   const [w, exp, mac] = String(token || '').split('.'); if (!w || !(+exp > Date.now()) || !mac) return null;
   const want = Buffer.from(hmac(w + '|' + exp)), got = Buffer.from(mac); return want.length === got.length && timingSafeEqual(want, got) ? w : null;
 }

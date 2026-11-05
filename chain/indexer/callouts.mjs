@@ -14,7 +14,9 @@ export function startCallouts({ q, q1, run, push, rate, coinStats, pinJSON, pinF
   // a callout is proven either by its own wallet signature, or (signed-in session) by the server's seal over all its fields
   const seal = (c) => 'h:' + hmac([c.mint, c.wallet, c.ts, c.reply ?? '', c.text, c.img || ''].join('|'));
   const sealData = (c) => [c.mint, c.wallet, c.ts, c.reply ?? '', c.text, c.img || ''].join('|');
-  const verify = (c) => (String(c.sig || '').startsWith('h:') ? sealMatches(c.sig, sealData(c)) : verifySig(calloutMessage(c.mint, c.ts, c.reply, c.text), c.sig, c.wallet, c.ts));
+  // restore: server seals (incl. the legacy pre-SESSION_SECRET key) or wallet signatures. New posts without a session: a wallet signature only —
+  // a client can never submit an 'h:' seal of its own
+  const verify = (c, { restore = false } = {}) => (String(c.sig || '').startsWith('h:') ? restore && sealMatches(c.sig, sealData(c), { legacy: true }) : verifySig(calloutMessage(c.mint, c.ts, c.reply, c.text), c.sig, c.wallet, c.ts));
   const row = (r) => ({ id: r.id, mint: r.mint, wallet: r.wallet, text: r.text, ts: r.ts, reply: r.reply, mc: r.mc, pos: r.pos, img: r.img || null });
   const IMG_MAX = 1.6e6, MAGIC = { png: [0x89, 0x50, 0x4e, 0x47], jpeg: [0xff, 0xd8, 0xff], gif: [0x47, 0x49, 0x46], webp: [0x52, 0x49, 0x46, 0x46] };
   function imageOf(dataUrl) {   // a real raster image (checked by its bytes, not its label), ≤ 1.6 MB
@@ -65,7 +67,7 @@ export function startCallouts({ q, q1, run, push, rate, coinStats, pinJSON, pinF
       const r = await fetch('https://api.pinata.cloud/data/pinList?status=pinned&metadata[name]=treid-callouts.json&pageLimit=20', { headers: { authorization: 'Bearer ' + pinataJwt } }), j = await r.json();
       const rows = (j.rows || []).sort((a, b) => new Date(b.date_pinned) - new Date(a.date_pinned)); if (!rows.length) return; lastCid = rows[0].ipfs_pin_hash;
       const snap = await (await fetch(gateway + '/ipfs/' + lastCid)).json(); let n = 0;
-      for (const c of (snap.callouts || []).sort((a, b) => a.id - b.id)) { if (!verify(c)) continue;   // every restored callout is re-checked against its wallet signature
+      for (const c of (snap.callouts || []).sort((a, b) => a.id - b.id)) { if (!verify(c, { restore: true })) continue;   // every restored callout is re-checked against its wallet signature
         n += run('INSERT OR IGNORE INTO callouts(id,mint,wallet,text,ts,sig,reply,mc,pos,img) VALUES(?,?,?,?,?,?,?,?,?,?)', c.id, c.mint, c.wallet, c.text, c.ts, c.sig, c.reply, c.mc, c.pos, c.img || null).changes; }
       log('callouts restored from IPFS:', n); for (const x of rows.slice(1)) fetch('https://api.pinata.cloud/pinning/unpin/' + x.ipfs_pin_hash, { method: 'DELETE', headers: { authorization: 'Bearer ' + pinataJwt } }).catch(() => {});
     } catch (e) { log('callouts restore err', e.message.slice(0, 100)); }
