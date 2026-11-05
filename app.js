@@ -30,6 +30,7 @@
   function fakeCA(suf) { suf = suf || 'trd'; return b58(44 - suf.length) + suf; }
   function numOk(v) { return /^\d*[.,]?\d*$/.test(String(v == null ? '' : v).trim()); }   // a plain positive decimal (or empty): no minus, one dot
   function numVal(v) { v = String(v == null ? '' : v).trim().replace(',', '.'); return numOk(v) ? (parseFloat(v) || 0) : 0; }   // ONE parser for every amount box (trade box, dev buy)
+  function decStr(v, sig) { if (!(v > 0) || !isFinite(v)) return '0'; var d = Math.max(0, Math.min(18, sig - 1 - Math.floor(Math.log10(v)))); return v.toFixed(d).replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, ''); }   // plain decimals, never "4.8e-8"
   function symK(k) { var t0 = typeof find === 'function' ? find(k) : null; return t0 ? symOf(t0) : String(k || ''); }   // real ticker for an internal key
   function symOf(t) { return t && typeof t === 'object' ? (t.sym || t.tick || '') : String(t || ''); }   // the coin's REAL ticker (two coins can share one; the internal key t.tick then gets a suffix)
   function short(a) { a = String(a || ''); return a ? esc(a.slice(0, 4) + '…' + a.slice(/treid$/.test(a) ? -5 : -4)) : ''; }   // escaped: addresses come from the server
@@ -54,6 +55,8 @@
     var h = Math.floor(m / 60); if (h < 24) return h + 'h'; return Math.floor(h / 24) + 'd';
   }
   function fmtNum(n) { if (!isFinite(n)) n = 0; var sg = n < 0 ? '-' : '', a = Math.abs(n); return sg + (a >= 1e9 - 5e5 ? (a / 1e9).toFixed(2) + 'B' : a >= 999950 ? (a / 1e6).toFixed(2) + 'M' : a >= 999.5 ? (a / 1e3).toFixed(1) + 'K' : Math.round(a).toString()); }
+  // banner pictures too small for the card get a softer treatment (was an inline onload — blocked by the CSP)
+  document.addEventListener('load', function (e) { var im = e.target; if (!im || im.tagName !== 'IMG' || !im.hasAttribute('data-banlow')) return; if (im.naturalWidth < im.clientWidth * Math.min(2, window.devicePixelRatio || 1) * .9 && im.parentNode) im.parentNode.classList.add('low'); }, true);
   var BADIMG = {}; document.addEventListener('error', function (e) { var im = e.target; if (!im || im.tagName !== 'IMG' || !im.closest('.av')) return; var src = im.getAttribute('src'); if (BADIMG[src]) return; BADIMG[src] = 1; im.style.visibility = 'hidden'; }, true);   // a missing logo hides instead of showing a broken image
   function avatarHTML(t, size) {
     if (!t || (!t.img && !t.spec)) t = { img: t && t.img, spec: { kind: 'frog', skin: A.SKINS[0], bg: A.BGS[0], eyes: 'normal', mouth: 'smile', acc: 'none' } };
@@ -662,7 +665,7 @@
   }
   function socialsHTML(t, big, hideEmpty) {
     var so = socialsOf(t), items = [['web', 'Website', I.web], ['x', 'X', I.x], ['tg', 'Telegram', I.tg]];
-    if (hideEmpty && !items.some(function (it) { return so[it[0]]; })) return '';   // no links at all: nothing to show (the risk flags already say "No socials")
+    items = items.filter(function (it) { return so[it[0]]; }); if (!items.length) return '';   // only the links the coin really has — no struck-through placeholders   // no links at all: nothing to show (the risk flags already say "No socials")
     return '<div class="soc' + (big ? ' big' : '') + '">' + items.map(function (it) {
       var has = !!so[it[0]];
       return has ? '<button class="sbtn2 on" data-act="soc" data-arg="' + esc(t.tick) + '|' + it[0] + '" aria-label="' + it[1] + '">' + it[2] + '<span>' + it[1] + '</span></button>' :
@@ -710,7 +713,7 @@
       (sn ? '<div class="pv-trap pv-trap2">🪤 Sniper trap: ' + [0, 1, 2].map(function (i) { return trapStepFee(sn.start, tm, i) + '%'; }).join(' → ') + ' → ' + normalCost(tm) + '% over ' + (sn.dur < 60 ? sn.dur + 's' : sn.dur / 60 + ' min') + '</div>' : '');
   }
   function statTiles(t) {
-    var R = [['HOLDERS', fmtNum(t.holders || 0), 'Wallets holding this coin'], ['VOL 24H', fmtK(t.vol), 'Traded in the last 24 hours'], paidTile(t), ['ATH', fmtK(athOf(t)), 'Highest market cap so far']];
+    var R = [['HOLDERS', fmtNum(t.holders || 0), 'Wallets holding this coin'], ['VOL', fmtK(t.vol), 'Total traded since launch'], paidTile(t), ['ATH', fmtK(athOf(t)), 'Highest market cap so far']];
     return '<div class="risk st-tiles">' + R.map(function (m) { return '<span class="rk-t lv-n" data-tip="' + esc(m[2]) + '"><span class="rk-l">' + m[0] + '</span><b class="mono">' + m[1] + '</b></span>'; }).join('') + '</div>';
   }
   function riskTiles(t) {
@@ -1971,7 +1974,7 @@
   function tcHTML(t, k) {
     var c = chg(t), tm = Math.max(t.buy, t.sell), id = esc(t.tick), sid = esc(symOf(t));
     return '<div class="tc-in ar-card" role="button" tabindex="0" data-act="open" data-arg="' + id + '">' +
-      '<div class="ar-bg' + (t.banner ? ' ban' : '') + (t._banLow ? ' low' : '') + '" aria-hidden="true">' + (t.banner ? '<img src="' + esc(t.banner) + '" alt="" onload="if(this.naturalWidth<this.clientWidth*Math.min(2,window.devicePixelRatio||1)*.9)this.parentNode.classList.add(\'low\')">' : avatarHTML(t, 300)) + '</div>' +
+      '<div class="ar-bg' + (t.banner ? ' ban' : '') + (t._banLow ? ' low' : '') + '" aria-hidden="true">' + (t.banner ? '<img src="' + esc(t.banner) + '" alt="" data-banlow>' : avatarHTML(t, 300)) + '</div>' +
       '<div class="ar-l"><div class="ar-info"><span class="ar-k"><i class="livedot"></i>Top meme #' + (k + 1) + '</span>' +
         '<span class="ar-id">' + avatarHTML(t, 64) + '<span><b>' + esc(t.name) + '</b><small class="mono">$' + sid + '</small></span></span>' +
         '<span class="ar-mc"><small>Market cap</small><b class="mono">' + fmtK(t.mcN) + '<em class="' + (c >= 0 ? 'up' : 'down') + '">' + chgTxt(c) + '</em></b></span>' +
@@ -3228,7 +3231,7 @@
     var U = PS ? SOL_USD : qUsdT(t), aN = numVal(S.amount), pxU = price(t);
     var inUsd = q.isBuy ? aN * U : aN * pxU, outUsd = q.isBuy ? Math.max(0, aN - (q.tax || 0) - (q.fee || 0)) * U * (1 - Math.min(99, q.impact || 0) / 100) : (q.out || 0) * (q.inSol ? SOL_USD : U), QSo = q.inSol ? 'SOL' : QS, blk = tradeBlock(t, q);
     function usdS(v) { return v > 0 ? '≈ $' + (v < 0.01 ? '<0.01' : money(v)) : ''; }
-    function f4(v) { return v > 0 && v < 0.0001 ? v.toPrecision(2) : v.toFixed(4); }
+    function f4(v) { return v > 0 && v < 0.0001 ? decStr(v, 2) : v.toFixed(4); }
     var bsBar = '<div class="bs bs3"><button class="b' + (S.side === 'buy' ? ' on' : '') + '" data-act="side" data-arg="buy">Buy</button><button class="s' + (S.side === 'sell' ? ' on' : '') + '" data-act="side" data-arg="sell">Sell</button><button class="l' + (S.side === 'tpsl' ? ' on' : '') + '" data-act="side" data-arg="tpsl">TP / SL</button></div>';
     var panel = S.side === 'tpsl' ? tpslPanel(t, pos, bsBar) : '<section class="card-s panel tradebox">' + bsBar +
       (jupOn(t) && !q.isBuy ? '<div class="paywith"><span class="muted">Receive</span><button class="' + (S.recvSol === false ? 'on' : '') + '" data-act="recvSol" data-arg="0">' + coinHTML(t.pair, 16) + esc(qSymT(t)) + '</button><button class="' + (S.recvSol !== false ? 'on' : '') + '" data-act="recvSol" data-arg="1">' + coinHTML('SOL', 16) + 'SOL</button>' + (S.recvSol !== false ? '<small class="muted">sold for ' + esc(qSymT(t)) + ', swapped to SOL in the same transaction · 1 wallet approval</small>' : '') + '</div>' : '') +
@@ -3530,7 +3533,7 @@
           '<div class="tm-cmd">$ <span class="tm-cur"></span></div></div></div>' + P.warn + P.how() + '</main></div>' + P.foot;
     },
     arcade: function (t, P, id) {
-      var rows = [['MKT CAP', P.mc], ['HOLDERS', P.hold], ['VOL 24H', P.vol], ['TAX', P.tax], [P.grad ? 'STATUS' : 'CURVE', P.grad ? 'GRAD!' : P.prog.toFixed(0) + '%']];
+      var rows = [['MKT CAP', P.mc], ['HOLDERS', P.hold], ['VOLUME', P.vol], ['TAX', P.tax], [P.grad ? 'STATUS' : 'CURVE', P.grad ? 'GRAD!' : P.prog.toFixed(0) + '%']];
       return P.top() + '<section class="ar-screen"><div class="ar-hud"><span>1UP</span><span>HI-SCORE ' + P.mc + '</span><span>$' + esc(symOf(t)) + '</span></div><span class="ar-av">' + P.av(150) + '</span><h1>' + esc(t.name) + '</h1>' + (P.desc ? '<p>' + P.desc + '</p>' : '') +
         '<button class="ar-start" data-act="open" data-arg="' + id + '">▶ PRESS START TO BUY</button>' + P.ca() + '<div class="ar-coin">INSERT COIN · ' + P.chg + ' TODAY</div></section>' + P.warn +
         '<section class="ar-table"><h2>High scores</h2>' + rows.map(function (r, i) { return '<div><span>' + (i + 1) + (['ST', 'ND', 'RD', 'TH', 'TH'][i]) + '</span><span>' + r[0] + '</span><b>' + r[1] + '</b></div>'; }).join('') + '</section>' +
@@ -3888,7 +3891,7 @@
     var cv = S.c.pro ? CURVE_PRO : CURVE_STD, tok = cv.b0 * solEq / (cv.q0 + solEq); tok = Math.min(tok, cv.sold);   // the curve as virtual reserves (SOL-equivalent): tokens out = B0·x / (Q0 + x)
     return { sol: amt, solIn: solIn, tok: tok, pct: tok / 1e9 * 100, sym: q.sym, key: q.key, isSol: !!q.sol, mint: q.mint };
   }
-  function niceQ(x) { if (!(x > 0)) return '0'; var p = Math.pow(10, Math.floor(Math.log10(x))); return String(+(Math.round(x / p) * p).toPrecision(2)); }
+  function niceQ(x) { if (!(x > 0)) return '0'; var p = Math.pow(10, Math.floor(Math.log10(x))); return decStr(Math.round(x / p) * p, 2); }
   function qPresets(q, list) { return q.sol ? list : list.map(function (v) { return v === '0' ? v : niceQ(+v * SOL_USD / q.usd); }); }
   // ===== CONTRACT ADDRESS ENDING: free ...treid or paid custom =====
   var B58C = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
@@ -4090,7 +4093,7 @@
   S.qBusy = null; S.qErr = '';
   function qOf(c) { return (c && c.q) || { mint: WSOL, sym: 'SOL', dec: 9, usd: SOL_USD, sol: true, key: 'SOL' }; }
   function qUsd(q) { return q.sol ? SOL_USD : q.usd; }
-  function usdTxt(v) { return v >= 1 ? v.toFixed(2) : v.toPrecision(3); }
+  function usdTxt(v) { return v >= 1 ? v.toFixed(2) : decStr(v, 3); }
   function qReg(sym, mint, icon, name) {
     if (mint === WSOL) return 'SOL'; if (mint === USDC_MINT) return 'USDC';   // only the real mints map to the known icons
     var k = String(sym || mint.slice(0, 4)).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10) || 'TOKEN';
