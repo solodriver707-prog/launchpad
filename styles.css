@@ -6778,3 +6778,4 @@ html body .tch-side:has(.rwin){width:86px}
 .trap .tl3 .tstair span{max-height:84px;border-radius:9px}
 @media (max-width:640px){.trap .tl3{grid-template-columns:1fr}.trap .tl3 .liq-prev{min-height:56px}.trap .tl3 .liq-prev .liq-c{flex-direction:row;align-items:center}}
 .tstair span{min-height:42px!important;padding:5px 2px 4px!important;overflow:hidden}.tstair small{padding-bottom:0!important}
+.trap .tl3{align-items:end!important}.trap .tl3 .tstair{height:96px!important;align-items:flex-end!important;align-self:end}.trap .tl3 .tstair span{max-height:96px!important;margin:0!important}.trap .tl3 .liq-prev{height:96px!important;box-sizing:border-box;align-self:end;margin:0!important}
