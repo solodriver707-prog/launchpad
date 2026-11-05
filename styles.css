@@ -6784,3 +6784,11 @@ html body .tch-side:has(.rwin){width:86px}
 .quote .q-cap{display:block;font-size:11.5px;padding-top:2px}
 .inp-bad,.amtwrap .inp.inp-bad,.devb-in input.inp-bad{border-color:var(--down)!important;box-shadow:0 0 0 2px rgba(242,112,138,.25)!important;animation:inpShake .25s ease-in-out}
 @keyframes inpShake{0%,100%{transform:translateX(0)}25%{transform:translateX(-3px)}75%{transform:translateX(3px)}}
+/* fix-ui: coin header — the "created … by <creator>" pill was squeezed to "create" (761–1560px); let the pill row wrap instead */
+@media (min-width:761px) and (max-width:1560px){
+  html body main.tp-env .tp-main section.tp-banner .hs-pills{flex-wrap:wrap!important;row-gap:6px!important}
+  html body main.tp-env .tp-main section.tp-banner .hs-pills>.pill:not(.copy2):not(.cs-pill){flex:none!important;overflow:visible!important;max-width:100%}
+}
+/* fix-ui: Activity box — the creator's track-record badge (e.g. "Serial rugger · 4 launches · 4 rugs") wraps instead of pushing out of the card */
+.actbox .st-foot>div,.st-foot>div{min-width:0}
+.st-foot .dev-rep{white-space:normal!important;max-width:100%;height:auto;line-height:1.3;padding-top:5px;padding-bottom:5px;text-align:left;flex-wrap:wrap;border-radius:14px}
