@@ -49,15 +49,19 @@ export const readLocks = async (conn, mint, creator) => summary(await escrowsOf(
 export function lockCache(conn) {
   const C = new Map(); let run = 0;
   const wants = (c) => { try { return !!new URL(c.uri).searchParams.get('lk'); } catch { return false; } };
-  function get(c, fresh = false) {
+  function get(c) {
     if (!c || !wants(c)) return null;
-    const h = C.get(c.mint), age = h ? Date.now() - h.ts : Infinity, ttl = fresh ? 30e3 : 5 * 60e3;
+    const h = C.get(c.mint), age = h ? Date.now() - h.ts : Infinity, ttl = 5 * 60e3;   // 5 min for everyone (a lock can't be undone; a new one shows within minutes)
     if (age > ttl && !h?.busy && run < 3) {
       const e = h || { ts: 0, list: null }; e.busy = true; C.set(c.mint, e); run++;
       escrowsOf(conn, c.mint, c.creator).then((list) => C.set(c.mint, { ts: Date.now(), list })).catch(() => { e.busy = false; e.ts = Date.now() - ttl + 20e3; }).finally(() => { run--; });
     }
     return summary(C.get(c.mint)?.list);
   }
-  async function fresh(c) { if (!wants(c)) return null; const list = await escrowsOf(conn, c.mint, c.creator); C.set(c.mint, { ts: Date.now(), list }); return summary(list); }
+  // money path (rewards): a real read, but one read serves every caller for 60 s
+  const busyF = new Map();
+  async function fresh(c) { if (!wants(c)) return null; const h = C.get(c.mint); if (h?.list && Date.now() - h.ts < 60e3) return summary(h.list);
+    if (!busyF.has(c.mint)) busyF.set(c.mint, escrowsOf(conn, c.mint, c.creator).then((list) => { C.set(c.mint, { ts: Date.now(), list }); return list; }).finally(() => busyF.delete(c.mint)));
+    return summary(await busyF.get(c.mint)); }
   return { get, wants, fresh, bust: (mint) => C.delete(mint) };
 }

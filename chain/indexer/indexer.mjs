@@ -107,7 +107,17 @@ db.exec('CREATE TABLE IF NOT EXISTS spx(day TEXT PRIMARY KEY, usd REAL)');
 db.exec('CREATE TABLE IF NOT EXISTS uburn(sig TEXT PRIMARY KEY, mint TEXT, wallet TEXT, tok REAL, ts INT)');
 // ---- burns: total burned is authoritative from the mint supply; events come from the ops receipts + reported user burns ----
 const supplyC = new Map();
-async function burnedOf(mint) { const h = supplyC.get(mint); if (h && Date.now() - h.ts < 60e3) return h.v; try { const s = await conn.getTokenSupply(new PublicKey(mint)); const v = Math.max(0, SUPPLY - Number(s.value.amount) / 1e6); supplyC.set(mint, { ts: Date.now(), v }); return v; } catch { return h?.v || 0; } }
+// the mint supply barely changes: cached 1 h per coin (6 h for coins with no trade in 3 days), busted when the server sees a burn
+// (verified user burns, and any ops/rewards ledger row whose kind is a burn — see runLedger below)
+const supplyBusy = new Map();
+const supplyTtl = (mint) => { const lt = q1('SELECT MAX(ts) t FROM trades WHERE mint=?', mint)?.t || 0; return Date.now() - lt > 3 * 864e5 ? 6 * 36e5 : 36e5; };
+const supplyStale = (mint) => { const h = supplyC.get(mint); return !h || Date.now() - h.ts > (h.ttl || 36e5); };
+export function bustSupply(mint) { if (mint) { supplyC.delete(mint); burnsSnap = null; } }
+async function burnedOf(mint) { const h = supplyC.get(mint); if (h && !supplyStale(mint)) return h.v; if (supplyBusy.has(mint)) return supplyBusy.get(mint);
+  const pr = (async () => { try { const s = await conn.getTokenSupply(new PublicKey(mint)); const v = Math.max(0, SUPPLY - Number(s.value.amount) / 1e6); supplyC.set(mint, { ts: Date.now(), v, ttl: supplyTtl(mint) }); return v; } catch { return h?.v || 0; } })().finally(() => supplyBusy.delete(mint));
+  supplyBusy.set(mint, pr); return pr; }
+// ops / rewards modules get this instead of `run`: a ledger row recording a burn busts that coin's cached supply (ops.mjs untouched)
+const runLedger = (sql, ...a) => { const r = run(sql, ...a); try { if (/INTO\s+rlog/i.test(sql) && /burn/.test(String(a[3] || ''))) bustSupply(String(a[2] || '')); } catch {} return r; };
 async function verifyBurn(sig) {   // a user's burn of a treid coin, checked on-chain (never trusted from the request)
   if (!/^[1-9A-HJ-NP-Za-km-z]{60,100}$/.test(sig)) throw new Error('bad signature'); if (q1('SELECT 1 FROM uburn WHERE sig=?', sig)) return { ok: true, dup: true };
   let tx = null; for (let i = 0; i < 6 && !tx; i++) { tx = await conn.getTransaction(sig, { maxSupportedTransactionVersion: 0, commitment: 'confirmed' }).catch(() => null); if (!tx) await new Promise((r) => setTimeout(r, 1500)); }
@@ -446,7 +456,14 @@ async function holders(mint) {   // one row per OWNER (all their token accounts 
 }
 // real on-chain balances (transfers, tax payouts and burns included) — cached, refreshed in the background
 const hCache = new Map(), inflight = new Map(), lbCache = new Map(), iconC = new Map(); let iconB = 0;
-function holdersCached(mint) { const h = hCache.get(mint); if (h?.list && Date.now() - h.ts < 30e3) return Promise.resolve(h.list); if (!inflight.has(mint)) inflight.set(mint, holders(mint).then((l) => { hCache.set(mint, { ts: Date.now(), list: l }); return l; }).finally(() => inflight.delete(mint))); return inflight.get(mint); }
+// ONE holder cache per mint for everything (/api/holders, coin stats, callouts, bubbles, rewards balances): a list is fresh for 90 s,
+// and concurrent askers share the one scan in flight
+const HOLD_TTL = 90e3, hFresh = (h) => !!(h?.list && Date.now() - h.ts < HOLD_TTL);
+function scanHolders(mint) { if (inflight.has(mint)) return inflight.get(mint); hRun++;
+  const pr = holders(mint).then((l) => { hCache.set(mint, { ts: Date.now(), list: l }); return l; }, (e) => { const h = hCache.get(mint) || { ts: 0, list: null }; h.failAt = Date.now(); hCache.set(mint, h); throw e; })
+    .finally(() => { hRun--; inflight.delete(mint); });
+  inflight.set(mint, pr); return pr; }
+function holdersCached(mint) { const h = hCache.get(mint); return hFresh(h) ? Promise.resolve(h.list) : scanHolders(mint); }
 // simple in-memory rate limiter (per key, n hits per window)
 // short response cache for the heavier read endpoints (a burst of visitors costs one computation, not hundreds of queries each)
 const rcache = new Map(); function cached(key, ms, fn) { const h = rcache.get(key); if (h && Date.now() - h.at < ms) return h.v; const v = fn(); rcache.set(key, { at: Date.now(), v }); if (rcache.size > 3000) { const now = Date.now(); for (const [k2, x] of rcache) if (now - x.at > 6e4) rcache.delete(k2); if (rcache.size > 3000) rcache.clear(); } return v; }
@@ -479,7 +496,7 @@ const ip = (req) => { if (req._ip) return req._ip; const x = xffOf(req), cf = vi
   let v = cf ? normIp(req.headers['cf-connecting-ip']) || normIp(x.length >= 2 ? x[0] : '') : '';   // via Cloudflare: its header, else the hop Cloudflare added
   if (!v) v = normIp(x.length ? x[x.length - 1] : '') || normIp(req.socket.remoteAddress) || 'unknown';   // direct: the address that connected to Render
   return (req._ip = v); };
-function liveHolders(mint, refresh = true) { const h = hCache.get(mint); if (refresh && (!h || Date.now() - h.ts > 120e3) && holderSlots()) { if (!h?.busy) { const e = h || { ts: 0, list: null }; e.busy = true; hCache.set(mint, e); hRun++; holders(mint).then((l) => { hCache.set(mint, { ts: Date.now(), list: l }); }).catch(() => { e.busy = false; e.ts = Date.now() - 60e3; }).finally(() => { hRun--; }); } } return h?.list || null; }
+function liveHolders(mint, refresh = true) { const h = hCache.get(mint); if (refresh && !hFresh(h) && !inflight.has(mint) && holderSlots() && !(h?.failAt && Date.now() - h.failAt < 30e3)) scanHolders(mint).catch(() => {}); return h?.list || null; }   // background refresh; never waits
 let hRun = 0; const holderSlots = () => hRun < 3;   // at most 3 holder scans at a time (each is a getProgramAccounts)
 // a creator's track record, from the indexed trades of each coin they launched (never guessed):
 //  · grad  = reached Meteora · rug = creator sold ≥70% of the most they ever held (or the rewards rules put them out for selling)
@@ -536,7 +553,7 @@ function stats(mint, list = false, scanOk = true) {
   const devN = (real ? (real.find((h) => h.wallet === c.creator)?.pct || 0) / 100 * SUPPLY + (lk?.inside || 0) : bal.find(b => b.wallet === c.creator)?.n || 0);   // trades never saw the move into the lock → the trade count already includes it
   const top10 = Math.min(SUPPLY, real ? real.slice(0, 10).reduce((s, h) => s + h.pct / 100 * SUPPLY, 0) : bal.slice(0, 10).reduce((s, b) => s + b.n, 0));
   const po = OPS && REW ? q1(`SELECT COALESCE(SUM(CASE WHEN kind='taxburn' THEN lamports END),0)/1e6 burned, COALESCE(SUM(CASE WHEN kind='taxhold' THEN lamports END),0)/1e6 holders, COALESCE(SUM(CASE WHEN kind='taxdev' THEN lamports END),0)/1e6 dev, COUNT(CASE WHEN kind='taxhold' THEN 1 END) n, COALESCE(SUM(CASE WHEN kind='taxholdq' THEN lamports END),0) * 1.0 / ${10 ** (c.quote_dec ?? 9)} holders_q FROM rlog WHERE mint=? AND kind IN ('taxburn','taxdev','taxhold','taxholdq')`, mint) : null;   // from on-chain receipts → survives restarts
-  const burned = supplyC.get(mint)?.v || 0; if (!supplyC.has(mint) || Date.now() - supplyC.get(mint).ts > 60e3) burnedOf(mint).catch(() => {});   // refreshed in the background
+  const burned = supplyC.get(mint)?.v || 0; if (supplyStale(mint) && (supplyC.has(mint) || supplyBusy.size < 8)) burnedOf(mint).catch(() => {});   // refreshed in the background
   const sp = c.tax_bps > 0 ? parseSplit(c.uri) : null;   // the split ops ACTUALLY applies (an invalid or missing one falls back to 70/20/10; dev share capped at 50% unless the coin launched with dc=1)
   let rwst = null; try { const r = q1('SELECT COUNT(DISTINCT wallet) w, COUNT(DISTINCT sig) n, MAX(ts) last FROM hpay WHERE mint=? AND wallet != ?', mint, c.creator); if (r && r.w) rwst = { wallets: r.w, payouts: r.n, last: r.last }; } catch {}   // holders paid (receipts), dev share excluded
   const ref24 = q1('SELECT mcap_usd m FROM trades WHERE mint=? AND ts<=? AND sys=0 ORDER BY ts DESC LIMIT 1', mint, Date.now() - 864e5) || q1('SELECT mcap_usd m FROM trades WHERE mint=? ORDER BY ts ASC LIMIT 1', mint);   // market cap 24h ago (or at launch) → a real "24h change"
@@ -693,7 +710,7 @@ async function handleReq(req, res) {
       return J({ mint: m, usd, symbol, name, icon, verified }); }
     if (p[1] === 'coins') { if (!coinsSnap) buildCoinsSnap(); else if (Date.now() - coinsSnap.at > 10e3) setImmediate(buildCoinsSnap); return J(coinsSnap.out); }   // stale-while-refresh: nobody waits for the rebuild
     if (p[1] === 'recent') return J(q('SELECT mint, wallet, side, usd, ts, sig FROM trades WHERE usd >= 5 ORDER BY ts DESC, slot DESC LIMIT 40').filter((r) => !HIDDEN.has(r.mint) && (!OPS || r.wallet !== OPS.publicKey.toBase58())).slice(0, 24));   // home page: the latest real trades across treid (no dust)
-    if (p[1] === 'coin') return J(HIDDEN.has(p[2]) ? null : stats(p[2], false, rate('hscan|' + ip(req), 30, 60e3)));   // a burst of different coins from one visitor can't fan out into holder scans
+    if (p[1] === 'coin') { const m = String(p[2] || ''); if (HIDDEN.has(m) || !/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(m)) return J(null); return J(cached('coin|' + m, 5e3, () => stats(m, false, rate('hscan|' + ip(req), 30, 60e3)))); }   // many visitors of one coin share one computation per 5 s   // a burst of different coins from one visitor can't fan out into holder scans
     if (p[1] === 'trades') return J(q('SELECT * FROM trades WHERE mint=? ORDER BY ts DESC, slot DESC LIMIT 200', p[2]));
     if (p[1] === 'creator' && p[2]) {   // creator rewards escrow status for a coin
       const c = q1('SELECT * FROM coins WHERE mint=?', p[2]); if (!c) return J(null);
@@ -789,9 +806,9 @@ async function handleReq(req, res) {
     if (p[1] === 'bubbles' && p[2]) { if (!rate('bub|' + ip(req), 30, 60e3)) return J({ error: 'slow down' }, 429); const k = 'bub|' + p[2], c0 = bubC.get(k); if (c0 && Date.now() - c0.ts < (c0.v?.done ? 60e3 : 6e3)) return J(c0.v);
       try { const v = await BUB.map(p[2]); if (!v) return J({ error: 'unknown coin' }, 404); bubC.set(k, { ts: Date.now(), v }); if (bubC.size > 500) bubC.delete(bubC.keys().next().value); return J(v); } catch (e) { return J({ error: 'bubble map unavailable' }, 503); } }
     if (p[1] === 'holders') { const withPs = (l) => l.slice(0, 300).map((x) => (x.curve || x.pool ? x : { ...x, ps: posStats(p[2], x.wallet, x.pct / 100 * SUPPLY) }));   // position value, spent and profit per holder
-      const h = hCache.get(p[2]); if (h?.list && Date.now() - h.ts < 15e3) return J(cached('hp|' + p[2] + '|' + h.ts, 15e3, () => withPs(h.list))); if (!q1('SELECT 1 FROM coins WHERE mint=?', p[2])) return J([]);
-      if (!inflight.has(p[2]) && (!holderSlots() || !rate('hscan|' + ip(req), 20, 60e3))) return J(h?.list ? withPs(h.list) : []);   // a fresh scan is a getProgramAccounts: at most 3 at a time and 20/min per visitor (else the last list)
-      if (!inflight.has(p[2])) inflight.set(p[2], holders(p[2]).finally(() => inflight.delete(p[2]))); const l = await inflight.get(p[2]); hCache.set(p[2], { ts: Date.now(), list: l }); return J(withPs(l)); }
+      const h = hCache.get(p[2]); if (hFresh(h)) return J(cached('hp|' + p[2] + '|' + h.ts, HOLD_TTL, () => withPs(h.list))); if (!q1('SELECT 1 FROM coins WHERE mint=?', p[2])) return J([]);
+      if (!inflight.has(p[2]) && (!holderSlots() || (h?.failAt && Date.now() - h.failAt < 30e3) || !rate('hscan|' + ip(req), 20, 60e3))) return J(h?.list ? withPs(h.list) : []);   // a fresh scan is a getProgramAccounts: at most 3 at a time and 20/min per visitor (else the last list)
+      const l = await scanHolders(p[2]); return J(cached('hp|' + p[2] + '|' + hCache.get(p[2]).ts, HOLD_TTL, () => withPs(l))); }
     res.writeHead(404, { 'access-control-allow-origin': '*' }); res.end('{}');
   } catch (e) { res.writeHead(500, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ error: pubErr(e) })); }
 }
@@ -848,7 +865,7 @@ async function start() {
   retier(); setInterval(() => loadConfigs().catch(() => {}), 24 * 36e5);   // full config rescan only daily (new configs are picked up from their own create tx)
   console.log('watching', configs.size, 'treid configs (partners', PARTNERS.join(', '), ')');
   if (!OPS) return;
-  REW = startRewards({ conn, dbc, ops: OPS, treasury: PARTNER, q, q1, run, mainnet: MAINNET, quoteUsd: (c) => quoteUsd(c.quote_mint, c.quote_symbol), lockedOf: async (c) => (await LOCKS.fresh(c))?.inside || 0, balances: async (mint) => new Map((await holdersCached(mint)).filter((h) => !h.curve).map((h) => [h.wallet, h.pct / 100 * SUPPLY])) });
+  REW = startRewards({ conn, dbc, ops: OPS, treasury: PARTNER, q, q1, run: runLedger, mainnet: MAINNET, quoteUsd: (c) => quoteUsd(c.quote_mint, c.quote_symbol), lockedOf: async (c) => (await LOCKS.fresh(c))?.inside || 0, balances: async (mint) => new Map((await holdersCached(mint)).filter((h) => !h.curve).map((h) => [h.wallet, h.pct / 100 * SUPPLY])) });
   for (let i = 1; ; i++) { try { await REW.rebuild(); break; } catch (e) { console.log('rewards rebuild retry', i, String(e?.message || e).slice(0, 120)); await sleep(Math.min(60e3, 5e3 * i)); } }   // a hole in the ledger could pay the wrong person
   setTimeout(() => REW.cycle(), 30e3); setInterval(() => REW.cycle(), +(process.env.OPS_EVERY_MIN || 10) * 60e3);
   // creator reminders (push to the creator's own devices): 24 h and 6 h before their coin's fees pause for inactivity — once per quiet spell
@@ -862,7 +879,7 @@ async function start() {
     if (!st || st.state !== 'active' || !st.creator || !(st.idle > 0)) continue; const left = 72 * 3600e3 - st.idle, stage = left <= 6 * 3600e3 ? 6 : left <= 24 * 3600e3 ? 24 : 0; if (!stage || left <= 0) continue;
     const k = 'remind:' + c.mint + ':' + st.creator + ':' + stage + ':' + st.last; if (q1('SELECT 1 FROM kv WHERE k=?', k)) continue; run('INSERT OR REPLACE INTO kv(k,v) VALUES(?,?)', k, String(Date.now()));
     PUSH.toWallet(st.creator, { title: '⏳ $' + c.symbol + ': your fees pause in ' + Math.max(1, Math.round(left / 36e5)) + 'h', body: 'Tap “I’m still here” (or post an update) to keep earning from your coin.', path: '#/coin/' + c.mint, tag: 'remind-' + c.mint }); } } catch (e) { console.log('remind err', String(e?.message || e).slice(0, 80)); } }, 5 * 60e3);
-  OPS_ST = startOps({ conn, dbc, ops: OPS, treasury: PARTNER, q, q1, run, mainnet: MAINNET, rewardOk: (m) => quoteAllowed(m), quoteUsd: (c) => quoteUsd(c.quote_mint, c.quote_symbol), devState: (c) => REW.state(c), liabilities: () => REW.liabilities(), reserved: () => CR.owed(), callerCost: (since) => CR.earnedSince(since), ready: () => REW.ready(), poolAuthority: deriveDbcPoolAuthority().toBase58(), everyMs: +(process.env.OPS_EVERY_MIN || 10) * 60e3 });
+  OPS_ST = startOps({ conn, dbc, ops: OPS, treasury: PARTNER, q, q1, run: runLedger, mainnet: MAINNET, rewardOk: (m) => quoteAllowed(m), quoteUsd: (c) => quoteUsd(c.quote_mint, c.quote_symbol), devState: (c) => REW.state(c), liabilities: () => REW.liabilities(), reserved: () => CR.owed(), callerCost: (since) => CR.earnedSince(since), ready: () => REW.ready(), poolAuthority: deriveDbcPoolAuthority().toBase58(), everyMs: +(process.env.OPS_EVERY_MIN || 10) * 60e3 });
   const opsBal = () => conn.getBalance(OPS.publicKey).then((b) => { opsSolC.v = b / 1e9; if (MAINNET && b < 0.05e9) console.error('!! ops wallet low on SOL:', b / 1e9); }).catch(() => {}); opsBal(); setInterval(opsBal, 10 * 60e3);
   console.log('ops wallet', OPS.publicKey.toBase58(), '→ treasury', PARTNER);
 }
