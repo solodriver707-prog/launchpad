@@ -6792,3 +6792,10 @@ html body .tch-side:has(.rwin){width:86px}
 /* fix-ui: Activity box — the creator's track-record badge (e.g. "Serial rugger · 4 launches · 4 rugs") wraps instead of pushing out of the card */
 .actbox .st-foot>div,.st-foot>div{min-width:0}
 .st-foot .dev-rep{white-space:normal!important;max-width:100%;height:auto;line-height:1.3;padding-top:5px;padding-bottom:5px;text-align:left;flex-wrap:wrap;border-radius:14px}
+/* fix-ui: dev-bag lock confirm */
+.lkc .lkc-amt{display:flex;flex-direction:column;gap:2px;padding:12px 14px;border-radius:12px;border:1px solid var(--line)}
+.lkc .lkc-amt b{font-size:20px}
+.lkc .lkc-n{margin:0;font-size:12.5px;line-height:1.45}
+.lkc .lkc-w{color:var(--yellow)}
+.lkc .lkc-l{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;font-size:13px}
+.lkc .lkc-l li{display:flex;justify-content:space-between;gap:10px}

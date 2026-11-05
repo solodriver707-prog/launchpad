@@ -3718,6 +3718,27 @@
       '<button class="btn pri" data-act="xcGo"' + (X.busy ? ' disabled' : '') + '>' + (X.busy ? 'Checking the post…' : 'Confirm') + '</button></div></div>';
   }
   // ---- locked dev bag (verified on-chain by the treid server: the creator's own Jupiter Lock escrow, no cancel, no recipient change) ----
+  function launchTokOf(t) {   // what the creator bought at launch, if this browser knows it
+    if (t.launchTok > 0) return t.launchTok;
+    var f = S.trades.filter(function (x) { return x.tick === t.tick && x.wallet === t.creator && x.side === 'buy' && x.tokens > 0 && x.t - t.born < 120e3; }).sort(function (a, b) { return a.t - b.t; })[0];
+    return f ? f.tokens : 0;
+  }
+  function lockOpen(t) {   // confirm first: exact amount + unlock dates, then the wallet signs
+    if (!t || !t.lockDays || S.account !== t.creator) return; S.lockConf = { tick: t.tick, loading: true }; render();
+    livePos(t).then(function () { if (S.lockConf && S.lockConf.tick === t.tick) { S.lockConf.loading = false; render(); } });
+  }
+  function lockConfModal() {
+    var L = S.lockConf, t = L && find(L.tick); if (!t) return ''; var pl = LOCK_PLANS[t.lockDays] || LOCK_PLANS[30], sid = esc(symOf(t));
+    var bal = (S.pos[t.tick] || {}).tok || 0, lt = launchTokOf(t), known = lt > 0, amt = known ? Math.min(lt, bal) : bal, tax = Math.max(t.buy || 0, t.sell || 0);
+    var now = Date.now() / 1000, u0 = now + pl.cliff * 86400, u1 = u0 + pl.days * 86400, fmtD = function (sec) { return new Date(sec * 1000).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }); };
+    var body = L.loading ? '<p class="muted" style="margin:0">Checking your balance…</p>' : !(amt > 0) ? '<div class="xcm-err">No $' + sid + ' in this wallet to lock.</div>' :
+      '<div class="lkc-amt"><small class="muted">' + (known ? 'Your launch buy' : 'Your whole balance') + '</small><b class="mono">' + fmtNum(amt) + ' $' + sid + '</b><span class="muted mono">' + (amt / 1e9 * 100).toFixed(2) + '% of supply</span></div>' +
+      (known ? (bal > amt + 1e-6 ? '<p class="muted lkc-n">You hold ' + fmtNum(bal) + ' $' + sid + ' — only the launch amount is locked, the other ' + fmtNum(bal - amt) + ' stay free.</p>' : '') : '<p class="lkc-n lkc-w">treid doesn’t know your launch amount in this browser, so this locks <b>everything</b> this wallet holds of $' + sid + '.</p>') +
+      '<ul class="lkc-l"><li><span class="muted">Nothing unlocks until</span><b>' + fmtD(u0) + '</b></li><li><span class="muted">Then a little every day until</span><b>' + fmtD(u1) + '</b></li><li><span class="muted">Can it be cancelled?</span><b>No — not by anyone</b></li></ul>' +
+      (tax > 0 ? '<p class="muted lkc-n">The coin’s ' + tax + '% transfer tax is taken on the way into the lock.</p>' : '');
+    return '<div class="overlay center" data-act="lockX"><div class="modal xcm lkc" data-stop role="dialog" aria-modal="true"><div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:18px">Lock your dev bag · ' + t.lockDays + ' days</b><button class="iconbtn" data-act="lockX" aria-label="Close">✕</button></div>' + body +
+      '<button class="btn pri" data-act="lockGo"' + (L.loading || !(amt > 0) || S.busy ? ' disabled' : '') + '>' + (S.busy ? esc(S.busy) + '…' : 'Lock ' + (amt > 0 ? fmtNum(amt) + ' $' + sid : '') + ' — sign in wallet') + '</button><button class="link" data-act="lockX">Cancel</button></div></div>';
+  }
   function lockDate(sec) { return new Date(sec * 1000).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }); }
   function lockLive(t) { var L = t.devLock; return !!(L && L.unlock_end * 1000 > Date.now() && L.locked_pct > 0.001); }
   function lockTip(t) { var L = t.devLock, pre = Date.now() < L.unlock_start * 1000;
@@ -3735,8 +3756,9 @@
       (L.escrows && L.escrows[0] ? '<a class="lk-a" target="_blank" rel="noopener" href="https://solscan.io/account/' + esc(L.escrows[0]) + cl + '">Check lock ↗</a>' : '') + '</div>';
   }
   function devnetQ() { return CHAIN_ID === 'solana:devnet' ? '?cluster=devnet' : ''; }
-  function lockNow(t, days) {   // the creator's whole bag of this coin → Jupiter Lock (one signature)
-    return chainRun('Locking your dev bag for ' + days + ' days', function (T) { return T.buildLock({ rpc: RPC, owner: S.account, mint: t.ca, days: days }); }).then(function (b) {
+  function lockNow(t, days, tok) {   // the creator's launch bag (tok, in whole tokens) — or, when unknown, the whole balance — → Jupiter Lock (one signature). Only ever called from the confirm modal.
+    var raw = tok > 0 ? String(Math.floor(tok * 1e6)) : null;
+    return chainRun('Locking your dev bag for ' + days + ' days', function (T) { return T.buildLock({ rpc: RPC, owner: S.account, mint: t.ca, days: days, amountRaw: raw }); }).then(function (b) {
       t.devLock = { total_pct: b.total / 1e6 / 1e9 * 100, inside_pct: b.total / 1e6 / 1e9 * 100, locked_pct: b.total / 1e6 / 1e9 * 100, start: Math.floor(Date.now() / 1000), unlock_start: b.unlockStart, unlock_end: b.unlockEnd, days: days, escrows: [b.escrow] }; t.lkLocal = { at: Date.now(), v: t.devLock };
       toast('🔒 Your dev bag is locked on-chain until ' + lockDate(b.unlockStart) + ' ✓'); render(); return b; });
   }
@@ -4501,7 +4523,7 @@
     var ovKeep = {}; [].forEach.call(document.querySelectorAll(OV_SEL), function (o) { var d = o.firstElementChild; ovKeep[ovKey(o)] = d ? d.scrollTop : 0; });   // modals already on screen: don't replay their open animation on live re-renders
     var detOpen = [].map.call(document.querySelectorAll('#app details'), function (d) { return d.open ? (d.className || 'd') : null; });
     if (S.screen === 'site') { document.getElementById('app').innerHTML = body + siteModal() + walletModal(); document.body.classList.add('on-site'); document.body.classList.remove('has-rail', 'has-rail-min'); return; } document.body.classList.remove('on-site');
-    document.getElementById('app').innerHTML = (RPC_DEV || API_DEV ? '<div class="devbar">⚠ Developer mode — custom ' + [RPC_DEV ? 'RPC' : '', API_DEV ? 'server' : ''].filter(Boolean).join(' + ') + ' (this tab only)</div>' : '') + '<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="ccUp" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3DDC97" stop-opacity=".28"/><stop offset="1" stop-color="#3DDC97" stop-opacity="0"/></linearGradient><linearGradient id="ccDn" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F2708A" stop-opacity=".26"/><stop offset="1" stop-color="#F2708A" stop-opacity="0"/></linearGradient></defs></svg>' + header() + tape() + body + footer() + walletModal() + xcModal() + demoImgModal() + termsModal() + calloutDrawer() + calloutRail() + palette() + walletDrawer() + holderMap() + burnModal() + ctoModal() + coModal() + shareModal() + siteModal() + notifModal() + recvModal();
+    document.getElementById('app').innerHTML = (RPC_DEV || API_DEV ? '<div class="devbar">⚠ Developer mode — custom ' + [RPC_DEV ? 'RPC' : '', API_DEV ? 'server' : ''].filter(Boolean).join(' + ') + ' (this tab only)</div>' : '') + '<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="ccUp" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3DDC97" stop-opacity=".28"/><stop offset="1" stop-color="#3DDC97" stop-opacity="0"/></linearGradient><linearGradient id="ccDn" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F2708A" stop-opacity=".26"/><stop offset="1" stop-color="#F2708A" stop-opacity="0"/></linearGradient></defs></svg>' + header() + tape() + body + footer() + walletModal() + xcModal() + lockConfModal() + demoImgModal() + termsModal() + calloutDrawer() + calloutRail() + palette() + walletDrawer() + holderMap() + burnModal() + ctoModal() + coModal() + shareModal() + siteModal() + notifModal() + recvModal();
     document.body.classList.toggle('has-rail', S.screen === 'home' && !S.coOpen && !S.railHidden); document.body.classList.toggle('has-rail-min', S.screen === 'home' && !S.coOpen && !!S.railHidden);
     [].forEach.call(document.querySelectorAll(OV_SEL), function (o) { var k = ovKey(o); if (k in ovKeep) { o.classList.add('ov-still'); var d = o.firstElementChild; if (d && ovKeep[k]) d.scrollTop = ovKeep[k]; } });
     if (fid) { var el = document.getElementById(fid); if (el) { el.focus({ preventScroll: true }); try { if (ss != null) el.setSelectionRange(ss, se); } catch (e) {} } }
@@ -4819,7 +4841,10 @@
       case 'xcGo': (function () { var X = S.xc, tx = X && find(X.tick), u = (document.getElementById('xc-url') || {}).value || ''; if (!tx) return; X.url = u.trim(); X.busy = true; X.err = ''; render();
         fetch(API + '/api/xconfirm', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mint: tx.ca, url: X.url }) }).then(function (r) { return r.json(); }).then(function (j) {
           if (!j.ok) throw new Error(j.error || 'could not confirm'); tx.xOk = j.handle; S.xc = null; toast('✓ 𝕏 @' + j.handle + ' confirmed'); render(); }).catch(function (er) { if (S.xc) { S.xc.busy = false; S.xc.err = er.message; render(); } }); })(); break;
-      case 'lockFinish': var tlk = find(S.tick); if (tlk && tlk.lockDays && S.account === tlk.creator) lockNow(tlk, tlk.lockDays).catch(function (e) { if (e && e.message !== 'busy') toast('Lock failed: ' + chainErr(e)); }); break;
+      case 'lockFinish': lockOpen(find(S.tick)); break;
+      case 'lockX': S.lockConf = null; render(); break;
+      case 'lockGo': { var tlk = S.lockConf && find(S.lockConf.tick); if (!tlk || !tlk.lockDays || S.account !== tlk.creator) break; var lkB = (S.pos[tlk.tick] || {}).tok || 0, lkL = launchTokOf(tlk), lkA = lkL > 0 ? Math.min(lkL, lkB) : 0; S.lockConf = null;
+        lockNow(tlk, tlk.lockDays, lkA).catch(function (e) { if (e && e.message !== 'busy') toast('Lock failed: ' + chainErr(e)); render(); }); break; }
       case 'feeK': setC({ feeK: arg }); setTimeout(function () { var i = document.getElementById('c-feev'); if (i && arg !== 'me') i.focus(); }, 30); break;
       case 'ctax': setC(+arg > 0 ? { buy: +arg, sell: +arg } : { buy: 0, sell: 0 }); break;
       case 'qpick': qSelect(arg); break;
@@ -5101,8 +5126,8 @@
             if (cc0.x || cc0.tg || cc0.web) { nt2.soc = true; nt2.links = { demo: false, web: linkOf(cc0.web), x: cc0.x ? linkOf(/[\/.]/.test(cc0.x) ? cc0.x : 'x.com/' + cc0.x.replace(/^@/, '')) : null, tg: cc0.tg ? linkOf(/[\/.]/.test(cc0.tg) ? cc0.tg : 't.me/' + cc0.tg.replace(/^@/, '')) : null }; }
             S.c = { name: '', tick: '', desc: '', x: '', tg: '', web: '', pair: 'SOL', q: null, buy: 0, sell: 0, img: null, banner: null, devBuy: '', spec: { kind: pick(A.KINDS), skin: pick(A.SKINS), bg: pick(A.BGS), eyes: 'normal', mouth: 'smile', acc: 'none' } };
             openToken(nt2.tick); confetti(); toast('$' + symOf(nt2) + ' is live on-chain' + NETP + ' ✓', nt2);
-            if (cc0.lk) { nt2.lockIntent = true; nt2.lockDays = cc0.lk; setTimeout(function () {   // step 2: the launch buy goes into the lock (a second signature)
-              lockNow(nt2, cc0.lk).catch(function (e) { if (e && e.message !== 'busy') toast('Your coin is live, but the lock wasn’t made: ' + chainErr(e) + ' — press “Finish locking” on your coin page'); render(); }); }, 1200); }
+            if (cc0.lk) { nt2.lockIntent = true; nt2.lockDays = cc0.lk; if (dq2.tok > 0) nt2.launchTok = dq2.tok; setTimeout(function () {   // step 2: the launch buy goes into the lock — shown in the confirm first (a second signature)
+              lockOpen(nt2); }, 1200); }
           }).catch(function (e) { gEl.remove(); if (S.busy && /^Finding/.test(S.busy)) { S.busy = null; render(); } if (e && e.message !== 'busy') toast('Launch failed: ' + chainErr(e)); });
           break;
         }
