@@ -369,7 +369,11 @@
   function dlGet() { try { return JSON.parse(localStorage.getItem('treid.dl') || 'null'); } catch (e) { return null; } }
   function dlPut(o) { try { if (o) localStorage.setItem('treid.dl', JSON.stringify(o)); else localStorage.removeItem('treid.dl'); } catch (e) {} }
   // security: the redirect link carries only the request id — never keys, session or cosigners. A reply is honoured only when its id was stored by THIS browser (treid.dl / treid.dlpre), so a crafted link can't 'connect' someone else's address
-  function dlBack(rid) { return location.origin + location.pathname + '?dlr=' + rid; }
+  // the reply can land in a NEW tab — and Safari private tabs don't share storage — so the link back also carries this request's keys in its #fragment
+  // (never sent to any server; it only goes to the wallet, which is the other end of this channel anyway, and is wiped from the address bar on return)
+  function dlB64(o) { try { return btoa(unescape(encodeURIComponent(JSON.stringify(o)))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); } catch (e) { return ''; } }
+  function dlUnB64(v) { try { v = String(v).replace(/-/g, '+').replace(/_/g, '/'); while (v.length % 4) v += '='; return JSON.parse(decodeURIComponent(escape(atob(v)))); } catch (e) { return null; } }
+  function dlBack(rid, st) { var u = location.origin + location.pathname + '?dlr=' + rid; if (st && st.sk) { var k = dlB64({ prov: st.prov, sk: st.sk, pk: st.pk, wpk: st.wpk, session: st.session, account: st.account, pend: st.pend }); if (k) u += '#dk=' + k; } return u; }
   function dlRid() { return Math.random().toString(36).slice(2, 10); }
   function dlUrl(st, method, params) { return DLP[st.prov].base + method + '?' + Object.keys(params).map(function (k) { return k + '=' + encodeURIComponent(params[k]); }).join('&'); }
   function dlGo(st, method, params) { location.href = dlUrl(st, method, params); }
@@ -420,7 +424,8 @@
     var p = st && st.pend && rid && st.pend.rid === rid ? st.pend : null, pre = {};
     try { pre = JSON.parse(localStorage.getItem('treid.dlpre') || '{}'); } catch (e) {}
     if (!p && rid && pre[rid]) { st = pre[rid]; p = st.pend; }   // the tap handler may not have run before iOS switched apps
-    var cands = p ? [] : [st].concat(Object.keys(pre).map(function (k) { return pre[k]; })).filter(function (x) { return x && x.sk && x.pend; });   // id lost on the way back: the reply can still be opened with whichever key we sent
+    var dk = q.get('dk') ? dlUnB64(q.get('dk')) : null; if (!p && dk && dk.sk && dk.pend && dk.pend.rid === rid) { st = dk; p = dk.pend; try { var o0 = dlGet(); if (o0 && o0.account && !st.account) st.account = o0.account; } catch (e) {} }   // reply opened in a fresh (private) tab: our keys came back in the link
+    var cands = p ? [] : [st, dk].concat(Object.keys(pre).map(function (k) { return pre[k]; })).filter(function (x) { return x && x.sk && x.pend; });   // id lost on the way back: the reply can still be opened with whichever key we sent
     var ret = (p && p.ret) || (cands[0] && cands[0].pend && cands[0].pend.ret) || '';
     try { history.replaceState(null, '', location.pathname + ret); } catch (e) {}
     return { q: q, st: st, p: p, cands: cands }; })();
