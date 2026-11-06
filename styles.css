@@ -6917,3 +6917,6 @@ html body .tp-banner .tp-key>.tax>.liq-taxin{top:0!important;right:0!important;b
 .cw-wait{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;text-align:center}
 .cw-wait .gr-sp{margin-bottom:2px}
 .tradebox .quote>div{gap:10px}.tradebox .quote>div>span:last-child{white-space:nowrap;flex:none}
+.bl-ic svg{width:17px;height:17px;fill:var(--c)}
+.bl-amt small{white-space:nowrap}
+@media (max-width:760px){.bl-ic svg{width:14px;height:14px}.bl-of{display:none}.bn-lg2{grid-template-columns:34px minmax(0,1fr) auto 34px}}
