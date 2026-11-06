@@ -6863,3 +6863,4 @@ html body .tcard .tch-side>.tax{width:63px!important;height:57px!important;min-h
 html body .tcard .tch-side>.tax .tax-rw{position:absolute;top:4px;right:4px;width:13px;height:13px;display:flex;border-radius:50%;overflow:hidden;box-shadow:0 0 0 1.5px rgba(255,255,255,.85)}html body .tcard .tch-side>.tax .tax-rw>*{width:13px!important;height:13px!important}
 html body .tc-name2>b{flex:0 1 auto;min-width:0}html body .tc-name2>.tc-tkr{flex:0 4 auto!important;min-width:0;overflow:hidden}html body .tc-name2>.tc-tkr>.mono{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 html body .tc-name2>.tc-tkr>.mono{flex:none;overflow:visible}html body .tc-name2>.tc-tkr>.tc-ca{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:0 1 auto}html body .tc-name2>b{min-width:min(40%,110px)}
+html body .tc-name2>b>.tc-nm{color:inherit!important;font-size:inherit!important;font-weight:inherit!important;letter-spacing:inherit}
