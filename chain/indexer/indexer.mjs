@@ -406,7 +406,7 @@ async function handle(sig) {
     const rowSig = n++ ? sig + '#' + coin.mint.slice(0, 6) : sig;
     run('INSERT OR IGNORE INTO trades(sig,mint,wallet,side,sol,tokens,price_usd,mcap_usd,slot,ts,sniper,bundle,fee_sol,progress,usd,reserve) VALUES(?,?,?,?,?,?,?,?,?,?,?,0,?,?,?,?)', rowSig, coin.mint, trader, side, sol, tokens, price, price * circ, tx.slot, ts, sniper, fee / QD, Math.min(100, prog), sol * QU, reserve);
     if (SYSW.has(trader)) run('UPDATE trades SET sys=1 WHERE sig=?', rowSig);   // treid's own wallets (tax sales, buybacks) never count as market activity
-    if (coId && buy && CR) CR.attr({ sig: rowSig, id: coId, trader, coin, ts, usd: sol * QU, sys: SYSW.has(trader), treidFeeLam: feeLam(Math.min(fee * 0.5, inAmt * (tax > 0 ? 0.002 : 0.004)), coin, QD, QU) });   // treid's half of the trading fee (Meteora's cut is separate), never more than the normal rate (sniper-trap fees don't count)
+    if (coId && buy && CR) CR.attr({ sig: rowSig, id: coId, trader, coin, ts, usd: sol * QU, sys: SYSW.has(trader), mcUsd: price * circ, treidFeeLam: feeLam(Math.min(fee * 0.5, inAmt * (tax > 0 ? 0.002 : 0.004)), coin, QD, QU) });   // treid's half of the trading fee (Meteora's cut is separate), never more than the normal rate (sniper-trap fees don't count)
     // bundle = several different wallets buying in the same slot right after launch (where coordinated buys matter)
     if (buy && coin.created_slot > 0 && tx.slot - coin.created_slot <= 20) { const same = q("SELECT DISTINCT wallet FROM trades WHERE mint=? AND slot=? AND side='buy' AND wallet!=?", coin.mint, tx.slot, coin.creator); if (same.length >= 3) run("UPDATE trades SET bundle=1 WHERE mint=? AND slot=? AND side='buy' AND wallet!=?", coin.mint, tx.slot, coin.creator); }
     const t = q1('SELECT * FROM trades WHERE sig=?', rowSig); if (t) push({ type: 'trade', ...t, symbol: coin.symbol });
@@ -424,7 +424,7 @@ async function handle(sig) {
     const rowSig = n++ ? sig + '#' + coin.mint.slice(0, 6) : sig;
     run('INSERT OR IGNORE INTO trades(sig,mint,wallet,side,sol,tokens,price_usd,mcap_usd,slot,ts,sniper,bundle,fee_sol,progress,usd,reserve) VALUES(?,?,?,?,?,?,?,?,?,?,0,0,?,100,?,?)', rowSig, coin.mint, trader, side, sol, tokens, price, price * circ, tx.slot, ts, fee / QD, sol * QU, Number(d.reserve_b_amount) / QD);
     if (SYSW.has(trader)) run('UPDATE trades SET sys=1 WHERE sig=?', rowSig);
-    if (coId && buy && CR) CR.attr({ sig: rowSig, id: coId, trader, coin, ts, usd: sol * QU, sys: SYSW.has(trader), treidFeeLam: feeLam(Math.min(fee * 0.4, sol * QD * (cfgFee.get(coin.config) || 50) / 1e4 * 0.4), coin, QD, QU) });   // treid's LP half of the pool fee after Meteora's 20%
+    if (coId && buy && CR) CR.attr({ sig: rowSig, id: coId, trader, coin, ts, usd: sol * QU, sys: SYSW.has(trader), mcUsd: price * circ, treidFeeLam: feeLam(Math.min(fee * 0.4, sol * QD * (cfgFee.get(coin.config) || 50) / 1e4 * 0.4), coin, QD, QU) });   // treid's LP half of the pool fee after Meteora's 20%
     const t = q1('SELECT * FROM trades WHERE sig=?', rowSig); if (t) push({ type: 'trade', ...t, symbol: coin.symbol });
     console.log('trade ', coin.symbol, side.padEnd(4), sol.toFixed(3), coin.quote_symbol || 'SOL', tokens.toFixed(0), '(DAMM)');
   }

@@ -11,6 +11,8 @@ import { HALT, halt, withLock, canWrite, dbGuard } from './lock.mjs';
 const MEMO = new PublicKey('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr');
 const memoIx = (s) => new TransactionInstruction({ keys: [], programId: MEMO, data: Buffer.from(s) });
 export const CO_SHARE = Math.min(0.5, Math.max(0, +(process.env.CALLOUT_SHARE_PCT ?? 25) / 100));   // share of TREID'S fee (not of the trade)
+// calls on bigger coins earn a bigger share of treid's fee (market cap right after the buy); never over 50% — always funded by the fee itself
+export const coShareFor = (mcUsd) => Math.min(0.5, mcUsd >= 1e6 ? Math.max(CO_SHARE, 0.5) : mcUsd >= 1e5 ? Math.max(CO_SHARE, 0.35) : CO_SHARE);
 const WINDOW_MS = 72 * 3600e3;   // a callout earns from buys made within 72h of posting it
 const PAY_USD = 1, PER_TX = 5, KEEP = 0.2e9;
 const day = (ts) => new Date(ts).toISOString().slice(0, 10);
@@ -34,14 +36,14 @@ export function startCalloutRewards({ conn, ops, q, q1, run, solUsd = () => 0, m
   const owedAll = () => q('SELECT caller, SUM(lam) e FROM coattr GROUP BY caller').reduce((a, r) => a + Math.max(0, r.e - paidTo(r.caller)), 0);
 
   // called by the indexer for every buy that carried a callout memo. treidFeeLam: treid's own part of this trade's fee, in lamports.
-  function attr({ sig, id, trader, coin, treidFeeLam, usd, ts, sys = false }) {
+  function attr({ sig, id, trader, coin, treidFeeLam, usd, ts, sys = false, mcUsd = 0 }) {
     try {
       if (sys || !(treidFeeLam > 0) || !Number.isFinite(treidFeeLam)) return null;   // any pair: the indexer passes treid's fee already valued in SOL lamports (pair tokens are only allowed when verified with real liquidity)
       let c = q1('SELECT id, mint, wallet, ts, reply FROM callouts WHERE id=?', id); if (c && c.reply != null) c = q1('SELECT id, mint, wallet, ts, reply FROM callouts WHERE id=?', c.reply);   // a reply / update counts as its ROOT callout: same author, the root's own 72h window (updates can't renew it)
       if (!c || c.reply != null || c.mint !== coin.mint) return null;   // the callout must be about THIS coin
       if (c.wallet === trader || c.wallet === coin.creator || trader === coin.creator) return null;   // not your own buy; the dev already earns creator fees
       if (!(ts >= c.ts && ts - c.ts <= WINDOW_MS)) return null;
-      const lam = Math.floor(treidFeeLam * CO_SHARE); if (lam <= 0) return null;
+      const lam = Math.floor(treidFeeLam * coShareFor(+mcUsd || 0)); if (lam <= 0) return null;
       const r = run('INSERT OR IGNORE INTO coattr(sig,co,caller,trader,mint,lam,fee_lam,usd,ts) VALUES(?,?,?,?,?,?,?,?,?)', sig, c.id, c.wallet, trader, coin.mint, lam, Math.floor(treidFeeLam), usd || 0, ts);
       return r.changes ? { caller: c.wallet, lam } : null;
     } catch (e) { log('callout reward attr err', String(e?.message || e).slice(0, 100)); return null; }
