@@ -6877,3 +6877,4 @@ html body .tc-name2.two .tc-bdg{display:flex;align-items:center;gap:4px;min-widt
 html body .tc-name2.two .tc-bdg>*{flex:none;margin:0!important}
 html body .tc-name2.two>.tc-tkr>.tc-ca{flex:none!important;margin-left:auto}
 html body .tc-name2.two .tc-bdg .crb{font-size:8.5px;padding:1px 5px}
+.co-btn .co-ic{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linejoin:round;flex:none}
