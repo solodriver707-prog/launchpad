@@ -25,7 +25,7 @@ import { startPush } from './push.mjs';
 import { curveOk } from './curve.mjs';
 import { lockCache } from './devlock.mjs';
 import { fetchT, JUP } from './txutil.mjs';
-import { HALT, lockIdle } from './lock.mjs';
+import { HALT, lockIdle, dbVolatile } from './lock.mjs';
 let OPS_ST = null;
 import { verifySig, SITES, issueSession } from './sig.mjs';
 import { xauthOn, xStart, xFinish, retOk } from './xauth.mjs';
@@ -682,7 +682,7 @@ async function handleReq(req, res) {
     const [h, b64] = d.split(','), ct = h.slice(5, h.indexOf(';')); if (!/^image\/(png|jpe?g|gif|webp)$/.test(ct)) { res.writeHead(404); return res.end(); }   // never serve svg (script)
     res.writeHead(200, { 'content-type': ct, 'x-content-type-options': 'nosniff', 'access-control-allow-origin': '*', 'cache-control': 'public, max-age=86400' }); return res.end(Buffer.from(b64, 'base64')); }
   // public health: no ops balance / halt reason / subscriber counts (there is no admin-token mechanism; those live in the logs + Telegram alerts)
-  if (!p.length || p[1] === 'health') return J({ ok: true, ready, coins: q1('SELECT COUNT(*) n FROM coins').n, trades: q1('SELECT COUNT(*) n FROM trades').n, partner: PARTNER || null, ops: OPS?.publicKey.toBase58() || null, sol_usd: SOL_USD });
+  if (!p.length || p[1] === 'health') return J({ ok: true, ready, coins: q1('SELECT COUNT(*) n FROM coins').n, trades: q1('SELECT COUNT(*) n FROM trades').n, partner: PARTNER || null, ops: OPS?.publicKey.toBase58() || null, sol_usd: SOL_USD, cluster: MAINNET ? 'mainnet' : 'devnet', db_ok: !dbVolatile(), ops_ok: opsSolC.v == null ? null : opsSolC.v >= 0.05, halted: HALT.on });   // yes/no flags only (the monitor needs them; amounts and reasons stay in the logs)
   try {
     if (p[1] === 'stream') { const ipx = ip(req), nIp = sseByIp.get(ipx) || 0; if (clients.size >= 3000 || nIp >= 6) { res.writeHead(429, { 'access-control-allow-origin': '*' }); return res.end(); }
       sseByIp.set(ipx, nIp + 1); req.on('close', () => { const v = (sseByIp.get(ipx) || 1) - 1; if (v > 0) sseByIp.set(ipx, v); else sseByIp.delete(ipx); });
