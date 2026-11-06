@@ -6868,3 +6868,12 @@ html body .tc-name2>b{flex:0 0 auto!important;max-width:68%}html body .tc-name2>
 html body .tc-name2>.tc-tkr>.tc-ca{flex:0 20 auto!important;min-width:18px}html body .tc-name2>.tc-tkr>.mono{flex:0 1 auto!important;min-width:3.2em}
 .tch-vamp{position:absolute;left:54px;bottom:10px;z-index:3;width:36px;height:36px;border-radius:11px;border:1px solid rgba(255,255,255,.12);background:rgba(8,8,10,.6);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center}.tch-vamp .vampb{margin:0}
 html body .tc-name2>b{flex:0 1 auto!important;max-width:none;min-width:0}html body .tc-name2>.tc-tkr{flex:0 0 auto!important;overflow:visible}html body .tc-name2>.tc-tkr>.mono,html body .tc-name2>.tc-tkr>.tc-ca{flex:none!important;min-width:0;overflow:visible}
+html body .tc-name2.two{display:flex;flex-direction:column;align-items:stretch;gap:5px}
+html body .tc-name2.two>b{display:block;max-width:100%;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+html body .tc-name2.two>b>.tc-nm{display:inline}
+html body .tc-name2.two>.tc-tkr{display:flex;align-items:center;gap:6px;flex-wrap:nowrap;min-width:0;justify-content:flex-start}
+html body .tc-name2.two>.tc-tkr>.mono{flex:none!important;font-size:12px;color:var(--muted)}
+html body .tc-name2.two .tc-bdg{display:flex;align-items:center;gap:4px;min-width:0;flex:0 1 auto;overflow:hidden}
+html body .tc-name2.two .tc-bdg>*{flex:none;margin:0!important}
+html body .tc-name2.two>.tc-tkr>.tc-ca{flex:none!important;margin-left:auto}
+html body .tc-name2.two .tc-bdg .crb{font-size:8.5px;padding:1px 5px}
