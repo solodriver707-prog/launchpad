@@ -6843,3 +6843,5 @@ html body .tch-side:has(.rwin){width:86px}
 .lk3-tr i{display:block;height:100%;background:#3DDC97}
 .lk3-a{font-size:12px;font-weight:700;color:#7FF0BE;text-decoration:none;white-space:nowrap}.lk3-a:hover{text-decoration:underline}
 @media (max-width:760px){.lk3{flex-wrap:wrap;gap:6px 12px}.lk3-s{padding-left:0;border-left:0}.lk3-tr{display:none}}
+
+.cr-money .cr-usd{font-style:normal;font-size:10.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
