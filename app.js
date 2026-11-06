@@ -5226,8 +5226,14 @@
             var who0 = S.account, pt = { live: true, qMint: qq1.mint, qSym: qq1.sym, pair: qq1.key, qUsd: qq1.usd, qDec: qq1.dec };
             if (!(qq1.usd > 0)) throw new Error('No price for ' + qq1.sym + ' right now — try again in a moment');
             gEl.querySelector('span:last-child').innerHTML = 'Step 1 of 2: swapping <b>' + dq2.solIn + ' SOL → ' + esc(qq1.sym) + '</b> for your initial buy (all of it goes into your coin) — confirm in your wallet';
-            return jupSolToPair0(pt, Math.floor(dq2.solIn * 1e9)).then(function (sig) { return swapDeliveredRaw(sig, who0, qq1.mint); }).then(function (d) {
+            // a launch that failed AFTER step 1 left the swapped pair token in the wallet: the next try uses it (no second swap, no extra SOL)
+            if (!S.launchSwap) try { S.launchSwap = JSON.parse(localStorage.getItem('treid.launchSwap') || 'null'); } catch (e) {}   // survives a page reload
+            var pv = S.launchSwap && S.launchSwap.who === who0 && S.launchSwap.mint === qq1.mint && S.launchSwap.solIn === dq2.solIn ? S.launchSwap : null;
+            var pairRaw = function () { return rpc('getTokenAccountsByOwner', [who0, { mint: qq1.mint }, { encoding: 'jsonParsed', commitment: 'confirmed' }]).then(function (r) { return ((r && r.value) || []).reduce(function (a, x) { return a + BigInt(String(x.account.data.parsed.info.tokenAmount.amount)); }, 0n); }); };
+            var step1 = pv ? pairRaw().then(function (bal) { if (bal < BigInt(pv.raw)) { S.launchSwap = null; try { localStorage.removeItem('treid.launchSwap'); } catch (e) {} return null; } return { raw: BigInt(pv.raw), wasEmpty: pv.wasEmpty && bal === BigInt(pv.raw), reused: true }; }) : Promise.resolve(null);
+            return step1.then(function (d0) { if (d0) return d0; return jupSolToPair0(pt, Math.floor(dq2.solIn * 1e9)).then(function (sig) { return swapDeliveredRaw(sig, who0, qq1.mint); }).then(function (d1) { if (d1.raw > 0n) { S.launchSwap = { who: who0, mint: qq1.mint, sym: qq1.sym, dec: qq1.dec, solIn: dq2.solIn, raw: d1.raw.toString(), wasEmpty: d1.wasEmpty }; try { localStorage.setItem('treid.launchSwap', JSON.stringify(S.launchSwap)); } catch (e) {} } return d1; }); }).then(function (d) {
               if (!(d.raw > 0n)) throw new Error('The swap to ' + qq1.sym + ' didn’t arrive — nothing was launched');
+              if (d.reused) toast('Using the ' + qq1.sym + ' already swapped for this launch — no new swap');
               var got = Number(d.raw) / Math.pow(10, qq1.dec || 0), dp = Math.pow(10, Math.min(6, qq1.dec || 6)); dq2.sol = Math.floor(got * dp) / dp; dq2.raw = d.raw.toString(); dq2.close = d.wasEmpty; gEl.querySelector('span:last-child').innerHTML = 'Step 2 of 2: finding your address <b class="mono">…' + esc(suf1) + '</b> <small class="mono" id="gr-n"></small>'; return T; }); })
           .then(function (T) { return T.grind(suf1, { onProgress: function (n, exp) { var el = document.getElementById('gr-n'); if (!el) return; var rate = n / Math.max(0.2, (Date.now() - gStart) / 1000), left = Math.max(0, (exp - n) / rate); el.textContent = fmtNum(n) + ' tried · ' + (n >= exp ? 'any moment now — it\'s luck' : left < 5 ? 'almost there' : '~' + (left < 90 ? Math.ceil(left) + 's' : Math.ceil(left / 60) + ' min') + ' left'); } }); })
           .then(function (g) { gEl.remove(); grindT = g; S.busy = 'Sign once to save your logo'; render(); toast('Sign the message in your wallet to save your logo (free, no transaction)');
@@ -5240,10 +5246,10 @@
             var nt2 = liveTok(coin); nt2.spec = cc0.spec; nt2.img = cc0.img; nt2.banner = cc0.banner || null; nt2.desc = (cc0.desc || '').trim(); nt2.split = tax0 > 0 && cc0.split ? { p: cc0.split.p, h: cc0.split.h, b: cc0.split.b, d: cc0.split.d } : null;
             if (cc0.x || cc0.tg || cc0.web) { nt2.soc = true; nt2.links = { demo: false, web: linkOf(cc0.web), x: cc0.x ? linkOf(/[\/.]/.test(cc0.x) ? cc0.x : 'x.com/' + cc0.x.replace(/^@/, '')) : null, tg: cc0.tg ? linkOf(/[\/.]/.test(cc0.tg) ? cc0.tg : 't.me/' + cc0.tg.replace(/^@/, '')) : null }; }
             S.c = { name: '', tick: '', desc: '', x: '', tg: '', web: '', pair: 'SOL', q: null, buy: 0, sell: 0, img: null, banner: null, devBuy: '', spec: { kind: pick(A.KINDS), skin: pick(A.SKINS), bg: pick(A.BGS), eyes: 'normal', mouth: 'smile', acc: 'none' } };
-            openToken(nt2.tick); confetti(); toast('$' + symOf(nt2) + ' is live on-chain' + NETP + ' ✓', nt2);
+            S.launchSwap = null; try { localStorage.removeItem('treid.launchSwap'); } catch (e) {} openToken(nt2.tick); confetti(); toast('$' + symOf(nt2) + ' is live on-chain' + NETP + ' ✓', nt2);
             if (cc0.lk) { nt2.lockIntent = true; nt2.lockDays = cc0.lk; if (dq2.tok > 0) nt2.launchTok = dq2.tok; setTimeout(function () {   // step 2: the launch buy goes into the lock — shown in the confirm first (a second signature)
               lockOpen(nt2); }, 1200); }
-          }).catch(function (e) { gEl.remove(); if (S.busy && /^Finding/.test(S.busy)) { S.busy = null; render(); } if (e && e.message !== 'busy') toast('Launch failed: ' + chainErr(e)); });
+          }).catch(function (e) { gEl.remove(); if (S.busy && /^Finding/.test(S.busy)) { S.busy = null; render(); } if (e && e.message !== 'busy') { var ls = S.launchSwap; toast('Launch failed: ' + chainErr(e) + (ls ? ' — the ' + niceQ(Number(ls.raw) / Math.pow(10, ls.dec || 0)) + ' ' + ls.sym + ' from step 1 is in your wallet; press Launch again to use it (no new swap)' : '')); } });
           break;
         }
         var vc = c.van && c.van.mode === 'custom', vs = vc ? (c.van.suf || '') : 'trd', vf = vc ? vanFee(vs.length) : 0;
