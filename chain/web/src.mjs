@@ -5,7 +5,7 @@ import { Connection, Keypair, PublicKey, Transaction, SystemProgram, Transaction
 import { ed25519 } from '@noble/curves/ed25519';
 import bs58lib from 'bs58';
 const bs58enc = (b) => (bs58lib.default || bs58lib).encode(b instanceof Uint8Array ? b : Uint8Array.from(b));
-import { NATIVE_MINT, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, getAssociatedTokenAddressSync, createBurnCheckedInstruction, getMint, getExtensionTypes, ExtensionType, getTransferFeeConfig, getTransferHook, getDefaultAccountState, AccountState } from '@solana/spl-token';
+import { NATIVE_MINT, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, getAssociatedTokenAddressSync, createBurnCheckedInstruction, createCloseAccountInstruction, getMint, getExtensionTypes, ExtensionType, getTransferFeeConfig, getTransferHook, getDefaultAccountState, AccountState } from '@solana/spl-token';
 import BN from 'bn.js';
 import { getSwapQuoteTransferFees, DynamicBondingCurveClient, buildCurveWithMarketCap, buildCurve, TokenType, TokenDecimal, TokenAuthorityOption, BaseFeeMode, CollectFeeMode,
   MigrationOption, MigrationFeeOption, MigratedCollectFeeMode, DammV2DynamicFeeMode, ActivationType, deriveDbcPoolAddress, deriveDammV1MigrationMetadataAddress, SwapMode, getCurrentPoint, deriveDammV2PoolAddress, DAMM_V2_MIGRATION_FEE_ADDRESS, getPriceFromSqrtPrice } from '@meteora-ag/dynamic-bonding-curve-sdk';
@@ -92,7 +92,7 @@ async function finish(rpc, txs, payer, keypairs) {
   return { bytes: txs.map((t) => t.serialize({ requireAllSignatures: false, verifySignatures: false })), lastValidBlockHeight, cosigners: keypairs.map((k) => Array.from(k.secretKey)) };
 }
 // create config + coin (+ optional dev first buy, never hit by the trap) — returns unsigned-by-wallet tx bytes
-export async function buildCreate({ rpc, payer, partner, treasury, name, symbol, uri, taxBps = 0, trapBps = 5000, trapSecs = 30, devBuySol = 0, mintSecret = null, extraFeeSol = 0, escrow = null, quoteMint = null, mc0 = null, mc1 = null, pro = false, proThr = null }) {
+export async function buildCreate({ rpc, payer, partner, treasury, name, symbol, uri, taxBps = 0, trapBps = 5000, trapSecs = 30, devBuySol = 0, devBuyRaw = null, closeQuote = false, mintSecret = null, extraFeeSol = 0, escrow = null, quoteMint = null, mc0 = null, mc1 = null, pro = false, proThr = null }) {
   payer = pk(payer); partner = pk(partner); treasury = treasury ? pk(treasury) : partner;
   const qi = await quoteInfo({ rpc, mint: quoteMint || NATIVE_MINT }); if (!qi.ok) throw new Error(qi.reason); const QM = pk(qi.mint);
   const cl = client(rpc), cfg = Keypair.generate(), mint = mintSecret ? Keypair.fromSecretKey(Uint8Array.from(mintSecret)) : Keypair.generate(), curve = pro ? curveForPro({ taxBps, trapBps, trapSecs, quoteDecimals: qi.decimals, thr: proThr || RULES.proThrSol }) : curveFor({ taxBps, trapBps, trapSecs, quoteDecimals: qi.decimals, mc0: mc0 || RULES.mc0Sol, mc1: mc1 || RULES.mc1Sol });   // Pro start: 40% of the supply for ~85 SOL worth of the pair
@@ -100,7 +100,10 @@ export async function buildCreate({ rpc, payer, partner, treasury, name, symbol,
     transferFeeParameters: taxBps > 0 ? { transferFeeBasisPoints: Math.min(RULES.maxTaxBps, taxBps), withheldAuthority: 0, migratedTransferFeeAuthorityOption: 0 } : null,
     preCreatePoolParam: { name: String(name).slice(0, 32), symbol: String(symbol).slice(0, 10), uri: String(uri).split('MINT'.repeat(11)).join(mint.publicKey.toBase58()).slice(0, 200), poolCreator: payer, baseMint: mint.publicKey } };
   let txs;
-  if (devBuySol > 0) { const r = await cl.partner.createConfigAndPoolWithFirstBuy({ ...common, firstBuyParam: { buyer: payer, buyAmount: new BN(Math.round(devBuySol * 10 ** qi.decimals)), minimumAmountOut: new BN(0), referralTokenAccount: null } }); txs = [r.createConfigTx, r.createPoolWithFirstBuyTx]; }
+  if (devBuySol > 0) { const r = await cl.partner.createConfigAndPoolWithFirstBuy({ ...common, firstBuyParam: { buyer: payer, buyAmount: new BN(devBuyRaw ? String(devBuyRaw) : Math.round(devBuySol * 10 ** qi.decimals)), minimumAmountOut: new BN(0), referralTokenAccount: null } }); txs = [r.createConfigTx, r.createPoolWithFirstBuyTx];
+    // the dev paid in SOL and it was swapped to the pair token just before: the buy spends EXACTLY what arrived, so a pair account that was empty
+    // before ends empty again → close it in the same tx (rent back, and the pair token doesn't linger in the wallet). Classic SPL tokens only.
+    if (closeQuote && devBuyRaw && !qi.native && qi.program === 'spl') txs[1].add(createCloseAccountInstruction(getAssociatedTokenAddressSync(QM, payer, false, TOKEN_PROGRAM_ID), payer, payer, [], TOKEN_PROGRAM_ID)); }
   else txs = [await cl.partner.createConfigAndPool(common)];
   // treid rewards escrow: hand the pool's creator role (creator fee claims) to the treid ops wallet in the same tx — the dev stays the real creator off-chain
   if (escrow) { const poolPk = deriveDbcPoolAddress(QM, mint.publicKey, cfg.publicKey), tp = await cl.creator.program.methods.transferPoolCreator().accountsPartial({ virtualPool: poolPk, newCreator: pk(escrow), config: cfg.publicKey, creator: payer }).remainingAccounts([{ isSigner: false, isWritable: false, pubkey: deriveDammV1MigrationMetadataAddress(poolPk) }]).transaction();   // pool doesn't exist yet → build the ix directly
@@ -212,23 +215,36 @@ export async function buildSolSwap({ rpc, owner, pool, side, amount, slippageBps
 
   const jq = async (inM, outM, amt) => { const r = await (await fetch(jup + '/quote?inputMint=' + inM + '&outputMint=' + outM + '&amount=' + amt + '&slippageBps=' + slippageBps + '&maxAccounts=38')).json();
     if (!r || !r.outAmount || r.inputMint !== inM || r.outputMint !== outM) throw new Error('No Jupiter route between SOL and this pair right now — try again in a moment'); return r; };
-  let jQuote, q, dbcTx;
+  let jQuote, q, dbcTx, exact = false;
   if (!sell) { const lam = Math.floor(amount * 1e9); if (!(lam > 0)) throw new Error('Enter an amount first');
-    jQuote = await jq(SOLM, qm, lam); const pairIn = BigInt(jQuote.outAmount) * 9985n / 10000n;
+    jQuote = await jq(SOLM, qm, lam); var inQ0 = jQuote; let pairIn = BigInt(jQuote.outAmount) * 9985n / 10000n;
+    // exact pair amount (Jupiter ExactOut, where it has a route): the coin buy then spends every pair token that arrives — nothing left over
+    try { const xo = await (await fetch(jup + '/quote?inputMint=' + SOLM + '&outputMint=' + qm + '&amount=' + pairIn + '&swapMode=ExactOut&slippageBps=' + slippageBps + '&maxAccounts=38')).json();
+      if (xo && xo.swapMode === 'ExactOut' && xo.inputMint === SOLM && xo.outputMint === qm && BigInt(xo.outAmount) === pairIn && BigInt(xo.otherAmountThreshold) <= BigInt(lam)) { jQuote = xo; exact = true; } } catch {}
     q = await quote({ rpc, pool, side: 'buy', amount: Number(pairIn) / 10 ** qd, slippageBps, expect });
     dbcTx = await cl.pool.swap2({ owner, pool: pk(pool), swapBaseForQuote: false, referralTokenAccount: null, swapMode: q.mode, amountIn: new BN(q.amountIn), minimumAmountOut: new BN(q.minRaw) }); }
   else { q = await quote({ rpc, pool, side: 'sell', amount, slippageBps, expect }); const pairOut = BigInt(Math.floor(q.out * 10 ** qd)) * 9985n / 10000n; if (pairOut <= 0n) throw new Error('Amount too small');
     dbcTx = await cl.pool.swap2({ owner, pool: pk(pool), swapBaseForQuote: true, referralTokenAccount: null, swapMode: q.mode, amountIn: new BN(q.amountIn), minimumAmountOut: new BN(q.minRaw) });
     jQuote = await jq(qm, SOLM, pairOut.toString()); }
-  const ji = await (await fetch(jup + '/swap-instructions', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ quoteResponse: jQuote, userPublicKey: owner.toBase58(), wrapAndUnwrapSol: true }) })).json();
-  if (!ji || !ji.swapInstruction) throw new Error('Jupiter couldn’t build the swap');
-  const jup1 = [...(ji.setupInstructions || []).map(jIx), jIx(ji.swapInstruction), ...(ji.cleanupInstruction ? [jIx(ji.cleanupInstruction)] : [])], dbc1 = dbcTx.instructions.filter((ix) => !isCB(ix));
-  const ixs = [ComputeBudgetProgram.setComputeUnitLimit({ units: 900000 }), ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 50000 }), ...(sell ? [...dbc1, ...jup1] : [...jup1, ...dbc1])];
-  const alts = (await Promise.all((ji.addressLookupTableAddresses || []).map((a) => C(rpc).getAddressLookupTable(pk(a))))).map((r) => r.value).filter(Boolean);
-  const bh = await C(rpc).getLatestBlockhash('confirmed'), msg = new TransactionMessage({ payerKey: owner, recentBlockhash: bh.blockhash, instructions: ixs }).compileToV0Message(alts), vtx = new VersionedTransaction(msg);
-  const bytes = vtx.serialize(); if (bytes.length > 1232) throw new Error('This route is too big for one transaction — try a smaller amount or pay with ' + (sell ? 'the pair token' : 'the pair token'));
-  const sim = await C(rpc).simulateTransaction(vtx, { sigVerify: false, replaceRecentBlockhash: true }); if (sim.value.err) throw new Error('The swap would fail right now (' + JSON.stringify(sim.value.err).slice(0, 80) + ') — try again or raise slippage');
-  return { bytes, lastValidBlockHeight: bh.lastValidBlockHeight, quote: sell ? { ...q, out: Number(jQuote.outAmount) / 1e9, minOut: Number(jQuote.otherAmountThreshold) / 1e9, outSym: 'SOL' } : q, solMinRaw: sell ? jQuote.otherAmountThreshold : null, coinMinRaw: sell ? null : q.minRaw, lamports: sell ? null : Math.floor(amount * 1e9), tokensRaw: sell ? q.amountIn : null };
+  const inQuote = sell ? jQuote : inQ0;   // the plain ExactIn route — always the fallback
+  const assemble = async (jQuote, exact) => {
+    const ji = await (await fetch(jup + '/swap-instructions', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ quoteResponse: jQuote, userPublicKey: owner.toBase58(), wrapAndUnwrapSol: true }) })).json();
+    if (!ji || !ji.swapInstruction) throw new Error('Jupiter couldn’t build the swap');
+    const jup1 = [...(ji.setupInstructions || []).map(jIx), jIx(ji.swapInstruction), ...(ji.cleanupInstruction ? [jIx(ji.cleanupInstruction)] : [])], dbc1 = dbcTx.instructions.filter((ix) => !isCB(ix));
+    const ixs = [ComputeBudgetProgram.setComputeUnitLimit({ units: 900000 }), ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 50000 }), ...(sell ? [...dbc1, ...jup1] : [...jup1, ...dbc1])];
+    let closeIx = null; if (!sell && exact) { try { const qai = await C(rpc).getAccountInfo(pk(qm)); if (qai && qai.owner.equals(TOKEN_PROGRAM_ID)) { const qata = getAssociatedTokenAddressSync(pk(qm), owner, false, TOKEN_PROGRAM_ID); if (!(await C(rpc).getAccountInfo(qata))) closeIx = createCloseAccountInstruction(qata, owner, owner, [], TOKEN_PROGRAM_ID); } } catch {} }   // opened by this tx and spent to zero → close it
+    const alts = (await Promise.all((ji.addressLookupTableAddresses || []).map((a) => C(rpc).getAddressLookupTable(pk(a))))).map((r) => r.value).filter(Boolean);
+    const bh = await C(rpc).getLatestBlockhash('confirmed');
+    const mk = (list) => { try { const v = new VersionedTransaction(new TransactionMessage({ payerKey: owner, recentBlockhash: bh.blockhash, instructions: list }).compileToV0Message(alts)); const b = v.serialize(); return b.length <= 1232 ? { vtx: v, bytes: b } : null; } catch { return null; } };
+    let built = closeIx ? mk([...ixs, closeIx]) : null, why = closeIx ? (built ? '' : 'close-too-big') : (exact ? 'had-account' : 'no-exactout');
+    if (built) { const s0 = await C(rpc).simulateTransaction(built.vtx, { sigVerify: false, replaceRecentBlockhash: true }); if (s0.value.err) { built = null; why = 'close-sim:' + JSON.stringify(s0.value.err).slice(0, 60); } }   // close not possible → plain version
+    if (!built) built = mk(ixs); if (!built) throw new Error('This route is too big for one transaction — try a smaller amount or pay with the pair token');
+    const vtx = built.vtx, bytes = built.bytes, closed = !!(closeIx && !why);
+    const sim = await C(rpc).simulateTransaction(vtx, { sigVerify: false, replaceRecentBlockhash: true }); if (sim.value.err) throw new Error('The swap would fail right now (' + JSON.stringify(sim.value.err).slice(0, 80) + ') — try again or raise slippage');
+    return { bytes, lastValidBlockHeight: bh.lastValidBlockHeight, quote: sell ? { ...q, out: Number(jQuote.outAmount) / 1e9, minOut: Number(jQuote.otherAmountThreshold) / 1e9, outSym: 'SOL' } : q, solMinRaw: sell ? jQuote.otherAmountThreshold : null, coinMinRaw: sell ? null : q.minRaw, lamports: sell ? null : Math.floor(amount * 1e9), tokensRaw: sell ? q.amountIn : null, pairExact: exact, pairClosed: closed, pairNote: why };
+  };
+  if (exact) { try { return await assemble(jQuote, true); } catch {} }   // exact route too big / failing → the plain route (a little pair dust stays)
+  return assemble(inQuote, false);
 }
 export async function tokenBalance({ rpc, owner, mint }) {
   if (pk(mint).equals(NATIVE_MINT)) return (await C(rpc).getBalance(pk(owner))) / 1e9;
