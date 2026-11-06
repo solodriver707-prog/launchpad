@@ -699,12 +699,13 @@
     ];
   }
   // board cards show the coin's activity; the risk checks (dev, top 10, snipers, bundles) are on the coin page ("What we can see")
+  var FIRE = '<svg class="rk-fire" viewBox="0 0 16 20" aria-hidden="true"><defs><linearGradient id="fireG" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#FF5A1F"/><stop offset=".6" stop-color="#FF9A2E"/><stop offset="1" stop-color="#FFD15C"/></linearGradient></defs><path fill="url(#fireG)" d="M8 0c.6 3.2 2.4 4.7 4.1 6.6C14 8.7 15 10.6 15 12.9 15 16.8 11.9 20 8 20s-7-3.2-7-7.1c0-2.4 1-4.3 2.6-5.6-.1 1.6.5 2.9 1.7 3.6C5 7.4 6.3 3.4 8 0z"/><path fill="#FFE7A3" d="M8.3 10.2c.4 1.6 1.4 2.3 2 3.3.4.6.6 1.3.6 2 0 1.8-1.3 3-2.9 3s-2.9-1.2-2.9-3c0-1.4.8-2.3 1.6-3 .1.8.5 1.3 1 1.5-.2-1.4 0-2.7.6-3.8z" opacity=".9"/></svg>';
   function paidTile(t) {   // what the tax has paid holders so far (USD at today's prices) · coins without a holder share: 🔥 share of supply burned
     var sp = splitOf(t), tp = t.taxPaid || {};
     if (sp && sp.h > 0 && Math.max(t.buy, t.sell) > 0) { var usd = (tp.holders || 0) * price(t) + (tp.holders_q || 0) * qUsdT(t);
       return ['PAID', '$' + (usd >= 1000 ? fmtK(usd / 1000).replace('$', '') : usd >= 10 ? Math.round(usd) : usd > 0 ? usd.toFixed(2) : '0'), 'Paid to holders from the tax so far' + (tp.n ? ' · ' + tp.n + ' payouts' : '')]; }
     var bp = t.supply > 0 && t.supply < 1e9 ? (1e9 - t.supply) / 1e9 * 100 : 0;
-    return ['🔥 BURNED', (bp >= 10 ? bp.toFixed(0) : bp >= 0.1 ? bp.toFixed(1) : bp > 0 ? '<0.1' : '0') + '%', 'Share of the supply burned for good'];
+    return ['BURNED' + FIRE, (bp >= 10 ? bp.toFixed(0) : bp >= 0.1 ? bp.toFixed(1) : bp > 0 ? '<0.1' : '0') + '%', 'Share of the supply burned for good'];
   }
   function previewTiles(t, o) {   // Create preview: what buyers see at launch, in the same card
     var dp = t.devPct || 0, col = dp < 3 ? '#3DDC97' : dp < 8 ? '#FFD15C' : '#F2708A', sn = o.snipe, tm = Math.max(t.buy || 0, t.sell || 0);

@@ -6849,3 +6849,6 @@ html body .tch-side:has(.rwin){width:86px}
 .cr-logmore{display:block;margin:6px auto 0;font-size:12px}
 .lk3.lk3-no{background:rgba(255,209,92,.07);border-color:rgba(255,209,92,.35)}.lk3-no .lk3-t b{color:#FFD15C}.lk3-no .lk3-w{color:var(--muted);white-space:normal}
 .kin-w b{position:relative;top:-.07em}
+.rk-l .rk-fire{width:9px;height:11px;margin-left:4px;vertical-align:-1px;display:inline-block}
+html body .pairbig>div{text-align:left}
+html body .lb3-rm{gap:14px}
