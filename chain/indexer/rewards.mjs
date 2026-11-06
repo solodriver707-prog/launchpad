@@ -137,16 +137,13 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, q
     const base = { era: e.type, creator: e.wallet || null, fund: 0, paid: sum(c.mint, 'pay'), buyback: sum(c.mint, 'buyback'), burnedTokens: sum(c.mint, 'burntok'), granted: sum(c.mint, 'platform'), lastPay: lastOf(c.mint, 'pay')?.ts || 0 };
     if (e.type === 'out') return { ...base, state: 'out', why: outWhy(c), outAt: e.start, idle: 0, sold: 0, last: e.start };
     if (e.to) base.to = { kind: e.to.kind, id: e.to.id, linked: !!e.wallet, linkedAt: e.linkedAt || null };
-    const devDumped = () => { if (!(e.type === 'dev' && e.to && c.creator && c.creator !== e.wallet)) return false; const d = activity(c, c.creator, c.created_at || 0); return d.sold >= RULES.soldOut && d.bal < RULES.keepPct / 100 * SUPPLY; };
-    if (!e.wallet) { const left = FEE_GRACE_MS - (Date.now() - e.start); if (devDumped()) return { ...base, state: 'out', why: 'sold', bal: 0, peak: 0, sold: 0, last: e.start, idle: 0, outAt: null };   // fees for a handle that hasn't claimed yet: they wait in the pool, no timers run
+    // fees sent to an X account: only that person's own activity counts — the launch wallet selling doesn't take their fees (buyers still see "dev sold" on the coin page)
+    if (!e.wallet) { const left = FEE_GRACE_MS - (Date.now() - e.start);    // fees for a handle that hasn't claimed yet: they wait in the pool, no timers run
       return { ...base, state: left > 0 ? 'waiting' : 'out', why: left > 0 ? null : 'unclaimed', claimBy: e.start + FEE_GRACE_MS, bal: 0, peak: 0, sold: 0, last: e.start, idle: 0, outAt: null }; }
     const a = activity(c, e.wallet, e.start, e.type === 'cto' ? e.startBag : null); let st = 'active', why = null;
     const IR = idleRules(e);
     // out: sold/moved 70%+ of the peak bag AND kept under 0.5% of supply (a dev trimming 10% → 2% keeps a real stake and stays in), or 7 days away · paused: 72h away
     if (a.sold >= RULES.soldOut && a.bal < RULES.keepPct / 100 * SUPPLY) { st = 'out'; why = 'sold'; } else if (a.idle >= IR.out) { st = 'out'; why = 'idle'; } else if (a.idle >= IR.freeze) st = 'frozen';
-    // fees sent to an X / GitHub account: the launch wallet's bag counts too — the dev can't dump from the launch wallet while the handle keeps earning.
-    // Measured from the coin's creation (a re-link to a new wallet never resets it)
-    if (st !== 'out' && devDumped()) { st = 'out'; why = 'sold'; }
     const r = { ...base, ...a, paid: sum(c.mint, 'pay', e.start), state: st, why, outAt: null, freezeMs: IR.freeze, outMs: IR.out };
     if (e.type === 'cto') r.cto = { lead: e.wallet, at: e.start, fund: 0, paid: 0, vested: 0, owed: 0 };
     return r;
