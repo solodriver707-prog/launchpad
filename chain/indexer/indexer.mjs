@@ -29,6 +29,7 @@ import { HALT, lockIdle, dbVolatile } from './lock.mjs';
 let OPS_ST = null;
 import { verifySig, SITES, issueSession } from './sig.mjs';
 import { xauthOn, xStart, xFinish, retOk } from './xauth.mjs';
+const CLOG = [];
 import { ed25519 } from '@noble/curves/ed25519';
 
 const RPC = process.env.RPC || 'http://127.0.0.1:8899';
@@ -752,6 +753,12 @@ async function handleReq(req, res) {
           const img = String(b.image || ''); if (!/^data:image\/(webp|jpeg|png);base64,[A-Za-z0-9+/=]+$/.test(img) || img.length > 1_100_000) throw new Error('use a PNG, JPG or WEBP banner under 800 KB');
           run('INSERT INTO meta(mint, name, symbol, banner, at) VALUES(?,?,?,?,?) ON CONFLICT(mint) DO UPDATE SET banner=excluded.banner, at=excluded.at', c.mint, c.name, c.symbol, img, Date.now());
           coinsSnap = null; J({ ok: true, v: Date.now() }); } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: pubErr(e) })); } }); return; }
+    if (p[1] === 'clog') {   // wallet-connect failures reported by browsers (wallet name, error text, browser) — no addresses; last 60 kept in memory
+      if (req.method === 'POST') { if (!rate('clog|' + ip(req), 20, 36e5)) { res.writeHead(429, { 'access-control-allow-origin': '*' }); return res.end('{}'); }
+        let body; try { body = await readBody(req, res, 1500); } catch (e) { return bodyFail(res, e); }
+        try { const b = JSON.parse(body), cut = (v, n) => String(v || '').replace(/[\u0000-\u001f]/g, ' ').slice(0, n); CLOG.push({ at: Date.now(), w: cut(b.w, 30), e: cut(b.e, 200), e0: cut(b.e0, 200), ua: cut(req.headers['user-agent'], 160), host: cut(b.host, 40) }); while (CLOG.length > 60) CLOG.shift(); console.log('clog', cut(b.w, 30), '|', cut(b.e0, 120), '|', cut(b.e, 120)); } catch {}
+        res.writeHead(204, { 'access-control-allow-origin': '*' }); return res.end(); }
+      return J({ items: CLOG.slice().reverse() }); }
     if (p[1] === 'xauth' && p[2] === 'start' && req.method === 'POST') {   // "Sign in with X" to claim fees sent to an X handle (xauth.mjs)
       if (!rate('xa|' + ip(req), 20, 36e5)) { res.writeHead(429, { 'access-control-allow-origin': '*' }); return res.end('{"ok":false,"error":"too many tries — try again later"}'); }
       let body; try { body = await readBody(req, res, 4000); } catch (e) { return bodyFail(res, e); }

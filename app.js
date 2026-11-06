@@ -274,7 +274,13 @@
       // the extension's own provider usually still works: connect there, then use the accounts the standard wallet picks up (no second popup)
       return Promise.resolve(legacy.connect()).then(function () { return wait(250); }).then(function () { return (w.accounts && w.accounts.length) ? { accounts: w.accounts } : wait(700).then(function () { return (w.accounts && w.accounts.length) ? { accounts: w.accounts } : stdC(); }); }); })
     .catch(function (err) { var em = String((err && err.message) || ''); if (silent || /reject|cancel|denied|closed/i.test(em)) throw err;
-      return wait(600).then(stdC); })   // one quiet retry: a wallet that was still waking up / unlocking usually answers the second time
+      // a wallet extension whose background worker was asleep answers the first calls with "Internal JSON-RPC error" while it starts up:
+      // keep trying quietly for a few seconds (standard connect, then the wallet's own provider) before telling the user anything
+      var tries = [700, 1400, 2400, 3500], k = 0;
+      var again = function (e) { var m = String((e && e.message) || ''); if (/reject|cancel|denied|closed/i.test(m) && !/JSON-RPC/i.test(m)) throw e; if (k >= tries.length) throw e;
+        return wait(tries[k++]).then(function () { return stdC(); }).catch(function (e2) { if (!legacy || /reject|cancel|denied|closed/i.test(String((e2 && e2.message) || ''))) throw e2;
+          return Promise.resolve(legacy.connect()).then(function () { return wait(300); }).then(function () { if (w.accounts && w.accounts.length) return { accounts: w.accounts }; throw e2; }); }).catch(again); };
+      return again(err); })
     .then(function (res) {
       var accs = (res && res.accounts) || w.accounts || [];
       var acc = accs.filter(function (a) { return (a.chains || []).some(function (c) { return String(c).indexOf('solana:') === 0; }); })[0] || accs[0];
@@ -285,7 +291,7 @@
       if (!silent) toast(w.name + ' connected · ' + short(acc.address));
     }).catch(function (err) {
       set({ connecting: null });
-      if (!silent) { var em = String((err && err.message) || ''); try { console.warn('[treid] connect failed', w.name, S.connErr, err); } catch (e) {}
+      if (!silent) { var em = String((err && err.message) || ''); try { console.warn('[treid] connect failed', w.name, S.connErr, err); } catch (e) {} try { if (API) fetch(API + '/api/clog', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ w: w.name, e: em, e0: S.connErr || '', host: location.host }) }).catch(function () {}); } catch (e) {}
         toast(/reject|cancel|denied|closed/i.test(em) && !/JSON-RPC/i.test(S.connErr || '') ? 'Connection cancelled' : 'Couldn’t connect to ' + w.name + (em ? ' (' + em.slice(0, 60) + ')' : '') + ' — open the wallet, unlock it and try again. If it keeps failing, restart the browser or use another wallet.'); }
     });
   }
