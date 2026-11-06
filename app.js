@@ -3914,21 +3914,20 @@
         '<small class="van-err" id="van-err"></small></div>' : '') +
       '<div class="van-prev"><small>Preview</small><div id="van-prev">' + vanPrev(c) + '</div>' + (cus && n >= 3 ? '<span class="van-fee mono" id="van-fee">+' + vanFee(n) + ' SOL · ' + vanEta(n) + '</span>' : cus ? '<span class="van-fee mono" id="van-fee">type at least 3 characters</span>' : '<span class="van-fee ok mono">free · instant</span>') + '</div></div>';
   }
-  // who gets the creator fees: you, an X account, a GitHub user or another wallet (fixed at launch, stored in the coin's on-chain metadata)
+  // who gets the creator fees: you or an X account (fixed at launch, stored in the coin's on-chain metadata; older coins may still point at GitHub — the indexer keeps serving those)
   function fParam(c) {
-    var k = c.feeK || 'me', v = String(c.feeV || '').trim(); if (k === 'me') return { v: '' };
+    var k = c.feeK === 'x' ? 'x' : 'me', v = String(c.feeV || '').trim(); if (k === 'me') return { v: '' };
     if (k === 'x') { v = v.replace(/^https?:\/\/(www\.)?(x|twitter)\.com\//i, '').replace(/^@/, '').split(/[/?#]/)[0]; return /^[A-Za-z0-9_]{1,15}$/.test(v) ? { v: 'x.' + v, show: '@' + v } : { err: 'Enter the X handle that should get the creator fees (e.g. @name)' }; }
-    if (k === 'g') { v = v.replace(/^https?:\/\/(www\.)?github\.com\//i, '').replace(/^@/, '').split(/[/?#]/)[0]; return /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/.test(v) ? { v: 'g.' + v, show: v } : { err: 'Enter the GitHub username that should get the creator fees' }; }
-    return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(v) ? { v: 'w.' + v, show: short(v) } : { err: 'Enter the Solana wallet that should get the creator fees' };
+    return { v: '' };
   }
   function feeToPicker(c) {
-    var k = c.feeK || 'me', opts = [['me', 'Me'], ['x', 'X account'], ['g', 'GitHub']], fp = fParam(c);
-    var ph = { x: '@handle or x.com/handle', g: 'GitHub username', w: 'Solana wallet address' }[k];
+    var k = c.feeK === 'x' ? 'x' : 'me', opts = [['me', 'Me'], ['x', 'X account']], fp = fParam(c);
+    var ph = '@handle or x.com/handle';
     return '<div class="field feeto"><div class="lbl"><b>Creator fees go to <span class="muted" style="font-weight:500;font-size:12px">· set once, can’t be changed after launch</span></b></div>' +
       '<div class="feeto-q">' + opts.map(function (o) { return '<button class="' + (k === o[0] ? 'on' : '') + '" data-act="feeK" data-arg="' + o[0] + '">' + o[1] + '</button>'; }).join('') + '</div>' +
-      (k === 'me' ? '' : '<input id="c-feev" class="inp' + (k === 'w' ? ' mono' : '') + '" data-bind="c.feeV" value="' + esc(c.feeV || '') + '" placeholder="' + ph + '" autocomplete="off" spellcheck="false">' +
-        '<small class="muted feeto-n">' + (k === 'w' ? 'That wallet earns the creator fees and must show up every 72h, like a creator.' :
-          'The fees wait safely in the pool. ' + (k === 'x' ? 'The X account' : 'The GitHub user') + ' claims them on the coin page by posting their wallet address from that account — no sign-up needed. They have <b>30 days</b> to claim; after that the creator rules treat the fees as unclaimed (half buys back & burns the coin). Your coin’s share of the tax for the creator is burned until they claim.') + '</small>') + '</div>';
+      (k === 'me' ? '' : '<input id="c-feev" class="inp" data-bind="c.feeV" value="' + esc(c.feeV || '') + '" placeholder="' + ph + '" autocomplete="off" spellcheck="false">' +
+        '<small class="muted feeto-n">' + (
+          'The fees wait safely in the pool. The X account claims them on the coin page by signing in with 𝕏 — no sign-up needed. They have <b>30 days</b> to claim; after that the creator rules treat the fees as unclaimed (half buys back & burns the coin). Your coin’s share of the tax for the creator is burned until they claim.') + '</small>') + '</div>';
   }
   function devBuyPicker(c) {
     var q = devQuote(String(c.devBuy || '').replace(',', '.')), lv = q.pct === 0 ? 'z' : q.pct < 3 ? 'g' : q.pct < 8 ? 'y' : 'r';
