@@ -3651,6 +3651,7 @@
   function trapEndFee(tax) { return tax > 0 ? FEE.taxed : FEE.plain; }
   function trapStepFee(start, tax, i) { return Math.round((start - (start - trapEndFee(tax)) * i / TRAP_STEPS + tax) * 10) / 10; }
   function normalCost(tax) { return Math.round((tax + trapEndFee(tax)) * 10) / 10; }
+  function snipeTax(t) { var m = Math.max(t.buy, t.sell); return Math.round(Math.max(m, snipeNow(t) - trapEndFee(m)) * 10) / 10; }   // the trap as tax only (no trading fee): ends on the badge's own %
   function snipeNow(t, at) { var sn = t.snipe; if (!sn || !sn.on) return 0; var age = ((at || Date.now()) - t.born) / 1000; if (age >= sn.dur) return 0; return trapStepFee(sn.start, Math.max(t.buy, t.sell), Math.floor(age / (sn.dur / TRAP_STEPS))); }
   function trapLeft(t) { return t.snipe && t.snipe.on ? Math.max(0, t.snipe.dur - (Date.now() - t.born) / 1000) : 0; }
   function hgSVG(f) {
@@ -3666,7 +3667,7 @@
   function liqContent(t, cls, rel) {
     var m = Math.max(t.buy, t.sell), id = esc(t.tick), sid = esc(symOf(t)), left = trapFmt(trapLeft(t));
     if (rel) return cls === 'card' ? '<small>TAX</small><b>' + m + '%</b><em>released</em>' : cls === 'head' ? '<b>✓ Trap over</b><small>tax is now ' + m + '%</small>' : '<b>✓ Sniper trap is over</b><small>Normal ' + m + '% tax from now on.</small>';
-    if (cls === 'taxin') return rel ? '<small>TRAP OVER</small><b>' + m + '%</b><small>normal tax now</small>' : '<small>🪤 SNIPER TAX</small><b class="mono" data-trapv="' + id + '">' + snipeNow(t) + '%</b><small>→ ' + normalCost(m) + '% in <i class="mono" data-liqt>' + left + '</i></small>';
+    if (cls === 'taxin') return rel ? '<small>TRAP OVER</small><b>' + m + '%</b><small>normal tax now</small>' : '<small>🪤 SNIPER TAX</small><b class="mono" data-trapvt="' + id + '">' + snipeTax(t) + '%</b><small>→ ' + m + '% in <i class="mono" data-liqt>' + left + '</i></small>';
     if (cls === 'card') return '<small>SNIPER TAX</small><b data-trapv="' + id + '">' + snipeNow(t) + '%</b><em class="mono" data-liqt>' + left + '</em>';
     if (cls === 'head') return '<span class="lq-big mono" data-trapv="' + id + '">' + snipeNow(t) + '%</span><span class="lq-tx"><b>🪤 Sniper tax</b><small>drops to <i>' + normalCost(m) + '%</i> in <i class="mono" data-liqt>' + left + '</i></small></span>';
     return '<span class="lq-big mono" data-trapv="' + id + '">' + snipeNow(t) + '%</span><span class="lq-tx"><b>Sniper tax is on</b><small>Every trade now costs <i data-trapv="' + id + '">' + snipeNow(t) + '%</i> (trap fee + tax), buys and sells. It steps down every ' + Math.round(t.snipe.dur / TRAP_STEPS) + 's and reaches <i>' + normalCost(m) + '%</i> in <i class="mono" data-liqt>' + left + '</i>.</small></span>';
@@ -3700,6 +3701,7 @@
     document.querySelectorAll('[data-hgtax]').forEach(function (e) { var t = find(e.getAttribute('data-hgtax')); if (!t) return; var left = trapLeft(t);
       if (left <= 0) { if (e.classList.contains('rel')) return; var m = Math.max(t.buy, t.sell); e.classList.add('rel'); e.style.background = taxBg(m); e.innerHTML = '<small>TAX</small><b>' + m + '%</b><i class="rel-burst"></i>'; var tc = e.closest('.tcard'); if (tc) { var tr = tc.querySelector('.trap-c'); if (tr) tr.remove(); tc.classList.add('released'); } return; }
       var sv = e.querySelector('.hg-svg'); if (sv) sv.outerHTML = hgSVG(left / t.snipe.dur); var tt = e.querySelector('.hgt-t'); if (tt) tt.textContent = trapFmt(left); });
+    document.querySelectorAll('[data-trapvt]').forEach(function (e) { var t = find(e.getAttribute('data-trapvt')); if (t && trapLeft(t) > 0) { var v = snipeTax(t) + '%'; if (e.textContent !== v) { e.textContent = v; e.classList.remove('stepdn'); void e.offsetWidth; e.classList.add('stepdn'); } } });
     document.querySelectorAll('[data-trapv]').forEach(function (e) { var t = find(e.getAttribute('data-trapv')); if (t && trapLeft(t) > 0) { var v = snipeNow(t) + '%'; if (e.textContent !== v) { e.textContent = v; e.classList.remove('stepdn'); void e.offsetWidth; e.classList.add('stepdn'); } } });
     document.querySelectorAll('[data-trapt]').forEach(function (e) { var t = find(e.getAttribute('data-trapt')); if (t) e.textContent = trapFmt(trapLeft(t)); });
   }, 250);
