@@ -310,6 +310,13 @@ export async function checkSwapTx(bytes, owner, rpc) {
       if (!(op === 17 || (op === 9 && a[1]?.equals(me) && a[2]?.equals(me)))) bad('token instruction'); } }
   return true;
 }
+// every account a transaction can touch (its own keys + those from its lookup tables, read from the chain): an account not in this list
+// cannot change, so the wallet check only needs to simulate these (the RPC refuses more addresses than the transaction has)
+export async function txKeys(bytes, rpc) {
+  const m = VersionedTransaction.deserialize(Uint8Array.from(bytes)).message, alts = [];
+  for (const l of m.addressTableLookups || []) { const r = await C(rpc).getAddressLookupTable(l.accountKey); if (!r.value) throw new Error('Unknown lookup table — refusing'); alts.push(r.value); }
+  const k = m.getAccountKeys({ addressLookupTableAccounts: alts }), out = []; for (let i = 0; i < k.length; i++) out.push(k.get(i).toBase58()); return out;
+}
 // any transaction built by an outside API (Jupiter Trigger orders): refuse the instructions that hand over control of the wallet or its
 // tokens, whatever else the transaction does — token Approve / ApproveChecked / SetAuthority, system Assign / Allocate (programs are always static keys)
 export function dangerousIx(bytes) {

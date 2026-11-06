@@ -2724,8 +2724,12 @@
     return chainLib().then(function (T) { var bad = T.dangerousIx(b64Bytes(b64)); if (bad) throw new Error('Refused: ' + bad + ' — not signing');
       return Promise.all(TPS.map(function (pid) { return rpc('getTokenAccountsByOwner', [who, { programId: pid }, { encoding: 'jsonParsed', commitment: 'confirmed' }]); }).concat([rpc('getBalance', [who, { commitment: 'confirmed' }])])); }).then(function (rs) {
       rs.slice(0, 2).forEach(function (r) { ((r && r.value) || []).forEach(function (a) { var inf = a.account.data.parsed.info; accs.push({ addr: a.pubkey, mint: inf.mint, pre: BigInt(inf.tokenAmount.amount), del: inf.delegate || null }); }); });
-      var solPre = BigInt(rs[2].value), watch = accs.slice(0, 90);
-      var extra = o.gain ? window.TreidChain.ataAddrs(who, o.gain.mint).filter(function (x) { return !watch.some(function (w) { return w.addr === x; }); }) : [];
+      var solPre = BigInt(rs[2].value);
+      // only the accounts this transaction can touch (any other account can't change) — wallets with many tokens hit the RPC's limit
+      // ("Too many accounts provided; max N": no more addresses than the transaction itself has)
+      return window.TreidChain.txKeys(b64Bytes(b64), RPC).then(function (keys) { var inTx = {}; keys.forEach(function (k) { inTx[k] = 1; });
+      var watch = accs.filter(function (a) { return inTx[a.addr]; });
+      var extra = o.gain ? window.TreidChain.ataAddrs(who, o.gain.mint).filter(function (x) { return inTx[x] && !watch.some(function (w) { return w.addr === x; }); }) : [];
       return rpc('simulateTransaction', [b64, { encoding: 'base64', sigVerify: false, replaceRecentBlockhash: true, commitment: 'confirmed', accounts: { encoding: 'jsonParsed', addresses: [who].concat(watch.map(function (a) { return a.addr; }), extra) } }]).then(function (sim) {
         var v = sim && sim.value; if (!v || !v.accounts) throw new Error('Couldn’t check the transaction — not signing'); if (v.err) throw new Error('The transaction fails in simulation — not signing');
         var me = v.accounts[0]; if (me && (me.owner !== '11111111111111111111111111111111' || (me.data && me.data[0] && me.data[0].length))) throw new Error('Refused: it would change who controls your wallet — not signing');
@@ -2739,7 +2743,7 @@
         for (var m in spent) if (spent[m] > 0n && spent[m] > BigInt((o.spend || {})[m] || 0)) throw new Error('It would move tokens you didn’t choose (or more than you chose) — not signing');
         if (o.solGainMin != null && solPost - solPre < BigInt(o.solGainMin)) throw new Error('It wouldn’t deliver the minimum SOL to your wallet — not signing');
         if (o.gain && got < o.gain.min) throw new Error('It wouldn’t deliver the minimum to your wallet — not signing');
-        return true; }); });
+        return true; }); }); });
   }
   function qSymT(t) { return t && t.live && t.qMint ? (t.qSym || t.pair) : 'SOL'; }
   function qUsdT(t) { return t && t.live && t.qMint && t.qUsd ? t.qUsd : SOL_USD; }
