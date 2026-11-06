@@ -3770,7 +3770,12 @@
   function lockBar(t) {
     if (!t.live) return '';
     var mine = S.account && S.account === t.creator;
-    if (!t.devLock) return t.lockIntent && mine && t.lockDays ? '<button class="lkfix" data-act="lockFinish">🔒 Finish locking your dev bag (' + t.lockDays + ' days) — one signature</button>' : '';
+    if (!t.devLock) {
+      if (!t.lockIntent || !t.lockDays) return '';
+      if (mine) return '<button class="lkfix" data-act="lockFinish"><span>⚠ Your dev bag is <b>not locked yet</b> — buyers see this</span><em>🔒 Lock it now · ' + t.lockDays + ' days · one signature</em></button>';
+      if (Date.now() - (t.born || 0) < 10 * 60e3) return '';   // give the launch a few minutes (the lock is the second signature)
+      return '<div class="lk3 lk3-no" title="This coin was launched as a Locked launch, but the dev never made the lock. Their tokens can be sold at any time."><span class="lk3-t">⚠ <b>Lock not made</b></span><span class="lk3-s"><small>Launched as</small><b class="mono">Locked launch · ' + t.lockDays + 'd</b></span><span class="lk3-s lk3-w">the dev’s tokens are not locked and can be sold any time</span></div>';
+    }
     if (!lockLive(t)) return '';
     var L = t.devLock, now = Date.now() / 1000, span = Math.max(1, L.unlock_end - L.start), pc = function (x) { return Math.max(0, Math.min(100, (x - L.start) / span * 100)).toFixed(1); }, cl = devnetQ();
     var tok = L.locked_pct / 100 * (t.supply || 1e9), still = L.total_pct > 0 ? Math.min(100, L.locked_pct / L.total_pct * 100) : 100, pre = now < L.unlock_start, dLeft = Math.max(0, Math.ceil(((pre ? L.unlock_start : L.unlock_end) - now) / 86400));
