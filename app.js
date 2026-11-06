@@ -2265,7 +2265,11 @@
     var nReal = bars.filter(function (x) { return !x.fill; }).length, hw = (LW.host && LW.host.clientWidth) || 0;
     if (!fresh && LW.fit && LW.fit.view === view && (LW.fit.w === 0 && hw > 0 || LW.fit.n <= 2 && nReal > 2)) fresh = true;   // first fit happened before the trades loaded / before the chart had a size → fit again once
     if (fresh) LW.fit = { view: view, w: hw, n: nReal };
-    if (fresh) { var tsc = LW.chart.timeScale(); tsc.applyOptions({ barSpacing: 9 }); tsc.scrollToRealTime(); requestAnimationFrame(function () { if (LW.chart) LW.chart.timeScale().scrollToRealTime(); }); LW.chart.priceScale('right').applyOptions({ autoScale: true }); }
+    if (fresh) { var tsc = LW.chart.timeScale(); tsc.applyOptions({ barSpacing: 9 }); tsc.scrollToRealTime();
+      // few trades: the default zoom showed hours of empty minutes with the candles squeezed at the right edge → zoom to where the trades are (at least 40 bars wide)
+      var ri = []; bars.forEach(function (x, i) { if (!x.fill) ri.push(i); }); var cap = hw > 0 ? Math.floor(hw / 9) : 120, rng = null;
+      if (ri.length) { var f0 = ri[Math.max(0, ri.length - 60)], l0 = bars.length - 1, pad = Math.max(6, Math.ceil((36 - (l0 - f0)) / 2)); if (l0 - f0 + 2 * pad < cap) rng = { from: f0 - pad, to: l0 + pad }; }   // the trades sit in the middle, not squeezed at the edge
+      requestAnimationFrame(function () { if (!LW.chart) return; if (rng) LW.chart.timeScale().setVisibleLogicalRange(rng); else LW.chart.timeScale().scrollToRealTime(); }); LW.chart.priceScale('right').applyOptions({ autoScale: true }); }
     lwLegend(null);
   }
   function lwLegend(bar) {
@@ -3160,7 +3164,7 @@
     tt.forEach(function (x) { if (x.side === 'buy') { nb++; vb += x.sol; } else { ns++; vs += x.sol; } });
     var q = quoteFor(t), pos = position(t), tmax = Math.max(t.buy, t.sell);
     var curveSol = t.live ? (liqK(t) * 1000 / qUsdT(t)).toFixed(2) : (t.prog / 100 * 85).toFixed(2);
-    var head = '<section class="card-s tp-head2 tp-banner"><div class="tb-bg' + (t.banner ? ' ban' : '') + '" aria-hidden="true">' + (t.banner ? '<img src="' + esc(t.banner) + '" alt="">' : avatarHTML(t, 420)) + '</div>' + (t.live && S.account && S.account === t.creator ? '<button class="ban-edit-btn" data-act="banEditOpen">✎ ' + (t.banner ? 'Change banner' : 'Add banner') + '</button>' : '') + '<div class="tb-av">' + avatarHTML(t, 104) + '</div>' +
+    var head = '<section class="card-s tp-head2 tp-banner"><div class="tb-bg' + (t.banner ? ' ban' : '') + '" aria-hidden="true">' + (t.banner ? '<img src="' + esc(t.banner) + '" alt="">' : avatarHTML(t, 420)) + '</div>' + (t.live && S.account && S.account === t.creator ? '<button class="ban-edit-btn" data-act="banEditOpen">✎ ' + (t.banner ? 'Change banner' : 'Add banner') + '</button>' : '') + '<div class="tb-av" data-act="avZoom" title="View full image">' + avatarHTML(t, 104) + '</div>' +
       '<div class="tp-id"><div class="title-xl" style="margin:0;font-size:30px">' + esc(t.name) + ' <span class="tk">$' + sid + '</span>' + crBadge(t) + '</div>' + msBadges(t, 'lg') + (t.archived ? '<div class="arch-note ' + t.archived + '">' + (t.archived === 'rug' ? '⚠ Past coin · dev sold after ' + durH(t.devSoldAfter) : t.archived === 'dead' ? '💤 Past coin · inactive, faded on the curve' : '🎓 Past coin · graduated') + '</div>' : '') +
         '<div class="hs-pills" style="margin-top:8px"><button class="pill copy2" data-act="ca" data-arg="' + id + '">CA ' + esc(short(t.ca)) + ' ' + I.copy + '</button><span class="pill" style="padding-left:11px">created <span data-t="' + t.born + '">&nbsp;' + ago(t.born) + '</span>&nbsp;ago by&nbsp;' + makerHTML(devOf(t), t) + '</span>' +
         socialsHTML(t, true, true) +
@@ -3243,7 +3247,7 @@
     var bsBar = '<div class="bs bs3"><button class="b' + (S.side === 'buy' ? ' on' : '') + '" data-act="side" data-arg="buy">Buy</button><button class="s' + (S.side === 'sell' ? ' on' : '') + '" data-act="side" data-arg="sell">Sell</button><button class="l' + (S.side === 'tpsl' ? ' on' : '') + '" data-act="side" data-arg="tpsl">TP / SL</button></div>';
     var panel = S.side === 'tpsl' ? tpslPanel(t, pos, bsBar) : '<section class="card-s panel tradebox">' + bsBar +
       (jupOn(t) && !q.isBuy ? '<div class="paywith"><span class="muted">Receive</span><button class="' + (S.recvSol === false ? 'on' : '') + '" data-act="recvSol" data-arg="0">' + coinHTML(t.pair, 16) + esc(qSymT(t)) + '</button><button class="' + (S.recvSol !== false ? 'on' : '') + '" data-act="recvSol" data-arg="1">' + coinHTML('SOL', 16) + 'SOL</button>' + (S.recvSol !== false ? '<small class="muted">sold for ' + esc(qSymT(t)) + ', swapped to SOL in the same transaction · 1 wallet approval</small>' : '') + '</div>' : '') +
-      (jupOn(t) && q.isBuy ? '<div class="paywith"><span class="muted">Pay with</span><button class="' + (PS ? '' : 'on') + '" data-act="paySol" data-arg="0">' + coinHTML(t.pair, 16) + esc(qSymT(t)) + '</button><button class="' + (PS ? 'on' : '') + '" data-act="paySol" data-arg="1">' + coinHTML('SOL', 16) + 'SOL</button>' + (PS ? '<small class="muted">swapped to ' + esc(qSymT(t)) + ' in the same transaction · 1 wallet approval</small>' : '') + '</div>' : '') +
+      (jupOn(t) && q.isBuy ? '<div class="paywith"><span class="muted">Pay with</span>' + (PS ? '' : '<button class="on" data-act="paySol" data-arg="0">' + coinHTML(t.pair, 16) + esc(qSymT(t)) + '</button>') + '<button class="' + (PS ? 'on' : '') + '" data-act="paySol" data-arg="1">' + coinHTML('SOL', 16) + 'SOL</button>' + (PS ? '<small class="muted">swapped to ' + esc(qSymT(t)) + ' automatically · 1 approval</small>' : '') + '</div>' : '') +
       '<div class="tb-top"><span class="muted" style="font-size:12.5px">' + (q.isBuy ? (bal != null ? 'Balance ' + (bal >= 1000 ? fmtNum(bal) : bal.toFixed(3)) + ' ' + esc(QS) : 'Amount in ' + esc(QS)) : (pos ? 'You hold ' + fmtNum(pos.tok) + ' $' + sid : 'You hold 0 $' + sid)) + '</span>' +
         '<button class="slipbtn" data-act="slip">Slippage ' + S.slip + '% ⚙</button></div>' +
       (S.slipOpen ? '<div class="slipbox"><span class="muted" style="font-size:12px">Max slippage</span><div class="presets">' + [1, 3, 5, 10, 20].map(function (v) { return '<button class="' + (S.slip === v ? 'on' : '') + '" data-act="setslip" data-arg="' + v + '">' + v + '%</button>'; }).join('') + '</div><span class="muted" style="font-size:11.5px">Priority fee: 0.0001 SOL</span></div>' : '') +
@@ -4766,6 +4770,10 @@
       case 'bhPer': S.bhPer = arg; render(); break;
       case 'cauto': if (LW.chart) LW.chart.priceScale('right').applyOptions({ autoScale: true }); break;
       case 'lwMk': lwMkClick(arg); break;
+      case 'avZoom': (function () { var im = el.querySelector('img'), sv = el.querySelector('svg'); if (!im && !sv) return; var o = document.createElement('div'); o.className = 'imgzoom'; o.setAttribute('role', 'dialog');
+        o.innerHTML = '<div class="iz-in">' + (im ? '<img src="' + esc(im.getAttribute('src')) + '" alt="">' : sv.outerHTML) + '</div><button class="iz-x" aria-label="Close">✕</button>';
+        var close = function () { o.remove(); document.removeEventListener('keydown', kd); }, kd = function (ev) { if (ev.key === 'Escape') close(); };
+        o.addEventListener('click', close); document.addEventListener('keydown', kd); document.body.appendChild(o); })(); break;
       case 'cnow': if (LW.chart) LW.chart.timeScale().scrollToRealTime(); break;
       case 'czoom': if (LW.chart) { LW.chart.timeScale().applyOptions({ barSpacing: 9 }); LW.chart.timeScale().scrollToRealTime(); LW.chart.priceScale('right').applyOptions({ autoScale: true }); } break;
       case 'cden': S.cden = arg === 'sol' ? 'sol' : 'usd'; cviewSave(); render(); break;
