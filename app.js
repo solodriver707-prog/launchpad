@@ -3766,17 +3766,20 @@
   function lockLive(t) { var L = t.devLock; return !!(L && L.unlock_end * 1000 > Date.now() && L.locked_pct > 0.001); }
   function lockTip(t) { var L = t.devLock, pre = Date.now() < L.unlock_start * 1000;
     return L.locked_pct.toFixed(2) + '% of supply locked on-chain (Jupiter Lock) by the creator. ' + (pre ? 'Nothing unlocks until ' + lockDate(L.unlock_start) + ', then a little every day until ' + lockDate(L.unlock_end) + '.' : 'Unlocking a little every day until ' + lockDate(L.unlock_end) + '.') + ' Nobody can cancel it. It covers the launch buy only — DYOR.'; }
-  function lockBadge(t) { if (!t.live || !lockLive(t)) return ''; var L = t.devLock, pre = Date.now() < L.unlock_start * 1000, d = Math.max(1, Math.ceil(((pre ? L.unlock_start : L.unlock_end) * 1000 - Date.now()) / 864e5));
-    return '<span class="lkb' + (pre ? '' : ' un') + '" title="' + esc(lockTip(t)) + '">🔒<b>' + (pre ? 'LOCKED ' + d + 'D' : 'UNLOCKING') + '</b></span>'; }
+  function lockBadge(t) { if (!t.live || !lockLive(t)) return ''; return '<span class="lkb" title="' + esc(lockTip(t)) + '">🔒<b>LOCKED</b></span>'; }
   function lockBar(t) {
     if (!t.live) return '';
     var mine = S.account && S.account === t.creator;
     if (!t.devLock) return t.lockIntent && mine && t.lockDays ? '<button class="lkfix" data-act="lockFinish">🔒 Finish locking your dev bag (' + t.lockDays + ' days) — one signature</button>' : '';
     if (!lockLive(t)) return '';
-    var L = t.devLock, now = Date.now() / 1000, span = Math.max(1, L.unlock_end - L.start), pc = function (x) { return Math.max(0, Math.min(100, (x - L.start) / span * 100)).toFixed(1); }, cl = (devnetQ());
-    return '<div class="lkbar" title="' + esc(lockTip(t)) + '"><span class="lk-ic">🔒</span><span class="lk-t"><b>Dev bag locked</b><span>' + L.locked_pct.toFixed(2) + '% of supply · ' + (now < L.unlock_start ? 'unlocks from ' + lockDate(L.unlock_start) : 'unlocking daily') + ' · free on ' + lockDate(L.unlock_end) + '</span></span>' +
-      '<span class="lk-tr"><i class="cl" style="width:' + pc(L.unlock_start) + '%"></i><i class="nw" style="left:' + pc(now) + '%"></i></span>' +
-      (L.escrows && L.escrows[0] ? '<a class="lk-a" target="_blank" rel="noopener" href="https://solscan.io/account/' + esc(L.escrows[0]) + cl + '">Check lock ↗</a>' : '') + '</div>';
+    var L = t.devLock, now = Date.now() / 1000, span = Math.max(1, L.unlock_end - L.start), pc = function (x) { return Math.max(0, Math.min(100, (x - L.start) / span * 100)).toFixed(1); }, cl = devnetQ();
+    var tok = L.locked_pct / 100 * (t.supply || 1e9), still = L.total_pct > 0 ? Math.min(100, L.locked_pct / L.total_pct * 100) : 100, pre = now < L.unlock_start, dLeft = Math.max(0, Math.ceil(((pre ? L.unlock_start : L.unlock_end) - now) / 86400));
+    var cell = function (k, v, sub) { return '<div class="lk2-c"><small>' + k + '</small><b class="mono">' + v + '</b><span>' + sub + '</span></div>'; };
+    return '<section class="lk2" title="' + esc(lockTip(t)) + '"><div class="lk2-h"><span class="lk2-ic">🔒</span><div><b>Dev bag is locked</b><span>The creator’s launch buy sits in a Jupiter Lock escrow — nobody can cancel it, not even the creator.</span></div>' +
+      (L.escrows && L.escrows[0] ? '<a class="lk-a" target="_blank" rel="noopener" href="https://solscan.io/account/' + esc(L.escrows[0]) + cl + '">Verify on-chain ↗</a>' : '') + '</div>' +
+      '<div class="lk2-g">' + cell('Locked', L.locked_pct.toFixed(2) + '%', fmtBig(tok) + ' $' + esc(symOf(t)) + ' of supply') + cell(pre ? 'First unlock in' : 'Fully free in', dLeft + (dLeft === 1 ? ' day' : ' days'), pre ? 'on ' + lockDate(L.unlock_start) : 'on ' + lockDate(L.unlock_end)) + cell('Still locked', Math.round(still) + '%', pre ? 'nothing unlocked yet' : 'unlocking a little each day') + '</div>' +
+      '<div class="lk2-tl"><div class="lk2-tr"><i class="l" style="width:' + pc(L.unlock_start) + '%"></i><i class="u" style="left:' + pc(L.unlock_start) + '%"></i><em class="nw" style="left:' + pc(now) + '%"><u>Today</u></em></div>' +
+      '<div class="lk2-ax mono"><span>Launch</span><span style="left:' + pc(L.unlock_start) + '%">' + lockDate(L.unlock_start) + ' · unlocks start</span><span>' + lockDate(L.unlock_end) + ' · all free</span></div></div></section>';
   }
   function devnetQ() { return CHAIN_ID === 'solana:devnet' ? '?cluster=devnet' : ''; }
   function lockNow(t, days, tok) {   // the creator's launch bag (tok, in whole tokens) — or, when unknown, the whole balance — → Jupiter Lock (one signature). Only ever called from the confirm modal.
