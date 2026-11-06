@@ -6912,3 +6912,5 @@ html body .tp-banner .tp-key>.tax>.liq-taxin{top:0!important;right:0!important;b
 .signwait small{font-size:11.5px;color:rgba(255,255,255,.5);line-height:1.4}
 .signwait .sw-sp{width:26px;height:26px;border-radius:50%;border:3px solid rgba(255,255,255,.15);border-top-color:#3DDC97;animation:swSpin .8s linear infinite}
 @keyframes swSpin{to{transform:rotate(360deg)}}
+.trapi{width:1.15em;height:1.15em;display:inline-block;vertical-align:-.2em;flex:none}
+.liq-taxin .liq-c small .trapi{width:21px;height:21px;margin-right:4px;vertical-align:-6px}

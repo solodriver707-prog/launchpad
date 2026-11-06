@@ -718,7 +718,7 @@
     var dp = t.devPct || 0, col = dp < 3 ? '#3DDC97' : dp < 8 ? '#FFD15C' : '#F2708A', sn = o.snipe, tm = Math.max(t.buy || 0, t.sell || 0);
     var R = [['YOU HOLD', '<span style="color:' + col + '">' + dp.toFixed(2) + '%</span>'], ['SNIPERS', '0%'], ['BUNDLES', '0%'], ['START MC', fmtK(t.mcN)]];
     return '<div class="risk st-tiles">' + R.map(function (m) { return '<span class="rk-t lv-n"><span class="rk-l">' + m[0] + '</span><b class="mono">' + m[1] + '</b></span>'; }).join('') + '</div>' +
-      (sn ? '<div class="pv-trap pv-trap2">🪤 Sniper trap: ' + [0, 1, 2].map(function (i) { return trapStepFee(sn.start, tm, i) + '%'; }).join(' → ') + ' → ' + normalCost(tm) + '% over ' + (sn.dur < 60 ? sn.dur + 's' : sn.dur / 60 + ' min') + '</div>' : '');
+      (sn ? '<div class="pv-trap pv-trap2">' + TRAPI + ' Sniper trap: ' + [0, 1, 2].map(function (i) { return trapStepFee(sn.start, tm, i) + '%'; }).join(' → ') + ' → ' + normalCost(tm) + '% over ' + (sn.dur < 60 ? sn.dur + 's' : sn.dur / 60 + ' min') + '</div>' : '');
   }
   function statTiles(t) {
     var R = [['HOLDERS', fmtNum(t.holders || 0), 'Wallets holding this coin'], ['VOL', fmtK(t.vol), 'Total traded since launch'], paidTile(t), ['ATH', fmtK(athOf(t)), 'Highest market cap so far']];
@@ -1392,7 +1392,7 @@
     var head = '<div class="lrow2 lhead">' + LCOLS.map(function (c) { return keep ? '<span class="' + c[2] + '">' + c[1] + '</span>' : '<button class="' + c[2] + (S.lsort === c[0] ? ' on' : '') + '" data-act="lsort" data-arg="' + c[0] + '">' + c[1] + (S.lsort === c[0] ? ((S.ldir === -1) !== (c[0] === 'age') ? ' ↓' : ' ↑') : '') + '</button>'; }).join('') + '</div>';
     var body = rows.map(function (t, i) { var ls = lstats(t), tm = Math.max(t.buy, t.sell), rk = riskMetrics(t).some(function (m) { return m.lv === 'r'; }), liq = liqK(t);
       return '<div class="lrow2" data-act="open" data-arg="' + esc(t.tick) + '"><span class="lr-n mono">#' + (i + 1) + '</span>' +
-        '<span class="lr-tok">' + avatarHTML(t, 28) + '<span class="lt-n"><b>' + esc(symOf(t)) + '</b><small>/ ' + esc(pairLabel(t.pair).replace('$', '')) + '</small><em>' + esc(t.name) + '</em>' + (rk ? '<i class="lt-flag" title="Risk flag">⚠</i>' : '') + (trapLeft(t) > 0 ? '<i class="lt-trap">🪤</i>' : '') + '</span></span>' +
+        '<span class="lr-tok">' + avatarHTML(t, 28) + '<span class="lt-n"><b>' + esc(symOf(t)) + '</b><small>/ ' + esc(pairLabel(t.pair).replace('$', '')) + '</small><em>' + esc(t.name) + '</em>' + (rk ? '<i class="lt-flag" title="Risk flag">⚠</i>' : '') + (trapLeft(t) > 0 ? '<i class="lt-trap">' + TRAPI + '</i>' : '') + '</span></span>' +
         '<span class="r"><i class="lt-tax" style="background:' + taxBg(tm) + '">' + tm + '%</i></span>' +
         '<span class="r mono lt-mc" data-mc="' + esc(t.tick) + '" data-v="' + fmtK(t.mcN) + '">' + fmtK(t.mcN) + '</span>' +
         '<span class="r mono">' + fmtPrice(price(t)) + '</span><span class="r mono" data-t="' + t.born + '">' + ago(t.born) + '</span>' +
@@ -1619,7 +1619,7 @@
     return '<div class="tnrow' + (fresh ? ' is-new' : '') + '" data-act="open" data-arg="' + id + '">' +
       '<span class="trw-pic">' + avatarHTML(t, 52) + '</span>' +
       '<span class="trw-mid"><span class="trw-n"><b>' + esc(t.name) + '</b>' + (t.vamp ? '<i title="Same name as an older coin">' + VAMP + '</i>' : '') + '</span>' +
-        '<span class="trw-s"><span class="mono">$' + sid + '</span><span class="mono trw-age" data-t="' + t.born + '">' + ago(t.born) + '</span><i class="trw-tax" style="background:' + taxBg(tm) + '">' + tm + '%</i>' + (trapLeft(t) > 0 ? '<i class="trw-trap" title="Anti-snipe fee still on">🪤</i>' : '') + '</span>' +
+        '<span class="trw-s"><span class="mono">$' + sid + '</span><span class="mono trw-age" data-t="' + t.born + '">' + ago(t.born) + '</span><i class="trw-tax" style="background:' + taxBg(tm) + '">' + tm + '%</i>' + (trapLeft(t) > 0 ? '<i class="trw-trap" title="Anti-snipe fee still on">' + TRAPI + '</i>' : '') + '</span>' +
         '<span class="trw-k"><span>👥 <b class="mono">' + fmtNum(t.holders) + '</b></span><span>Vol <b class="mono">' + fmtK(t.vol) + '</b></span><span class="' + (fl.length ? 'bad' : 'ok') + '" title="' + esc(fl.join(' · ') || 'No red flags') + '">' + (fl.length ? '⚠ ' + esc(fl[0]) : '✓ clean') + '</span></span></span>' +
       '<span class="trw-r"><b class="mono" data-mc="' + id + '" data-v="' + fmtK(t.mcN) + '">' + fmtK(t.mcN) + '</b><span class="trw-rb"><span class="chgpill ' + (c >= 0 ? 'up' : 'down') + '" data-chg="' + id + '">' + chgTxt(c) + '</span>' +
         '<button class="trw-star' + (on ? ' on' : '') + '" data-act="star" data-arg="' + id + '" aria-label="Add to watchlist" aria-pressed="' + on + '">' + I.star(on) + '</button></span></span>' +
@@ -3315,7 +3315,7 @@
       '<div class="bar" style="height:12px"><i class="' + (t.prog >= 100 ? 'done' : '') + '" data-bar="' + id + '" style="width:' + Math.max(1, Math.min(100, t.prog)) + '%"></i></div>' +
       '<span class="muted" style="font-size:12.5px;line-height:1.55">' + (t.prog >= 100 ? 'Liquidity is live on Meteora.' : (function () { var have = +curveSol || 0, tgt = t.prog >= 1 ? have / (t.prog / 100) : 85 * SOL_USD / qUsdT(t), nf = function (v) { return v >= 100 ? Math.round(v) : v >= 1 ? v.toFixed(1) : niceQ(v); };
         return '<b style="color:var(--text)">' + nf(have) + ' / ' + nf(tgt) + ' ' + esc(qSymT(t)) + '</b> raised · graduates to Meteora when the curve fills (≈ ' + fmtK(tgt * qUsdT(t) / 1000) + ' of buys at today’s ' + (t.qMint ? esc(qSymT(t)) : 'SOL') + ' price).'; })()) + '</span></section>';
-    var mbuy = '<div class="m-bar"><button class="m-b" data-act="mSide" data-arg="buy">Buy</button><button class="m-s" data-act="mSide" data-arg="sell">Sell</button><span class="m-tx mono">' + (trapLeft(t) > 0 ? '🪤 ' + snipeNow(t) + '%' : 'tax ' + tmax + '%') + '</span></div>';
+    var mbuy = '<div class="m-bar"><button class="m-b" data-act="mSide" data-arg="buy">Buy</button><button class="m-s" data-act="mSide" data-arg="sell">Sell</button><span class="m-tx mono">' + (trapLeft(t) > 0 ? '' + TRAPI + ' ' + snipeNow(t) + '%' : 'tax ' + tmax + '%') + '</span></div>';
     return mbuy + '<main class="wrap tp-env" style="padding-top:14px;--coin:' + ((t.spec && t.spec.bg) || '#2A2418') + '"><div class="tp-glow" aria-hidden="true">' + avatarHTML(t, 300) + '</div><button class="link" data-act="home">' + I.back + 'Back to board</button>' +
       '<div class="tp-grid3">' + thread + '<div class="tp-main">' + head + banEditModal(t) + lockBar(t) + xBar(t) + vampWarn + kstats + chart + tabsHTML + '</div><aside class="tp-side">' + panel + posCard + activity + (t.desc ? '<section class="card-s panel about-b"><div class="ab-h">' + avatarHTML(t, 26) + '<b>About $' + sid + '</b></div><p class="ab-t' + (t.desc.length > 220 && !S.descOpen ? ' clamp' : '') + '">' + esc(t.desc) + '</p>' + (t.desc.length > 220 ? '<button class="ab-more" data-act="descToggle">' + (S.descOpen ? 'Show less' : 'Show more') + '</button>' : '') + '</section>' : '') + taxSplitPanel(t) + crPanel(t) + safety + curve + '</aside></div></main>';
   }
@@ -3667,9 +3667,9 @@
   function liqContent(t, cls, rel) {
     var m = Math.max(t.buy, t.sell), id = esc(t.tick), sid = esc(symOf(t)), left = trapFmt(trapLeft(t));
     if (rel) return cls === 'card' ? '<small>TAX</small><b>' + m + '%</b><em>released</em>' : cls === 'head' ? '<b>✓ Trap over</b><small>tax is now ' + m + '%</small>' : '<b>✓ Sniper trap is over</b><small>Normal ' + m + '% tax from now on.</small>';
-    if (cls === 'taxin') return rel ? '<small>TRAP OVER</small><b>' + m + '%</b><small>normal tax now</small>' : '<small>🪤 SNIPER TAX</small><b class="mono" data-trapvt="' + id + '">' + snipeTax(t) + '%</b><small>→ ' + m + '% in <i class="mono" data-liqt>' + left + '</i></small>';
+    if (cls === 'taxin') return rel ? '<small>TRAP OVER</small><b>' + m + '%</b><small>normal tax now</small>' : '<small>' + TRAPI + ' SNIPER TAX</small><b class="mono" data-trapvt="' + id + '">' + snipeTax(t) + '%</b><small>→ ' + m + '% in <i class="mono" data-liqt>' + left + '</i></small>';
     if (cls === 'card') return '<small>SNIPER TAX</small><b data-trapv="' + id + '">' + snipeNow(t) + '%</b><em class="mono" data-liqt>' + left + '</em>';
-    if (cls === 'head') return '<span class="lq-big mono" data-trapv="' + id + '">' + snipeNow(t) + '%</span><span class="lq-tx"><b>🪤 Sniper tax</b><small>drops to <i>' + normalCost(m) + '%</i> in <i class="mono" data-liqt>' + left + '</i></small></span>';
+    if (cls === 'head') return '<span class="lq-big mono" data-trapv="' + id + '">' + snipeNow(t) + '%</span><span class="lq-tx"><b>' + TRAPI + ' Sniper tax</b><small>drops to <i>' + normalCost(m) + '%</i> in <i class="mono" data-liqt>' + left + '</i></small></span>';
     return '<span class="lq-big mono" data-trapv="' + id + '">' + snipeNow(t) + '%</span><span class="lq-tx"><b>Sniper tax is on</b><small>Every trade now costs <i data-trapv="' + id + '">' + snipeNow(t) + '%</i> (trap fee + tax), buys and sells. It steps down every ' + Math.round(t.snipe.dur / TRAP_STEPS) + 's and reaches <i>' + normalCost(m) + '%</i> in <i class="mono" data-liqt>' + left + '</i>.</small></span>';
   }
   function trapBox(t, cls) {
@@ -3747,6 +3747,7 @@
     var vest = state === 'cto' && cto ? Math.max(0, Math.min(1, (now - cto.at) / (DR.vestDays * 864e5))) : 0;
     return { state: state, why: why, sold: sold, last: last, idle: idle, outAt: outAt, cut: cut, earned: earned, claimable: claimable, burned: burned, fund: fund, fundEnds: fundEnds, cto: cto, vest: vest, mine: mine };
   }
+  var TRAPI = '<svg class="trapi" aria-hidden="true" viewBox="0 0 24 24" fill="currentColor"><ellipse cx="13" cy="6.6" rx="3.9" ry="2.3"/><ellipse cx="8.6" cy="5.9" rx="2.1" ry="1.6"/><circle cx="9.2" cy="4.2" r="1.15"/><circle cx="6.6" cy="6.1" r=".5"/><path d="M16.6 7.2c1.6.2 2.8 1.2 3.9.6.6-.3.9-.9 1-1.4" fill="none" stroke="currentColor" stroke-width=".9" stroke-linecap="round"/><rect x="10.3" y="8.3" width=".9" height="1.6" rx=".4"/><rect x="14.2" y="8.3" width=".9" height="1.6" rx=".4"/><path d="M11.4 19.6 3.2 10.6l1.6-1 1.2 1.9.8-1.1 1 2 .8-1.1 1 2 .8-1.1 1 2 .8-1.1.9 3.4z"/><path d="M12.6 19.6l8.2-9-1.6-1-1.2 1.9-.8-1.1-1 2-.8-1.1-1 2-.8-1.1-1 2-.8-1.1-.9 3.4z"/><circle cx="12" cy="19.4" r="1.5"/><rect x="2.5" y="20.4" width="19" height="2" rx="1"/></svg>';   // sniper trap mark: a mouse over an open trap (replaces the emoji)
   var VAMP = '<svg class="vamp-ic" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="15.5" fill="#1a0b0f"/><path d="M5 13.5 2.6 11.2l3.6.4M27 13.5l2.4-2.3-3.6.4" fill="#F2E9E4" stroke="#1a0b0f" stroke-width=".6"/><path d="M6 15c0-6.3 4.5-10 10-10s10 3.7 10 10c0 7-4.6 12.5-10 12.5S6 22 6 15z" fill="#F2E9E4"/><path d="M6.2 13.2C6.8 8 10.6 5 16 5s9.2 3 9.8 8.2c-2.3-1.4-4.6-2-6.6-2L16 15.6l-3.2-4.4c-2 0-4.3.6-6.6 2z" fill="#14090c"/><path d="M9.6 16.8l4.3 1.1c-.3 1.4-1.6 2-2.7 1.5-1-.5-1.6-1.5-1.6-2.6zM22.4 16.8l-4.3 1.1c.3 1.4 1.6 2 2.7 1.5 1-.5 1.6-1.5 1.6-2.6z" fill="#B3121F"/><path d="M12 22.2c2.6 1 5.4 1 8 0" fill="none" stroke="#14090c" stroke-width="1.4" stroke-linecap="round"/><path d="M13.2 22.6l.9 2.6.9-2.3zM18.8 22.6l-.9 2.6-.9-2.3z" fill="#fff" stroke="#B3121F" stroke-width=".5"/></svg>';
   // copycat ("vamp") flag: same folded ticker / name as an OLDER coin — flagged with a 🧛 badge, never blocked
   var VLEET = { '0': 'o', '1': 'i', '3': 'e', '4': 'a', '5': 's', '7': 't', '8': 'b', '$': 's', '@': 'a', '!': 'i' };
@@ -4110,7 +4111,7 @@
       '<text x="' + x1 + '" y="' + (y(base) - 7).toFixed(1) + '" fill="#D6D1C9" font-size="10" text-anchor="end" font-family="JetBrains Mono,monospace">' + base + '%</text>' +
       '<text x="' + x0 + '" y="' + (H - 6) + '" fill="#7A766F" font-size="9" font-family="JetBrains Mono,monospace">launch</text><text x="' + x1 + '" y="' + (H - 6) + '" fill="#7A766F" font-size="9" text-anchor="end" font-family="JetBrains Mono,monospace">+' + (sn.dur < 60 ? sn.dur + 's' : sn.dur / 60 + 'm') + '</text></svg>';
     return '<div class="field taxf"><div class="lbl"><b>Tax <span class="muted" style="font-weight:500;font-size:12px">· same for buys and sells</span></b><span class="mono" style="color:' + taxBg(base) + '">' + base + '%</span></div><div class="txrow">' + steps.join('') + '</div></div>' +
-      '<div class="trap' + (sn.on ? ' on' : '') + '"><div class="trap-t"><span class="trap-ic">🪤</span><span><b>Sniper trap <em class="trap-on">always on</em></b><small>Every coin on treid starts with a sniper trap: buyers in the first seconds pay a high fee that steps down in 3 drops to normal as the timer runs out. Minimum 50% for 30 seconds — make it stronger or longer if you like. Your own initial buy is never affected.</small></span></div>' +
+      '<div class="trap' + (sn.on ? ' on' : '') + '"><div class="trap-t"><span class="trap-ic">' + TRAPI + '</span><span><b>Sniper trap <em class="trap-on">always on</em></b><small>Every coin on treid starts with a sniper trap: buyers in the first seconds pay a high fee that steps down in 3 drops to normal as the timer runs out. Minimum 50% for 30 seconds — make it stronger or longer if you like. Your own initial buy is never affected.</small></span></div>' +
       (sn.on ? (function () {
         var durTxt = function (sec) { return sec < 60 ? sec + 's' : (sec % 60 ? Math.floor(sec / 60) + 'm ' + (sec % 60) + 's' : sec / 60 + 'm'); };
         var at = function (f) { return Math.round(sn.start - (sn.start - base) * f); };
@@ -4123,7 +4124,7 @@
       })() : '') + '</div>';
   }
   setInterval(function () {
-    document.querySelectorAll('[data-trap]').forEach(function (e) { var t = find(e.getAttribute('data-trap')); var v = t ? snipeNow(t) : 0; if (v > 0) e.textContent = '🪤 ' + v + '%'; else e.remove(); });
+    document.querySelectorAll('[data-trap]').forEach(function (e) { var t = find(e.getAttribute('data-trap')); var v = t ? snipeNow(t) : 0; if (v > 0) e.innerHTML = TRAPI + ' ' + v + '%'; else e.remove(); });
     document.querySelectorAll('[data-trapl]').forEach(function (e) { var t = find(e.getAttribute('data-trapl')); if (!t) return; var v = snipeNow(t), m = Math.max(t.buy, t.sell), sm = e.querySelector('small'); if (v > 0) { var left = Math.ceil(t.snipe.dur - (Date.now() - t.born) / 1000); sm.innerHTML = 'cost now <i>' + v + '%</i> → ' + normalCost(m) + '% · ' + (left >= 60 ? Math.floor(left / 60) + 'm ' : '') + (left % 60) + 's left'; } else { e.classList.add('done'); sm.textContent = 'ended — tax is ' + m + '%'; } });
   }, 1000);
   function socField(c, k, name, pre, ph) {
