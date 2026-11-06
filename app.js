@@ -750,7 +750,7 @@
         '<div class="tch-av">' + avatarHTML(t, 150) + '</div>' + '' + (opts.preview ? '' : '<button class="tch-star' + (on ? ' on' : '') + '" data-act="star" data-arg="' + esc(t.tick) + '" aria-label="Add to watchlist" aria-pressed="' + on + '">' + I.star(on) + '</button>') +
         '<div class="tch-side">' + (trapLeft(t) > 0 ? trapBox(t, 'card') : '<div class="tax" style="background:' + taxBg(tmax) + '" data-tip="' + esc(splitTip(t)) + '"><small>TAX</small><b>' + tmax + '%</b>' + (splitOf(t) ? splitBar(splitOf(t), 'mini') : '') + rwLine(t, 13) + '</div>') +
         (tmax > 0 || (t.live && t.qMint) ? '<div class="pairmini" data-tip="Paired with ' + esc(pairInfo(t.pair).name) + '">' + coinHTML(t.pair, 28) + '<small>PAIR</small><b>' + esc(pairLabel(t.pair)) + '</b></div>' : '<div class="pairmini plain" data-tip="Paired with SOL">' + coinHTML('SOL', 28) + '<small>PAIR</small><b>SOL</b></div>') + '</div></div>' +
-      '<div class="tc-name2"><b>' + esc(t.name) + crBadge(t) + '</b><span class="tc-tkr"><span class="mono">$' + esc(symOf(t)) + '</span>' + (opts.preview ? '' : '<button class="tc-ca mono" data-act="ca" data-arg="' + esc(t.tick) + '" data-tip="Copy contract address" aria-label="Copy contract address">' + esc(short(t.ca)) + I.copy + '</button>') + '</span></div>' +
+      '<div class="tc-name2"><b><span class="tc-nm">' + esc(t.name) + '</span>' + crBadge(t) + '</b><span class="tc-tkr"><span class="mono">$' + esc(symOf(t)) + '</span>' + (opts.preview ? '' : '<button class="tc-ca mono" data-act="ca" data-arg="' + esc(t.tick) + '" data-tip="Copy contract address" aria-label="Copy contract address">' + esc(short(t.ca)) + I.copy + '</button>') + '</span></div>' +
       (opts.preview ? previewTiles(t, opts) : statTiles(t)) + socialsHTML(t) +
       '<div class="tc-mid"><div class="tc-mc"><div class="v"><span data-mc="' + esc(t.tick) + '" data-v="' + fmtK(t.mcN) + '">' + fmtK(t.mcN) + '</span>' +
         '<span class="chgpill ' + (c >= 0 ? 'up' : 'down') + '" data-chg="' + esc(t.tick) + '">' + chgTxt(c) + '</span></div><div class="l">market cap</div></div></div>' +
@@ -4107,11 +4107,13 @@
   function qOf(c) { return (c && c.q) || { mint: WSOL, sym: 'SOL', dec: 9, usd: SOL_USD, sol: true, key: 'SOL' }; }
   function qUsd(q) { return q.sol ? SOL_USD : q.usd; }
   function usdTxt(v) { return v >= 1 ? v.toFixed(2) : decStr(v, 3); }
+  var KNOWN_ICON = { A7bdiYdS5GjqGFtxf17ppRHtDKPkkRqbKtR27dxvQXaS: 'icons/zec.svg' };
   function qReg(sym, mint, icon, name) {
     if (mint === WSOL) return 'SOL'; if (mint === USDC_MINT) return 'USDC';   // only the real mints map to the known icons
     var k = String(sym || mint.slice(0, 4)).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10) || 'TOKEN';
     if (PAIR_INFO[k] && PAIR_INFO[k].ca !== mint) k = k + '·' + mint.slice(0, 3);   // a token merely CALLED “USDC” never borrows the real one's name and icon
     if (!PAIR_INFO[k]) PAIR_INFO[k] = { name: (name || sym || 'Token') + ' · ' + mint.slice(0, 4) + '…' + mint.slice(-4), cat: 'crypto', g: k.slice(0, 2), c: '#4A4A4F', ca: mint, custom: true };
+    if (KNOWN_ICON[mint]) PAIR_INFO[k].img = KNOWN_ICON[mint];   // our own copy for tokens whose listed icon is missing or broken
     if (safeImg(icon) && !PAIR_INFO[k].img) PAIR_INFO[k].img = safeImg(icon);
     var alt = arguments[4]; if (safeImg(alt) && !PAIR_INFO[k].alt) PAIR_INFO[k].alt = safeImg(alt);
     return k;
