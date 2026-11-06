@@ -487,5 +487,8 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, q
     return { ok: true, approved: false };
   }
   return { rebuild, cycle, state, era, applications, ping, claimNow, ctoApply, ctoVote, link, linkCheck, linkCommit, liabilities, ready: () => READY,
-    logFor: (mint) => q(`SELECT sig, kind, lamports, ts, extra FROM rlog WHERE mint=? AND kind NOT IN ('ctoapply','claimx','pay0') ORDER BY ts DESC LIMIT 30`, mint) };
+    logFor: (mint) => { const rows = q(`SELECT sig, kind, lamports, ts, extra FROM rlog WHERE mint=? AND kind NOT IN ('ctoapply','claimx','pay0') ORDER BY ts DESC LIMIT 300`, mint);
+      const c = q1('SELECT uri, created_at FROM coins WHERE mint=?', mint), ft = c && feeTo(c);   // an X account claiming (wallet linked) is stamped under the account, shared by its coins
+      if (ft) rows.push(...q(`SELECT sig, kind, 0 lamports, ts, extra FROM rlog WHERE mint=? AND kind='hlink' AND ts>=? ORDER BY ts DESC LIMIT 20`, ft.key, c.created_at || 0));
+      return rows.sort((a, b) => b.ts - a.ts); } };
 }

@@ -6845,3 +6845,4 @@ html body .tch-side:has(.rwin){width:86px}
 @media (max-width:760px){.lk3{flex-wrap:wrap;gap:6px 12px}.lk3-s{padding-left:0;border-left:0}.lk3-tr{display:none}}
 
 .cr-money .cr-usd{font-style:normal;font-size:10.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cr-logmore{display:block;margin:6px auto 0;font-size:12px}
