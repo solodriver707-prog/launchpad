@@ -2678,7 +2678,7 @@
       .then(function (got) { if (!(got > 0)) throw new Error('The swap didn’t deliver ' + qSymT(t) + ' — nothing was bought'); return got; });
   }
   function swapDeliveredRaw(sig, who, mint) {   // same, in raw units: { raw, wasEmpty } — the launch spends exactly what arrived (nothing left over)
-    var tries = 0; return (function get() { return rpc('getTransaction', [sig, { encoding: 'jsonParsed', commitment: 'confirmed', maxSupportedTransactionVersion: 0 }]).then(function (tx) {
+    var tries = 0; return (function get() { return rpc('getTransaction', [sig, { encoding: 'jsonParsed', commitment: 'confirmed', maxSupportedTransactionVersion: 1 }]).then(function (tx) {
       if (!tx || !tx.meta) { if (++tries > 8) throw new Error('Couldn’t read the swap result — check your wallet balance'); return new Promise(function (r) { setTimeout(r, 1500); }).then(get); }
       var sum = function (arr) { return (arr || []).filter(function (b) { return b.mint === mint && b.owner === who; }).reduce(function (a, b) { return a + BigInt(String(b.uiTokenAmount.amount)); }, 0n); };
       var pre = sum(tx.meta.preTokenBalances); return { raw: sum(tx.meta.postTokenBalances) - pre, wasEmpty: pre === 0n }; }); })();
