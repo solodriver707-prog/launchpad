@@ -357,10 +357,20 @@ function dbcIxs(tx, keys, pid0 = DBC_ID) {   // every instruction of one program
   return out;
 }
 const retryN = new Map();
+// every swap on a treid pool counts, whatever app or wallet sent it: the transaction is read from the chain, never from our site.
+// A new transaction format must never make trades silently disappear again (Phantom's v1 swaps did): read the newest version the RPC
+// names, and count anything still unreadable in /api/health (the hourly check alerts on it). It is never marked seen → the regular re-sync retries it.
+let TXV = 1; const UNREAD = new Map();
+async function readTx(sig) {
+  for (let i = 0; i < 2; i++) { try { const t = await conn.getTransaction(sig, { commitment: 'confirmed', maxSupportedTransactionVersion: TXV }); if (t) UNREAD.delete(sig); return t; }
+    catch (e) { const m = /Transaction version \((\d+)\) is not supported/.exec(String(e?.message || '')); if (m && +m[1] > TXV && +m[1] < 16) { TXV = +m[1]; console.log('tx version', TXV, 'now read'); continue; } if (m) { unread(sig, 'v' + m[1]); return null; } return null; } }
+  return null;
+}
+function unread(sig, why = 'not found') { if (UNREAD.size > 500) UNREAD.delete(UNREAD.keys().next().value); UNREAD.set(sig, { why, ts: Date.now() }); console.log('UNREAD tx', sig, why); }
 async function handle(sig) {
   if (q1('SELECT 1 FROM seen WHERE sig=?', sig)) return;
-  const tx = await conn.getTransaction(sig, { commitment: 'confirmed', maxSupportedTransactionVersion: 1 }).catch(() => null);
-  if (!tx) { const n = (retryN.get(sig) || 0) + 1; if (n <= 6) { retryN.set(sig, n); setTimeout(() => enqueue(sig), 2000 * n); } else retryN.delete(sig); return; }   // the RPC can lag the websocket by a few seconds: look again
+  const tx = await readTx(sig);
+  if (!tx) { const n = (retryN.get(sig) || 0) + 1; if (n <= 6) { retryN.set(sig, n); setTimeout(() => enqueue(sig), 2000 * n); } else { retryN.delete(sig); unread(sig); } return; }   // the RPC can lag the websocket by a few seconds: look again
   retryN.delete(sig);
   if (tx.meta?.err) { run('INSERT OR IGNORE INTO seen VALUES(?)', sig); return; }
   const keys = tx.transaction.message.getAccountKeys({ accountKeysFromLookups: tx.meta.loadedAddresses }), ts = (tx.blockTime || Math.floor(Date.now() / 1000)) * 1000, ixs = dbcIxs(tx, keys);
@@ -683,7 +693,7 @@ async function handleReq(req, res) {
     const [h, b64] = d.split(','), ct = h.slice(5, h.indexOf(';')); if (!/^image\/(png|jpe?g|gif|webp)$/.test(ct)) { res.writeHead(404); return res.end(); }   // never serve svg (script)
     res.writeHead(200, { 'content-type': ct, 'x-content-type-options': 'nosniff', 'access-control-allow-origin': '*', 'cache-control': 'public, max-age=86400' }); return res.end(Buffer.from(b64, 'base64')); }
   // public health: no ops balance / halt reason / subscriber counts (there is no admin-token mechanism; those live in the logs + Telegram alerts)
-  if (!p.length || p[1] === 'health') return J({ ok: true, ready, coins: q1('SELECT COUNT(*) n FROM coins').n, trades: q1('SELECT COUNT(*) n FROM trades').n, partner: PARTNER || null, ops: OPS?.publicKey.toBase58() || null, sol_usd: SOL_USD, cluster: MAINNET ? 'mainnet' : 'devnet', db_ok: !dbVolatile(), ops_ok: opsSolC.v == null ? null : opsSolC.v >= 0.05, halted: HALT.on });   // yes/no flags only (the monitor needs them; amounts and reasons stay in the logs)
+  if (!p.length || p[1] === 'health') return J({ ok: true, ready, coins: q1('SELECT COUNT(*) n FROM coins').n, trades: q1('SELECT COUNT(*) n FROM trades').n, partner: PARTNER || null, ops: OPS?.publicKey.toBase58() || null, sol_usd: SOL_USD, cluster: MAINNET ? 'mainnet' : 'devnet', unread_tx: [...UNREAD.values()].filter((x) => Date.now() - x.ts < 6 * 36e5).length, tx_version: TXV, db_ok: !dbVolatile(), ops_ok: opsSolC.v == null ? null : opsSolC.v >= 0.05, halted: HALT.on });   // yes/no flags only (the monitor needs them; amounts and reasons stay in the logs)
   try {
     if (p[1] === 'stream') { const ipx = ip(req), nIp = sseByIp.get(ipx) || 0; if (clients.size >= 3000 || nIp >= 6) { res.writeHead(429, { 'access-control-allow-origin': '*' }); return res.end(); }
       sseByIp.set(ipx, nIp + 1); req.on('close', () => { const v = (sseByIp.get(ipx) || 1) - 1; if (v > 0) sseByIp.set(ipx, v); else sseByIp.delete(ipx); });
