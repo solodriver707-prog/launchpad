@@ -755,7 +755,7 @@
         '<div class="tch-av">' + avatarHTML(t, 150) + '</div>' + '' + (opts.preview ? '' : '<button class="tch-star' + (on ? ' on' : '') + '" data-act="star" data-arg="' + esc(t.tick) + '" aria-label="Add to watchlist" aria-pressed="' + on + '">' + I.star(on) + '</button>') +
         '<div class="tch-side">' + (trapLeft(t) > 0 ? trapBox(t, 'card') : '<div class="tax" style="background:' + taxBg(tmax) + '" data-tip="' + esc(splitTip(t)) + '"><small>TAX</small><b>' + tmax + '%</b>' + (splitOf(t) ? splitBar(splitOf(t), 'mini') : '') + (function () { var r = rwInfo(t, 13); return r ? '<span class="tax-rw" title="Holders are paid in ' + esc(r.sym) + '">' + r.ic + '</span>' : ''; })() + '</div>') +
         (tmax > 0 || (t.live && t.qMint) ? '<div class="pairmini" data-tip="Paired with ' + esc(pairInfo(t.pair).name) + '">' + coinHTML(t.pair, 28) + '<small>PAIR</small><b>' + esc(pairLabel(t.pair)) + '</b></div>' : '<div class="pairmini plain" data-tip="Paired with SOL">' + coinHTML('SOL', 28) + '<small>PAIR</small><b>SOL</b></div>') + '</div></div>' +
-      '<div class="tc-name2"><b><span class="tc-nm">' + esc(t.name) + '</span>' + crBadge0(t) + xBadge(t) + lockBadge(t) + '</b><span class="tc-tkr"><span class="mono">$' + esc(symOf(t)) + '</span>' + vampBadge(t) + (opts.preview ? '' : '<button class="tc-ca mono" data-act="ca" data-arg="' + esc(t.tick) + '" data-tip="Copy contract address" aria-label="Copy contract address">' + esc(short(t.ca)) + I.copy + '</button>') + '</span></div>' +
+      '<div class="tc-name2"><b><span class="tc-nm">' + esc(t.name) + '</span>' + crBadge0(t) + xBadge(t) + lockBadge(t) + '</b><span class="tc-tkr"><span class="mono">$' + esc(symOf(t)) + '</span>' + vampBadge(t) + (opts.preview ? '' : '<button class="tc-ca mono" data-act="ca" data-arg="' + esc(t.tick) + '" data-tip="Copy contract address" aria-label="Copy contract address">CA ' + I.copy + '</button>') + '</span></div>' +
       (opts.preview ? previewTiles(t, opts) : statTiles(t)) + socialsHTML(t) +
       '<div class="tc-mid"><div class="tc-mc"><div class="v"><span data-mc="' + esc(t.tick) + '" data-v="' + fmtK(t.mcN) + '">' + fmtK(t.mcN) + '</span>' +
         '<span class="chgpill ' + (c >= 0 ? 'up' : 'down') + '" data-chg="' + esc(t.tick) + '">' + chgTxt(c) + '</span></div><div class="l">market cap</div></div></div>' +
@@ -5446,11 +5446,13 @@
     ['Sniper trap', 'Bots that rush in at launch pay a huge tax. It steps down in 3 drops, then everyone pays the normal tax.'],
     ['Trade the curve', 'Every buy pushes the price up the bonding curve. Every trade pays the tax shown on the coin.'],
     ['Risk flags', 'We never hide or delete coins. We show dev, top 10, snipers and bundles — you decide.'],
-    ['Graduate', 'After ~85 SOL of buys the curve fills (a ~420 SOL market cap — about $' + gradK() + 'K at today’s SOL price; it moves with SOL, like on pump.fun). Liquidity moves to Meteora and milestone badges start.'],
+    ['Graduate', ''],
     ['Tax flywheel', 'Every trade’s tax splits three ways: creator, holders and burn. More trading, more rewards.']
   ];
+  STS.forEach(function (x, n) { if (x[0] === 'Graduate') Object.defineProperty(x, 1, { get: function () { return 'After ~85 SOL of buys the curve fills (a ~420 SOL market cap — about $' + gradK() + 'K at today’s SOL price; it moves with SOL, like on pump.fun). Liquidity moves to Meteora and milestone badges start.'; } }); });
   var FW = { raf: 0, el: null, coins: [], last: 0, lt: 0, paused: false, hi: -1, jars: [0, 0, 0], spawn: 0, cnt: [1240, 386, 0, [52, 171], 214, 0] };
-  var FST = [['Launch', 'Make a coin, pick a tax', '#F5D9A8'], ['Sniper trap', 'Early bots pay huge tax', '#FF5E6C'], ['Bonding curve', 'Every buy lifts the price', '#3DDC97'], ['Risk scan', 'We flag risks, never hide', '#FFB15C'], ['Graduate', 'At ~$' + gradK() + 'K it moves to Meteora', '#F5D9A8'], ['Tax split', 'Creator picks the split, locked', '#7FB6FF']];
+  var FST = [['Launch', 'Make a coin, pick a tax', '#F5D9A8'], ['Sniper trap', 'Early bots pay huge tax', '#FF5E6C'], ['Bonding curve', 'Every buy lifts the price', '#3DDC97'], ['Risk scan', 'We flag risks, never hide', '#FFB15C'], ['Graduate', '', '#F5D9A8'], ['Tax split', 'Creator picks the split, locked', '#7FB6FF']];
+  Object.defineProperty(FST[4], 1, { get: function () { return 'At ~$' + gradK() + 'K it moves to Meteora'; } });   // today's SOL price, not the one at page load
   function fxMini(k) {
     var t = all()[3] || all()[0];
     if (k === 0) return '<div class="fm fm0"><span class="fm-blank">?</span><span class="fm-arr">→</span><span class="fm-coin">' + avatarHTML(t, 26) + '<i class="mono">2%</i></span></div>';
