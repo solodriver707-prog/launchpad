@@ -266,13 +266,14 @@
   }
   function connect(w, silent) {
     S.connecting = w.name; if (S.walletOpen) render();
-    var stdC = function () { return Promise.resolve(w.features['standard:connect'].connect(silent ? { silent: true } : undefined)); };
+    S.connLog = []; var lg = function (x) { try { S.connLog.push(x); } catch (e) {} };
+    var stdC = function () { lg('std'); return Promise.resolve(w.features['standard:connect'].connect(silent ? { silent: true } : undefined)).then(function (r) { lg('std-ok:' + (((r && r.accounts) || []).length)); return r; }, function (e) { lg('std-err:' + String((e && (e.code || e.message)) || e).slice(0, 60)); throw e; }); };
     // Phantom sometimes answers the standard connect with "Internal JSON-RPC error" (stale session in the extension): ask its own provider once, then retry
     var legacy = /phantom/i.test(w.name) && window.phantom && window.phantom.solana;
     var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
     stdC().catch(function (err) { var em = String((err && err.message) || ''); S.connErr = em || String(err || ''); if (silent || !legacy || /reject|cancel|denied|closed/i.test(em)) throw err;
       // the extension's own provider usually still works: connect there, then use the accounts the standard wallet picks up (no second popup)
-      return Promise.resolve(legacy.connect()).then(function () { return wait(250); }).then(function () { return (w.accounts && w.accounts.length) ? { accounts: w.accounts } : wait(700).then(function () { return (w.accounts && w.accounts.length) ? { accounts: w.accounts } : stdC(); }); }); })
+      lg('legacy'); return Promise.resolve(legacy.connect()).then(function (r) { lg('legacy-ok:' + !!(r && r.publicKey) + ':' + ((w.accounts || []).length)); return wait(250); }, function (e) { lg('legacy-err:' + String((e && (e.code || e.message)) || e).slice(0, 60)); throw e; }).then(function () { return (w.accounts && w.accounts.length) ? { accounts: w.accounts } : wait(700).then(function () { return (w.accounts && w.accounts.length) ? { accounts: w.accounts } : stdC(); }); }); })
     .catch(function (err) { var em = String((err && err.message) || ''); if (silent || /reject|cancel|denied|closed/i.test(em)) throw err;
       // a wallet extension whose background worker was asleep answers the first call with "Internal JSON-RPC error": try once more right away
       var tries = [250], k = 0;   // one instant retry only — people would rather tap again than wait
@@ -290,7 +291,7 @@
       if (!silent) toast(w.name + ' connected · ' + short(acc.address));
     }).catch(function (err) {
       set({ connecting: null });
-      if (!silent) { var em = String((err && err.message) || ''); try { console.warn('[treid] connect failed', w.name, S.connErr, err); } catch (e) {} try { if (API) fetch(API + '/api/clog', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ w: w.name, e: em, e0: S.connErr || '', host: location.host }) }).catch(function () {}); } catch (e) {}
+      if (!silent) { var em = String((err && err.message) || ''); try { console.warn('[treid] connect failed', w.name, S.connErr, err); } catch (e) {} try { if (API) fetch(API + '/api/clog', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ w: w.name, e: em + ' | ' + (S.connLog || []).join(' > '), e0: (S.connErr || '') + ' | code ' + String((err && err.code) || '') + ' | legacy ' + !!(window.phantom && window.phantom.solana) + ' | ver ' + String((w && w.version) || ''), host: location.host }) }).catch(function () {}); } catch (e) {}
         toast(/reject|cancel|denied|closed/i.test(em) && !/JSON-RPC/i.test(S.connErr || '') ? 'Connection cancelled' : (/JSON-RPC/i.test(em + (S.connErr || '')) ? w.name + ' was waking up — tap Connect again' : 'Couldn’t connect to ' + w.name + (em ? ' (' + em.slice(0, 60) + ')' : '') + ' — unlock the wallet and tap Connect again')); }
     });
   }
@@ -374,11 +375,8 @@
   function dlGet() { try { return JSON.parse(localStorage.getItem('treid.dl') || 'null'); } catch (e) { return null; } }
   function dlPut(o) { try { if (o) localStorage.setItem('treid.dl', JSON.stringify(o)); else localStorage.removeItem('treid.dl'); } catch (e) {} }
   // security: the redirect link carries only the request id — never keys, session or cosigners. A reply is honoured only when its id was stored by THIS browser (treid.dl / treid.dlpre), so a crafted link can't 'connect' someone else's address
-  // the reply can land in a NEW tab — and Safari private tabs don't share storage — so the link back also carries this request's keys in its #fragment
-  // (never sent to any server; it only goes to the wallet, which is the other end of this channel anyway, and is wiped from the address bar on return)
-  function dlB64(o) { try { return btoa(unescape(encodeURIComponent(JSON.stringify(o)))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); } catch (e) { return ''; } }
-  function dlUnB64(v) { try { v = String(v).replace(/-/g, '+').replace(/_/g, '/'); while (v.length % 4) v += '='; return JSON.parse(decodeURIComponent(escape(atob(v)))); } catch (e) { return null; } }
-  function dlBack(rid, st) { var u = location.origin + location.pathname + '?dlr=' + rid; if (st && st.sk) { var k = dlB64({ prov: st.prov, sk: st.sk, pk: st.pk, wpk: st.wpk, session: st.session, account: st.account, pend: st.pend }); if (k) u += '#dk=' + k; } return u; }
+  // security: the redirect link carries only the request id — never keys, session or cosigners. A reply is honoured only when its id was stored by THIS browser (treid.dl / treid.dlpre), so a crafted link can't 'connect' someone else's address
+  function dlBack(rid) { return location.origin + location.pathname + '?dlr=' + rid; }
   function dlRid() { return Math.random().toString(36).slice(2, 10); }
   function dlUrl(st, method, params) { return DLP[st.prov].base + method + '?' + Object.keys(params).map(function (k) { return k + '=' + encodeURIComponent(params[k]); }).join('&'); }
   function dlGo(st, method, params) { location.href = dlUrl(st, method, params); }
@@ -429,8 +427,7 @@
     var p = st && st.pend && rid && st.pend.rid === rid ? st.pend : null, pre = {};
     try { pre = JSON.parse(localStorage.getItem('treid.dlpre') || '{}'); } catch (e) {}
     if (!p && rid && pre[rid]) { st = pre[rid]; p = st.pend; }   // the tap handler may not have run before iOS switched apps
-    var dk = q.get('dk') ? dlUnB64(q.get('dk')) : null; if (!p && dk && dk.sk && dk.pend && dk.pend.rid === rid) { st = dk; p = dk.pend; try { var o0 = dlGet(); if (o0 && o0.account && !st.account) st.account = o0.account; } catch (e) {} }   // reply opened in a fresh (private) tab: our keys came back in the link
-    var cands = p ? [] : [st, dk].concat(Object.keys(pre).map(function (k) { return pre[k]; })).filter(function (x) { return x && x.sk && x.pend; });   // id lost on the way back: the reply can still be opened with whichever key we sent
+    var cands = p ? [] : [st].concat(Object.keys(pre).map(function (k) { return pre[k]; })).filter(function (x) { return x && x.sk && x.pend; });   // id lost on the way back: the reply can still be opened with whichever key we sent
     var ret = (p && p.ret) || (cands[0] && cands[0].pend && cands[0].pend.ret) || '';
     try { history.replaceState(null, '', location.pathname + ret); } catch (e) {}
     return { q: q, st: st, p: p, cands: cands }; })();
