@@ -6848,3 +6848,4 @@ html body .tch-side:has(.rwin){width:86px}
 .cr-money .cr-usd{font-style:normal;font-size:10.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cr-logmore{display:block;margin:6px auto 0;font-size:12px}
 .lk3.lk3-no{background:rgba(255,209,92,.07);border-color:rgba(255,209,92,.35)}.lk3-no .lk3-t b{color:#FFD15C}.lk3-no .lk3-w{color:var(--muted);white-space:normal}
+.kin-w b{position:relative;top:-.07em}
