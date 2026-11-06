@@ -705,7 +705,7 @@
     if (sp && sp.h > 0 && Math.max(t.buy, t.sell) > 0) { var usd = (tp.holders || 0) * price(t) + (tp.holders_q || 0) * qUsdT(t);
       return ['PAID', '$' + (usd >= 1000 ? fmtK(usd / 1000).replace('$', '') : usd >= 10 ? Math.round(usd) : usd > 0 ? usd.toFixed(2) : '0'), 'Paid to holders from the tax so far' + (tp.n ? ' · ' + tp.n + ' payouts' : '')]; }
     var bp = t.supply > 0 && t.supply < 1e9 ? (1e9 - t.supply) / 1e9 * 100 : 0;
-    return ['BURNED' + FIRE, (bp >= 10 ? bp.toFixed(0) : bp >= 0.1 ? bp.toFixed(1) : bp > 0 ? '<0.1' : '0') + '%', 'Share of the supply burned for good'];
+    return ['BURNED', (bp >= 10 ? bp.toFixed(0) : bp >= 0.1 ? bp.toFixed(1) : bp > 0 ? '<0.1' : '0') + '%', 'Share of the supply burned for good'];
   }
   function previewTiles(t, o) {   // Create preview: what buyers see at launch, in the same card
     var dp = t.devPct || 0, col = dp < 3 ? '#3DDC97' : dp < 8 ? '#FFD15C' : '#F2708A', sn = o.snipe, tm = Math.max(t.buy || 0, t.sell || 0);
