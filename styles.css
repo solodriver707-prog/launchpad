@@ -6866,3 +6866,5 @@ html body .tc-name2>.tc-tkr>.mono{flex:none;overflow:visible}html body .tc-name2
 html body .tc-name2>b>.tc-nm{color:inherit!important;font-size:inherit!important;font-weight:inherit!important;letter-spacing:inherit}
 html body .tc-name2>b{flex:0 0 auto!important;max-width:68%}html body .tc-name2>.tc-tkr{flex:1 1 0!important;min-width:0}html body .tc-name2>.tc-tkr>.mono{flex:0 1 auto!important;min-width:0;overflow:hidden;text-overflow:ellipsis}
 html body .tc-name2>.tc-tkr>.tc-ca{flex:0 20 auto!important;min-width:18px}html body .tc-name2>.tc-tkr>.mono{flex:0 1 auto!important;min-width:3.2em}
+.tch-vamp{position:absolute;left:54px;bottom:10px;z-index:3;width:36px;height:36px;border-radius:11px;border:1px solid rgba(255,255,255,.12);background:rgba(8,8,10,.6);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center}.tch-vamp .vampb{margin:0}
+html body .tc-name2>b{flex:0 1 auto!important;max-width:none;min-width:0}html body .tc-name2>.tc-tkr{flex:0 0 auto!important;overflow:visible}html body .tc-name2>.tc-tkr>.mono,html body .tc-name2>.tc-tkr>.tc-ca{flex:none!important;min-width:0;overflow:visible}
