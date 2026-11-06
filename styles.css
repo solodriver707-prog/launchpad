@@ -6859,3 +6859,7 @@ html body .lb3-rm{gap:14px}
 button:hover .nb-burn svg,button.on .nb-burn svg{filter:drop-shadow(0 0 5px rgba(255,122,61,.65))}
 .nb-burn{position:relative;top:1.5px}
 .tc-name2.tk-first b{flex:0 0 auto;max-width:72%}.tc-name2.tk-first .tc-tkr{flex:1 1 auto;min-width:0;display:flex;align-items:center;justify-content:flex-end;gap:6px}.tc-name2.tk-first .tc-nm2{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:var(--muted);font-weight:600}.tc-name2.tk-first .tc-ca{flex:none}
+html body .tcard .tch-side>.tax{width:63px!important;height:57px!important;min-height:0!important;box-sizing:border-box;position:relative;justify-content:center}
+html body .tcard .tch-side>.tax .tax-rw{position:absolute;top:4px;right:4px;width:13px;height:13px;display:flex;border-radius:50%;overflow:hidden;box-shadow:0 0 0 1.5px rgba(255,255,255,.85)}html body .tcard .tch-side>.tax .tax-rw>*{width:13px!important;height:13px!important}
+html body .tc-name2>b{flex:0 1 auto;min-width:0}html body .tc-name2>.tc-tkr{flex:0 4 auto!important;min-width:0;overflow:hidden}html body .tc-name2>.tc-tkr>.mono{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+html body .tc-name2>.tc-tkr>.mono{flex:none;overflow:visible}html body .tc-name2>.tc-tkr>.tc-ca{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:0 1 auto}html body .tc-name2>b{min-width:min(40%,110px)}
