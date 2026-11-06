@@ -28,6 +28,7 @@ import { fetchT, JUP } from './txutil.mjs';
 import { HALT, lockIdle } from './lock.mjs';
 let OPS_ST = null;
 import { verifySig, SITES, issueSession } from './sig.mjs';
+import { xauthOn, xStart, xFinish, retOk } from './xauth.mjs';
 import { ed25519 } from '@noble/curves/ed25519';
 
 const RPC = process.env.RPC || 'http://127.0.0.1:8899';
@@ -729,7 +730,7 @@ async function handleReq(req, res) {
       if (!esc || Date.now() - esc.at > 60e3) { const vp = (await dbc.state.getPool(new PublicKey(c.pool)).catch(() => null))?.poolState; esc = { at: Date.now(), on: !!(OPS && vp && vp.creator.toBase58() === OPS.publicKey.toBase58()), pending: vp ? Number(vp.creatorQuoteFee.toString()) / 10 ** (c.quote_dec ?? 9) : 0 }; escCache.set(k, esc); }
       if (!esc.on || !REW) return J({ escrow: false, dev: c.creator });
       const st = REW.state(c), L = (x) => x / 10 ** (c.quote_dec ?? 9), apps = st.era === 'out' ? await REW.applications(c).catch(() => []) : [];
-      return J({ escrow: true, dev: c.creator, era: st.era, creator: st.creator, to: st.to || null, claimBy: st.claimBy || null, cto: st.cto ? { lead: st.cto.lead, at: st.cto.at, fundSol: L(st.cto.fund), paidSol: L(st.cto.paid), vestedSol: L(st.cto.vested) } : null, apps, state: st.state, why: st.why, idleMs: st.idle, lastActive: st.last, soldPct: st.sold, quote: c.quote_symbol || 'SOL', quoteUsd: quoteUsd(c.quote_mint, c.quote_symbol), pendingSol: Math.max(0, esc.pending - L(st.fund)), paidSol: L(st.paid), buybackSol: L(st.buyback), burnedTokens: st.burnedTokens / 1e6, fundSol: L(st.fund), grantedSol: L(st.granted), platformSol: L(st.granted), fundEndsAt: st.fundEndsAt, rules: { freezeH: REW_RULES.idleFreezeMs / 36e5, outD: REW_RULES.idleOutMs / 864e5, soldOut: 70, applyPct: 1, supportPct: 10 }, log: REW.logFor(c.mint) });
+      return J({ escrow: true, xLogin: xauthOn(), dev: c.creator, era: st.era, creator: st.creator, to: st.to || null, claimBy: st.claimBy || null, cto: st.cto ? { lead: st.cto.lead, at: st.cto.at, fundSol: L(st.cto.fund), paidSol: L(st.cto.paid), vestedSol: L(st.cto.vested) } : null, apps, state: st.state, why: st.why, idleMs: st.idle, lastActive: st.last, soldPct: st.sold, quote: c.quote_symbol || 'SOL', quoteUsd: quoteUsd(c.quote_mint, c.quote_symbol), pendingSol: Math.max(0, esc.pending - L(st.fund)), paidSol: L(st.paid), buybackSol: L(st.buyback), burnedTokens: st.burnedTokens / 1e6, fundSol: L(st.fund), grantedSol: L(st.granted), platformSol: L(st.granted), fundEndsAt: st.fundEndsAt, rules: { freezeH: REW_RULES.idleFreezeMs / 36e5, outD: REW_RULES.idleOutMs / 864e5, soldOut: 70, applyPct: 1, supportPct: 10 }, log: REW.logFor(c.mint) });
     }
     if (['cto', 'claim', 'ping', 'hlink'].includes(p[1]) && req.method === 'POST' && !rate('act|' + ip(req), 30, 36e5)) { res.writeHead(429, { 'access-control-allow-origin': '*' }); return res.end('{"ok":false,"error":"too many requests — try again later"}'); }
     if (p[1] === 'xconfirm' && req.method === 'POST') {   // the coin's own X account posted its contract address → "✓ X @handle" (a public post is the proof; no wallet needed)
@@ -751,6 +752,19 @@ async function handleReq(req, res) {
           const img = String(b.image || ''); if (!/^data:image\/(webp|jpeg|png);base64,[A-Za-z0-9+/=]+$/.test(img) || img.length > 1_100_000) throw new Error('use a PNG, JPG or WEBP banner under 800 KB');
           run('INSERT INTO meta(mint, name, symbol, banner, at) VALUES(?,?,?,?,?) ON CONFLICT(mint) DO UPDATE SET banner=excluded.banner, at=excluded.at', c.mint, c.name, c.symbol, img, Date.now());
           coinsSnap = null; J({ ok: true, v: Date.now() }); } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: pubErr(e) })); } }); return; }
+    if (p[1] === 'xauth' && p[2] === 'start' && req.method === 'POST') {   // "Sign in with X" to claim fees sent to an X handle (xauth.mjs)
+      if (!rate('xa|' + ip(req), 20, 36e5)) { res.writeHead(429, { 'access-control-allow-origin': '*' }); return res.end('{"ok":false,"error":"too many tries — try again later"}'); }
+      let body; try { body = await readBody(req, res, 4000); } catch (e) { return bodyFail(res, e); }
+      withBody(async () => { try { if (!REW) throw new Error('rewards escrow not enabled'); const b = JSON.parse(body), ret = retOk(b.ret, SITES); if (!ret) throw new Error('open this from the treid site');
+          const L = REW.linkCheck({ kind: 'x', handle: b.handle, wallet: b.wallet, ts: +b.ts, sig: b.sig }); if (L.already) return J({ ok: true, already: true, coins: L.n });
+          J({ ok: true, url: xStart({ L, ret, cb: PUBLIC_URL + '/api/xauth/cb' }) });
+        } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: pubErr(e) })); } }); return; }
+    if (p[1] === 'xauth' && p[2] === 'cb' && req.method === 'GET') {   // X sends the browser back here
+      const back = (ret, r, extra = '') => { const to = (ret?.base || 'https://treid.fun/') + '?xa=' + r + extra + (ret?.hash || ''); res.writeHead(302, { location: to, 'cache-control': 'no-store', 'referrer-policy': 'no-referrer' }); res.end(); };
+      let F; try { F = await xFinish({ state: u.searchParams.get('state'), code: u.searchParams.get('code'), error: u.searchParams.get('error'), cb: PUBLIC_URL + '/api/xauth/cb' }); }
+      catch (e) { console.log('xauth', e.message); return back(e.ret, /^(expired|cancelled|wrong-account)$/.test(e.message) ? e.message : 'x-failed', e.who ? '&who=' + encodeURIComponent(String(e.who).slice(0, 15)) : ''); }
+      try { const r = await REW.linkCommit(F.L); return back(F.ret, 'ok', '&n=' + r.coins + '&h=' + encodeURIComponent(F.handle)); }
+      catch (e) { console.log('xauth commit', e.message); return back(F.ret, 'busy'); } }
     if (p[1] === 'hlink' && req.method === 'POST') { let body; try { body = await readBody(req, res, 4000); } catch (e) { return bodyFail(res, e); }   // an X / GitHub account claims the fees sent to it
       withBody(async () => { try { if (!REW) throw new Error('rewards escrow not enabled'); J(await REW.link(JSON.parse(body))); } catch (e) { res.writeHead(400, { 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: false, error: pubErr(e) })); } }); return; }
     if (p[1] === 'cto' && (p[2] === 'apply' || p[2] === 'vote') && req.method === 'POST') { let body; try { body = await readBody(req, res, 6000); } catch (e) { return bodyFail(res, e); }

@@ -447,17 +447,26 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, q
     const r = await fetch('https://api.github.com/gists/' + gid, { headers: hd, signal: ctl(10e3) }); if (!r.ok) throw new Error('could not read that gist — is it public? try again in a minute');
     const j = await r.json(); return String(j?.owner?.login || '').toLowerCase() === H && Object.values(j.files || {}).some((f) => String(f.content || '').includes(wallet));
   }
-  async function link({ kind, handle, wallet, url, ts, sig }) {
+  // step 1 of any claim: the wallet signed "link <account> to <wallet>" and some treid coin sends its fees to that account
+  function linkCheck({ kind, handle, wallet, ts, sig }) {
     needReady(); fresh(ts); handle = String(handle || '').replace(/^@/, ''); kind = kind === 'x' ? 'x' : kind === 'g' ? 'g' : null; if (!kind) throw new Error('unknown account type');
     try { new PublicKey(wallet); } catch { throw new Error('connect a wallet first'); }
     if (!verify(linkMessage(kind, handle, wallet, ts), sig, wallet, ts)) throw new Error('bad signature'); guard('link', wallet, sig);
     const key = kind + '@' + handle.toLowerCase(), coins = q('SELECT * FROM coins').filter((c) => feeTo(c)?.key === key);
     if (!coins.length) throw new Error('no treid coin sends its fees to this account');
-    if (lastOf(key, 'hlink')?.extra === wallet) return { ok: true, already: true, coins: coins.length };
-    const now = Date.now(); while (linkHits.length && now - linkHits[0] > 36e5) linkHits.shift(); if (linkHits.length >= 30) throw new Error('too many claims right now — try again in a few minutes');   // each link costs ops one tiny on-chain memo
-    if (!(await proofOk(kind, handle, wallet, url))) throw new Error(kind === 'x' ? `that post isn’t from @${handle} or doesn’t contain your wallet address` : `that gist isn’t owned by ${handle} or doesn’t contain your wallet address`);
-    linkHits.push(now); await withLock(() => stamp(key, 'hlink', 0, wallet));   // on-chain, so it survives any database loss (the ledger rebuild reads it back)
-    coins.forEach((c) => lastDone.delete(c.mint)); log('rewards linked', key, '→', wallet.slice(0, 6), coins.length, 'coin(s)'); return { ok: true, coins: coins.length };
+    return { kind, handle, wallet, key, n: coins.length, already: lastOf(key, 'hlink')?.extra === wallet };
+  }
+  const linkRoom = () => { const now = Date.now(); while (linkHits.length && now - linkHits[0] > 36e5) linkHits.shift(); if (linkHits.length >= 30) throw new Error('too many claims right now — try again in a few minutes'); };   // each link costs ops one tiny on-chain memo
+  // step 2: the account itself was proven (a public post / gist, or "Sign in with X") → the wallet gets the fees
+  async function linkCommit(L) {
+    needReady(); linkRoom(); linkHits.push(Date.now()); await withLock(() => stamp(L.key, 'hlink', 0, L.wallet));   // on-chain, so it survives any database loss (the ledger rebuild reads it back)
+    q('SELECT * FROM coins').filter((c) => feeTo(c)?.key === L.key).forEach((c) => lastDone.delete(c.mint)); log('rewards linked', L.key, '→', L.wallet.slice(0, 6), L.n, 'coin(s)'); return { ok: true, coins: L.n };
+  }
+  async function link({ kind, handle, wallet, url, ts, sig }) {
+    const L = linkCheck({ kind, handle, wallet, ts, sig }); if (L.already) return { ok: true, already: true, coins: L.n };
+    linkRoom();
+    if (!(await proofOk(L.kind, L.handle, wallet, url))) throw new Error(L.kind === 'x' ? `that post isn’t from @${L.handle} or doesn’t contain your wallet address` : `that gist isn’t owned by ${L.handle} or doesn’t contain your wallet address`);
+    return linkCommit(L);
   }
   async function ctoApply({ mint, wallet, ts, sig, plan }) {
     needReady(); const c = coin(mint), p = cleanPlan(plan); fresh(ts); if (p.length < 10) throw new Error('write a short plan (10+ characters)');
@@ -476,6 +485,6 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, q
     run('INSERT OR REPLACE INTO ctovotes VALUES(?,?,?,?,?,?)', mint, e.start, wallet, applicant, Date.now(), sig);   // signed, stored; balances are re-checked every cycle for 24h
     return { ok: true, approved: false };
   }
-  return { rebuild, cycle, state, era, applications, ping, claimNow, ctoApply, ctoVote, link, liabilities, ready: () => READY,
+  return { rebuild, cycle, state, era, applications, ping, claimNow, ctoApply, ctoVote, link, linkCheck, linkCommit, liabilities, ready: () => READY,
     logFor: (mint) => q(`SELECT sig, kind, lamports, ts, extra FROM rlog WHERE mint=? AND kind NOT IN ('ctoapply','claimx','pay0') ORDER BY ts DESC LIMIT 30`, mint) };
 }

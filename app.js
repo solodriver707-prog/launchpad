@@ -3818,6 +3818,11 @@
       if (TO && TO.kind !== 'w' && E.era !== 'out' && (wait || S.hlForm === t.tick)) {
         var isX = TO.kind === 'x', postTxt = 'Claiming my $' + symOf(t) + ' creator fees on treid.fun\n\nWallet: ' + (S.account || '');
         hlBox = S.hlForm !== t.tick ? '<button class="btn pri cr-hlgo" data-act="hlForm" data-arg="' + esc(t.tick) + '">I’m ' + esc(toName) + ' — claim these fees</button>'
+          : isX && E.xLogin && !S.hlPost ? '<div class="cto-form hl-form"><ol class="cto-how">' +
+            '<li><b>Connect the wallet</b> you want the fees in' + (S.account ? ': <span class="mono">' + esc(short(S.account)) + '</span> ✓' : ' — <button class="link" data-act="openWallet">connect wallet</button>') + '</li>' +
+            '<li><b>Sign in with 𝕏</b> as @' + esc(TO.id) + ' — that proves the account is yours. No post needed.</li></ol>' +
+            '<div class="cr-acts"><button class="btn sec" data-act="hlFormX">Cancel</button><button class="btn pri hl-xa" data-act="hlXa" data-arg="' + esc(t.tick) + '"' + (S.account && !S.busy ? '' : ' disabled') + '>' + (S.busy === 'XA' ? 'Opening 𝕏…' : 'Sign in with 𝕏') + '</button></div>' +
+            '<small class="muted">We only read your 𝕏 username — no posting, no access kept.<br><button class="link" data-act="hlPost">Verify with a post instead</button></small></div>'
           : '<div class="cto-form hl-form"><ol class="cto-how">' +
             '<li><b>Connect the wallet</b> you want the fees in' + (S.account ? ': <span class="mono">' + esc(short(S.account)) + '</span> ✓' : ' — <button class="link" data-act="openWallet">connect wallet</button>') + '</li>' +
             (isX ? '<li><b>Post from @' + esc(TO.id) + '</b> a public post that contains your wallet address. ' + (S.account ? '<a class="btn sec hl-post" target="_blank" rel="noopener" href="https://x.com/intent/post?text=' + encodeURIComponent(postTxt) + '">Post on 𝕏</a>' : '') + '</li>'
@@ -5039,7 +5044,18 @@
           .catch(function (e) { toast(chainErr(e)); });
       })(act); break;
       case 'hlForm': set({ hlForm: arg }); break;
-      case 'hlFormX': set({ hlForm: null }); break;
+      case 'hlFormX': set({ hlForm: null, hlPost: false }); break;
+      case 'hlPost': set({ hlPost: true }); break;
+      case 'hlXa': (function () {   // "Sign in with X": sign the link with the wallet, then X confirms the account (indexer/xauth.mjs)
+        var tk = find(arg), TO2 = tk && tk.esc && tk.esc.to; if (!tk || !TO2 || TO2.kind !== 'x') return; if (!S.wallet) { set({ walletOpen: true }); return; }
+        var fsg = S.wallet.features['solana:signMessage']; if (!fsg) { toast('This wallet can’t sign messages — try Phantom or Solflare'); return; }
+        var ts0 = Date.now(), msg = 'treid: link X @' + TO2.id + ' to ' + S.account + ' — ' + ts0;   // must match indexer/rewards.mjs linkMessage
+        S.busy = 'XA'; render();
+        Promise.resolve(fsg.signMessage({ account: S.walletAcc, message: new TextEncoder().encode(siteMsg(msg)) })).then(function (r) { var sg = (Array.isArray(r) ? r[0] : r).signature; return chainLib().then(function (T) {
+          return fetch(API + '/api/xauth/start', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ handle: TO2.id, wallet: S.account, ts: ts0, sig: T.b58(sg), ret: location.origin + location.pathname + '#/coin/' + tk.ca }) }).then(function (x) { return x.json(); }); }); })
+          .then(function (j) { if (!j || !j.ok) throw new Error((j && j.error) || 'failed'); if (j.already) { S.busy = null; S.hlForm = null; toast('This wallet already gets these fees ✓', tk); render(); return; } location.href = j.url; })
+          .catch(function (e) { S.busy = null; render(); toast(chainErr(e)); });
+      })(); break;
       case 'hlLink': (function () {
         var tk = find(arg), E2 = tk && tk.esc, TO2 = E2 && E2.to; if (!tk || !TO2) return; if (!S.wallet) { set({ walletOpen: true }); return; }
         var url = ((document.getElementById('hl-url') || {}).value || S.hlUrl || '').trim(); if (!url) { toast(TO2.kind === 'x' ? 'Paste the link to your post' : 'Paste the link to your gist'); return; }
@@ -5996,4 +6012,10 @@
   applyRoute(); render();   // same tick as the first paint → no flash of the board on refresh
 
   setTimeout(function () { S.loading = false; render(); routeReady = true; syncRoute(); }, 850);
+  (function () {   // back from "Sign in with X" (indexer/xauth.mjs): ?xa=ok|wrong-account|cancelled|expired|busy|x-failed
+    var m = /[?&]xa=([a-z-]+)/.exec(location.search); if (!m) return; var g = function (k) { var r = new RegExp('[?&]' + k + '=([^&]*)').exec(location.search); return r ? decodeURIComponent(r[1]) : ''; };
+    var n = +g('n') || 1, msg = { ok: 'Claimed ✓ — @' + g('h') + '’s fees now pay to your wallet' + (n > 1 ? ' (' + n + ' coins)' : ''), 'wrong-account': 'You signed in as @' + g('who') + ' — sign in with the account the fees go to', cancelled: 'Sign in with 𝕏 was cancelled', expired: 'That sign-in expired — try again', busy: 'Signed in, but the server is busy — try again in a minute' }[m[1]] || 'Couldn’t confirm your 𝕏 account — try again or verify with a post';
+    try { history.replaceState(null, '', location.pathname + location.hash); } catch (e) {}
+    setTimeout(function () { toast(msg); if (m[1] === 'ok') confetti(); }, 1200);
+  })();
 })();
