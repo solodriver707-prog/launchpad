@@ -24,11 +24,13 @@ const sendTx = (...a) => { if (HALT.on) throw new Error('ops halted'); return se
 import { rwOut, taxswapGot } from './ops.mjs';
 import { verifySig } from './sig.mjs';
 
-export const RULES = { idleFreezeMs: 72 * 3600e3, idleOutMs: 7 * 864e5, soldOut: 70, keepPct: 0.5, ctoApplyPct: 1, ctoSupportPct: 10, ctoHoldMs: 24 * 36e5 };
+export const RULES = { idleFreezeMs: 72 * 3600e3, idleOutMs: 7 * 864e5, handleFreezeMs: 14 * 864e5, handleOutMs: 30 * 864e5, soldOut: 70, keepPct: 0.5, ctoApplyPct: 1, ctoSupportPct: 10, ctoHoldMs: 24 * 36e5 };
 const SUPPLY = 1e9, MEMO = new PublicKey('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr');
 const memo = (s) => new TransactionInstruction({ keys: [], programId: MEMO, data: Buffer.from(s) });
 // creator fees can go to someone other than the launch wallet: an X handle, a GitHub user or another wallet — set ONCE at launch in the coin's
 // on-chain metadata URI (f=x.<handle> | f=g.<user> | f=w.<wallet>), which can never be changed afterwards
+// fees sent to an X account: that person may not follow the coin daily → paused after 14 days without showing up, out after 30 (launch wallet: 72h / 7d)
+export const idleRules = (e) => e && e.type === 'dev' && e.to && e.to.kind !== 'w' ? { freeze: RULES.handleFreezeMs, out: RULES.handleOutMs } : { freeze: RULES.idleFreezeMs, out: RULES.idleOutMs };
 export const FEE_GRACE_MS = 30 * 864e5;   // a handle has 30 days to claim; until then its fees just wait in the Meteora pool (nobody touches them)
 export function feeTo(c) { try { const f = new URL(c.uri).searchParams.get('f') || ''; const m = /^(x|g|w)\.(.+)$/.exec(f); if (!m) return null;
     if (m[1] === 'x' && /^[A-Za-z0-9_]{1,15}$/.test(m[2])) return { kind: 'x', id: m[2], key: 'x@' + m[2].toLowerCase() };
@@ -139,12 +141,13 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, q
     if (!e.wallet) { const left = FEE_GRACE_MS - (Date.now() - e.start); if (devDumped()) return { ...base, state: 'out', why: 'sold', bal: 0, peak: 0, sold: 0, last: e.start, idle: 0, outAt: null };   // fees for a handle that hasn't claimed yet: they wait in the pool, no timers run
       return { ...base, state: left > 0 ? 'waiting' : 'out', why: left > 0 ? null : 'unclaimed', claimBy: e.start + FEE_GRACE_MS, bal: 0, peak: 0, sold: 0, last: e.start, idle: 0, outAt: null }; }
     const a = activity(c, e.wallet, e.start, e.type === 'cto' ? e.startBag : null); let st = 'active', why = null;
+    const IR = idleRules(e);
     // out: sold/moved 70%+ of the peak bag AND kept under 0.5% of supply (a dev trimming 10% → 2% keeps a real stake and stays in), or 7 days away · paused: 72h away
-    if (a.sold >= RULES.soldOut && a.bal < RULES.keepPct / 100 * SUPPLY) { st = 'out'; why = 'sold'; } else if (a.idle >= RULES.idleOutMs) { st = 'out'; why = 'idle'; } else if (a.idle >= RULES.idleFreezeMs) st = 'frozen';
+    if (a.sold >= RULES.soldOut && a.bal < RULES.keepPct / 100 * SUPPLY) { st = 'out'; why = 'sold'; } else if (a.idle >= IR.out) { st = 'out'; why = 'idle'; } else if (a.idle >= IR.freeze) st = 'frozen';
     // fees sent to an X / GitHub account: the launch wallet's bag counts too — the dev can't dump from the launch wallet while the handle keeps earning.
     // Measured from the coin's creation (a re-link to a new wallet never resets it)
     if (st !== 'out' && devDumped()) { st = 'out'; why = 'sold'; }
-    const r = { ...base, ...a, paid: sum(c.mint, 'pay', e.start), state: st, why, outAt: null };
+    const r = { ...base, ...a, paid: sum(c.mint, 'pay', e.start), state: st, why, outAt: null, freezeMs: IR.freeze, outMs: IR.out };
     if (e.type === 'cto') r.cto = { lead: e.wallet, at: e.start, fund: 0, paid: 0, vested: 0, owed: 0 };
     return r;
   }
