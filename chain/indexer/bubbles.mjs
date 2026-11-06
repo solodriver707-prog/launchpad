@@ -14,7 +14,7 @@ export function startBubbles({ conn, q, q1, run, holdersCached }) {
     if (sigs.length >= 1000) return { kind: 'old' };   // an established wallet — its first funding is too far back to matter
     const oldest = sigs.filter((s) => !s.err).reverse().slice(0, 4);   // the first few successful txs, oldest first
     for (const s of oldest) {
-      const tx = await conn.getParsedTransaction(s.signature, { maxSupportedTransactionVersion: 0 });
+      const tx = await conn.getParsedTransaction(s.signature, { maxSupportedTransactionVersion: 1 });
       if (!tx) continue;
       const ixs = [...tx.transaction.message.instructions, ...(tx.meta?.innerInstructions || []).flatMap((x) => x.instructions)];
       for (const ix of ixs) { const pi = ix.parsed; if (ix.programId?.toBase58?.() !== SYS || !pi || !/^transfer/.test(pi.type)) continue;

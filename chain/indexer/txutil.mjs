@@ -56,6 +56,6 @@ export async function landOrExpire(conn, raw, sig, lastValidBlockHeight) {
 }
 // read a confirmed tx, retrying while the RPC catches up
 export async function getTxRetry(conn, sig, tries = 6) {
-  for (let i = 0; i < tries; i++) { const t = await conn.getTransaction(sig, { commitment: 'confirmed', maxSupportedTransactionVersion: 0 }).catch(() => null); if (t) return t; await sleep(1500 * (i + 1)); }
+  for (let i = 0; i < tries; i++) { const t = await conn.getTransaction(sig, { commitment: 'confirmed', maxSupportedTransactionVersion: 1 }).catch(() => null); if (t) return t; await sleep(1500 * (i + 1)); }
   return null;
 }
