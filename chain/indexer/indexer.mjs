@@ -195,7 +195,7 @@ async function syncAddress(addr, limit = 1000) {   // fetch history (oldest firs
 }
 let PUSH = null; const clients = new Set(); const push = (ev) => { if (PUSH) PUSH.onEvent(ev); const s = `data: ${JSON.stringify(ev)}\n\n`; for (const c of clients) { if (c.writableLength > 256e3) { clients.delete(c); try { c.destroy(); } catch {} continue; } c.write(s); } };   // slow readers are dropped, never buffered forever
 function buildCoinsSnap() { if (coinsSnap && coinsSnap.busy) return; if (coinsSnap) coinsSnap.busy = true;
-  try { const v = q('SELECT mint FROM coins ORDER BY created_slot DESC LIMIT 2000').filter((r) => !HIDDEN.has(r.mint)).map((r) => stats(r.mint, true)), raw = JSON.stringify(v); coinsSnap = { at: Date.now(), v, out: { raw, __gz: zlib.gzipSync(raw, { level: 6 }) } }; }
+  try { const v = q('SELECT mint FROM coins ORDER BY created_slot DESC LIMIT 2000').filter((r) => !HIDDEN.has(r.mint)).map((r) => { const o = stats(r.mint, true); try { const st = REW && REW.ready() ? REW.state(q1('SELECT * FROM coins WHERE mint=?', r.mint)) : null; o.cr = st ? { era: st.era, state: st.state, why: st.why || null } : null; } catch { o.cr = null; } return o; }), raw = JSON.stringify(v); coinsSnap = { at: Date.now(), v, out: { raw, __gz: zlib.gzipSync(raw, { level: 6 }) } }; }
   catch (e) { if (coinsSnap) coinsSnap.busy = false; throw e; } }
 let CO = null, CR = null, BUB = null, bubC = new Map(), walC = new Map(), coinsSnap = null, burnsSnap = null; const opsSolC = { v: null };   // callouts (started below, once the helpers exist)
 
