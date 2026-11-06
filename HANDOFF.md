@@ -31,7 +31,14 @@ Mainnet indexer: https://treid-indexer-mainnet.onrender.com (Render, Docker, `ch
 - **TP/SL** (coin page → "TP / SL" tab): Jupiter Trigger **V2** docs say Token-2022 mints with transfer-fee/hook are rejected unless whitelisted → only 0%-tax coins get ⚡ Auto-sell (vault deposit, OCO or single, min $10, via `/api/jt/*` proxy that adds `JUP_API_KEY`). Every Jupiter-built tx is simulated first and refused if it takes more of your tokens/SOL than chosen. Taxed coins (and anyone who prefers) get 🔔 Alert me: one-shot push at TP/SL market cap (`/api/push/alert*`, table `pushalert`).
   NOT yet tested on mainnet: first try a $10+ order on a 0%-tax coin; if Jupiter's challenge/deposit shapes differ from the docs, adjust `jtToken`/`jtPlace`. Ask Jupiter to whitelist treid coins to enable Auto-sell for taxed ones.
 
+## Done 6 Nov 2026
+- Domain **treid.fun** (GoDaddy, Domain Lock + 2FA + privacy) → GitHub Pages (CNAME file, HTTPS enforced). Mail: ImprovMX catch-all *@treid.fun → admin Proton inbox.
+- Sign in with X for X-handle fee claims (xauth.mjs; Render env X_CLIENT_ID / X_CLIENT_SECRET; X app callback <PUBLIC_URL>/api/xauth/cb). Post proof stays as fallback.
+- X-handle fee recipients: pause 14d / out 30d, no sell rule, dev selling doesn't affect them. Launch form offers only Me / X account.
+- /api/health has yes/no flags (cluster, db_ok, ops_ok, halted); hourly health-check task updated.
+
 ## Next up
+- Phantom dApp domain review for treid.fun; treid X account (@treidfun); Telegram; beta testers; $TREID later (official-CA badge + copycat warning when TREID_MINT is set).
 - Mainnet test of TP/SL Auto-sell; Jupiter whitelist request for transfer-fee coins.
 
 ## Earlier plan (agreed)
