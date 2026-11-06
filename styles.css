@@ -6914,3 +6914,4 @@ html body .tp-banner .tp-key>.tax>.liq-taxin{top:0!important;right:0!important;b
 @keyframes swSpin{to{transform:rotate(360deg)}}
 .trapi{width:1.15em;height:1.15em;display:inline-block;vertical-align:-.2em;flex:none}
 .liq-taxin .liq-c small .trapi{width:21px;height:21px;margin-right:4px;vertical-align:-6px}
+.tradebox .quote>div{gap:10px}.tradebox .quote>div>span:last-child{white-space:nowrap;flex:none}

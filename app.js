@@ -2653,7 +2653,7 @@
   // ---- Buy with SOL on pair coins: SOL → pair token via Jupiter, then the normal pool buy (mainnet only — Jupiter has no devnet) ----
   var JUP = 'https://lite-api.jup.ag/swap/v1';
   function jupOn(t) { return CHAIN_ID === 'solana:mainnet' && !!(t && t.live && t.qMint); }
-  function paySol(t) { return jupOn(t) && S.side === 'buy' && S.paySol !== false && !(S.wallet && S.wallet.dl); }   // default: pay with SOL (swapped to the pair token for you) — nobody has to hold the pair token
+  function paySol(t) { return jupOn(t) && S.side === 'buy'; }   // you always pay in SOL (and get SOL when you sell) — the pair token is only used inside the transaction   // default: pay with SOL (swapped to the pair token for you) — nobody has to hold the pair token
   function b64Bytes(x) { var b = atob(x), u = new Uint8Array(b.length); for (var i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u; }
   function bytesB64(u) { var s0 = ''; for (var i = 0; i < u.length; i++) s0 += String.fromCharCode(u[i]); return btoa(s0); }
   // waits for a FINAL answer: confirmed, failed, or expired (blockhash past its last valid height — it can never land). Never "gave up while it could still land".
@@ -2692,12 +2692,13 @@
       var b64 = bytesB64(b.bytes), sp = {}, o;
       if (side === 'buy') o = { spend: sp, solMax: BigInt(b.lamports) + 30000000n, gain: { mint: t.ca, min: BigInt(b.coinMinRaw) * BigInt(10000 - taxBps - 50) / 10000n } };   // what lands after the coin's own tax
       else { sp[t.ca] = String(b.tokensRaw); o = { spend: sp, solMax: 30000000n, solGainMin: BigInt(b.solMinRaw) > 20000000n ? BigInt(b.solMinRaw) - 20000000n : 0n }; }
-      return walletGuard(b64, o).then(function () { if (S.account !== who) throw new Error('Wallet account changed — stopped'); return walletSign([b.bytes]); })
+      return walletGuard(b64, o).then(function () { if (S.account !== who) throw new Error('Wallet account changed — stopped'); return walletSign([b.bytes], { lastValidBlockHeight: b.lastValidBlockHeight, mint: t.ca }); })
         .then(function (signed) { S.busy = 'Confirming on-chain…'; render(); return rpc('sendTransaction', [bytesB64(signed[0]), { encoding: 'base64', preflightCommitment: 'confirmed', maxRetries: 3 }]); })
         .then(function (sig) { return waitSig(sig, b.lastValidBlockHeight).then(function () { return b; }); }); })
       .then(function (b) { S.busy = null; S.amount = ''; S.sellAll = false; if (side === 'buy') confettiSmall(); render(); refreshBalance();
         toast(side === 'buy' ? 'Bought ~' + fmtNum(b.quote.out) + ' $' + sym + ' with SOL · on-chain ✓' : 'Sold $' + sym + ' for ~' + b.quote.out.toFixed(4) + ' SOL · on-chain ✓', t); setTimeout(function () { liveLoad(t); }, 1200); })
       .catch(function (e) { S.busy = null; render(); var m = String((e && e.message) || '');
+        if (/too big for one transaction|No Jupiter route/i.test(m) && S.wallet && S.wallet.dl) { toast('This amount doesn’t fit one transaction right now — try a smaller amount (or open treid in your wallet app’s browser)'); return; }
         if (/too big for one transaction|No Jupiter route/i.test(m)) { S.solTwoStep = true; toast('Using the 2-step route for this one (' + m.slice(0, 60) + ') — press ' + (side === 'buy' ? 'Buy' : 'Sell') + ' again'); setTimeout(function () { S.solTwoStep = false; }, 120e3); return; }
         if (m !== 'busy') toast(chainErr(e)); });
   }
@@ -2764,7 +2765,7 @@
         else { res.out = L.out; res.min = L.minOut; res.tax = L.out * ct / Math.max(1e-9, 1 - ct); res.sol = L.out + L.feeSol; }
         res.grad = !!L.graduated; res.impact = typeof L.impact === 'number' && isFinite(L.impact) ? Math.min(99, L.impact) : 0; res.exact = true; }
     }
-    if (!isBuy && jupOn(t) && S.recvSol !== false && t.qMint) {   // "Receive: SOL" — the pair token is swapped to SOL in the same transaction, so show SOL
+    if (!isBuy && jupOn(t) && true && t.qMint) {   // "Receive: SOL" — the pair token is swapped to SOL in the same transaction, so show SOL
       var k2s = qUsdT(t) / SOL_USD; ['out', 'min', 'tax', 'fee', 'sol'].forEach(function (k) { if (typeof res[k] === 'number') res[k] *= k2s; }); res.min *= 0.995; res.out *= 0.998; res.inSol = true; }
     return res;
   }
@@ -3259,9 +3260,8 @@
     function usdS(v) { return v > 0 ? '≈ $' + (v < 0.01 ? '<0.01' : money(v)) : ''; }
     function f4(v) { return v > 0 && v < 0.0001 ? decStr(v, 2) : v.toFixed(4); }
     var bsBar = '<div class="bs bs3"><button class="b' + (S.side === 'buy' ? ' on' : '') + '" data-act="side" data-arg="buy">Buy</button><button class="s' + (S.side === 'sell' ? ' on' : '') + '" data-act="side" data-arg="sell">Sell</button><button class="l' + (S.side === 'tpsl' ? ' on' : '') + '" data-act="side" data-arg="tpsl">TP / SL</button></div>';
+    var SW = false;
     var panel = S.side === 'tpsl' ? tpslPanel(t, pos, bsBar) : '<section class="card-s panel tradebox">' + bsBar +
-      (jupOn(t) && !q.isBuy ? '<div class="paywith"><span class="muted">Receive</span><button class="' + (S.recvSol === false ? 'on' : '') + '" data-act="recvSol" data-arg="0">' + coinHTML(t.pair, 16) + esc(qSymT(t)) + '</button><button class="' + (S.recvSol !== false ? 'on' : '') + '" data-act="recvSol" data-arg="1">' + coinHTML('SOL', 16) + 'SOL</button>' + (S.recvSol !== false ? '<small class="muted">sold for ' + esc(qSymT(t)) + ', swapped to SOL in the same transaction · 1 wallet approval</small>' : '') + '</div>' : '') +
-      (jupOn(t) && q.isBuy ? '<div class="paywith"><span class="muted">Pay with</span>' + (PS ? '' : '<button class="on" data-act="paySol" data-arg="0">' + coinHTML(t.pair, 16) + esc(qSymT(t)) + '</button>') + '<button class="' + (PS ? 'on' : '') + '" data-act="paySol" data-arg="1">' + coinHTML('SOL', 16) + 'SOL</button>' + (PS ? '<small class="muted">swapped to ' + esc(qSymT(t)) + ' automatically · 1 approval</small>' : '') + '</div>' : '') +
       '<div class="tb-top"><span class="muted" style="font-size:12.5px">' + (q.isBuy ? (bal != null ? 'Balance ' + (bal >= 1000 ? fmtNum(bal) : bal.toFixed(3)) + ' ' + esc(QS) : 'Amount in ' + esc(QS)) : (pos ? 'You hold ' + fmtNum(pos.tok) + ' $' + sid : 'You hold 0 $' + sid)) + '</span>' +
         '<button class="slipbtn" data-act="slip">Slippage ' + S.slip + '% ⚙</button></div>' +
       (S.slipOpen ? '<div class="slipbox"><span class="muted" style="font-size:12px">Max slippage</span><div class="presets">' + [1, 3, 5, 10, 20].map(function (v) { return '<button class="' + (S.slip === v ? 'on' : '') + '" data-act="setslip" data-arg="' + v + '">' + v + '%</button>'; }).join('') + '</div><span class="muted" style="font-size:11.5px">Priority fee: 0.0001 SOL</span></div>' : '') +
@@ -3269,6 +3269,7 @@
       '<div class="amtwrap"><input id="amt" class="inp" inputmode="decimal" data-bind="amount" value="' + esc(S.amount) + '" placeholder="0.0"><span>' + (q.isBuy ? coinHTML(QK, 22) + esc(QS) : avatarHTML(t, 22) + '$' + sid) + '</span></div>' +
       (inUsd > 0 ? '<div class="amt-usd mono">' + usdS(inUsd) + (q.isBuy && q.out > 0 ? ' · ≈ ' + fmtNum(q.out) + ' $' + sid : '') + '</div>' : '') +
       '<div class="presets">' + presets + '</div>' +
+      (function () { SW = !q.isBuy && jupOn(t) && !!t.qMint; return ''; })() +   // selling a coin paired with another asset: you get SOL, the pair token is swapped in the same transaction
       (PS ? '<div class="quote">' + (function () { var sa = numVal(S.amount), f4s = function (v) { return (v > 0 && v < 0.0001 ? '<0.0001' : v.toFixed(4)) + ' SOL'; };   // same breakdown as SOL coins, in SOL
           return (q.pct > 0 ? '<div><span class="muted">Coin ' + (q.isBuy ? 'buy' : 'sell') + ' tax (' + q.pct + '%)</span><span style="color:' + taxBg(q.pct) + '">' + f4s(sa * q.pct / 100) + '</span></div>' : '') +
             '<div><span class="muted">Trading fee (' + (+q.fp.toFixed(2)) + '%)</span><span>' + f4s(sa * q.fp / 100) + '</span></div>' +
@@ -3278,7 +3279,8 @@
             '<div><span class="muted">Min received (' + S.slip + '% slip)</span><span>' + fmtNum(q.min) + ' $' + sid + '</span></div>'; })() + (q.capped ? '<div class="q-cap muted">Capped at what\'s left on the bonding curve</div>' : '') + '<div style="padding-top:9px;border-top:1px solid var(--line)"><span class="muted">You receive ≈</span><span style="font-weight:800;font-size:15px">' + fmtNum(q.out) + ' $' + sid + (outUsd > 0 ? ' <small class="q-usd">' + usdS(outUsd) + '</small>' : '') + '</span></div></div>' :
       '<div class="quote">' + (q.pct > 0 ? '<div><span class="muted">Coin ' + (q.isBuy ? 'buy' : 'sell') + ' tax (' + q.pct + '%)</span><span style="color:' + taxBg(q.pct) + '">' + f4(q.tax) + ' ' + esc(QSo) + '</span></div>' : '') +
         '<div><span class="muted">Trading fee (' + (+q.fp.toFixed(2)) + '%)' + (q.grad ? ' <em class="q-cr">' + gradCreator(t) + '% to creator</em>' : ' <em class="q-cr">' + (q.exact ? +(q.fp * 0.4).toFixed(2) : (q.pct > 0 ? FEE.creatorTaxed : FEE.creatorPlain)) + '% to creator</em>') + '</span><span>' + f4(q.fee) + ' ' + esc(QSo) + '</span></div>' +
-        '<div class="q-tot"><span class="muted">Total cost</span><span class="mono">' + (+(q.pct + q.fp).toFixed(2)) + '% · ' + f4((q.tax + q.fee)) + ' ' + esc(QSo) + '</span></div>' +
+        (SW ? '<div><span class="muted">Swap ' + esc(qSymT(t)) + ' → SOL (~0.2%)</span><span>' + f4(q.out * 0.002) + ' SOL</span></div>' : '') +
+        '<div class="q-tot"><span class="muted">Total cost</span><span class="mono">' + (SW ? '≈' : '') + (+(q.pct + q.fp + (SW ? 0.2 : 0)).toFixed(2)) + '% · ' + f4((q.tax + q.fee + (SW ? q.out * 0.002 : 0))) + ' ' + esc(QSo) + '</span></div>' +
         '<div><span class="muted">Price impact</span><span class="' + (q.impact > 5 ? 'down' : '') + '">' + q.impact.toFixed(2) + '%</span></div>' +
         '<div><span class="muted">Min received (' + S.slip + '% slip)</span><span>' + (q.isBuy ? fmtNum(q.min) + ' $' + sid : q.min.toFixed(4) + ' ' + esc(QSo)) + '</span></div>' +
         '<div style="padding-top:9px;border-top:1px solid var(--line)"><span class="muted">You receive ≈</span><span style="font-weight:800;font-size:15px">' + (q.isBuy ? fmtNum(q.out) + ' $' + sid : q.out.toFixed(4) + ' ' + esc(QSo)) + (outUsd > 0 ? ' <small class="q-usd">' + usdS(outUsd) + '</small>' : '') + '</span></div>' + (q.capped ? '<div class="q-cap muted">Capped at what\'s left on the bonding curve</div>' : '') + '</div>') +
@@ -5151,17 +5153,17 @@
           if (t.qMint && typeof S.balance === 'number' && S.balance < 0.003) { toast('You need a little SOL for network fees'); break; }
           if (side0 === 'sell' && !(ps0.tok > 0) && !S.posChecked) { S.posChecked = true; toast('Checking your balance…'); livePos(t).then(function () { setTimeout(function () { S.posChecked = false; }, 15e3); if (S.pos[t.tick] && S.pos[t.tick].tok > 0) toast('Balance loaded — tap Sell again'); else toast('You don\'t hold any $' + symOf(t) + ' yet — buy first'); }); break; }
           if (side0 === 'sell') { if (amt > ps0.tok && (amt - ps0.tok < 1e-6 || (S.sellAll && amt - Math.floor(ps0.tok) < 1))) amt = ps0.tok; if (amt > ps0.tok) { toast('You only hold ' + fmtNum(ps0.tok) + ' $' + symOf(t)); break; } if (amt <= 0) { toast('You don\'t hold any $' + symOf(t) + ' yet — buy first'); break; } }
-          if (!(S.wallet && S.wallet.dl) && jupOn(t) && !S.solTwoStep && ((side0 === 'buy' && paySol(t)) || (side0 === 'sell' && S.recvSol !== false))) {   // ONE transaction: SOL in / SOL out, like stonk.fun
+          if (jupOn(t) && !(S.solTwoStep && !(S.wallet && S.wallet.dl)) && ((side0 === 'buy' && paySol(t)) || (side0 === 'sell' && true))) {   // ONE transaction: SOL in / SOL out, like stonk.fun
             if (side0 === 'buy' && typeof S.balance === 'number' && amt > S.balance - 0.01) { toast('Not enough SOL — balance ' + S.balance.toFixed(3)); break; } if (S.busy) break;
             solSwapRun(t, side0, amt); break; }
           if (paySol(t)) { if (typeof S.balance === 'number' && amt > S.balance - 0.01) { toast('Not enough SOL — balance ' + S.balance.toFixed(3)); break; } if (S.busy) break; S.busy = 'Swapping SOL → ' + qSymT(t); render(); toast('Step 1 of 2: swap SOL → ' + qSymT(t) + ' — confirm in your wallet');
             jupSolToPair(t, amt).catch(function (e) { throw /fetch/i.test(String(e && e.message)) ? new Error('Couldn’t reach Jupiter — try again in a moment') : e; }).then(function (got) { S.busy = null; S.swappedTo = { tick: t.tick, amt: got }; render(); return chainRun('Step 2 of 2: buying $' + symOf(t), function (T) { return T.buildSwap({ rpc: RPC, expect: { mint: t.ca, partners: [PARTNER, TREASURY] }, owner: S.account, pool: t.pool, side: 'buy', amount: got, slippageBps: Math.round(S.slip * 100), referral: TREASURY }); }); })
               .then(function (b) { S.amount = ''; S.swappedTo = null; confettiSmall(); toast('Bought ~' + fmtNum(b.quote.out) + ' $' + symOf(t) + ' with SOL · on-chain ✓', t); setTimeout(function () { liveLoad(t); refreshBalance(); }, 1200); })
-              .catch(function (e) { S.busy = null; if (S.swappedTo && S.swappedTo.tick === t.tick) { S.paySol = false; S.amount = String(S.swappedTo.amt); toast('Your SOL is now ' + niceQ(S.swappedTo.amt) + ' ' + qSymT(t) + ' in your wallet — press Buy again to use it (or sell it any time)', t); } S.swappedTo = null; render(); if (e && e.message !== 'busy') toast(chainErr(e)); });
+              .catch(function (e) { S.busy = null; if (S.swappedTo && S.swappedTo.tick === t.tick) toast('The buy step didn’t go through — your SOL is now ' + niceQ(S.swappedTo.amt) + ' ' + qSymT(t) + ' in your wallet (you can swap it back to SOL in your wallet any time)', t); S.swappedTo = null; render(); if (e && e.message !== 'busy') toast(chainErr(e)); });
             break; }
           chainRun(side0 === 'buy' ? 'Buying $' + symOf(t) : 'Selling $' + symOf(t), function (T) { var cr = side0 === 'buy' ? coRef(t) : null; return T.buildSwap({ rpc: RPC, expect: { mint: t.ca, partners: [PARTNER, TREASURY] }, owner: S.account, pool: t.pool, side: side0, amount: amt, slippageBps: Math.round(S.slip * 100), memo: cr ? 'treid:co:' + cr.id : null, referral: TREASURY }); })
             .then(function (b) { S.amount = ''; S.sellAll = false; if (side0 === 'buy') confettiSmall(); toast((side0 === 'buy' ? 'Bought ~' + fmtNum(b.quote.out) + ' $' + symOf(t) : 'Sold ' + fmtNum(amt) + ' $' + symOf(t) + ' for ~' + b.quote.out.toFixed(4) + ' ' + qSymT(t)) + ' · on-chain ✓', t); setTimeout(function () { liveLoad(t); }, 1200);
-              if (side0 === 'sell' && jupOn(t) && S.recvSol !== false && b.sigs && b.sigs.length && !S.busy) { var who1 = S.account; S.busy = 'Swapping ' + qSymT(t) + ' → SOL'; render(); toast('Step 2 of 2: swap ' + qSymT(t) + ' → SOL — confirm in your wallet');
+              if (side0 === 'sell' && jupOn(t) && true && b.sigs && b.sigs.length && !S.busy) { var who1 = S.account; S.busy = 'Swapping ' + qSymT(t) + ' → SOL'; render(); toast('Step 2 of 2: swap ' + qSymT(t) + ' → SOL — confirm in your wallet');
                 swapDelivered(b.sigs[b.sigs.length - 1], who1, t.qMint).then(function (got) { if (!(got > 0)) throw new Error('Couldn’t see the ' + qSymT(t) + ' you received — it stays in your wallet');
                   var rawAmt = BigInt(Math.floor(got * Math.pow(10, t.qDec != null ? t.qDec : 9))); return jupPairToSol(t, String(rawAmt)); })
                   .then(function (sol) { S.busy = null; render(); refreshBalance(); toast('Received ~' + sol.toFixed(4) + ' SOL ✓', t); })
