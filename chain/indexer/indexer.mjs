@@ -356,6 +356,9 @@ function dbcIxs(tx, keys, pid0 = DBC_ID) {   // every instruction of one program
   for (const g of tx.meta.innerInstructions || []) for (const ix of g.instructions) { try { add(ix.programIdIndex, ix.accounts, Buffer.from(bs58.decode(ix.data))); } catch {} }
   return out;
 }
+// treid's fee on a trade, in SOL lamports for the callout ledger: SOL pairs as they are; other pairs valued at the pair price at that moment
+// (no price → 0, nothing credited)
+function feeLam(raw, coin, QD, QU) { if (!coin.quote_mint || coin.quote_mint === WSOL) return raw; if (!(QU > 0) || !(SOL_USD > 0)) return 0; return Math.floor(raw / QD * QU / SOL_USD * 1e9); }
 const retryN = new Map();
 // every swap on a treid pool counts, whatever app or wallet sent it: the transaction is read from the chain, never from our site.
 // A new transaction format must never make trades silently disappear again (Phantom's v1 swaps did): read the newest version the RPC
@@ -403,7 +406,7 @@ async function handle(sig) {
     const rowSig = n++ ? sig + '#' + coin.mint.slice(0, 6) : sig;
     run('INSERT OR IGNORE INTO trades(sig,mint,wallet,side,sol,tokens,price_usd,mcap_usd,slot,ts,sniper,bundle,fee_sol,progress,usd,reserve) VALUES(?,?,?,?,?,?,?,?,?,?,?,0,?,?,?,?)', rowSig, coin.mint, trader, side, sol, tokens, price, price * circ, tx.slot, ts, sniper, fee / QD, Math.min(100, prog), sol * QU, reserve);
     if (SYSW.has(trader)) run('UPDATE trades SET sys=1 WHERE sig=?', rowSig);   // treid's own wallets (tax sales, buybacks) never count as market activity
-    if (coId && buy && CR) CR.attr({ sig: rowSig, id: coId, trader, coin, ts, usd: sol * QU, sys: SYSW.has(trader), treidFeeLam: Math.min(fee * 0.5, inAmt * (tax > 0 ? 0.002 : 0.004)) });   // treid's half of the trading fee (Meteora's cut is separate), never more than the normal rate (sniper-trap fees don't count)
+    if (coId && buy && CR) CR.attr({ sig: rowSig, id: coId, trader, coin, ts, usd: sol * QU, sys: SYSW.has(trader), mcUsd: price * circ, treidFeeLam: feeLam(Math.min(fee * 0.5, inAmt * (tax > 0 ? 0.002 : 0.004)), coin, QD, QU) });   // treid's half of the trading fee (Meteora's cut is separate), never more than the normal rate (sniper-trap fees don't count)
     // bundle = several different wallets buying in the same slot right after launch (where coordinated buys matter)
     if (buy && coin.created_slot > 0 && tx.slot - coin.created_slot <= 20) { const same = q("SELECT DISTINCT wallet FROM trades WHERE mint=? AND slot=? AND side='buy' AND wallet!=?", coin.mint, tx.slot, coin.creator); if (same.length >= 3) run("UPDATE trades SET bundle=1 WHERE mint=? AND slot=? AND side='buy' AND wallet!=?", coin.mint, tx.slot, coin.creator); }
     const t = q1('SELECT * FROM trades WHERE sig=?', rowSig); if (t) push({ type: 'trade', ...t, symbol: coin.symbol });
@@ -421,7 +424,7 @@ async function handle(sig) {
     const rowSig = n++ ? sig + '#' + coin.mint.slice(0, 6) : sig;
     run('INSERT OR IGNORE INTO trades(sig,mint,wallet,side,sol,tokens,price_usd,mcap_usd,slot,ts,sniper,bundle,fee_sol,progress,usd,reserve) VALUES(?,?,?,?,?,?,?,?,?,?,0,0,?,100,?,?)', rowSig, coin.mint, trader, side, sol, tokens, price, price * circ, tx.slot, ts, fee / QD, sol * QU, Number(d.reserve_b_amount) / QD);
     if (SYSW.has(trader)) run('UPDATE trades SET sys=1 WHERE sig=?', rowSig);
-    if (coId && buy && CR) CR.attr({ sig: rowSig, id: coId, trader, coin, ts, usd: sol * QU, sys: SYSW.has(trader), treidFeeLam: Math.min(fee * 0.4, sol * QD * (cfgFee.get(coin.config) || 50) / 1e4 * 0.4) });   // treid's LP half of the pool fee after Meteora's 20%
+    if (coId && buy && CR) CR.attr({ sig: rowSig, id: coId, trader, coin, ts, usd: sol * QU, sys: SYSW.has(trader), mcUsd: price * circ, treidFeeLam: feeLam(Math.min(fee * 0.4, sol * QD * (cfgFee.get(coin.config) || 50) / 1e4 * 0.4), coin, QD, QU) });   // treid's LP half of the pool fee after Meteora's 20%
     const t = q1('SELECT * FROM trades WHERE sig=?', rowSig); if (t) push({ type: 'trade', ...t, symbol: coin.symbol });
     console.log('trade ', coin.symbol, side.padEnd(4), sol.toFixed(3), coin.quote_symbol || 'SOL', tokens.toFixed(0), '(DAMM)');
   }
@@ -866,7 +869,9 @@ CO = startCallouts({ q, q1, run, push, rate, pinJSON, pinFile, pinataJwt: PINATA
     let held = false; try { const hs = await holdersCached(mint); const h = hs.find((x) => x.wallet === wallet && !x.curve); if (h) { held = true; pos = h.pct / 100 * SUPPLY * (last.price_usd || 0); } } catch {}
     return { mc: last.mcap_usd || 0, pos, allowed: held && pos >= 1 }; } });   // you must actually hold ≥ $1 of the coin right now (a dust buy doesn't buy a voice)
 run(`CREATE TABLE IF NOT EXISTS rlog(sig TEXT, i INT, mint TEXT, kind TEXT, lamports INT, ts INT, PRIMARY KEY(sig, i))`); try { run('ALTER TABLE rlog ADD COLUMN extra TEXT'); } catch {} run('CREATE TABLE IF NOT EXISTS kv(k TEXT PRIMARY KEY, v TEXT)');
-CR = startCalloutRewards({ conn, ops: OPS, q, q1, run, mainnet: MAINNET, solUsd: () => SOL_USD, ready: () => !!REW && REW.ready(), otherLiab: () => (REW ? REW.liabilities() : 0) + (OPS_ST && OPS_ST.pending ? OPS_ST.pending() : 0) });   // callers earn a share of treid's fee on the buys their callouts bring
+CR = startCalloutRewards({ conn, ops: OPS, q, q1, run, mainnet: MAINNET, solUsd: () => SOL_USD,
+  // treid's fee income in a time window, in SOL lamports: its half of the curve fee (40% after graduation), every trade valued in USD at the time
+  dayIncomeLam: (t0, t1) => { const u = q1('SELECT COALESCE(SUM(CASE WHEN sol > 0 AND usd > 0 THEN fee_sol * usd / sol * (CASE WHEN progress >= 100 THEN 0.4 ELSE 0.5 END) ELSE 0 END), 0) u FROM trades WHERE ts >= ? AND ts < ?', t0, t1)?.u || 0; return SOL_USD > 0 ? u / SOL_USD * 1e9 : 0; }, ready: () => !!REW && REW.ready(), otherLiab: () => (REW ? REW.liabilities() : 0) + (OPS_ST && OPS_ST.pending ? OPS_ST.pending() : 0) });   // callers earn a share of treid's fee on the buys their callouts bring
 const sleep0 = (ms) => new Promise((r) => setTimeout(r, ms));
 const coRestored = Promise.race([Promise.resolve().then(() => CO.restore()).catch((e) => console.log('callout restore err', String(e?.message || e).slice(0, 100))), sleep0(60e3)]);   // callouts must be back BEFORE old trades are replayed, or their callers' earnings are never credited
 setInterval(() => push({ type: 'ping', t: Date.now() }), 25e3);               // keeps proxies from closing the stream
