@@ -2412,7 +2412,7 @@
   function banEditModal(t) { var B = S.banEdit; if (!B) return '';
     return '<div class="overlay center" data-act="tpFltX"><div class="modal tpm ban-m" data-stop role="dialog" aria-label="Change banner"><div class="tpm-h"><b>' + (t.banner ? 'Change' : 'Add') + ' banner · $' + esc(symOf(t)) + '</b><button class="iconbtn" data-act="banEditX" aria-label="Close">✕</button></div>' +
       (B.src ? banFrame(B, 'ban-edit') + '<small class="muted">Drag the picture to choose what shows. Saved as a slim 4:1 banner (1600×400).</small>' : '<label class="ban-pick" for="c-banedit">' + I.up + '<b>Choose a picture</b><small>any landscape image · PNG, JPG or WEBP · up to 4 MB</small></label>') +
-      '<div class="tpm-f">' + (B.src ? '<label class="btn sec" for="c-banedit">Choose another</label><button class="btn pri" data-act="banEditSave"' + (B.out && !B.busy ? '' : ' disabled') + '>' + (B.busy ? 'Saving…' : 'Sign & save') + '</button>' : '<button class="btn sec" data-act="banEditX">Cancel</button>') + '</div></div></div>'; }
+      '<div class="tpm-f">' + (B.src ? '<label class="btn sec" for="c-banedit">Choose another</label><button class="btn pri" data-act="banEditSave"' + (B.out && !B.busy ? '' : ' disabled') + '>' + (B.busy ? (B.busy === 'sign' ? 'Confirm in your wallet…' : 'Saving…') : 'Sign & save') + '</button>' : '<button class="btn sec" data-act="banEditX">Cancel</button>') + '</div></div></div>'; }
   function tpChips() { var c = [], sid = function () { var t = find(S.tick); return t ? '$' + symOf(t) : 'tokens'; };
     if (S.tpFilter !== 'all') c.push(['type', { buy: 'Buys', sell: 'Sells', whale: 'Whales', mine: 'Mine' }[S.tpFilter]]);
     if (S.tpMaker) c.push(['maker', 'Trader ' + short(S.tpMaker)]);
@@ -4852,9 +4852,12 @@
       case 'banEditOpen': set({ banEdit: { open: true } }); break;
       case 'banEditX': set({ banEdit: null }); break;
       case 'banEditSave': (function () { var tk = find(S.tick), B = S.banEdit; if (!tk || !B || !B.out || !S.wallet) { if (!S.wallet) set({ walletOpen: true }); return; } var fsg = S.wallet.features['solana:signMessage']; if (!fsg) { toast('This wallet can’t sign messages — try Phantom or Solflare'); return; }
-        var ts0 = Date.now(), msg = 'treid: set banner — ' + tk.ca + ' — ' + ts0; B.busy = true; render();   // must match the server's message
-        Promise.resolve(fsg.signMessage({ account: S.walletAcc, message: new TextEncoder().encode(siteMsg(msg)) })).then(function (r) { var sg = (Array.isArray(r) ? r[0] : r).signature; return chainLib().then(function (T) {
-          return fetch(API + '/api/banner', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mint: tk.ca, wallet: S.account, ts: ts0, sig: T.b58(sg), image: B.out }) }).then(function (x) { return x.json(); }); }); })
+        var ts0 = Date.now(), msg = 'treid: set banner — ' + tk.ca + ' — ' + ts0; B.busy = 'sign'; render();   // must match the server's message
+        // never a silent endless "Saving…": the wallet gets 90 s to answer (it may be locked / its window hidden), the upload 45 s
+        var lim = function (p, ms, why) { return Promise.race([p, new Promise(function (_, no) { setTimeout(function () { no(new Error(why)); }, ms); })]); };
+        lim(Promise.resolve(fsg.signMessage({ account: S.walletAcc, message: new TextEncoder().encode(siteMsg(msg)) })), 90e3, 'Your wallet didn’t answer — open it (unlock it if needed) and press Sign & save again. Nothing was changed.').then(function (r) { var sg = (Array.isArray(r) ? r[0] : r).signature; if (S.banEdit) { S.banEdit.busy = 'save'; render(); } return chainLib().then(function (T) {
+          var ac = window.AbortController ? new AbortController() : null; setTimeout(function () { if (ac) ac.abort(); }, 45e3);
+          return lim(fetch(API + '/api/banner', { method: 'POST', headers: { 'content-type': 'application/json' }, signal: ac ? ac.signal : undefined, body: JSON.stringify({ mint: tk.ca, wallet: S.account, ts: ts0, sig: T.b58(sg), image: B.out }) }).then(function (x) { return x.json(); }), 46e3, 'The server didn’t answer in time — please press Sign & save again').catch(function (e) { if (e && e.name === 'AbortError') throw new Error('The server didn’t answer in time — please press Sign & save again'); throw e; }); }); })
           .then(function (j) { if (!j || !j.ok) throw new Error((j && j.error) || 'failed'); tk.banner = B.out; tk._banV = j.v; S.banEdit = null; toast('Banner updated ✓', tk); render(); })
           .catch(function (e) { if (S.banEdit) S.banEdit.busy = false; render(); toast(chainErr(e)); }); })(); break;
       case 'cpair': setC({ pair: arg }); break;
