@@ -5221,6 +5221,7 @@
           S.busy = 'Finding address …' + suf1; render();
           var gBox = document.getElementById('toasts'), gEl = document.createElement('div'); gEl.className = 'toast grind-t'; gEl.innerHTML = '<span class="gr-sp"></span><span>Finding your address <b class="mono">…' + esc(suf1) + '</b> <small class="mono" id="gr-n"></small></span>'; if (gBox) gBox.appendChild(gEl);
           var gStart = Date.now();
+          if (!dq2.isSol && dq2.solIn > 0 && S.wallet && S.wallet.dl) { gEl.remove(); S.busy = null; render(); toast('On a phone, an initial buy on a coin paired with ' + qq1.sym + ' needs 2 steps — open treid in your wallet app’s browser, or launch without an initial buy'); return; }   // a deep-link wallet leaves the page after step 1: step 2 would never run
           chainLib().then(function (T) { if (dq2.isSol || !(dq2.solIn > 0)) return T;
             // you pay your initial buy in SOL: it's swapped to the pair token first (Jupiter), then the coin launches with what actually arrived
             var who0 = S.account, pt = { live: true, qMint: qq1.mint, qSym: qq1.sym, pair: qq1.key, qUsd: qq1.usd, qDec: qq1.dec };
