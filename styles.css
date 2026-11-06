@@ -6858,3 +6858,4 @@ html body .lb3-rm{gap:14px}
 .nb-burn{background:linear-gradient(90deg,#FFB547,#FF7A3D);-webkit-background-clip:text;background-clip:text;color:transparent}
 button:hover .nb-burn svg,button.on .nb-burn svg{filter:drop-shadow(0 0 5px rgba(255,122,61,.65))}
 .nb-burn{position:relative;top:1.5px}
+.tc-name2.tk-first b{flex:0 0 auto;max-width:72%}.tc-name2.tk-first .tc-tkr{flex:1 1 auto;min-width:0;display:flex;align-items:center;justify-content:flex-end;gap:6px}.tc-name2.tk-first .tc-nm2{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:var(--muted);font-weight:600}.tc-name2.tk-first .tc-ca{flex:none}

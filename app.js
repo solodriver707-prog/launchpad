@@ -750,7 +750,7 @@
         '<div class="tch-av">' + avatarHTML(t, 150) + '</div>' + '' + (opts.preview ? '' : '<button class="tch-star' + (on ? ' on' : '') + '" data-act="star" data-arg="' + esc(t.tick) + '" aria-label="Add to watchlist" aria-pressed="' + on + '">' + I.star(on) + '</button>') +
         '<div class="tch-side">' + (trapLeft(t) > 0 ? trapBox(t, 'card') : '<div class="tax" style="background:' + taxBg(tmax) + '" data-tip="' + esc(splitTip(t)) + '"><small>TAX</small><b>' + tmax + '%</b>' + (splitOf(t) ? splitBar(splitOf(t), 'mini') : '') + rwLine(t, 13) + '</div>') +
         (tmax > 0 || (t.live && t.qMint) ? '<div class="pairmini" data-tip="Paired with ' + esc(pairInfo(t.pair).name) + '">' + coinHTML(t.pair, 28) + '<small>PAIR</small><b>' + esc(pairLabel(t.pair)) + '</b></div>' : '<div class="pairmini plain" data-tip="Paired with SOL">' + coinHTML('SOL', 28) + '<small>PAIR</small><b>SOL</b></div>') + '</div></div>' +
-      '<div class="tc-name2"><b><span class="tc-nm">' + esc(t.name) + '</span>' + crBadge(t) + '</b><span class="tc-tkr"><span class="mono">$' + esc(symOf(t)) + '</span>' + (opts.preview ? '' : '<button class="tc-ca mono" data-act="ca" data-arg="' + esc(t.tick) + '" data-tip="Copy contract address" aria-label="Copy contract address">' + esc(short(t.ca)) + I.copy + '</button>') + '</span></div>' +
+      '<div class="tc-name2 tk-first"><b><span class="tc-nm">$' + esc(symOf(t)) + '</span>' + crBadge(t) + '</b><span class="tc-tkr"><span class="tc-nm2">' + esc(t.name) + '</span>' + (opts.preview ? '' : '<button class="tc-ca mono" data-act="ca" data-arg="' + esc(t.tick) + '" data-tip="Copy contract address" aria-label="Copy contract address">' + esc(short(t.ca)) + I.copy + '</button>') + '</span></div>' +
       (opts.preview ? previewTiles(t, opts) : statTiles(t)) + socialsHTML(t) +
       '<div class="tc-mid"><div class="tc-mc"><div class="v"><span data-mc="' + esc(t.tick) + '" data-v="' + fmtK(t.mcN) + '">' + fmtK(t.mcN) + '</span>' +
         '<span class="chgpill ' + (c >= 0 ? 'up' : 'down') + '" data-chg="' + esc(t.tick) + '">' + chgTxt(c) + '</span></div><div class="l">market cap</div></div></div>' +
@@ -2563,7 +2563,7 @@
     if (S.screen !== 'home' || S.coOpen) return '';
     if (S.railHidden) return '<button class="co-rail-min" data-act="railShow" title="Show live callouts"><span class="tt-dot"></span><b class="mono" id="rail-n">' + (S.railNew || 0) + '</b><span>Callouts</span></button>';
     var list = globalCallouts().slice(0, 25);
-    return '<aside class="co-rail" id="co-rail"><div class="cr-hd"><b>Live callouts</b><span class="tt-dot"></span><button class="iconbtn" data-act="railHide" aria-label="Collapse callouts" title="Collapse">⟩</button></div><div class="cr-list" id="rail-list">' + list.map(function (x) { return commentHTML(x.c, x.t, false, { coinTag: true }); }).join('') + '</div></aside>';
+    return '<aside class="co-rail" id="co-rail"><div class="cr-hd"><b>Live callouts</b><button class="iconbtn" data-act="railHide" aria-label="Collapse callouts" title="Collapse">⟩</button></div><div class="cr-list" id="rail-list">' + list.map(function (x) { return commentHTML(x.c, x.t, false, { coinTag: true }); }).join('') + '</div></aside>';
   }
   var isMob = function () { return window.matchMedia && window.matchMedia('(max-width: 760px)').matches; };
   function coPeek(c, t) {
