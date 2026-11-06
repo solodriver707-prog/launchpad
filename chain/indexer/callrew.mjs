@@ -12,7 +12,9 @@ const MEMO = new PublicKey('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr');
 const memoIx = (s) => new TransactionInstruction({ keys: [], programId: MEMO, data: Buffer.from(s) });
 export const CO_SHARE = Math.min(0.5, Math.max(0, +(process.env.CALLOUT_SHARE_PCT ?? 25) / 100));   // share of TREID'S fee (not of the trade)
 // calls on bigger coins earn a bigger share of treid's fee (market cap right after the buy); never over 50% — always funded by the fee itself
-export const coShareFor = (mcUsd) => Math.min(0.5, mcUsd >= 1e6 ? Math.max(CO_SHARE, 0.5) : mcUsd >= 1e5 ? Math.max(CO_SHARE, 0.35) : CO_SHARE);
+export const coShareFor = (mcUsd) => Math.min(0.5, mcUsd >= 1e6 ? Math.max(CO_SHARE, 0.4) : mcUsd >= 1e5 ? Math.max(CO_SHARE, 0.3) : CO_SHARE);
+// all callers together never get more than this share of treid's fee income of that day: above it, everyone's earnings that day are scaled down
+export const DAY_CAP = Math.min(0.5, Math.max(0.05, +(process.env.CALLOUT_DAY_CAP_PCT ?? 30) / 100));
 const WINDOW_MS = 72 * 3600e3;   // a callout earns from buys made within 72h of posting it
 const PAY_USD = 1, PER_TX = 5, KEEP = 0.2e9;
 const day = (ts) => new Date(ts).toISOString().slice(0, 10);
@@ -26,14 +28,21 @@ export function coMemoOf(tx, keys) {
   return null;
 }
 
-export function startCalloutRewards({ conn, ops, q, q1, run, solUsd = () => 0, mainnet = false, ready = () => true, otherLiab = () => 0, log = console.log }) {
+export function startCalloutRewards({ conn, ops, q, q1, run, solUsd = () => 0, dayIncomeLam = null, mainnet = false, ready = () => true, otherLiab = () => 0, log = console.log }) {
   dbGuard(mainnet);   // mainnet: no payouts from a throw-away database
   run(`CREATE TABLE IF NOT EXISTS coattr(sig TEXT PRIMARY KEY, co INT, caller TEXT, trader TEXT, mint TEXT, lam INT, fee_lam INT, usd REAL, ts INT)`);
   run('CREATE INDEX IF NOT EXISTS coattr_caller ON coattr(caller)');
+  run('CREATE TABLE IF NOT EXISTS cocap(d TEXT PRIMARY KEY, f REAL, inc INT, sum INT)');   // per closed UTC day: the factor callers' earnings are scaled by (1 = under the cap)
+  const DAYX = "strftime('%Y-%m-%d', coattr.ts / 1000, 'unixepoch')", LAMX = 'CAST(coattr.lam * COALESCE((SELECT f FROM cocap WHERE d=' + DAYX + '), 1) AS INT)';
+  // close every finished day once: compare what callers earned that day with DAY_CAP of treid's fee income that day
+  function closeDays() { if (!dayIncomeLam) return; const today = day(Date.now());
+    for (const r of q('SELECT ' + DAYX + ' d, SUM(lam) s FROM coattr GROUP BY d')) { if (r.d >= today || q1('SELECT 1 FROM cocap WHERE d=?', r.d)) continue;
+      const t0 = Date.parse(r.d), inc = Math.max(0, Math.floor(dayIncomeLam(t0, t0 + 864e5) || 0)), f = r.s > 0 ? Math.min(1, DAY_CAP * inc / r.s) : 1;
+      run('INSERT OR IGNORE INTO cocap(d,f,inc,sum) VALUES(?,?,?,?)', r.d, f, inc, r.s); if (f < 1) log('callout rewards over the day cap on', r.d, '— scaled to', (f * 100).toFixed(1) + '%'); } }
   const paidTo = (w) => q1("SELECT COALESCE(SUM(lamports),0) s FROM rlog WHERE kind='copay' AND mint=?", w)?.s || 0;
-  const earned = (w) => q1('SELECT COALESCE(SUM(lam),0) s FROM coattr WHERE caller=?', w)?.s || 0;
+  const earned = (w) => q1('SELECT COALESCE(SUM(' + LAMX + '),0) s FROM coattr WHERE caller=?', w)?.s || 0;
   const owedOf = (w) => Math.max(0, earned(w) - paidTo(w));
-  const owedAll = () => q('SELECT caller, SUM(lam) e FROM coattr GROUP BY caller').reduce((a, r) => a + Math.max(0, r.e - paidTo(r.caller)), 0);
+  const owedAll = () => q('SELECT caller, SUM(' + LAMX + ') e FROM coattr GROUP BY caller').reduce((a, r) => a + Math.max(0, r.e - paidTo(r.caller)), 0);
 
   // called by the indexer for every buy that carried a callout memo. treidFeeLam: treid's own part of this trade's fee, in lamports.
   function attr({ sig, id, trader, coin, treidFeeLam, usd, ts, sys = false, mcUsd = 0 }) {
@@ -50,20 +59,20 @@ export function startCalloutRewards({ conn, ops, q, q1, run, solUsd = () => 0, m
   }
 
   function stats(w) {
-    const r = q1('SELECT COUNT(*) n, COUNT(DISTINCT trader) t, COALESCE(SUM(usd),0) v, COALESCE(SUM(lam),0) e FROM coattr WHERE caller=?', w);
+    const r = q1('SELECT COUNT(*) n, COUNT(DISTINCT trader) t, COALESCE(SUM(usd),0) v, COALESCE(SUM(' + LAMX + '),0) e FROM coattr WHERE caller=?', w);
     const lp = q1("SELECT MAX(ts) t FROM rlog WHERE kind='copay' AND mint=?", w)?.t || null;
-    return { wallet: w, buys: r.n, buyers: r.t, volume_usd: Math.round(r.v * 100) / 100, earned_sol: r.e / 1e9, paid_sol: paidTo(w) / 1e9, owed_sol: Math.max(0, r.e - paidTo(w)) / 1e9, last_paid: lp, share: CO_SHARE };
+    return { wallet: w, buys: r.n, buyers: r.t, volume_usd: Math.round(r.v * 100) / 100, earned_sol: r.e / 1e9, paid_sol: paidTo(w) / 1e9, owed_sol: Math.max(0, r.e - paidTo(w)) / 1e9, last_paid: lp, share: CO_SHARE, day_cap: DAY_CAP };
   }
-  const top = (days = 30) => q('SELECT caller, COUNT(*) n, COUNT(DISTINCT trader) t, SUM(usd) v, SUM(lam) e FROM coattr WHERE ts>=? GROUP BY caller ORDER BY e DESC LIMIT 20', Date.now() - days * 864e5)
+  const top = (days = 30) => q('SELECT caller, COUNT(*) n, COUNT(DISTINCT trader) t, SUM(usd) v, SUM(' + LAMX + ') e FROM coattr WHERE ts>=? GROUP BY caller ORDER BY e DESC LIMIT 20', Date.now() - days * 864e5)
     .map((r) => ({ wallet: r.caller, buys: r.n, buyers: r.t, volume_usd: Math.round(r.v * 100) / 100, earned_sol: r.e / 1e9 }));
-  const byCallout = (ids) => { const out = {}; for (const id of ids.slice(0, 300)) { const r = q1('SELECT COUNT(*) n, COALESCE(SUM(lam),0) e FROM coattr WHERE co=?', id); if (r.n) out[id] = { buys: r.n, earned_sol: r.e / 1e9 }; } return out; };
+  const byCallout = (ids) => { const out = {}; for (const id of ids.slice(0, 300)) { const r = q1('SELECT COUNT(*) n, COALESCE(SUM(' + LAMX + '),0) e FROM coattr WHERE co=?', id); if (r.n) out[id] = { buys: r.n, earned_sol: r.e / 1e9 }; } return out; };
 
   // ---- daily payout (once per UTC day, after the ledger is rebuilt), in the same one-at-a-time lock as every ops action ----
   async function payout() {
     if (!ops || (!mainnet && !process.env.CALLOUT_PAY_DEVNET)) return; if (HALT.on || !ready() || !canWrite(run)) return;
     const today = day(Date.now()); if (q1("SELECT v FROM kv WHERE k='copay_day'")?.v === today) return;
     const px = solUsd(); if (!(px > 0)) return;
-    const due = q('SELECT caller, SUM(lam) e FROM coattr WHERE ts < ? GROUP BY caller', Date.parse(today)).map((r) => ({ w: r.caller, lam: Math.max(0, r.e - paidTo(r.caller)) }))   // only buys from before today: a day's total is final
+    closeDays(); const due = q('SELECT caller, SUM(' + LAMX + ') e FROM coattr WHERE ts < ? GROUP BY caller', Date.parse(today)).map((r) => ({ w: r.caller, lam: Math.max(0, r.e - paidTo(r.caller)) }))   // only buys from before today: a day's total is final
       .filter((x) => x.lam / 1e9 * px >= PAY_USD).sort((a, b) => b.lam - a.lam);
     let paid = 0, n = 0;
     const send = async (batch) => {   // true = sent and recorded · false = nothing was sent (a definite failure)
@@ -85,7 +94,7 @@ export function startCalloutRewards({ conn, ops, q, q1, run, solUsd = () => 0, m
     run("INSERT OR REPLACE INTO kv(k,v) VALUES('copay_day',?)", today);
     if (n) log('callout rewards paid:', n, 'callers,', (paid / 1e9).toFixed(4), 'SOL');
   }
-  setInterval(() => { withLock(payout).catch((e) => log('callout payout err', String(e?.message || e).slice(0, 120))); }, 15 * 60e3);
-  const earnedSince = (ts) => q1('SELECT COALESCE(SUM(lam),0) s FROM coattr WHERE ts>=?', ts)?.s || 0;   // what callers earned out of treid's fees (the $TREID budget is net of it)
-  return { attr, stats, top, byCallout, owed: owedAll, owedOf, payout, earnedSince };
+  setInterval(() => { try { closeDays(); } catch {} withLock(payout).catch((e) => log('callout payout err', String(e?.message || e).slice(0, 120))); }, 15 * 60e3);
+  const earnedSince = (ts) => q1('SELECT COALESCE(SUM(' + LAMX + '),0) s FROM coattr WHERE ts>=?', ts)?.s || 0;   // what callers earned out of treid's fees (the $TREID budget is net of it)
+  return { attr, stats, top, byCallout, owed: owedAll, owedOf, payout, earnedSince, closeDays };
 }
