@@ -2442,7 +2442,61 @@
     if (S.tpSort) c.push(['sort', 'Sorted by ' + { t: 'age', usd: 'USD', sol: 'SOL', tok: 'amount', px: 'price' }[S.tpSort.k] + ((S.tpSort.d > 0) !== (S.tpSort.k === 't') ? ' ↑' : ' ↓')]);
     return c.length ? '<div class="tp-chips">' + c.map(function (x) { return '<button class="chip on" data-act="tpChipX" data-arg="' + x[0] + '">' + esc(x[1]) + ' ✕</button>'; }).join('') + (c.length > 1 ? '<button class="link" data-act="tpChipX" data-arg="all">Clear all</button>' : '') + '</div>' : ''; }
   function timeTxt(ts) { if (!S.absTime) return ago(ts); var d = new Date(ts); return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2) + ':' + ('0' + d.getSeconds()).slice(-2); }
+
+  // ===== phone trades list (dexscreener-style): TXN · USD · SOL · TRADER; tap a row → that wallet on this coin =====
+  var WAGG = { k: '', m: {} };
+  function wAgg(t) {   // per wallet on this coin, from the trades loaded here (the sheet then asks the server for the full numbers)
+    var k = t.tick + '|' + S.trades.length; if (WAGG.k === k) return WAGG.m; var m = {};
+    S.trades.forEach(function (x) { if (x.tick !== t.tick) return; var g = m[x.wallet] || (m[x.wallet] = { bu: 0, su: 0, bt: 0, st: 0, nb: 0, ns: 0, first: x.t }); var u = x.usd != null ? x.usd : x.sol * SOL_USD, tk = x.tokens || 0;
+      if (x.side === 'buy') { g.bu += u; g.bt += tk; g.nb++; } else { g.su += u; g.st += tk; g.ns++; } g.first = Math.min(g.first, x.t); });
+    WAGG = { k: k, m: m }; return m; }
+  var TIERS = [[0, 'Shrimp', 'under $250'], [250, 'Fish', '$250–$1K'], [1000, 'Dolphin', '$1K–$10K'], [10000, 'Whale', '$10K+']];
+  function tierOf(usd) { var i = 0; TIERS.forEach(function (x, j) { if (usd >= x[0]) i = j; }); return i; }
+  function tierIc(i) { return '<i class="trm-tier t' + i + '" title="' + TIERS[i][1] + ': ' + TIERS[i][2] + ' traded">' + [0, 1, 2, 3].map(function (j) { return '<b class="' + (j <= i ? 'on' : '') + '" style="height:' + (4 + j * 2.5) + 'px"></b>'; }).join('') + '</i>'; }
+  var ARW = { b: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg>', s: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M19 12l-7 7-7-7"/></svg>' };
+  function usdShort(u) { return u >= 1e6 ? '$' + (u / 1e6).toFixed(2) + 'M' : u >= 1e4 ? '$' + (u / 1e3).toFixed(1) + 'K' : u >= 1000 ? '$' + (u / 1e3).toFixed(2) + 'K' : u >= 10 ? '$' + Math.round(u) : u >= 1 ? '$' + u.toFixed(2) : '$' + u.toFixed(2); }
+  function tradeRowM(tr, t, enter) {
+    var buy = tr.side === 'buy', usd = tr.usd != null ? tr.usd : tr.sol * SOL_USD, g = wAgg(t)[tr.wallet] || { bu: 0, su: 0, bt: 0, st: 0 }, me = S.account && tr.wallet === S.account, dev = tr.wallet === devOf(t);
+    var hold = g.bt > 0 ? Math.max(0, Math.min(1, (g.bt - g.st) / g.bt)) : null, sol = solOf(tr, t);
+    return '<div class="trm ' + (buy ? 'b' : 's') + (enter ? ' enter' : '') + '" data-act="wsheet" data-arg="' + esc(tr.wallet) + '|' + esc(tr.sig && tr.real ? tr.sig : '') + '">' +
+      '<span class="trm-tx"><i class="trm-ar">' + (buy ? ARW.b : ARW.s) + '</i><span class="mono" data-t="' + tr.t + '">' + timeTxt(tr.t) + '</span></span>' +
+      '<span class="trm-usd mono">' + usdShort(usd) + '</span>' +
+      '<span class="trm-sol mono">' + (sol >= 1000 ? fmtNum(sol) : sol.toFixed(sol < 0.01 ? 4 : sol < 10 ? 3 : 2)) + '</span>' +
+      '<span class="trm-who">' + tierIc(tierOf(g.bu + g.su)) + '<span class="trm-nm"><b class="mono">' + (me ? 'You' : esc(tr.wallet.slice(0, 6))) + '</b>' + (dev ? '<em class="trm-dev">DEV</em>' : '') +
+        '<i class="trm-hold' + (hold == null ? ' unk' : '') + '" title="' + (hold == null ? 'Bought before what is loaded here' : 'Still holds ' + Math.round(hold * 100) + '% of what they bought') + '"><b style="width:' + (hold == null ? 100 : Math.round(hold * 100)) + '%"></b></i></span></span>' +
+      '<button class="trm-f' + (S.tpMaker === tr.wallet ? ' on' : '') + '" data-act="maker" data-arg="' + (S.tpMaker === tr.wallet ? '' : esc(tr.wallet)) + '" aria-label="' + (S.tpMaker === tr.wallet ? 'Show all wallets' : 'Only this wallet\'s trades') + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg></button></div>';
+  }
+  function trmHead() { return '<div class="trm h"><span>Txn</span><span>USD</span><span>SOL</span><span class="trm-hw">Trader</span><span></span></div>'; }
+  // the wallet on this coin, as a sheet from the bottom: bought / sold / PnL / still holds, then filter · full profile · Solscan
+  function wSheet(arg) {
+    var p = String(arg || '').split('|'), w = p[0], sig = p[1] || '', t = find(S.tick); if (!w || !t) return;
+    var old = document.querySelector('.wsheet'); if (old) old.remove();
+    var o = document.createElement('div'); o.className = 'wsheet'; o.setAttribute('role', 'dialog');
+    var close = function () { o.classList.add('out'); setTimeout(function () { o.remove(); }, 180); document.removeEventListener('keydown', kd); }, kd = function (e) { if (e.key === 'Escape') close(); };
+    var paint = function (d, live) {
+      var g = wAgg(t)[w] || { bu: 0, su: 0, bt: 0, st: 0, nb: 0, ns: 0, first: 0 }, me = S.account && w === S.account, dev = w === devOf(t);
+      var dn = d && (d.nb + d.ns) > 0, bu = d ? d.spent : g.bu, su = d ? d.got : g.su, bt = dn ? d.bought : g.bt, st = dn ? d.sold : g.st, nb = dn ? d.nb : g.nb, ns = dn ? d.ns : g.ns, first = d && d.first ? d.first : g.first, val = d ? d.value : null, rw = d ? d.rewardsUsd : 0;
+      var pnl = su - bu, ti = tierOf(bu + su), money = function (v) { return (v < 0 ? '-' : '') + usdShort(Math.abs(v)); }, tok = function (v) { return v > 0 ? fmtNum(v) : '0'; };
+      o.innerHTML = '<div class="ws-in"><span class="ws-grab"></span>' +
+        '<div class="ws-head"><span class="av" style="width:44px;height:44px">' + A.svg(walletSpec(w)) + '</span><div><b>' + (me ? 'You' : short(w)) + (dev ? ' <em class="trm-dev">DEV</em>' : '') + '</b><small>' + TIERS[ti][1] + ' · ' + TIERS[ti][2] + ' traded' + (first ? ' · first trade ' + ago(first) + ' ago' : '') + '</small></div><button class="ws-x" aria-label="Close">✕</button></div>' +
+        '<div class="ws-st">' +
+          '<div><span class="muted">Bought</span><b class="down mono">' + usdShort(bu) + '</b><small class="mono">' + tok(bt) + ' · ' + nb + ' txn' + (nb === 1 ? '' : 's') + '</small></div>' +
+          '<div><span class="muted">Sold</span><b class="up mono">' + usdShort(su) + '</b><small class="mono">' + tok(st) + ' · ' + ns + ' txn' + (ns === 1 ? '' : 's') + '</small></div>' +
+          '<div><span class="muted">PnL (realized)</span><b class="mono ' + (pnl >= 0 ? 'up' : 'down') + '">' + money(pnl) + '</b>' + (rw > 0.005 ? '<small class="mono">+ ' + usdShort(rw) + ' holder rewards</small>' : '') + '</div>' +
+          '<div><span class="muted">Still holds</span><b class="mono">' + (val == null ? '…' : usdShort(val)) + '</b><small class="mono">' + (d ? (d.supplyPct > 0 ? d.supplyPct.toFixed(2) + '% of supply' : 'nothing left') : (live ? 'loading…' : '')) + '</small></div>' +
+        '</div>' +
+        '<div class="ws-act"><button class="btn sec" data-ws="f">' + (S.tpMaker === w ? 'Show all trades' : 'Only their trades') + '</button><button class="btn sec" data-ws="p">Full profile</button>' +
+          '<a class="btn sec" target="_blank" rel="noopener" href="https://solscan.io/account/' + esc(w) + (CHAIN_ID === 'solana:devnet' ? '?cluster=devnet' : '') + '">Solscan ↗</a>' +
+          (sig ? '<a class="btn sec" target="_blank" rel="noopener" href="https://solscan.io/tx/' + esc(sig) + (CHAIN_ID === 'solana:devnet' ? '?cluster=devnet' : '') + '">This trade ↗</a>' : '') + '</div></div>';
+    };
+    paint(null, true); document.body.appendChild(o); requestAnimationFrame(function () { o.classList.add('in'); });
+    o.addEventListener('click', function (e) { var b = e.target.closest('[data-ws]'); if (e.target === o || e.target.closest('.ws-x')) { close(); return; }
+      if (!b) return; var k = b.getAttribute('data-ws'); close(); if (k === 'f') set({ tpMaker: S.tpMaker === w ? null : w, tpTab: 'trades', tpQueue: 0 }); else if (k === 'p') set({ walletView: w, walletMenu: false }); });
+    document.addEventListener('keydown', kd);
+    if (API && t.live) apiGet('/api/pos?mint=' + t.ca + '&wallet=' + w).then(function (r) { if (o.isConnected) paint(psClean(r), false); }).catch(function () { if (o.isConnected) paint(null, false); });
+  }
   function tradeRow(tr, t, enter) {
+    if (isMob()) return tradeRowM(tr, t, enter);
     var buy = tr.side === 'buy', usd = tr.usd != null ? tr.usd : tr.sol * SOL_USD, w = Math.min(100, usd / (5 * SOL_USD) * 100), px = tr.price || price(t), tok = tr.tokens || usd / px;
     return '<div class="trow ' + (buy ? 'b' : 's') + (enter ? ' enter' : '') + (usd >= 2 * SOL_USD ? ' big' : '') + '" style="--w:' + w.toFixed(0) + '%" data-act="wallet" data-arg="' + esc(tr.wallet) + '" title="Open wallet">' +
       '<span class="muted" data-t="' + tr.t + '">' + timeTxt(tr.t) + '</span>' +
@@ -3240,8 +3294,8 @@
       body = '<div class="tfilters"><div class="seg">' + [['all', 'All'], ['buy', 'Buys'], ['sell', 'Sells'], ['whale', 'Whales'], ['mine', 'Mine']].map(function (f) { return '<button class="' + (S.tpFilter === f[0] ? 'on' : '') + '" data-act="tpf" data-arg="' + f[0] + '">' + f[1] + '</button>'; }).join('') + '</div>' +
         tpChips() +
         '<span class="paused" id="tp-paused" style="display:none" data-act="resume">Paused · <b id="tp-qn">0</b> new trades — click to resume</span></div>' +
-        '<div class="tbl" id="tp-tbl"><div class="trow h"><span class="th"><button class="th-l" data-act="tpSort" data-arg="t" title="Sort">' + (S.absTime ? 'Time' : 'Age') + (S.tpSort && S.tpSort.k === 't' ? ((S.tpSort.d > 0) !== !S.absTime ? ' ↑' : ' ↓') : '') + '</button><button class="th-f" data-act="abs" title="Switch between age and clock time">⇄</button></span>' +
-          tpHead('type', 'Type', { sort: false }) + tpHead('usd', 'USD', { r: 1 }) + tpHead('sol', 'SOL', { r: 1 }) + tpHead('tok', '$' + sid, { r: 1 }) + tpHead('px', 'Price', { r: 1, filter: false }) + tpHead('maker', 'Trader', { r: 1, sort: false }) + '<span class="r">Txn</span></div>' +
+        '<div class="tbl' + (isMob() ? ' tbl-m' : '') + '" id="tp-tbl">' + (isMob() ? trmHead() : '<div class="trow h"><span class="th"><button class="th-l" data-act="tpSort" data-arg="t" title="Sort">' + (S.absTime ? 'Time' : 'Age') + (S.tpSort && S.tpSort.k === 't' ? ((S.tpSort.d > 0) !== !S.absTime ? ' ↑' : ' ↓') : '') + '</button><button class="th-f" data-act="abs" title="Switch between age and clock time">⇄</button></span>' +
+          tpHead('type', 'Type', { sort: false }) + tpHead('usd', 'USD', { r: 1 }) + tpHead('sol', 'SOL', { r: 1 }) + tpHead('tok', '$' + sid, { r: 1 }) + tpHead('px', 'Price', { r: 1, filter: false }) + tpHead('maker', 'Trader', { r: 1, sort: false }) + '<span class="r">Txn</span></div>') +
         '<div id="tp-trades">' + (rows.length ? rows.map(function (x) { return tradeRow(x, t); }).join('') : '<div class="muted" style="padding:24px;text-align:center">No trades match these filters</div>') + '</div></div>' + tpFltModal(t);
     } else if (S.tpTab === 'thread') {
       var cm = seedComments(t);
@@ -3356,7 +3410,7 @@
   S.cpq = ''; S.cpTab = 'crypto';
   try { var CP = JSON.parse(localStorage.getItem('dl.cpairs') || '{}'); Object.keys(CP).forEach(function (k) { PAIR_INFO[k] = CP[k]; }); } catch (e) {}
   // ---- sign in once (24 h): the wallet signs one message, the server hands back a session token — no popup for every callout ----
-  function psClean(p) { if (!p || typeof p !== 'object') return null; var o = {}; ['value', 'spent', 'got', 'profit', 'profitPct', 'avgEntryMc', 'avgExitMc', 'avgEntryMcQ', 'avgExitMcQ', 'soldPct', 'supplyPct', 'held', 'trades'].forEach(function (k) { o[k] = Number(p[k]) || 0; }); return o; }
+  function psClean(p) { if (!p || typeof p !== 'object') return null; var o = {}; ['value', 'spent', 'got', 'profit', 'profitPct', 'avgEntryMc', 'avgExitMc', 'avgEntryMcQ', 'avgExitMcQ', 'soldPct', 'supplyPct', 'held', 'trades', 'bought', 'sold', 'nb', 'ns', 'first', 'rewardsUsd'].forEach(function (k) { o[k] = Number(p[k]) || 0; }); return o; }
   function money(v) { v = Math.abs(v); return v >= 1e6 ? (v / 1e6).toFixed(2) + 'M' : v >= 1e4 ? (v / 1e3).toFixed(1) + 'K' : v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
   function moneyS(v) { v = Math.abs(v); return v >= 1e6 ? (v / 1e6).toFixed(2) + 'M' : v >= 1e3 ? (v / 1e3).toFixed(v >= 1e5 ? 0 : 2) + 'K' : v.toFixed(2); }
   function psStatus(ps) { return ps.held < 1 ? 'Sold all' : ps.soldPct >= 1 ? 'Sold ' + Math.round(ps.soldPct) + '%' : 'Holding'; }
@@ -5010,6 +5064,7 @@
       case 'walletAny': S.hmap = null;
       case 'walletAnyX': S.tick = (S.trades.filter(function (x) { return x.wallet === arg; })[0] || {}).tick || S.tick; set({ walletView: arg }); break;
       case 'wallet': set({ walletView: arg, walletMenu: false }); break;
+      case 'wsheet': wSheet(arg); break;
       case 'devRec': set({ walletView: arg, wTab: 'created', walletMenu: false }); break;
       case 'closeW': set({ walletView: null }); break;
       case 'wTab': set({ wTab: arg }); break;

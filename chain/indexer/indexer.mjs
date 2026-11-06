@@ -461,14 +461,15 @@ function posStats(mint, wallet, held = null) {
   const r = q1(`SELECT COALESCE(SUM(CASE WHEN side='buy' THEN usd END),0) spent, COALESCE(SUM(CASE WHEN side='sell' THEN usd END),0) got, COALESCE(SUM(CASE WHEN side='buy' THEN tokens END),0) bought,
     COALESCE(SUM(CASE WHEN side='sell' THEN tokens END),0) sold, COALESCE(SUM(CASE WHEN side='buy' THEN tokens*mcap_usd END),0) wmc, COALESCE(SUM(CASE WHEN side='sell' THEN tokens*mcap_usd END),0) smc,
     COALESCE(SUM(CASE WHEN side='buy' AND usd>0 AND sol>0 THEN tokens*mcap_usd*sol/usd END),0) wmq, COALESCE(SUM(CASE WHEN side='buy' AND usd>0 AND sol>0 THEN tokens END),0) bq,
-    COALESCE(SUM(CASE WHEN side='sell' AND usd>0 AND sol>0 THEN tokens*mcap_usd*sol/usd END),0) smq, COALESCE(SUM(CASE WHEN side='sell' AND usd>0 AND sol>0 THEN tokens END),0) sq, COUNT(*) n FROM trades WHERE mint=? AND wallet=?`, mint, wallet);
+    COALESCE(SUM(CASE WHEN side='sell' AND usd>0 AND sol>0 THEN tokens*mcap_usd*sol/usd END),0) smq, COALESCE(SUM(CASE WHEN side='sell' AND usd>0 AND sol>0 THEN tokens END),0) sq, COUNT(*) n,
+    SUM(CASE WHEN side='buy' THEN 1 ELSE 0 END) nb, SUM(CASE WHEN side='sell' THEN 1 ELSE 0 END) ns, MIN(ts) first FROM trades WHERE mint=? AND wallet=?`, mint, wallet);
   const px = q1('SELECT price_usd p FROM trades WHERE mint=? ORDER BY ts DESC, slot DESC LIMIT 1', mint)?.p || 0;
   if (held == null) { const lh = hCache.get(mint)?.list; const h = lh && lh.find((x) => x.wallet === wallet); held = h ? h.pct / 100 * SUPPLY : Math.max(0, r.bought - r.sold); }
   const cRow = q1('SELECT tax_bps, quote_mint, quote_symbol, quote_dec FROM coins WHERE mint=?', mint) || {}, sellTax = (cRow.tax_bps || 0) / 1e4;
   let rewardsUsd = 0; try { for (const h of q('SELECT token, SUM(amt) a, MAX(dec) d FROM hpay WHERE mint=? AND wallet=? AND token != ? GROUP BY token', mint, wallet, mint)) rewardsUsd += h.a / 10 ** (h.d ?? 9) * (h.token === cRow.quote_mint ? quoteUsd(cRow.quote_mint, cRow.quote_symbol) : quoteUsd(h.token)); } catch {}   // paid in SOL / the pair / another token
   const value = held * px * (1 - sellTax), profit = value + r.got + rewardsUsd - r.spent;   // value = what selling now would bring (after the coin's tax)
   return { value, spent: r.spent, got: r.got, rewardsUsd, profit, profitPct: r.spent > 0 ? profit / r.spent * 100 : 0, avgEntryMc: r.bought > 0 ? r.wmc / r.bought : 0,   /* token-weighted, like the exit */ avgExitMc: r.sold > 0 ? r.smc / r.sold : 0, avgEntryMcQ: r.bq > 0 ? r.wmq / r.bq : 0, avgExitMcQ: r.sq > 0 ? r.smq / r.sq : 0,   /* the same in the pair token (SOL), for charts drawn at today's SOL price */
-    soldPct: r.bought > 0 ? Math.min(100, r.sold / r.bought * 100) : 0, supplyPct: held / SUPPLY * 100, held, trades: r.n };
+    soldPct: r.bought > 0 ? Math.min(100, r.sold / r.bought * 100) : 0, supplyPct: held / SUPPLY * 100, held, trades: r.n, bought: r.bought, sold: r.sold, nb: r.nb || 0, ns: r.ns || 0, first: r.first || 0 };
 }
 async function holders(mint) {   // one row per OWNER (all their token accounts added up) — a dust account can't fake someone's balance
   const coin = q1('SELECT * FROM coins WHERE mint=?', mint); if (!coin) return [];
