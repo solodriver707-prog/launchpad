@@ -143,7 +143,8 @@ export function startRewards({ conn, dbc, ops, treasury, q, q1, run, balances, q
     const a = activity(c, e.wallet, e.start, e.type === 'cto' ? e.startBag : null); let st = 'active', why = null;
     const IR = idleRules(e);
     // out: sold/moved 70%+ of the peak bag AND kept under 0.5% of supply (a dev trimming 10% → 2% keeps a real stake and stays in), or 7 days away · paused: 72h away
-    if (a.sold >= RULES.soldOut && a.bal < RULES.keepPct / 100 * SUPPLY) { st = 'out'; why = 'sold'; } else if (a.idle >= IR.out) { st = 'out'; why = 'idle'; } else if (a.idle >= IR.freeze) st = 'frozen';
+    const handle = e.type === 'dev' && e.to && e.to.kind !== 'w';   // fees sent to an X account: that person may hold no tokens at all — only being away counts
+    if (!handle && a.sold >= RULES.soldOut && a.bal < RULES.keepPct / 100 * SUPPLY) { st = 'out'; why = 'sold'; } else if (a.idle >= IR.out) { st = 'out'; why = 'idle'; } else if (a.idle >= IR.freeze) st = 'frozen';
     const r = { ...base, ...a, paid: sum(c.mint, 'pay', e.start), state: st, why, outAt: null, freezeMs: IR.freeze, outMs: IR.out };
     if (e.type === 'cto') r.cto = { lead: e.wallet, at: e.start, fund: 0, paid: 0, vested: 0, owed: 0 };
     return r;
