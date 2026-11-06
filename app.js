@@ -462,6 +462,13 @@
     if (/reject|declin|cancel|denied/i.test(m)) return 'Cancelled in wallet';
     if (/insufficient|0x1\b|lamports/i.test(m)) return 'Not enough ' + NET + 'SOL';
     if (/slippage|0x1771|ExceededSlippage/i.test(m)) return 'Price moved too much — raise slippage';
+    // plain words instead of raw RPC / program errors (nothing was sent in any of these)
+    if (/no record of a prior credit/i.test(m)) return 'Not enough ' + NET + 'SOL';
+    if (/blockhash not found|block height exceeded|expired/i.test(m)) return 'The network was slow and the transaction expired — please try again';
+    if (/failed to fetch|networkerror|load failed|network request failed/i.test(m)) return 'Connection problem — check your internet and try again';
+    if (/\b429\b|too many requests|rate.?limit/i.test(m)) return 'The network is busy — try again in a few seconds';
+    if (/too large|too big|exceeds.*size|encoding overruns/i.test(m)) return 'This doesn’t fit in one transaction — try a smaller amount';
+    if (/custom program error|InstructionError|simulation failed|Transaction simulation/i.test(m) && !/not signing|refus/i.test(m)) return 'The transaction would fail right now, so nothing was sent — try again in a moment' + ((/0x[0-9a-f]+/i.exec(m) || [''])[0] ? ' (' + /0x[0-9a-f]+/i.exec(m)[0] + ')' : '');
     return m.length > 140 ? m.slice(0, 140) + '…' : m;
   }
   function chainRun(label, build, again) {
@@ -1603,7 +1610,7 @@
     return '<main class="wrap trend"><div class="tr-head"><div><span class="kicker">TOP 100</span><h1 class="tr-h">Trending</h1></div><span class="muted mono">' + Math.min(100, a.length) + ' coins · updates live</span></div>' +
       '<div class="tr-bar"><div class="seg">' + pre.map(function (x) { return '<button class="' + (S.lsort === x[0] ? 'on' : '') + '" data-act="tpreset" data-arg="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div>' +
       '<div class="seg tr-cats">' + [['all', 'All pairs']].concat((DEMO ? CATS.slice(1) : RW_TABS).map(function (c) { return [c[0], c[1]]; })).map(function (c) { return '<button class="' + (S.tcat === c[0] ? 'on' : '') + '" data-act="tcat" data-arg="' + c[0] + '">' + c[1] + '</button>'; }).join('') + '</div></div>' +
-      (a.length ? listHTML(a) : '<div class="empty"><b style="font-size:19px">' + (S.tcat !== 'all' ? 'No ' + esc(String(((DEMO ? CATS : RW_TABS).filter(function (c) { return c[0] === S.tcat; })[0] || [0, S.tcat])[1]).toLowerCase()) + ' pairs yet' : 'No coins yet') + '</b><span class="muted">' + (S.tcat !== 'all' ? 'Nothing trades against this kind of token yet.' : 'Be the first — launch a coin in a minute.') + '</span>' + (S.tcat !== 'all' ? '<button class="btn sec" data-act="tcat" data-arg="all">All pairs</button>' : '<button class="btn pri" data-act="create">Launch a coin →</button>') + '</div>') + '</main>';
+      (a.length ? listHTML(a) : coinsWait() ? coinsWaitHTML() : '<div class="empty"><b style="font-size:19px">' + (S.tcat !== 'all' ? 'No ' + esc(String(((DEMO ? CATS : RW_TABS).filter(function (c) { return c[0] === S.tcat; })[0] || [0, S.tcat])[1]).toLowerCase()) + ' pairs yet' : 'No coins yet') + '</b><span class="muted">' + (S.tcat !== 'all' ? 'Nothing trades against this kind of token yet.' : 'Be the first — launch a coin in a minute.') + '</span>' + (S.tcat !== 'all' ? '<button class="btn sec" data-act="tcat" data-arg="all">All pairs</button>' : '<button class="btn pri" data-act="create">Launch a coin →</button>') + '</div>') + '</main>';
   }
   // ===== TRENCHES: New / Graduating / Graduated, live from /api/stream (phones: swipeable tabs) =====
   var TR_GRAD = 50;   // bonding-curve % from which a coin counts as "graduating"
@@ -1950,9 +1957,13 @@
     if (g && S.view !== 'bubbles' && S.view !== 'list') g.innerHTML = list.length ? list.map(function (t) { return isMob() ? mrow(t) : card(t); }).join('') : boardEmpty();
   }
   // the Board's empty grid says WHY it's empty (watchlist, graduated, a category, rewards…), not always "loosen the filters"
+  // before the first coin list arrives (or while the server restarts) say so — never "No coins yet" on a platform that has coins
+  function coinsWait() { return !!(API && !S.coinsIn); }
+  function coinsWaitHTML(cls) { return '<div class="' + (cls || 'empty') + ' cw-wait"><span class="gr-sp"></span><b>Loading coins…</b><span class="muted">' + (S.apiWait > 1 ? 'the server is restarting — reconnecting (try ' + S.apiWait + ')…' : 'fetching live data from the chain') + '</span></div>'; }
   function boardEmpty() {
     var A = all(), box = function (h, sub, btn) { return '<div class="empty"><b style="font-size:19px">' + h + '</b><span class="muted">' + sub + '</span>' + (btn || '<button class="btn pri" data-act="reset">Reset filters</button>') + '</div>'; };
     var catN = S.cat !== 'all' ? ((DEMO ? CATS : RW_TABS).filter(function (c) { return c[0] === S.cat; })[0] || [0, S.cat])[1] : '';
+    if (!A.length && coinsWait()) return coinsWaitHTML();
     if (!A.length) return box('No coins yet', 'Be the first — launch a coin in a minute.', '<button class="btn pri" data-act="create">Launch a coin →</button>');
     if (S.watchOnly && !S.watch.some(function (k) { return find(k); })) return box('Your watchlist is empty', 'Tap the ☆ on any coin and it shows up here.', '<button class="btn pri" data-act="toggle" data-arg="watchOnly">Show all coins</button>');
     if (S.gradOnly && !A.some(function (t) { return t.prog >= 100; })) return box('No coin has graduated yet', 'A coin graduates to Meteora when its bonding curve fills.', '<button class="btn pri" data-act="toggle" data-arg="gradOnly">Show all coins</button>');
@@ -2031,7 +2042,7 @@
         '<p class="i3-p"><b class="i3-slogan">Launch fair. Trade safer.</b> Your tax pays holders in anything — your own coin, SOL, gold, memes. Dev bag and risks always on the label.</p>' +
         '<div class="i3-cta"><button class="btn pri" data-act="create">Launch a coin <span aria-hidden="true">→</span></button><button class="btn sec" data-act="board">Trade anything ↓</button></div>' +
         '</div>' +
-      (t0 ? '<div class="tc ar-spot" id="tc">' + tcFill(t0, tcI) + '</div>' : '<div class="tc tc-empty ar-spot"><b>No coins yet</b><small>Be the first — launch a coin in a minute.</small><button class="btn pri" data-act="create">Launch a coin →</button></div>') +
+      (t0 ? '<div class="tc ar-spot" id="tc">' + tcFill(t0, tcI) + '</div>' : (coinsWait() ? coinsWaitHTML('tc tc-empty ar-spot') : '<div class="tc tc-empty ar-spot"><b>No coins yet</b><small>Be the first — launch a coin in a minute.</small><button class="btn pri" data-act="create">Launch a coin →</button></div>')) +
     '</section>';
   }
   // the "Just launched" box is never half empty: newest coins first, then the latest trades, then an invite to launch
@@ -6053,14 +6064,14 @@
     if (!API) return;
     apiGet('/api/health').then(function (h) { if (!h || !h.ops) return; if (!window.TREID_PARTNER || API_DEV) { PARTNER = h.ops; S.escrowWallet = h.ops; } else if (h.ops !== window.TREID_PARTNER) { S.opsMismatch = true; console.warn('[treid] server ops wallet does not match the pinned one — launching disabled'); render(); } }).catch(function () {});
     var tries = 0; (function coinsLoad() { apiGet('/api/coins').then(function (cs) {
-      S.apiOk = true; S.apiWait = 0; cs.filter(Boolean).sort(function (a, b) { return (a.created_at || 0) - (b.created_at || 0); }).forEach(liveTok); render();   // oldest first: the original keeps the plain ticker, a later copycat becomes $PEPE2
+      S.apiOk = true; S.apiWait = 0; S.coinsIn = true; cs.filter(Boolean).sort(function (a, b) { return (a.created_at || 0) - (b.created_at || 0); }).forEach(liveTok); render();   // oldest first: the original keeps the plain ticker, a later copycat becomes $PEPE2
       var coAll = function (n) { apiGet('/api/callouts?x=1' + coMe()).then(function (rows) { if (coMerge(rows || []).length) render(); }).catch(function () { if (n < 6) setTimeout(function () { coAll(n + 1); }, 5000 * (n + 1)); }); }; coAll(0); setInterval(function () { if (!document.hidden) coAll(6); }, 60e3);   // retried: a server restart must not leave the callouts empty
       if (S.pendingRoute) { var pr = S.pendingRoute, tp = S.live.filter(function (x) { return x.ca === pr || x.tick.toUpperCase() === String(pr).toUpperCase(); })[0]; S.pendingRoute = null; var rr = routeReady; routeReady = false; var psite = S.pendingSite, pco = S.pendingCo; S.pendingSite = null; S.pendingCo = null; if (tp && pco != null) { liveLoad(tp); S.tick = tp.tick; set({ screen: 'callout', coView: { tick: tp.tick, id: pco } }); } else if (tp && psite) { liveLoad(tp); set({ screen: 'site', site: { tick: tp.tick, th: psite } }); } else if (tp) openToken(tp.tick); else { set({ screen: 'home' }); toast('That coin wasn\'t found'); } routeReady = rr; }
       var es = new EventSource(API + '/api/stream');
       es.onmessage = function (m) { var ev; try { ev = JSON.parse(m.data); } catch (e) { return; } if (ev.type === 'callout') { coMerge([ev]).forEach(function (x) { coArrive(x.c, x.t); if (!(S.account && x.c.w === S.account)) coPeek(x.c, x.t); }); } else if (ev.type === 'coreact') { var cc = coById(+ev.id); if (cc) { cc.likes = +ev.likes || 0; cc.rt = +ev.rts || 0; var lk = document.querySelectorAll('[data-act="coLike"][data-arg$="|' + (+ev.id) + '"]'); if (lk.length) render(); } } else if (ev.type === 'burn') burnsLoad(); else if (ev.type === 'trade') liveTrade(ev); else if (ev.type === 'coin') apiGet('/api/coin/' + ev.mint).then(function (c) { if (c) { var known = S.live.some(function (x) { return x.ca === c.mint; }), t = liveTok(c); if (!known && !isMob()) toast('New on treid: ' + t.name + ' $' + symOf(t), t); render(); } }).catch(function () {}); };
       es.onerror = function () { S.apiOk = es.readyState === 1; };
       es.onopen = function () { S.apiOk = true; apiGet('/api/coins').then(function (cs2) { cs2.filter(Boolean).sort(function (a, b) { return (a.created_at || 0) - (b.created_at || 0); }).forEach(liveTok); }).catch(function () {}); };
-    }).catch(function (e) { tries++; S.apiWait = tries; if (S.screen === 'pending') render(); console.warn('[treid] indexer not reachable, retrying', e); setTimeout(coinsLoad, Math.min(15000, 1500 * tries)); }); })();   // the server restarts after updates — keep trying instead of hanging
+    }).catch(function (e) { tries++; S.apiWait = tries; if (S.screen === 'pending' || !S.coinsIn) render(); console.warn('[treid] indexer not reachable, retrying', e); setTimeout(coinsLoad, Math.min(15000, 1500 * tries)); }); })();   // the server restarts after updates — keep trying instead of hanging
   }
   liveStart(); pushInit();
   if (!RPC_DEV && !DEMO) rpc('getGenesisHash', []).then(function (g) { if (g !== GENESIS[CHAIN_ID]) { S.netBad = true; render(); console.warn('[treid] RPC network mismatch'); } }).catch(function () {});
