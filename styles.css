@@ -6888,3 +6888,8 @@ html body main.tp-env .tp-main section.tp-banner>.tp-key .pairbig{padding-left:1
 .imgzoom .iz-in img,.imgzoom .iz-in svg{display:block;width:min(640px,92vw);height:auto;max-height:86vh;object-fit:contain}
 .imgzoom .iz-x{position:absolute;top:16px;right:16px;width:40px;height:40px;border-radius:50%;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.08);color:#fff;font-size:18px;cursor:pointer}
 @keyframes izIn{from{opacity:0}to{opacity:1}}
+/* PAIRED WITH / HOLDERS PAID IN (next to the tax badge): coin fully inside the block, centred, a bit smaller */
+html body main.tp-env .tp-main section.tp-banner>.tp-key:has(.rwbig) .pairbig{min-height:50px!important;padding:8px 12px 8px 9px!important;align-items:center!important;gap:10px!important;border-radius:14px!important;box-sizing:border-box}
+html body main.tp-env .tp-main section.tp-banner>.tp-key:has(.rwbig) .pairbig .coin,html body main.tp-env .tp-main section.tp-banner>.tp-key:has(.rwbig) .pairbig .av{width:30px!important;height:30px!important;flex:none;align-self:center!important;margin:0!important;box-shadow:0 0 0 2px rgba(255,255,255,.12)!important}
+html body main.tp-env .tp-main section.tp-banner>.tp-key:has(.rwbig) .pairbig small{font-size:9px!important;line-height:1.2}
+html body main.tp-env .tp-main section.tp-banner>.tp-key:has(.rwbig) .pairbig b{font-size:16px!important;line-height:1.15}
