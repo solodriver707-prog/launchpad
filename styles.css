@@ -6853,3 +6853,8 @@ html body .tch-side:has(.rwin){width:86px}
 html body .pairbig>div{text-align:left}
 html body .lb3-rm{gap:14px}
 .tc-name2 b{display:flex;align-items:center;min-width:0;flex:0 1 auto}.tc-name2 b .tc-nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}.tc-name2 b>:not(.tc-nm){flex:none}.tc-name2 .tc-tkr{flex:none}
+.nb-burn{display:inline-flex;align-items:center;gap:6px}
+.nb-burn svg{width:15px;height:15px;fill:none;stroke:url(#nbG);stroke-width:2;stroke-linejoin:round;stroke-linecap:round;flex:none;transition:filter .2s}
+.nb-burn{background:linear-gradient(90deg,#FFB547,#FF7A3D);-webkit-background-clip:text;background-clip:text;color:transparent}
+button:hover .nb-burn svg,button.on .nb-burn svg{filter:drop-shadow(0 0 5px rgba(255,122,61,.65))}
+.nb-burn{position:relative;top:1.5px}
