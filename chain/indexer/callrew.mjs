@@ -36,7 +36,7 @@ export function startCalloutRewards({ conn, ops, q, q1, run, solUsd = () => 0, m
   // called by the indexer for every buy that carried a callout memo. treidFeeLam: treid's own part of this trade's fee, in lamports.
   function attr({ sig, id, trader, coin, treidFeeLam, usd, ts, sys = false }) {
     try {
-      if (sys || !(treidFeeLam > 0) || (coin.quote_mint && coin.quote_mint !== 'So11111111111111111111111111111111111111112')) return null;   // SOL pairs only: their fees arrive in ops as SOL
+      if (sys || !(treidFeeLam > 0) || !Number.isFinite(treidFeeLam)) return null;   // any pair: the indexer passes treid's fee already valued in SOL lamports (pair tokens are only allowed when verified with real liquidity)
       let c = q1('SELECT id, mint, wallet, ts, reply FROM callouts WHERE id=?', id); if (c && c.reply != null) c = q1('SELECT id, mint, wallet, ts, reply FROM callouts WHERE id=?', c.reply);   // a reply / update counts as its ROOT callout: same author, the root's own 72h window (updates can't renew it)
       if (!c || c.reply != null || c.mint !== coin.mint) return null;   // the callout must be about THIS coin
       if (c.wallet === trader || c.wallet === coin.creator || trader === coin.creator) return null;   // not your own buy; the dev already earns creator fees

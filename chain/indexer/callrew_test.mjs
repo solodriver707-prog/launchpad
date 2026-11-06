@@ -20,7 +20,7 @@ ok(!CR.attr({ sig: 's3', id: 1, trader: dev, coin, treidFeeLam: fee, usd: 150, t
 ok(!CR.attr({ sig: 's4', id: 2, trader: buyer, coin, treidFeeLam: fee, usd: 150, ts: now + 3600e3 }), 'callout about another coin: nothing');
 ok(!CR.attr({ sig: 's5', id: 1, trader: buyer, coin, treidFeeLam: fee, usd: 150, ts: now + 73 * 3600e3 }), 'after 72h: nothing');
 ok(!CR.attr({ sig: 's6', id: 1, trader: buyer, coin, treidFeeLam: fee, usd: 150, ts: now - 1000 }), 'buy before the callout existed: nothing');
-ok(!CR.attr({ sig: 's7', id: 1, trader: buyer, coin: { ...coin, quote_mint: OTHER }, treidFeeLam: fee, usd: 150, ts: now + 3600e3 }), 'non-SOL pair: nothing');
+ok(!CR.attr({ sig: 's7', id: 1, trader: buyer, coin: { ...coin, quote_mint: OTHER }, treidFeeLam: 0, usd: 150, ts: now + 3600e3 }), 'non-SOL pair without a price: nothing');
 ok(!CR.attr({ sig: 's8', id: 99, trader: buyer, coin, treidFeeLam: fee, usd: 150, ts: now + 3600e3 }), 'unknown callout: nothing');
 for (let i = 0; i < 9; i++) CR.attr({ sig: 'b' + i, id: 1, trader: W(), coin, treidFeeLam: fee, usd: 150, ts: now + 7200e3 });   // 10 buys total → 0.01 SOL = $1.50
 ok(Math.abs(CR.stats(caller).earned_sol - 0.01) < 1e-9, 'earned 0.01 SOL from 10 buys');
