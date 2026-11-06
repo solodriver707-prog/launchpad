@@ -37,6 +37,9 @@ Mainnet indexer: https://treid-indexer-mainnet.onrender.com (Render, Docker, `ch
 - X-handle fee recipients: pause 14d / out 30d, no sell rule, dev selling doesn't affect them. Launch form offers only Me / X account.
 - /api/health has yes/no flags (cluster, db_ok, ops_ok, halted); hourly health-check task updated.
 
+- CSP needs 'unsafe-eval' in script-src: Phantom's injected provider uses eval; without it every desktop connect fails with -32603 'Internal JSON-RPC error'. /api/clog shows browsers' connect failures (step log, no addresses).
+- Phone deeplink keys stay out of the redirect URL (5 Nov audit); Safari private tabs can't finish a phone connect — use a normal tab.
+
 ## Next up
 - Phantom dApp domain review for treid.fun; treid X account (@treidfun); Telegram; beta testers; $TREID later (official-CA badge + copycat warning when TREID_MINT is set).
 - Mainnet test of TP/SL Auto-sell; Jupiter whitelist request for transfer-fee coins.
